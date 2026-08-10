@@ -1,0 +1,65 @@
+/* ===== Scrollbar for Sidebar ===== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* شريط التمرير مخفي افتراضياً */
+.sidebar::-webkit-scrollbar {
+  width: 8px; /* شريط رأسي فقط */
+  height: 0px; /* يمنع الشريط الأفقي */
+  background: transparent;
+}
+
+/* مسار الشريط */
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* مقبض الشريط (Thumb) */
+.sidebar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+  transition: background 0.3s ease;
+}
+
+/* يظهر فقط عند مرور الماوس */
+.sidebar:hover::-webkit-scrollbar-thumb {
+  background: #3b82f6; /* blue-500 */
+}
+
+/* عند الضغط */
+.sidebar::-webkit-scrollbar-thumb:active {
+  background: #2563eb; /* blue-600 */
+}
+
+/* ===== Animations ===== */
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
