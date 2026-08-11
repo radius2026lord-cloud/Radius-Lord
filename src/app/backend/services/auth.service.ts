@@ -29,7 +29,7 @@ export type LoginResult = LoginSuccess | LoginFail;
 export class AuthService {
   static async login(username: string, password: string): Promise<LoginResult> {
     const result = await db.query(
-      'SELECT * FROM bab_managers WHERE username = ? LIMIT 1',
+      'SELECT * FROM lord_manger WHERE username = ? LIMIT 1',
       [username],
     );
 
