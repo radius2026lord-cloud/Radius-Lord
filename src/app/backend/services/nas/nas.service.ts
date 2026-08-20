@@ -42,9 +42,7 @@ async function insertApiCredentials(
   nasId: number,
   api: NasApiCredentialsInput,
 ) {
-  const passwordEncrypted = api.password
-    ? encryptPassword(api.password)
-    : null;
+  const passwordEncrypted = api.password ? encryptPassword(api.password) : null;
 
   await connection.execute(
     `INSERT INTO lord_nas_api_credentials
@@ -177,7 +175,7 @@ export class NasService {
         shortname: row.shortname,
         type: row.type,
         ports: row.ports,
-        secret: row.secret,
+        has_secret: Boolean(row.secret),
         server: row.server,
         community: row.community,
         description: row.radius_description,
