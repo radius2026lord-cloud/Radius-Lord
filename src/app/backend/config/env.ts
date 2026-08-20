@@ -37,6 +37,10 @@ export const env = {
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'MY_SECRET_KEY',
 
+  // NAS credentials encryption
+  NAS_ENCRYPTION_KEY:
+    process.env.NAS_ENCRYPTION_KEY || 'CHANGE_THIS_NAS_ENCRYPTION_KEY',
+
   // Frontend
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
