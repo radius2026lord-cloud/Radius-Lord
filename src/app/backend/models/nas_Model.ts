@@ -22,6 +22,10 @@ export interface RadiusNas {
   description: string | null;
 }
 
+export interface RadiusNasPublic extends Omit<RadiusNas, 'secret'> {
+  has_secret: boolean;
+}
+
 export interface LordNas {
   id: number;
   radius_nas_id: number;
@@ -72,7 +76,7 @@ export interface LordNasEndpoint {
 }
 
 export interface NasDetails extends LordNas {
-  radius: RadiusNas;
+  radius: RadiusNasPublic;
   api_credentials: Omit<LordNasApiCredentials, 'password_encrypted'> | null;
   endpoints: LordNasEndpoint[];
 }
