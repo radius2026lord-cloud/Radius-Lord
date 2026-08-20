@@ -152,6 +152,8 @@ export class NasService {
       [id],
     );
 
+    const apiRow = (apiRows as RowDataPacket[])[0];
+
     return {
       id: row.id,
       radius_nas_id: row.radius_nas_id,
@@ -180,7 +182,21 @@ export class NasService {
         community: row.community,
         description: row.radius_description,
       },
-      api_credentials: (apiRows as RowDataPacket[])[0] ?? null,
+      api_credentials: apiRow
+        ? {
+            id: apiRow.id,
+            nas_id: apiRow.nas_id,
+            enabled: apiRow.enabled,
+            api_host: apiRow.api_host,
+            api_port: apiRow.api_port,
+            use_ssl: apiRow.use_ssl,
+            username: apiRow.username,
+            status: apiRow.status,
+            last_connected_at: apiRow.last_connected_at,
+            created_at: apiRow.created_at,
+            updated_at: apiRow.updated_at,
+          }
+        : null,
       endpoints: endpointRows as any,
     };
   }
@@ -283,7 +299,7 @@ export class NasService {
       }
 
       const radiusFields: string[] = [];
-      const radiusValues: unknown[] = [];
+      const radiusValues: any[] = [];
       const radiusMap: Record<string, unknown> = {
         nasname: input.nasname,
         shortname: input.shortname,
@@ -310,7 +326,7 @@ export class NasService {
       }
 
       const lordFields: string[] = [];
-      const lordValues: unknown[] = [];
+      const lordValues: any[] = [];
       const lordMap: Record<string, unknown> = {
         name: input.name,
         host: input.host,
@@ -355,7 +371,7 @@ export class NasService {
           } else {
             const api = input.api_credentials;
             const apiFields: string[] = [];
-            const apiValues: unknown[] = [];
+            const apiValues: any[] = [];
 
             if (api.enabled !== undefined) {
               apiFields.push('enabled = ?');
