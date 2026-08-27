@@ -2,18 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import {
-  BarChart3,
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  Mail,
-  Phone,
-  Radio,
-  Server,
-  ShieldCheck,
-  UserRound,
-} from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Mail, Phone, Radio, UserRound } from "lucide-react";
 
 type Mode = "login" | "signup";
 type IconType = React.ComponentType<{ className?: string }>;
@@ -26,13 +15,6 @@ type FieldProps = {
   placeholder: string;
   suffix?: React.ReactNode;
 };
-
-const features = [
-  ["إدارة شاملة", "إدارة أجهزة NAS والمشتركين", Server, "from-[#1684ff] to-[#0757e8]"],
-  ["تقارير ذكية", "متابعة الأداء والاستخدام", BarChart3, "from-[#ffb536] to-[#f29600]"],
-  ["أمان متقدم", "حماية وصلاحيات متكاملة", ShieldCheck, "from-[#24b77e] to-[#0a8d5b]"],
-  ["تنبيهات فورية", "متابعة أحداث الشبكة", Radio, "from-[#875dff] to-[#6334e3]"],
-] as const;
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -52,23 +34,38 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function NetworkBackground() {
+function PageMotion() {
   return (
-    <div className="pointer-events-none absolute inset-0 opacity-45 dark:opacity-20" aria-hidden="true">
-      <svg viewBox="0 0 900 900" className="h-full w-full">
-        <g stroke="#4d91ef" strokeOpacity=".18" fill="none" strokeWidth="1.2">
-          <path d="M40 270 180 220l135 90 125-120 150 90 130-90 145 110" />
-          <path d="M55 555 190 455l125 80 110-95 155 80 135-110 140 80" />
-          <path d="M85 725 240 620l125 78 140-110 145 70 120-70" />
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div className="auth-orb auth-orb-a" />
+      <div className="auth-orb auth-orb-b" />
+      <div className="auth-orb auth-orb-c" />
+      <svg viewBox="0 0 1600 900" className="auth-network absolute inset-0 h-full w-full opacity-40 dark:opacity-20">
+        <g fill="none" stroke="#2f80ed" strokeWidth="1">
+          <path d="M70 210 260 120l170 120 170-85 190 115 180-90 230 130" opacity=".18" />
+          <path d="M20 640 220 520l170 90 170-120 220 120 185-90 250 115" opacity=".15" />
         </g>
       </svg>
     </div>
   );
 }
 
-function ServerIllustration({ small = false }: { small?: boolean }) {
+function PanelNetwork() {
   return (
-    <div className={`relative mx-auto w-full ${small ? "h-[205px] max-w-[310px]" : "h-[250px] max-w-[360px]"}`} aria-hidden="true">
+    <div className="pointer-events-none absolute inset-0 opacity-45 dark:opacity-20" aria-hidden="true">
+      <svg viewBox="0 0 700 700" className="h-full w-full">
+        <g stroke="#4d91ef" strokeOpacity=".18" fill="none" strokeWidth="1.2">
+          <path d="M30 230 150 180l110 76 100-95 120 70 110-72 100 85" />
+          <path d="M40 500 155 410l105 72 95-80 130 65 110-92 105 62" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function ServerIllustration() {
+  return (
+    <div className="relative mx-auto h-[250px] w-full max-w-[360px]" aria-hidden="true">
       <div className="absolute bottom-2 left-1/2 h-9 w-[78%] -translate-x-1/2 rounded-[50%] bg-[#2f6fc8]/15 blur-xl dark:bg-black/30" />
       <div className="absolute bottom-[12%] left-1/2 w-[56%] -translate-x-1/2">
         {[0, 1, 2, 3].map((item) => (
@@ -85,38 +82,21 @@ function ServerIllustration({ small = false }: { small?: boolean }) {
   );
 }
 
-function FeatureGrid() {
-  return (
-    <div className="grid grid-cols-2 gap-2.5">
-      {features.map(([title, text, Icon, tone]) => (
-        <div key={title} className="flex items-center gap-2.5 rounded-[13px] border border-white/90 bg-white/90 px-3 py-2.5 shadow-sm dark:border-white/[.08] dark:bg-[#0d243b]/92">
-          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br ${tone} text-white`}><Icon className="h-4 w-4" /></div>
-          <div className="min-w-0 text-right">
-            <div className="text-[11px] font-bold text-[#10336f] dark:text-white">{title}</div>
-            <div className="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">{text}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function VisualPanel({ signup }: { signup: boolean }) {
   return (
-    <section className="relative hidden h-full overflow-hidden border-r border-white/70 bg-gradient-to-br from-[#eef4fb] via-[#f8fbff] to-[#e6eef8] dark:border-white/[.06] dark:from-[#07182a] dark:via-[#081d33] dark:to-[#061526] min-[980px]:block">
-      <NetworkBackground />
+    <section className="relative hidden h-full overflow-hidden bg-gradient-to-br from-[#eef4fb] via-[#f8fbff] to-[#e6eef8] dark:from-[#07182a] dark:via-[#081d33] dark:to-[#061526] min-[980px]:block">
+      <PanelNetwork />
+      <div className="absolute right-0 top-[8%] h-[84%] w-px bg-gradient-to-b from-transparent via-[#7da7d8]/60 to-transparent dark:via-[#3f5f80]/80" />
+      <div className="absolute right-[-1px] top-1/2 h-24 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b from-[#0d6ef0]/0 via-[#0d6ef0]/70 to-[#0d6ef0]/0 blur-[.2px]" />
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-7 py-6">
         <Brand />
-        {signup ? (
-          <>
-            <h2 className="mt-4 text-center text-[22px] font-black text-[#0e316d] dark:text-white">منصة <span className="text-[#086ef1]">LORD</span> لإدارة أجهزة NAS</h2>
-            <p className="mt-1.5 max-w-[420px] text-center text-[11px] leading-5 text-slate-600 dark:text-slate-300">إدارة سهلة واحترافية لأجهزتك ومشتركيك وجلسات الإنترنت في مكان واحد وبأعلى مستوى من الأمان والكفاءة.</p>
-            <div className="mt-4 w-full max-w-[410px]"><FeatureGrid /></div>
-            <div className="mt-1 w-full"><ServerIllustration small /></div>
-          </>
-        ) : (
-          <div className="mt-7 w-full"><ServerIllustration /></div>
+        {signup && (
+          <div className="mt-4 text-center">
+            <h2 className="text-[20px] font-black text-[#0e316d] dark:text-white">منصة <span className="text-[#086ef1]">LORD</span> لإدارة أجهزة NAS</h2>
+            <p className="mx-auto mt-1.5 max-w-[390px] text-[10px] leading-5 text-slate-600 dark:text-slate-300">إدارة سهلة واحترافية لأجهزتك ومشتركيك وجلسات الإنترنت في مكان واحد.</p>
+          </div>
         )}
+        <div className={`${signup ? "mt-3" : "mt-7"} w-full`}><ServerIllustration /></div>
       </div>
       <div className="absolute bottom-0 left-0 right-0 h-[11%] overflow-hidden" aria-hidden="true">
         <div className="absolute -bottom-[55%] -left-[8%] h-full w-[78%] rotate-6 rounded-[50%] bg-[#0b4bc6]" />
@@ -142,7 +122,7 @@ function Field({ label, icon: Icon, type = "text", value, onChange, placeholder,
 
 function Steps() {
   return (
-    <div className="mx-auto mt-3.5 grid max-w-[420px] grid-cols-3 gap-2">
+    <div className="mx-auto mt-3.5 grid max-w-[400px] grid-cols-3 gap-2">
       {["المعلومات الأساسية", "معلومات إضافية", "تأكيد الحساب"].map((label, index) => (
         <div key={label} className="relative text-center">
           {index < 2 && <span className="absolute left-[-50%] top-3.5 h-px w-full bg-[#cbd9e7] dark:bg-[#3b526b]" />}
@@ -161,7 +141,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [promo, setPromo] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [remember, setRemember] = useState(false);
@@ -179,7 +158,12 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     }
     if (!email || !password) return setMessage("يرجى إدخال البريد الإلكتروني وكلمة المرور.");
     try {
-      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ username: email, password }) });
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: email, password }),
+      });
       const data = await response.json();
       if (response.ok && data.success) window.location.href = "/Dashboard";
       else setMessage(data.message || "فشل تسجيل الدخول.");
@@ -189,16 +173,19 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   };
 
   const eye = (visible: boolean, toggle: () => void) => (
-    <button type="button" onClick={toggle} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}>{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+    <button type="button" onClick={toggle} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}>
+      {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+    </button>
   );
 
   return (
-    <main dir="rtl" className="min-h-[100dvh] bg-[#e8eef5] text-[#102a63] dark:bg-[#061526] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
-      <div className="flex min-h-[100dvh] items-center justify-center p-3 sm:p-4">
-        <div dir="ltr" className={`grid w-full overflow-hidden rounded-[22px] border border-white/80 bg-[#f8fbff] shadow-[0_18px_55px_rgba(58,84,112,.14)] dark:border-white/[.08] dark:bg-[#081b2f] min-[980px]:grid-cols-2 ${signup ? "max-w-[1080px] min-[980px]:h-[690px]" : "max-w-[1020px] min-[980px]:h-[610px]"}`}>
+    <main dir="rtl" className="relative min-h-[100dvh] overflow-hidden bg-[#e8eef5] text-[#102a63] dark:bg-[#061526] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
+      <PageMotion />
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-3 sm:p-4">
+        <div dir="ltr" className={`grid w-full max-w-[1020px] overflow-hidden rounded-[22px] border border-white/80 bg-[#f8fbff]/96 shadow-[0_20px_65px_rgba(58,84,112,.18)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/96 min-[980px]:grid-cols-2 ${signup ? "min-[980px]:h-[650px]" : "min-[980px]:h-[610px]"}`}>
           <VisualPanel signup={signup} />
-          <section dir="rtl" className="flex min-h-[calc(100dvh-24px)] items-center justify-center bg-white/94 px-5 py-6 dark:bg-[#0a1f35]/96 sm:px-8 min-[980px]:min-h-0">
-            <div className={`w-full ${signup ? "max-w-[430px]" : "max-w-[410px]"}`}>
+          <section dir="rtl" className="flex min-h-[calc(100dvh-24px)] items-center justify-center bg-white/95 px-5 py-6 dark:bg-[#0a1f35]/96 sm:px-8 min-[980px]:min-h-0">
+            <div className={`w-full ${signup ? "max-w-[420px]" : "max-w-[410px]"}`}>
               <div className="mb-5 min-[980px]:hidden"><Brand compact /></div>
               <div className="text-center">
                 <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#eaf2ff] text-[#086df0] dark:bg-[#102d4d] dark:text-[#4da0ff]">{signup ? <UserRound className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}</div>
@@ -206,7 +193,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 <p className="mx-auto mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">{signup ? "أنشئ حسابك الآن وابدأ إدارة أجهزتك ومشتركيك بسهولة وأمان" : "مرحباً بك، يرجى تسجيل الدخول للوصول إلى لوحة التحكم"}</p>
               </div>
               {signup && <Steps />}
-              <form onSubmit={submit} className={signup ? "mt-3 space-y-2" : "mt-7 space-y-3.5"}>
+              <form onSubmit={submit} className={signup ? "mt-3 space-y-2.5" : "mt-7 space-y-3.5"}>
                 {signup && <Field label="الاسم الكامل *" icon={UserRound} value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />}
                 <Field label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
                 {signup && (
@@ -220,11 +207,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 )}
                 <Field label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                 {signup && <Field label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />}
-                {signup && <Field label="المجاز التعريفي (اختياري)" icon={ShieldCheck} value={promo} onChange={setPromo} placeholder="أدخل المجاز التعريفي إن كان لديك" />}
                 {!signup && <div className="flex items-center justify-between text-[11px]"><label className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="h-4 w-4 accent-[#0d6ef0]" />تذكرني</label><button type="button" className="font-semibold text-[#0874f9]">نسيت كلمة المرور؟</button></div>}
                 {signup && <label className="flex items-start gap-2 text-[9px] leading-5 text-slate-600 dark:text-slate-300"><input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-4 w-4 accent-[#0d6ef0]" /><span>أوافق على <button type="button" className="font-semibold text-[#0874f9]">الشروط والأحكام وسياسة الخصوصية</button></span></label>}
                 {message && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-700 dark:border-amber-400/15 dark:bg-amber-500/10 dark:text-amber-300">{message}</div>}
-                <button type="submit" className="flex h-[43px] w-full items-center justify-center gap-2 rounded-[10px] bg-gradient-to-l from-[#0d6ef0] to-[#0647d9] text-[12px] font-bold text-white shadow-sm hover:brightness-105">{signup ? "التالي" : "تسجيل الدخول"}<span>←</span></button>
+                <button type="submit" className="flex h-[43px] w-full items-center justify-center gap-2 rounded-[10px] bg-gradient-to-l from-[#0d6ef0] to-[#0647d9] text-[12px] font-bold text-white shadow-sm hover:brightness-105">{signup ? "إنشاء الحساب" : "تسجيل الدخول"}<span>←</span></button>
                 <div className="flex items-center gap-3 text-[10px] text-slate-400"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
                 <button type="button" className="flex h-[43px] w-full items-center justify-center gap-3 rounded-[10px] border border-[#cbd9e8] bg-white text-[11px] font-bold text-[#17386d] dark:border-[#304861] dark:bg-[#091c30] dark:text-white"><span className="text-base font-black text-[#4285f4]">G</span>{signup ? "إنشاء حساب باستخدام Google" : "تسجيل الدخول باستخدام Google"}</button>
                 <div className="text-center text-[11px] text-slate-500 dark:text-slate-400">{signup ? "لديك حساب بالفعل؟" : "ليس لديك حساب؟"}<Link href={signup ? "/login" : "/signup"} className="mr-2 font-bold text-[#0874f9]">{signup ? "تسجيل الدخول" : "إنشاء حساب جديد"}</Link></div>
@@ -233,6 +219,17 @@ export default function LordAuth({ mode }: { mode: Mode }) {
           </section>
         </div>
       </div>
+      <style jsx global>{`
+        @keyframes lordFloatA { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(34px,-24px,0)} }
+        @keyframes lordFloatB { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-42px,30px,0)} }
+        @keyframes lordNetwork { 0%,100%{transform:translateX(0);opacity:.34} 50%{transform:translateX(18px);opacity:.52} }
+        .auth-orb{position:absolute;border-radius:999px;filter:blur(65px);opacity:.26;will-change:transform}
+        .auth-orb-a{width:280px;height:280px;background:#2687ff;left:-70px;top:8%;animation:lordFloatA 12s ease-in-out infinite}
+        .auth-orb-b{width:240px;height:240px;background:#ffad16;right:-85px;bottom:4%;opacity:.12;animation:lordFloatB 15s ease-in-out infinite}
+        .auth-orb-c{width:200px;height:200px;background:#7c5cff;left:58%;top:-90px;opacity:.12;animation:lordFloatB 18s ease-in-out infinite reverse}
+        .auth-network{animation:lordNetwork 16s ease-in-out infinite}
+        @media (prefers-reduced-motion: reduce){.auth-orb,.auth-network{animation:none!important}}
+      `}</style>
     </main>
   );
 }
