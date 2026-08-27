@@ -1,38 +1,71 @@
-/* ===== Scrollbar for Sidebar ===== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* شريط التمرير مخفي افتراضياً */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
 .sidebar::-webkit-scrollbar {
-  width: 8px; /* شريط رأسي فقط */
-  height: 0px; /* يمنع الشريط الأفقي */
+  width: 8px;
+  height: 0;
   background: transparent;
 }
 
-/* مسار الشريط */
 .sidebar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* مقبض الشريط (Thumb) */
 .sidebar::-webkit-scrollbar-thumb {
   background: transparent;
   border-radius: 10px;
   transition: background 0.3s ease;
 }
 
-/* يظهر فقط عند مرور الماوس */
 .sidebar:hover::-webkit-scrollbar-thumb {
-  background: #3b82f6; /* blue-500 */
+  background: #3b82f6;
 }
 
-/* عند الضغط */
 .sidebar::-webkit-scrollbar-thumb:active {
-  background: #2563eb; /* blue-600 */
+  background: #2563eb;
 }
-
-/* ===== Animations ===== */
 
 @keyframes slideDown {
   from {
@@ -62,4 +95,23 @@
 
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
+}
+
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
