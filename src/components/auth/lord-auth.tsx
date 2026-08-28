@@ -33,11 +33,19 @@ function PageMotion() {
       <div className="auth-orb auth-orb-a" />
       <div className="auth-orb auth-orb-b" />
       <div className="auth-dot-grid" />
-      <svg viewBox="0 0 1600 900" className="auth-network absolute inset-0 h-full w-full opacity-25 dark:opacity-12">
-        <g fill="none" stroke="#2f80ed" strokeWidth="1">
-          <path d="M10 220 145 145l120 78 135-100 130 92" opacity=".16" />
-          <path d="M0 620 130 520l145 80 130-105 150 75" opacity=".13" />
-          <path d="M1180 130 1310 215l135-78 130 95" opacity=".10" />
+      <svg viewBox="0 0 1600 900" className="auth-network absolute inset-0 h-full w-full opacity-55 dark:opacity-30">
+        <g fill="none" stroke="#5b8fd6" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M0 150 L88 105 L174 160 L255 116 L330 168" opacity=".72" />
+          <path d="M0 270 L112 214 L205 266 L292 212 L370 256" opacity=".58" />
+          <path d="M0 620 L98 560 L188 622 L278 548 L372 610" opacity=".62" />
+          <path d="M0 760 L82 706 L174 754 L248 690 L338 734" opacity=".48" />
+          <path d="M1600 135 L1518 92 L1430 150 L1352 104 L1274 158" opacity=".64" />
+          <path d="M1600 276 L1504 222 L1418 270 L1330 218 L1248 264" opacity=".54" />
+          <path d="M1600 610 L1510 548 L1420 605 L1326 545 L1238 598" opacity=".60" />
+          <path d="M1600 758 L1514 706 L1428 760 L1340 704 L1258 748" opacity=".46" />
+        </g>
+        <g fill="#7ca4dc" opacity=".82">
+          {[ [88,105],[174,160],[255,116],[112,214],[205,266],[292,212],[98,560],[188,622],[278,548],[82,706],[174,754],[248,690],[1518,92],[1430,150],[1352,104],[1504,222],[1418,270],[1330,218],[1510,548],[1420,605],[1326,545],[1514,706],[1428,760],[1340,704] ].map(([cx,cy], index) => <circle key={index} cx={cx} cy={cy} r="4" />)}
         </g>
       </svg>
     </div>
@@ -77,11 +85,7 @@ function RadiusSummary() {
 
 function WaveFooter() {
   return (
-    <div
-      className="pointer-events-none absolute bottom-0 left-0 h-[124px] w-full overflow-hidden"
-      style={{ WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)", maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)" }}
-      aria-hidden="true"
-    >
+    <div className="pointer-events-none absolute bottom-0 left-0 h-[124px] w-full overflow-hidden" style={{ WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)", maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)" }} aria-hidden="true">
       <svg viewBox="0 0 760 156" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
         <path d="M0 94 C155 56 275 136 420 96 C545 62 640 70 760 108 L760 156 L0 156Z" fill="#7ca9ec" opacity=".38" />
         <path d="M0 108 C150 70 285 150 430 106 C555 68 655 84 760 120 L760 156 L0 156Z" fill="#195ed6" opacity=".9" />
@@ -180,10 +184,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_10%_18%,rgba(73,145,235,.25),transparent_30%),radial-gradient(circle_at_88%_82%,rgba(255,176,43,.11),transparent_26%),linear-gradient(135deg,#e4edf8_0%,#f5f8fc_48%,#e9f0f7_100%)] text-[#102a63] dark:bg-[radial-gradient(circle_at_12%_24%,rgba(35,104,186,.24),transparent_32%),radial-gradient(circle_at_88%_84%,rgba(196,126,28,.10),transparent_28%),linear-gradient(135deg,#04111f_0%,#071a2d_52%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-5 lg:p-6">
-        <div
-          dir="ltr"
-          className={`grid w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1024px]:grid-cols-2 ${signup ? "max-w-[1020px] min-[1024px]:h-[610px]" : "max-w-[980px] min-[1024px]:h-[600px]"}`}
-        >
+        <div dir="ltr" className={`grid w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1024px]:grid-cols-2 ${signup ? "max-w-[1020px] min-[1024px]:h-[610px]" : "max-w-[980px] min-[1024px]:h-[600px]"}`}>
           <VisualPanel signup={signup} />
           <section dir="rtl" className="flex min-h-[calc(100dvh-32px)] items-center justify-center bg-white/96 px-5 py-6 dark:bg-[#0a1f35]/96 sm:px-7 min-[1024px]:min-h-0 lg:px-8">
             <div className={`w-full ${signup ? "max-w-[470px]" : "max-w-[410px]"}`}>
@@ -233,13 +234,13 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       <style jsx global>{`
         @keyframes lordFloatA { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(18px,-12px,0)} }
         @keyframes lordFloatB { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-20px,15px,0)} }
-        @keyframes lordNetwork { 0%,100%{transform:translateX(0);opacity:.22} 50%{transform:translateX(7px);opacity:.30} }
+        @keyframes lordNetwork { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(10px,-4px,0)} }
         .auth-orb{position:absolute;border-radius:999px;filter:blur(90px);opacity:.14;will-change:transform}
         .auth-orb-a{width:300px;height:300px;background:#2687ff;left:-95px;top:8%;animation:lordFloatA 20s ease-in-out infinite}
         .auth-orb-b{width:250px;height:250px;background:#ffad16;right:-95px;bottom:4%;opacity:.07;animation:lordFloatB 24s ease-in-out infinite}
-        .auth-dot-grid{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(32,105,198,.22) 1px,transparent 1.2px);background-size:26px 26px;opacity:.12;mask-image:linear-gradient(115deg,#000 0%,transparent 34%,transparent 68%,#000 100%)}
-        .dark .auth-dot-grid{opacity:.07}
-        .auth-network{animation:lordNetwork 26s ease-in-out infinite}
+        .auth-dot-grid{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(32,105,198,.34) 1.35px,transparent 1.5px);background-size:24px 24px;opacity:.23;mask-image:linear-gradient(90deg,#000 0%,#000 23%,transparent 38%,transparent 62%,#000 77%,#000 100%)}
+        .dark .auth-dot-grid{opacity:.15}
+        .auth-network{animation:lordNetwork 18s ease-in-out infinite;filter:drop-shadow(0 0 2px rgba(71,124,193,.14))}
         @media (prefers-reduced-motion: reduce){.auth-orb,.auth-network{animation:none!important}}
       `}</style>
     </main>
