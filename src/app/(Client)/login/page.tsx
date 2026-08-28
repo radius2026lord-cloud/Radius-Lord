@@ -1,5 +1,5 @@
-import LordLogin from "@/components/auth/lord-login";
+import LordAuth from "@/components/auth/lord-auth";
 
 export default function LoginPage() {
-  return <LordLogin />;
+  return <LordAuth mode="login" />;
 }
