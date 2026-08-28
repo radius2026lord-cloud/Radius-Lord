@@ -176,12 +176,12 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   );
 
   return (
-    <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[#e8eef5] text-[#102a63] dark:bg-[#061526] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
+    <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[linear-gradient(135deg,#e5edf7_0%,#f4f8fc_48%,#e4ecf6_100%)] text-[#102a63] dark:bg-[linear-gradient(135deg,#04111f_0%,#071a2d_48%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-5 lg:p-6">
         <div
           dir="ltr"
-          className={`grid w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1024px]:grid-cols-2 ${signup ? "max-w-[1120px] min-[1024px]:h-[650px]" : "max-w-[980px] min-[1024px]:h-[600px]"}`}
+          className={`grid w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1024px]:grid-cols-2 ${signup ? "max-w-[1020px] min-[1024px]:h-[610px]" : "max-w-[980px] min-[1024px]:h-[600px]"}`}
         >
           <VisualPanel signup={signup} />
           <section dir="rtl" className="flex min-h-[calc(100dvh-32px)] items-center justify-center bg-white/96 px-5 py-6 dark:bg-[#0a1f35]/96 sm:px-7 min-[1024px]:min-h-0 lg:px-8">
