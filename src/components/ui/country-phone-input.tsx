@@ -15,6 +15,10 @@ type CountryPhoneInputProps = {
   className?: string;
 };
 
+const emojiStyle = {
+  fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
+};
+
 export function CountryPhoneInput({
   label = "رقم الهاتف *",
   countries,
@@ -53,7 +57,7 @@ export function CountryPhoneInput({
             className="flex h-full w-full items-center justify-center gap-1.5 px-2 text-[10px] font-semibold text-[#17386d] dark:text-white sm:text-[11px]"
             aria-expanded={open}
           >
-            <span>{country.flag}</span>
+            <span className="text-[16px] leading-none" style={emojiStyle} aria-hidden="true">{country.flag}</span>
             <span>{country.name}</span>
             <span dir="ltr">{country.code}</span>
             <ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`} />
@@ -80,7 +84,10 @@ export function CountryPhoneInput({
                         : "text-[#17386d] hover:bg-[#f3f7fb] dark:text-slate-200 dark:hover:bg-white/[.05]"
                     }`}
                   >
-                    <span className="flex items-center gap-2"><span>{item.flag}</span><span>{item.name}</span></span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-[17px] leading-none" style={emojiStyle} aria-hidden="true">{item.flag}</span>
+                      <span>{item.name}</span>
+                    </span>
                     <span dir="ltr">{item.code}</span>
                   </button>
                 );
