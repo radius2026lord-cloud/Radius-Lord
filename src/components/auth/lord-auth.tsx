@@ -67,15 +67,15 @@ const featureToneClasses = {
 
 function RadiusSummary() {
   return (
-    <div className="mt-4 w-full max-w-[430px] rounded-[20px] border border-white/85 bg-white/74 p-4 shadow-[0_14px_34px_rgba(50,84,124,.09)] backdrop-blur-sm dark:border-white/[.07] dark:bg-[#0d243b]/68">
-      <div className="mb-3 text-center text-[12px] font-black text-[#17386d] dark:text-slate-100">{radiusAuthContent.summaryTitle}</div>
-      <div className="grid grid-cols-2 gap-2.5">
+    <div className="mt-4 w-full max-w-[458px] rounded-[22px] border border-white/85 bg-white/76 p-5 shadow-[0_16px_38px_rgba(50,84,124,.10)] backdrop-blur-sm dark:border-white/[.07] dark:bg-[#0d243b]/70">
+      <div className="mb-4 text-center text-[14px] font-black text-[#17386d] dark:text-slate-100">{radiusAuthContent.summaryTitle}</div>
+      <div className="grid grid-cols-2 gap-3">
         {radiusAuthContent.features.map((feature) => {
           const Icon = feature.icon;
           return (
-            <div key={feature.title} className="flex min-h-[66px] items-start gap-2.5 rounded-[13px] bg-white/72 p-2.5 dark:bg-white/[.035]" dir="rtl">
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${featureToneClasses[feature.tone]}`}><Icon className="h-4 w-4" /></span>
-              <div className="min-w-0 text-right"><div className="text-[10px] font-black text-[#17386d] dark:text-white">{feature.title}</div><div className="mt-1 text-[8.5px] leading-4 text-slate-500 dark:text-slate-400">{feature.description}</div></div>
+            <div key={feature.title} className="flex min-h-[82px] items-start gap-3 rounded-[15px] bg-white/76 p-3 dark:bg-white/[.04]" dir="rtl">
+              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[13px] ${featureToneClasses[feature.tone]}`}><Icon className="h-5 w-5" /></span>
+              <div className="min-w-0 text-right"><div className="text-[12px] font-black text-[#17386d] dark:text-white">{feature.title}</div><div className="mt-1.5 text-[10px] leading-[18px] text-slate-500 dark:text-slate-400">{feature.description}</div></div>
             </div>
           );
         })}
