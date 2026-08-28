@@ -125,6 +125,24 @@ export function SelectDropdown<T>({
             filter: blur(1.4px);
           }
         }
+
+        .auth-dot-grid {
+          background-image:
+            radial-gradient(circle, rgba(38,111,205,.30) 1.15px, transparent 1.35px),
+            radial-gradient(circle, rgba(255,173,22,.16) 1px, transparent 1.2px);
+          background-position: 0 0, 12px 12px;
+          background-size: 24px 24px, 48px 48px;
+          opacity: .24;
+          -webkit-mask-image: radial-gradient(ellipse 47% 47% at 50% 50%, transparent 0%, transparent 60%, rgba(0,0,0,.30) 70%, rgba(0,0,0,.82) 84%, #000 100%);
+          mask-image: radial-gradient(ellipse 47% 47% at 50% 50%, transparent 0%, transparent 60%, rgba(0,0,0,.30) 70%, rgba(0,0,0,.82) 84%, #000 100%);
+        }
+        .dark .auth-dot-grid {
+          opacity: .13;
+          background-image:
+            radial-gradient(circle, rgba(93,164,255,.34) 1.15px, transparent 1.35px),
+            radial-gradient(circle, rgba(255,185,66,.16) 1px, transparent 1.2px);
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .select-dropdown-menu,
           .select-dropdown-menu.is-open,
