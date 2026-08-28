@@ -63,3 +63,78 @@
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
 }
+
+/* ===== Auth background network dots ===== */
+@keyframes authDotsFloatLeft {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(14px, -10px, 0); }
+}
+
+@keyframes authDotsFloatRight {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-12px, 12px, 0); }
+}
+
+.auth-dot-grid {
+  position: absolute !important;
+  inset: 0 !important;
+  opacity: 1 !important;
+  background: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  overflow: hidden;
+}
+
+.auth-dot-grid::before,
+.auth-dot-grid::after {
+  content: "";
+  position: absolute;
+  width: 34vw;
+  height: 74vh;
+  max-width: 470px;
+  max-height: 660px;
+  min-width: 260px;
+  min-height: 440px;
+  background-image: radial-gradient(circle, rgba(28, 103, 205, 0.44) 1.4px, transparent 1.7px);
+  background-size: 25px 25px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.auth-dot-grid::before {
+  left: -3vw;
+  top: 8vh;
+  opacity: 0.46;
+  -webkit-mask-image: radial-gradient(ellipse at left center, #000 0%, rgba(0,0,0,.9) 46%, transparent 82%);
+  mask-image: radial-gradient(ellipse at left center, #000 0%, rgba(0,0,0,.9) 46%, transparent 82%);
+  animation: authDotsFloatLeft 13s ease-in-out infinite;
+}
+
+.auth-dot-grid::after {
+  right: -4vw;
+  bottom: 3vh;
+  opacity: 0.38;
+  -webkit-mask-image: radial-gradient(ellipse at right center, #000 0%, rgba(0,0,0,.9) 44%, transparent 82%);
+  mask-image: radial-gradient(ellipse at right center, #000 0%, rgba(0,0,0,.9) 44%, transparent 82%);
+  animation: authDotsFloatRight 15s ease-in-out infinite;
+}
+
+.dark .auth-dot-grid::before,
+.dark .auth-dot-grid::after {
+  background-image: radial-gradient(circle, rgba(84, 157, 255, 0.50) 1.4px, transparent 1.7px);
+}
+
+@media (max-width: 767px) {
+  .auth-dot-grid::before,
+  .auth-dot-grid::after {
+    width: 58vw;
+    opacity: 0.28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-dot-grid::before,
+  .auth-dot-grid::after {
+    animation: none !important;
+  }
+}
