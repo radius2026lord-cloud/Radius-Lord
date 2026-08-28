@@ -32,6 +32,7 @@ function PageMotion() {
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       <div className="auth-orb auth-orb-a" />
       <div className="auth-orb auth-orb-b" />
+      <div className="auth-dot-grid" />
       <svg viewBox="0 0 1600 900" className="auth-network absolute inset-0 h-full w-full opacity-25 dark:opacity-12">
         <g fill="none" stroke="#2f80ed" strokeWidth="1">
           <path d="M10 220 145 145l120 78 135-100 130 92" opacity=".16" />
@@ -114,7 +115,7 @@ function VisualPanel({ signup }: { signup: boolean }) {
   return (
     <section className="relative hidden h-full overflow-hidden bg-gradient-to-br from-[#edf4fc] via-[#f8fbff] to-[#e9f1f9] dark:from-[#07182a] dark:via-[#081d33] dark:to-[#061526] min-[1024px]:block">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_28%,rgba(48,137,255,.10),transparent_24%),radial-gradient(circle_at_70%_72%,rgba(255,173,22,.07),transparent_22%)]" />
-      <div className="absolute right-0 top-6 bottom-6 w-px bg-gradient-to-b from-transparent via-[#9bbce4]/48 to-transparent dark:via-[#45627f]/55" />
+      <div className="absolute right-0 top-6 bottom-6 w-px bg-gradient-to-b from-transparent via-[#88a9d3]/70 to-transparent shadow-[0_0_12px_rgba(85,130,190,.10)] dark:via-[#58728f]/70" />
       <div className="relative z-10 flex h-full flex-col items-center px-8 pt-7 text-center">
         <Brand />
         {signup ? (
@@ -176,7 +177,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   );
 
   return (
-    <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_12%_28%,rgba(111,170,242,.34),transparent_32%),radial-gradient(circle_at_88%_84%,rgba(255,203,128,.20),transparent_30%),linear-gradient(135deg,#e7eef7_0%,#f7f9fc_52%,#edf1f5_100%)] text-[#102a63] dark:bg-[radial-gradient(circle_at_12%_28%,rgba(25,91,170,.22),transparent_34%),radial-gradient(circle_at_88%_84%,rgba(184,118,27,.10),transparent_30%),linear-gradient(135deg,#04111f_0%,#071a2d_52%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
+    <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_10%_18%,rgba(73,145,235,.25),transparent_30%),radial-gradient(circle_at_88%_82%,rgba(255,176,43,.11),transparent_26%),linear-gradient(135deg,#e4edf8_0%,#f5f8fc_48%,#e9f0f7_100%)] text-[#102a63] dark:bg-[radial-gradient(circle_at_12%_24%,rgba(35,104,186,.24),transparent_32%),radial-gradient(circle_at_88%_84%,rgba(196,126,28,.10),transparent_28%),linear-gradient(135deg,#04111f_0%,#071a2d_52%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-5 lg:p-6">
         <div
@@ -236,6 +237,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .auth-orb{position:absolute;border-radius:999px;filter:blur(90px);opacity:.14;will-change:transform}
         .auth-orb-a{width:300px;height:300px;background:#2687ff;left:-95px;top:8%;animation:lordFloatA 20s ease-in-out infinite}
         .auth-orb-b{width:250px;height:250px;background:#ffad16;right:-95px;bottom:4%;opacity:.07;animation:lordFloatB 24s ease-in-out infinite}
+        .auth-dot-grid{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(32,105,198,.22) 1px,transparent 1.2px);background-size:26px 26px;opacity:.12;mask-image:linear-gradient(115deg,#000 0%,transparent 34%,transparent 68%,#000 100%)}
+        .dark .auth-dot-grid{opacity:.07}
         .auth-network{animation:lordNetwork 26s ease-in-out infinite}
         @media (prefers-reduced-motion: reduce){.auth-orb,.auth-network{animation:none!important}}
       `}</style>
