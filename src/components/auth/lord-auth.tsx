@@ -90,11 +90,7 @@ function RadiusSummary() {
 
 function WaveFooter({ compact = false }: { compact?: boolean }) {
   return (
-    <div
-      className={`pointer-events-none absolute bottom-0 left-0 w-full overflow-hidden ${compact ? "h-[86px]" : "h-[124px]"}`}
-      style={compact ? undefined : { WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)", maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)" }}
-      aria-hidden="true"
-    >
+    <div className={`pointer-events-none absolute bottom-0 left-0 w-full overflow-hidden ${compact ? "h-[86px]" : "h-[124px]"}`} style={compact ? undefined : { WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)", maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)" }} aria-hidden="true">
       <svg viewBox="0 0 760 156" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
         <path d="M0 94 C155 56 275 136 420 96 C545 62 640 70 760 108 L760 156 L0 156Z" fill="#7ca9ec" opacity=".38" />
         <path d="M0 108 C150 70 285 150 430 106 C555 68 655 84 760 120 L760 156 L0 156Z" fill="#195ed6" opacity=".9" />
@@ -172,22 +168,15 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setMessage("");
-
     if (signup) {
       if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
       if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
       if (!terms) return setMessage("يرجى الموافقة على الشروط والأحكام وسياسة الخصوصية.");
       return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
     }
-
     if (!email || !password) return setMessage("يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.");
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ username: email, password }),
-      });
+      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ username: email, password }) });
       const data = await response.json();
       if (response.ok && data.success) window.location.href = "/Dashboard";
       else setMessage(data.message || "فشل تسجيل الدخول.");
@@ -197,33 +186,24 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   };
 
   const eye = (visible: boolean, toggle: () => void) => (
-    <button type="button" onClick={toggle} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}>
-      {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-    </button>
+    <button type="button" onClick={toggle} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}>{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
   );
 
   return (
     <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_10%_18%,rgba(73,145,235,.25),transparent_30%),radial-gradient(circle_at_88%_82%,rgba(255,176,43,.11),transparent_26%),linear-gradient(135deg,#e4edf8_0%,#f5f8fc_48%,#e9f0f7_100%)] text-[#102a63] dark:bg-[radial-gradient(circle_at_12%_24%,rgba(35,104,186,.24),transparent_32%),radial-gradient(circle_at_88%_84%,rgba(196,126,28,.10),transparent_28%),linear-gradient(135deg,#04111f_0%,#071a2d_52%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
-
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-5 lg:p-6">
-        <div
-          dir="ltr"
-          className={`auth-shell relative w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 ${signup ? "grid max-w-[1020px] min-[1024px]:h-[610px] min-[1024px]:grid-cols-2" : "max-w-[500px] min-[640px]:h-[610px]"} ${transitioning ? "auth-shell-transitioning" : ""}`}
-        >
+        <div dir="ltr" className={`auth-shell relative w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 ${signup ? "grid max-w-[1020px] min-[1024px]:h-[610px] min-[1024px]:grid-cols-2" : "max-w-[500px] min-[640px]:h-[610px]"} ${transitioning ? "auth-shell-transitioning" : ""}`}>
           {signup && <VisualPanel />}
-
           <section dir="rtl" className={`relative flex h-full items-center justify-center bg-white/96 px-5 dark:bg-[#0a1f35]/96 sm:px-8 ${signup ? "min-h-[calc(100dvh-32px)] py-6 min-[1024px]:min-h-0" : "min-h-[610px] pb-[92px] pt-7"}`}>
             <div className={`relative z-10 w-full transition-[max-width,opacity,transform] duration-500 ease-out ${signup ? "max-w-[470px]" : "max-w-[410px]"}`}>
-              {!signup && <div className="mb-5"><Brand /></div>}
+              {!signup && <div className="relative top-3 mb-5"><Brand /></div>}
               {signup && <div className="mb-4 min-[1024px]:hidden"><Brand compact /></div>}
-
               <div className="text-center">
                 <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-[#eaf2ff] text-[#086df0] dark:bg-[#102d4d] dark:text-[#4da0ff]">{signup ? <UserRound className="h-4.5 w-4.5" /> : <LockKeyhole className="h-4.5 w-4.5" />}</div>
                 <h1 className="mt-2.5 text-[23px] font-black">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
                 <p className="mx-auto mt-1 text-[10.5px] leading-5 text-slate-500 dark:text-slate-400">{signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
-
               <form onSubmit={submit} className={signup ? "mt-5" : "mt-7"}>
                 {signup ? (
                   <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
@@ -232,10 +212,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                     <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                    <label className="flex items-start gap-2 text-[9.5px] leading-5 text-slate-600 dark:text-slate-300 sm:col-span-2">
-                      <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#0d6ef0]" />
-                      <span>أوافق على <button type="button" className="font-semibold text-[#0874f9]">الشروط والأحكام وسياسة الخصوصية</button></span>
-                    </label>
+                    <label className="flex items-start gap-2 text-[9.5px] leading-5 text-slate-600 dark:text-slate-300 sm:col-span-2"><input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#0d6ef0]" /><span>أوافق على <button type="button" className="font-semibold text-[#0874f9]">الشروط والأحكام وسياسة الخصوصية</button></span></label>
                     {message && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] text-amber-700 dark:border-amber-400/15 dark:bg-amber-500/10 dark:text-amber-300 sm:col-span-2">{message}</div>}
                     <div className="sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
                     <div className="flex items-center gap-3 text-[9px] text-slate-400 sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
@@ -255,12 +232,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 )}
               </form>
             </div>
-
             {!signup && <WaveFooter compact />}
           </section>
         </div>
       </div>
-
       <style jsx global>{`
         @keyframes lordFloatA { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(18px,-12px,0)} }
         @keyframes lordFloatB { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-20px,15px,0)} }
