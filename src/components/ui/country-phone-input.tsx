@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronDown, Phone } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Phone } from "lucide-react";
 import type { ArabCountry } from "@/components/auth/auth-content";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 type CountryPhoneInputProps = {
   label?: string;
@@ -29,72 +29,41 @@ export function CountryPhoneInput({
   placeholder = "أدخل رقم الهاتف",
   className = "",
 }: CountryPhoneInputProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-
   return (
     <label className={`block ${className}`}>
       <span className="mb-1.5 block text-[11px] font-bold text-[#17386d] dark:text-slate-200 sm:text-[12px]">
         {label}
       </span>
       <div
-        ref={rootRef}
         className="relative flex h-[44px] rounded-[10px] border border-[#ccd9e7] bg-white dark:border-[#304861] dark:bg-[#091c30]"
         dir="ltr"
       >
-        <div className="relative w-[142px] shrink-0 border-r border-[#dbe5ef] dark:border-[#304861] sm:w-[154px]">
-          <button
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            className="flex h-full w-full items-center justify-center gap-1.5 px-2 text-[10px] font-semibold text-[#17386d] dark:text-white sm:text-[11px]"
-            aria-expanded={open}
-          >
-            <span className="text-[16px] leading-none" style={emojiStyle} aria-hidden="true">{country.flag}</span>
-            <span>{country.name}</span>
-            <span dir="ltr">{country.code}</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`} />
-          </button>
-
-          {open && (
-            <div
-              className="absolute left-0 top-[49px] z-50 max-h-64 w-[230px] overflow-auto rounded-[11px] border border-[#ccd9e7] bg-white p-1.5 shadow-[0_14px_38px_rgba(29,58,91,.18)] dark:border-[#304861] dark:bg-[#0b2138]"
-              dir="rtl"
-            >
-              {countries.map((item) => {
-                const active = item.code === country.code;
-                return (
-                  <button
-                    key={`${item.name}-${item.code}`}
-                    type="button"
-                    onClick={() => {
-                      onCountryChange(item);
-                      setOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-[8px] px-2.5 py-2 text-[11px] transition ${
-                      active
-                        ? "bg-[#edf5ff] font-bold text-[#0b5fd7] dark:bg-[#12304f] dark:text-[#70b4ff]"
-                        : "text-[#17386d] hover:bg-[#f3f7fb] dark:text-slate-200 dark:hover:bg-white/[.05]"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="text-[17px] leading-none" style={emojiStyle} aria-hidden="true">{item.flag}</span>
-                      <span>{item.name}</span>
-                    </span>
-                    <span dir="ltr">{item.code}</span>
-                  </button>
-                );
-              })}
-            </div>
+        <SelectDropdown
+          value={country}
+          items={countries}
+          getKey={(item) => `${item.name}-${item.code}`}
+          onChange={onCountryChange}
+          className="h-full w-[142px] shrink-0 border-r border-[#dbe5ef] dark:border-[#304861] sm:w-[154px]"
+          buttonClassName="px-2 text-[10px] font-semibold text-[#17386d] dark:text-white sm:text-[11px]"
+          menuClassName="w-[230px]"
+          align="left"
+          renderValue={(item) => (
+            <span className="flex min-w-0 items-center justify-center gap-1.5">
+              <span className="text-[16px] leading-none" style={emojiStyle} aria-hidden="true">{item.flag}</span>
+              <span className="truncate">{item.name}</span>
+              <span dir="ltr" className="shrink-0">{item.code}</span>
+            </span>
           )}
-        </div>
+          renderItem={(item, active) => (
+            <span className={`flex w-full items-center justify-between px-2.5 py-2 text-[11px] ${active ? "font-bold" : ""}`} dir="rtl">
+              <span className="flex items-center gap-2">
+                <span className="text-[17px] leading-none" style={emojiStyle} aria-hidden="true">{item.flag}</span>
+                <span>{item.name}</span>
+              </span>
+              <span dir="ltr">{item.code}</span>
+            </span>
+          )}
+        />
 
         <div className="relative min-w-0 flex-1" dir="rtl">
           <Phone className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
