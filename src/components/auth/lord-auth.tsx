@@ -3,34 +3,26 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Mail, Radio, UserRound } from "lucide-react";
-import {
-  CompactField,
-  PrimaryFormButton,
-  SecondaryFormButton,
-} from "@/components/ui/auth-form-controls";
+import { CompactField, PrimaryFormButton, SecondaryFormButton } from "@/components/ui/auth-form-controls";
 import { CountryPhoneInput } from "@/components/ui/country-phone-input";
-import {
-  arabCountries,
-  defaultArabCountry,
-  radiusAuthContent,
-} from "@/components/auth/auth-content";
+import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/components/auth/auth-content";
 
 type Mode = "login" | "signup";
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="text-center" dir="ltr">
-      <div className={`relative mx-auto grid place-items-center ${compact ? "h-12 w-16" : "h-[72px] w-[92px]"}`}>
-        <svg viewBox="0 0 96 68" className={compact ? "h-11 w-[68px]" : "h-[58px] w-[84px]"} aria-hidden="true">
+      <div className={`relative mx-auto grid place-items-center ${compact ? "h-10 w-14" : "h-[58px] w-[78px]"}`}>
+        <svg viewBox="0 0 96 68" className={compact ? "h-9 w-[60px]" : "h-[48px] w-[72px]"} aria-hidden="true">
           <path d="M8 51 16 15l19 17L48 7l13 25 19-17 8 36Z" fill="#ffad16" />
           <circle cx="16" cy="12" r="5" fill="#0b3b82" />
           <circle cx="48" cy="5" r="5" fill="#0b3b82" />
           <circle cx="80" cy="12" r="5" fill="#0b3b82" />
         </svg>
-        <Radio className={`absolute bottom-0 text-[#0c63dc] ${compact ? "h-6 w-6" : "h-8 w-8"}`} strokeWidth={2.4} />
+        <Radio className={`absolute bottom-0 text-[#0c63dc] ${compact ? "h-5 w-5" : "h-7 w-7"}`} strokeWidth={2.4} />
       </div>
-      <div className={`${compact ? "text-[28px]" : "text-[42px]"} mt-1 font-black leading-none tracking-tight text-[#0c3272] dark:text-white`}>LORD</div>
-      <div className={`${compact ? "text-[11px]" : "text-[16px]"} mt-1.5 font-extrabold tracking-[.06em] text-[#f2a000]`}>RADIUS LORD</div>
+      <div className={`${compact ? "text-[24px]" : "text-[34px]"} mt-1 font-black leading-none tracking-tight text-[#0c3272] dark:text-white`}>LORD</div>
+      <div className={`${compact ? "text-[10px]" : "text-[13px]"} mt-1 font-extrabold tracking-[.06em] text-[#f2a000]`}>RADIUS LORD</div>
     </div>
   );
 }
@@ -60,21 +52,19 @@ const featureToneClasses = {
 
 function RadiusSummary() {
   return (
-    <div className="mt-5 w-full max-w-[500px] rounded-[22px] border border-white/85 bg-white/74 p-5 shadow-[0_14px_34px_rgba(50,84,124,.09)] backdrop-blur-sm dark:border-white/[.07] dark:bg-[#0d243b]/68">
-      <div className="mb-4 text-center text-[14px] font-black text-[#17386d] dark:text-slate-100">
-        {radiusAuthContent.summaryTitle}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+    <div className="mt-4 w-full max-w-[430px] rounded-[20px] border border-white/85 bg-white/74 p-4 shadow-[0_14px_34px_rgba(50,84,124,.09)] backdrop-blur-sm dark:border-white/[.07] dark:bg-[#0d243b]/68">
+      <div className="mb-3 text-center text-[12px] font-black text-[#17386d] dark:text-slate-100">{radiusAuthContent.summaryTitle}</div>
+      <div className="grid grid-cols-2 gap-2.5">
         {radiusAuthContent.features.map((feature) => {
           const Icon = feature.icon;
           return (
-            <div key={feature.title} className="flex min-h-[78px] items-start gap-3 rounded-[14px] bg-white/72 p-3 dark:bg-white/[.035]" dir="rtl">
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${featureToneClasses[feature.tone]}`}>
-                <Icon className="h-5 w-5" />
+            <div key={feature.title} className="flex min-h-[66px] items-start gap-2.5 rounded-[13px] bg-white/72 p-2.5 dark:bg-white/[.035]" dir="rtl">
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] ${featureToneClasses[feature.tone]}`}>
+                <Icon className="h-4 w-4" />
               </span>
               <div className="min-w-0 text-right">
-                <div className="text-[12px] font-black text-[#17386d] dark:text-white">{feature.title}</div>
-                <div className="mt-1 text-[10px] leading-5 text-slate-500 dark:text-slate-400">{feature.description}</div>
+                <div className="text-[10px] font-black text-[#17386d] dark:text-white">{feature.title}</div>
+                <div className="mt-1 text-[8.5px] leading-4 text-slate-500 dark:text-slate-400">{feature.description}</div>
               </div>
             </div>
           );
@@ -87,11 +77,8 @@ function RadiusSummary() {
 function WaveFooter() {
   return (
     <div
-      className="pointer-events-none absolute bottom-0 left-0 h-[156px] w-full overflow-hidden"
-      style={{
-        WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)",
-        maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)",
-      }}
+      className="pointer-events-none absolute bottom-0 left-0 h-[124px] w-full overflow-hidden"
+      style={{ WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)", maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)" }}
       aria-hidden="true"
     >
       <svg viewBox="0 0 760 156" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -106,18 +93,18 @@ function WaveFooter() {
 
 function ServerIllustration() {
   return (
-    <div className="relative mx-auto h-[150px] w-full max-w-[270px]" aria-hidden="true">
-      <div className="absolute bottom-1 left-1/2 h-8 w-[76%] -translate-x-1/2 rounded-[50%] bg-[#2f6fc8]/14 blur-xl" />
+    <div className="relative mx-auto h-[112px] w-full max-w-[225px]" aria-hidden="true">
+      <div className="absolute bottom-1 left-1/2 h-7 w-[76%] -translate-x-1/2 rounded-[50%] bg-[#2f6fc8]/14 blur-xl" />
       <div className="absolute bottom-[14%] left-1/2 w-[55%] -translate-x-1/2">
         {[0, 1, 2, 3].map((item) => (
-          <div key={item} className="mb-1 flex h-[26px] items-center rounded-[11px] border border-[#7da5d6]/28 bg-gradient-to-r from-[#dbe8f8] to-[#b8cee9] px-3 shadow-sm dark:border-[#486586]/40 dark:from-[#1b3556] dark:to-[#102845]">
-            <span className={`h-2.5 w-2.5 rounded-full ${item === 1 ? "bg-[#ffad16]" : "bg-emerald-500"}`} />
-            <span className="mr-2.5 h-1.5 flex-1 rounded-full bg-[#6d91bd]/45 dark:bg-[#58789c]/50" />
+          <div key={item} className="mb-1 flex h-[20px] items-center rounded-[9px] border border-[#7da5d6]/28 bg-gradient-to-r from-[#dbe8f8] to-[#b8cee9] px-2.5 shadow-sm dark:border-[#486586]/40 dark:from-[#1b3556] dark:to-[#102845]">
+            <span className={`h-2 w-2 rounded-full ${item === 1 ? "bg-[#ffad16]" : "bg-emerald-500"}`} />
+            <span className="mr-2 h-1.5 flex-1 rounded-full bg-[#6d91bd]/45 dark:bg-[#58789c]/50" />
           </div>
         ))}
       </div>
-      <div className="absolute bottom-[8%] left-[13%] grid h-[68px] w-[56px] place-items-center rounded-[38%_38%_45%_45%/32%_32%_62%_62%] border-[4px] border-white bg-gradient-to-b from-[#187bff] to-[#063fbf] text-white shadow-xl dark:border-[#dce8f8]">
-        <LockKeyhole className="h-7 w-7" />
+      <div className="absolute bottom-[8%] left-[13%] grid h-[54px] w-[46px] place-items-center rounded-[38%_38%_45%_45%/32%_32%_62%_62%] border-[4px] border-white bg-gradient-to-b from-[#187bff] to-[#063fbf] text-white shadow-xl dark:border-[#dce8f8]">
+        <LockKeyhole className="h-6 w-6" />
       </div>
     </div>
   );
@@ -125,23 +112,22 @@ function ServerIllustration() {
 
 function VisualPanel({ signup }: { signup: boolean }) {
   return (
-    <section className="relative hidden h-full overflow-hidden bg-gradient-to-br from-[#edf4fc] via-[#f8fbff] to-[#e9f1f9] dark:from-[#07182a] dark:via-[#081d33] dark:to-[#061526] min-[1100px]:block">
+    <section className="relative hidden h-full overflow-hidden bg-gradient-to-br from-[#edf4fc] via-[#f8fbff] to-[#e9f1f9] dark:from-[#07182a] dark:via-[#081d33] dark:to-[#061526] min-[1024px]:block">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_28%,rgba(48,137,255,.10),transparent_24%),radial-gradient(circle_at_70%_72%,rgba(255,173,22,.07),transparent_22%)]" />
       <div className="absolute right-0 top-6 bottom-6 w-px bg-gradient-to-b from-transparent via-[#9bbce4]/48 to-transparent dark:via-[#45627f]/55" />
-
-      <div className="relative z-10 flex h-full flex-col items-center px-10 pt-10 text-center xl:px-12 xl:pt-12">
+      <div className="relative z-10 flex h-full flex-col items-center px-8 pt-7 text-center">
         <Brand />
         {signup ? (
           <>
-            <div className="mt-7 text-center">
-              <h2 className="text-[22px] font-black text-[#0e316d] dark:text-white xl:text-[24px]">{radiusAuthContent.title}</h2>
-              <p className="mx-auto mt-3 max-w-[520px] text-[12px] leading-6 text-slate-600 dark:text-slate-300 xl:text-[13px]">{radiusAuthContent.description}</p>
+            <div className="mt-5 text-center">
+              <h2 className="text-[18px] font-black text-[#0e316d] dark:text-white">{radiusAuthContent.title}</h2>
+              <p className="mx-auto mt-2 max-w-[440px] text-[10px] leading-5 text-slate-600 dark:text-slate-300">{radiusAuthContent.description}</p>
             </div>
             <RadiusSummary />
-            <div className="mt-auto mb-[88px] w-full"><ServerIllustration /></div>
+            <div className="mt-auto mb-[72px] w-full"><ServerIllustration /></div>
           </>
         ) : (
-          <div className="mt-auto mb-[110px] w-full"><ServerIllustration /></div>
+          <div className="mt-auto mb-[82px] w-full"><ServerIllustration /></div>
         )}
       </div>
       <WaveFooter />
@@ -166,22 +152,15 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setMessage("");
-
     if (signup) {
       if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
       if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
       if (!terms) return setMessage("يرجى الموافقة على الشروط والأحكام وسياسة الخصوصية.");
       return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
     }
-
     if (!email || !password) return setMessage("يرجى إدخال البريد الإلكتروني وكلمة المرور.");
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ username: email, password }),
-      });
+      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ username: email, password }) });
       const data = await response.json();
       if (response.ok && data.success) window.location.href = "/Dashboard";
       else setMessage(data.message || "فشل تسجيل الدخول.");
@@ -199,58 +178,49 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   return (
     <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[#e8eef5] text-[#102a63] dark:bg-[#061526] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-2.5 sm:p-3 lg:p-3.5">
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-5 lg:p-6">
         <div
           dir="ltr"
-          className="grid w-[calc(100vw-28px)] max-w-[1400px] overflow-hidden rounded-[26px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1100px]:grid-cols-2 min-[1100px]:h-[calc(100dvh-28px)] min-[1100px]:max-h-[820px] min-[1100px]:min-h-[700px]"
+          className={`grid w-full overflow-hidden rounded-[24px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1024px]:grid-cols-2 ${signup ? "max-w-[1120px] min-[1024px]:h-[650px]" : "max-w-[980px] min-[1024px]:h-[600px]"}`}
         >
           <VisualPanel signup={signup} />
-
-          <section dir="rtl" className="flex min-h-[calc(100dvh-20px)] items-center justify-center bg-white/96 px-5 py-7 dark:bg-[#0a1f35]/96 sm:px-8 min-[1100px]:min-h-0 lg:px-10 xl:px-12">
-            <div className={`w-full ${signup ? "max-w-[560px]" : "max-w-[460px]"}`}>
-              <div className="mb-5 min-[1100px]:hidden"><Brand compact /></div>
-
+          <section dir="rtl" className="flex min-h-[calc(100dvh-32px)] items-center justify-center bg-white/96 px-5 py-6 dark:bg-[#0a1f35]/96 sm:px-7 min-[1024px]:min-h-0 lg:px-8">
+            <div className={`w-full ${signup ? "max-w-[470px]" : "max-w-[410px]"}`}>
+              <div className="mb-4 min-[1024px]:hidden"><Brand compact /></div>
               <div className="text-center">
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#eaf2ff] text-[#086df0] dark:bg-[#102d4d] dark:text-[#4da0ff]">
-                  {signup ? <UserRound className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
-                </div>
-                <h1 className="mt-3 text-[27px] font-black sm:text-[29px]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400 sm:text-[13px]">
-                  {signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "مرحباً بك، يرجى تسجيل الدخول للوصول إلى لوحة التحكم"}
-                </p>
+                <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-[#eaf2ff] text-[#086df0] dark:bg-[#102d4d] dark:text-[#4da0ff]">{signup ? <UserRound className="h-4.5 w-4.5" /> : <LockKeyhole className="h-4.5 w-4.5" />}</div>
+                <h1 className="mt-2.5 text-[23px] font-black">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
+                <p className="mx-auto mt-1 text-[10.5px] leading-5 text-slate-500 dark:text-slate-400">{signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "مرحباً بك، يرجى تسجيل الدخول للوصول إلى لوحة التحكم"}</p>
               </div>
 
-              <form onSubmit={submit} className={signup ? "mt-7" : "mt-9"}>
+              <form onSubmit={submit} className={signup ? "mt-5" : "mt-7"}>
                 {signup ? (
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                     <CompactField label="الاسم الكامل *" icon={UserRound} value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
                     <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
                     <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-
-                    <label className="flex items-start gap-2 text-[10px] leading-5 text-slate-600 dark:text-slate-300 sm:col-span-2 sm:text-[11px]">
-                      <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-4 w-4 accent-[#0d6ef0]" />
+                    <label className="flex items-start gap-2 text-[9.5px] leading-5 text-slate-600 dark:text-slate-300 sm:col-span-2">
+                      <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#0d6ef0]" />
                       <span>أوافق على <button type="button" className="font-semibold text-[#0874f9]">الشروط والأحكام وسياسة الخصوصية</button></span>
                     </label>
-
-                    {message && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-700 dark:border-amber-400/15 dark:bg-amber-500/10 dark:text-amber-300 sm:col-span-2">{message}</div>}
-
+                    {message && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] text-amber-700 dark:border-amber-400/15 dark:bg-amber-500/10 dark:text-amber-300 sm:col-span-2">{message}</div>}
                     <div className="sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
-                    <div className="flex items-center gap-3 text-[10px] text-slate-400 sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
-                    <div className="sm:col-span-2"><SecondaryFormButton><span className="text-base font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
-                    <div className="text-center text-[11px] text-slate-500 dark:text-slate-400 sm:col-span-2">لديك حساب بالفعل؟ <Link href="/login" className="mr-2 font-bold text-[#0874f9]">تسجيل الدخول</Link></div>
+                    <div className="flex items-center gap-3 text-[9px] text-slate-400 sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
+                    <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
+                    <div className="text-center text-[10px] text-slate-500 dark:text-slate-400 sm:col-span-2">لديك حساب بالفعل؟ <Link href="/login" className="mr-2 font-bold text-[#0874f9]">تسجيل الدخول</Link></div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
-                    <div className="flex items-center justify-between text-[11px]"><label className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="h-4 w-4 accent-[#0d6ef0]" />تذكرني</label><button type="button" className="font-semibold text-[#0874f9]">نسيت كلمة المرور؟</button></div>
-                    {message && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-700 dark:border-amber-400/15 dark:bg-amber-500/10 dark:text-amber-300">{message}</div>}
+                    <div className="flex items-center justify-between text-[10px]"><label className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="h-3.5 w-3.5 accent-[#0d6ef0]" />تذكرني</label><button type="button" className="font-semibold text-[#0874f9]">نسيت كلمة المرور؟</button></div>
+                    {message && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] text-amber-700 dark:border-amber-400/15 dark:bg-amber-500/10 dark:text-amber-300">{message}</div>}
                     <PrimaryFormButton>تسجيل الدخول <span>←</span></PrimaryFormButton>
-                    <div className="flex items-center gap-3 text-[10px] text-slate-400"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
-                    <SecondaryFormButton><span className="text-base font-black text-[#4285f4]">G</span> تسجيل الدخول باستخدام Google</SecondaryFormButton>
-                    <div className="text-center text-[11px] text-slate-500 dark:text-slate-400">ليس لديك حساب؟ <Link href="/signup" className="mr-2 font-bold text-[#0874f9]">إنشاء حساب جديد</Link></div>
+                    <div className="flex items-center gap-3 text-[9px] text-slate-400"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
+                    <SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> تسجيل الدخول باستخدام Google</SecondaryFormButton>
+                    <div className="text-center text-[10px] text-slate-500 dark:text-slate-400">ليس لديك حساب؟ <Link href="/signup" className="mr-2 font-bold text-[#0874f9]">إنشاء حساب جديد</Link></div>
                   </div>
                 )}
               </form>
