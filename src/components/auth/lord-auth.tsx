@@ -51,28 +51,6 @@ function PageMotion() {
   );
 }
 
-function ServerIllustration({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className={`relative mx-auto w-full ${compact ? "h-[150px] max-w-[260px]" : "h-[260px] max-w-[380px]"}`} aria-hidden="true">
-      <div className="absolute bottom-1 left-1/2 h-8 w-[76%] -translate-x-1/2 rounded-[50%] bg-[#2f6fc8]/14 blur-xl" />
-      <div className="absolute bottom-[14%] left-1/2 w-[55%] -translate-x-1/2">
-        {[0, 1, 2, 3].map((item) => (
-          <div
-            key={item}
-            className={`${compact ? "mb-1 h-[26px]" : "mb-1.5 h-[42px]"} flex items-center rounded-[11px] border border-[#7da5d6]/28 bg-gradient-to-r from-[#dbe8f8] to-[#b8cee9] px-3 shadow-sm dark:border-[#486586]/40 dark:from-[#1b3556] dark:to-[#102845]`}
-          >
-            <span className={`h-2.5 w-2.5 rounded-full ${item === 1 ? "bg-[#ffad16]" : "bg-emerald-500"}`} />
-            <span className="mr-2.5 h-1.5 flex-1 rounded-full bg-[#6d91bd]/45 dark:bg-[#58789c]/50" />
-          </div>
-        ))}
-      </div>
-      <div className={`absolute bottom-[8%] left-[13%] grid ${compact ? "h-[68px] w-[56px] border-[4px]" : "h-[104px] w-[86px] border-[6px]"} place-items-center rounded-[38%_38%_45%_45%/32%_32%_62%_62%] border-white bg-gradient-to-b from-[#187bff] to-[#063fbf] text-white shadow-xl dark:border-[#dce8f8]`}>
-        <LockKeyhole className={compact ? "h-7 w-7" : "h-10 w-10"} />
-      </div>
-    </div>
-  );
-}
-
 const featureToneClasses = {
   blue: "bg-[#e8f1ff] text-[#0874f9] dark:bg-[#102e4f] dark:text-[#64adff]",
   green: "bg-[#e6f8ef] text-[#13a563] dark:bg-[#113a31] dark:text-[#50d39a]",
@@ -82,7 +60,7 @@ const featureToneClasses = {
 
 function RadiusSummary() {
   return (
-    <div className="mt-6 w-full max-w-[480px] rounded-[22px] border border-white/85 bg-white/74 p-5 shadow-[0_14px_34px_rgba(50,84,124,.09)] backdrop-blur-sm dark:border-white/[.07] dark:bg-[#0d243b]/68">
+    <div className="mt-5 w-full max-w-[500px] rounded-[22px] border border-white/85 bg-white/74 p-5 shadow-[0_14px_34px_rgba(50,84,124,.09)] backdrop-blur-sm dark:border-white/[.07] dark:bg-[#0d243b]/68">
       <div className="mb-4 text-center text-[14px] font-black text-[#17386d] dark:text-slate-100">
         {radiusAuthContent.summaryTitle}
       </div>
@@ -109,16 +87,38 @@ function RadiusSummary() {
 function WaveFooter() {
   return (
     <div
-      className="pointer-events-none absolute bottom-0 left-0 h-[150px] w-full overflow-hidden"
-      style={{ WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 72%,rgba(0,0,0,.72) 84%,transparent 100%)", maskImage: "linear-gradient(to right,#000 0%,#000 72%,rgba(0,0,0,.72) 84%,transparent 100%)" }}
+      className="pointer-events-none absolute bottom-0 left-0 h-[156px] w-full overflow-hidden"
+      style={{
+        WebkitMaskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)",
+        maskImage: "linear-gradient(to right,#000 0%,#000 76%,rgba(0,0,0,.72) 87%,transparent 100%)",
+      }}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 720 150" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-        <path d="M0 92 C150 55 260 135 395 94 C505 62 590 66 720 104 L720 150 L0 150Z" fill="#7ca9ec" opacity=".38" />
-        <path d="M0 105 C145 70 270 148 410 103 C530 67 610 83 720 116 L720 150 L0 150Z" fill="#195ed6" opacity=".9" />
-        <path d="M0 119 C145 88 260 153 405 117 C535 85 622 96 720 126 L720 150 L0 150Z" fill="#073da5" />
-        <path d="M0 132 C76 111 140 122 214 150 L0 150Z" fill="#ffad16" />
+      <svg viewBox="0 0 760 156" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+        <path d="M0 94 C155 56 275 136 420 96 C545 62 640 70 760 108 L760 156 L0 156Z" fill="#7ca9ec" opacity=".38" />
+        <path d="M0 108 C150 70 285 150 430 106 C555 68 655 84 760 120 L760 156 L0 156Z" fill="#195ed6" opacity=".9" />
+        <path d="M0 122 C150 88 275 154 425 120 C555 88 650 99 760 130 L760 156 L0 156Z" fill="#073da5" />
+        <path d="M0 136 C82 113 150 124 226 156 L0 156Z" fill="#ffad16" />
       </svg>
+    </div>
+  );
+}
+
+function ServerIllustration() {
+  return (
+    <div className="relative mx-auto h-[150px] w-full max-w-[270px]" aria-hidden="true">
+      <div className="absolute bottom-1 left-1/2 h-8 w-[76%] -translate-x-1/2 rounded-[50%] bg-[#2f6fc8]/14 blur-xl" />
+      <div className="absolute bottom-[14%] left-1/2 w-[55%] -translate-x-1/2">
+        {[0, 1, 2, 3].map((item) => (
+          <div key={item} className="mb-1 flex h-[26px] items-center rounded-[11px] border border-[#7da5d6]/28 bg-gradient-to-r from-[#dbe8f8] to-[#b8cee9] px-3 shadow-sm dark:border-[#486586]/40 dark:from-[#1b3556] dark:to-[#102845]">
+            <span className={`h-2.5 w-2.5 rounded-full ${item === 1 ? "bg-[#ffad16]" : "bg-emerald-500"}`} />
+            <span className="mr-2.5 h-1.5 flex-1 rounded-full bg-[#6d91bd]/45 dark:bg-[#58789c]/50" />
+          </div>
+        ))}
+      </div>
+      <div className="absolute bottom-[8%] left-[13%] grid h-[68px] w-[56px] place-items-center rounded-[38%_38%_45%_45%/32%_32%_62%_62%] border-[4px] border-white bg-gradient-to-b from-[#187bff] to-[#063fbf] text-white shadow-xl dark:border-[#dce8f8]">
+        <LockKeyhole className="h-7 w-7" />
+      </div>
     </div>
   );
 }
@@ -129,23 +129,19 @@ function VisualPanel({ signup }: { signup: boolean }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_28%,rgba(48,137,255,.10),transparent_24%),radial-gradient(circle_at_70%_72%,rgba(255,173,22,.07),transparent_22%)]" />
       <div className="absolute right-0 top-6 bottom-6 w-px bg-gradient-to-b from-transparent via-[#9bbce4]/48 to-transparent dark:via-[#45627f]/55" />
 
-      <div className="relative z-10 flex h-full flex-col items-center px-8 pt-9 text-center xl:px-10 xl:pt-11">
+      <div className="relative z-10 flex h-full flex-col items-center px-10 pt-10 text-center xl:px-12 xl:pt-12">
         <Brand />
         {signup ? (
           <>
             <div className="mt-7 text-center">
-              <h2 className="text-[22px] font-black text-[#0e316d] dark:text-white xl:text-[24px]">
-                {radiusAuthContent.title}
-              </h2>
-              <p className="mx-auto mt-3 max-w-[500px] text-[12px] leading-6 text-slate-600 dark:text-slate-300 xl:text-[13px]">
-                {radiusAuthContent.description}
-              </p>
+              <h2 className="text-[22px] font-black text-[#0e316d] dark:text-white xl:text-[24px]">{radiusAuthContent.title}</h2>
+              <p className="mx-auto mt-3 max-w-[520px] text-[12px] leading-6 text-slate-600 dark:text-slate-300 xl:text-[13px]">{radiusAuthContent.description}</p>
             </div>
             <RadiusSummary />
-            <div className="mt-auto mb-[86px] w-full"><ServerIllustration compact /></div>
+            <div className="mt-auto mb-[88px] w-full"><ServerIllustration /></div>
           </>
         ) : (
-          <div className="mt-auto mb-[105px] w-full"><ServerIllustration /></div>
+          <div className="mt-auto mb-[110px] w-full"><ServerIllustration /></div>
         )}
       </div>
       <WaveFooter />
@@ -203,15 +199,15 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   return (
     <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[#e8eef5] text-[#102a63] dark:bg-[#061526] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-3 sm:p-4 lg:p-5">
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-2.5 sm:p-3 lg:p-3.5">
         <div
           dir="ltr"
-          className={`grid w-full max-w-[1320px] overflow-hidden rounded-[26px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1100px]:grid-cols-2 min-[1100px]:h-[min(800px,calc(100dvh-40px))] min-[1100px]:min-h-[680px]`}
+          className="grid w-[calc(100vw-28px)] max-w-[1400px] overflow-hidden rounded-[26px] border border-white/80 bg-[#f8fbff]/97 shadow-[0_20px_60px_rgba(58,84,112,.16)] backdrop-blur-sm dark:border-white/[.08] dark:bg-[#081b2f]/97 min-[1100px]:grid-cols-2 min-[1100px]:h-[calc(100dvh-28px)] min-[1100px]:max-h-[820px] min-[1100px]:min-h-[700px]"
         >
           <VisualPanel signup={signup} />
 
-          <section dir="rtl" className="flex min-h-[calc(100dvh-24px)] items-center justify-center bg-white/96 px-5 py-7 dark:bg-[#0a1f35]/96 sm:px-8 min-[1100px]:min-h-0 lg:px-10 xl:px-12">
-            <div className={`w-full ${signup ? "max-w-[540px]" : "max-w-[460px]"}`}>
+          <section dir="rtl" className="flex min-h-[calc(100dvh-20px)] items-center justify-center bg-white/96 px-5 py-7 dark:bg-[#0a1f35]/96 sm:px-8 min-[1100px]:min-h-0 lg:px-10 xl:px-12">
+            <div className={`w-full ${signup ? "max-w-[560px]" : "max-w-[460px]"}`}>
               <div className="mb-5 min-[1100px]:hidden"><Brand compact /></div>
 
               <div className="text-center">
