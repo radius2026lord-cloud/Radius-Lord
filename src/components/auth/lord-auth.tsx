@@ -176,7 +176,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   );
 
   return (
-    <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[linear-gradient(135deg,#e5edf7_0%,#f4f8fc_48%,#e4ecf6_100%)] text-[#102a63] dark:bg-[linear-gradient(135deg,#04111f_0%,#071a2d_48%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
+    <main dir="rtl" className="relative min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_12%_28%,rgba(111,170,242,.34),transparent_32%),radial-gradient(circle_at_88%_84%,rgba(255,203,128,.20),transparent_30%),linear-gradient(135deg,#e7eef7_0%,#f7f9fc_52%,#edf1f5_100%)] text-[#102a63] dark:bg-[radial-gradient(circle_at_12%_28%,rgba(25,91,170,.22),transparent_34%),radial-gradient(circle_at_88%_84%,rgba(184,118,27,.10),transparent_30%),linear-gradient(135deg,#04111f_0%,#071a2d_52%,#0a2239_100%)] dark:text-slate-100" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <PageMotion />
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-5 lg:p-6">
         <div
