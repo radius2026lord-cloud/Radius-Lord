@@ -162,13 +162,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   );
 
   return (
-    <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#07182a] dark:text-slate-100">
-      <aside className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[28px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.28)] lg:block`}>
+    <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5]">
+      <aside className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[28px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
         <SidebarContent />
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
-          className="absolute -left-3 top-14 z-50 grid h-8 w-8 place-items-center rounded-full border border-[#bdd4ed] bg-white text-[#0758e9] shadow-lg transition hover:scale-105 dark:border-white/10 dark:bg-[#102942] dark:text-[#4da0ff]"
+          className="absolute -left-3 top-14 z-50 grid h-8 w-8 place-items-center rounded-full border border-[#bdd4ed] bg-white text-[#0758e9] shadow-lg transition hover:scale-105 dark:border-white/10 dark:bg-[#38363c] dark:text-[#6aa8ff]"
           aria-label={collapsed ? "فتح الشريط الجانبي" : "طي الشريط الجانبي"}
         >
           {collapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -178,7 +178,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       {mobileOpen && (
         <div className="fixed inset-0 z-[80] lg:hidden">
           <button className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" />
-          <aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[26px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#0b2036]">
+          <aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[26px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]">
             <SidebarContent mobile />
           </aside>
         </div>
@@ -186,29 +186,29 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
       <div className={`${mainGap} h-screen min-w-0 overflow-hidden transition-all duration-300`}>
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5">
-          <div className="flex min-h-[62px] items-center gap-3 rounded-[22px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.24)] sm:px-5">
-            <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-white/[.04] dark:text-white lg:hidden" aria-label="فتح القائمة">
+          <div className="flex min-h-[62px] items-center gap-3 rounded-[22px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
+            <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة">
               <Menu className="h-5 w-5" />
             </button>
 
             <div className="relative min-w-0 flex-1 sm:max-w-[430px]">
               <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
-                className="h-10 w-full rounded-2xl border border-[#d7e3ef] bg-white/90 pr-12 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.09] dark:bg-[#0d243c] dark:text-white dark:placeholder:text-slate-500"
+                className="h-10 w-full rounded-2xl border border-[#d7e3ef] bg-white/90 pr-12 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894]"
                 placeholder="ابحث عن NAS، مشترك، جلسة ..."
               />
             </div>
 
             <div className="mr-auto flex items-center gap-2 sm:gap-3">
-              <div className="hidden min-h-10 items-center gap-3 rounded-2xl border border-[#d7e3ef] bg-white px-4 dark:border-white/[.09] dark:bg-[#0d243c] md:flex">
+              <div className="hidden min-h-10 items-center gap-3 rounded-2xl border border-[#d7e3ef] bg-white px-4 dark:border-white/[.10] dark:bg-[#38363c] md:flex">
                 <Radio className="h-5 w-5 text-[#0758e9]" />
                 <div className="leading-tight">
                   <div className="text-xs font-bold">RADIUS</div>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400"><span className="h-2 w-2 rounded-full bg-emerald-500" />Online</div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]"><span className="h-2 w-2 rounded-full bg-emerald-500" />Online</div>
                 </div>
               </div>
 
-              <button className="relative grid h-10 w-10 place-items-center rounded-2xl border border-[#d7e3ef] bg-white dark:border-white/[.09] dark:bg-[#0d243c]" aria-label="التنبيهات">
+              <button className="relative grid h-10 w-10 place-items-center rounded-2xl border border-[#d7e3ef] bg-white dark:border-white/[.10] dark:bg-[#38363c]" aria-label="التنبيهات">
                 <Bell className="h-5 w-5" />
                 <span className="absolute -left-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff9f0a] px-1 text-[10px] font-bold text-white">3</span>
               </button>
@@ -216,37 +216,37 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <button
                 type="button"
                 onClick={() => setTheme(isDark ? "light" : "dark")}
-                className="grid h-10 w-10 place-items-center rounded-2xl border border-[#d7e3ef] bg-white text-[#102a63] dark:border-white/[.09] dark:bg-[#0d243c] dark:text-slate-100"
+                className="grid h-10 w-10 place-items-center rounded-2xl border border-[#d7e3ef] bg-white text-[#102a63] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#f4f1f5]"
                 aria-label="تبديل الوضع"
               >
                 {mounted && isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
 
-              <div className="hidden items-center gap-2 rounded-2xl border border-[#d7e3ef] bg-white py-1 pr-2 pl-3 dark:border-white/[.09] dark:bg-[#0d243c] sm:flex">
+              <div className="hidden items-center gap-2 rounded-2xl border border-[#d7e3ef] bg-white py-1 pr-2 pl-3 dark:border-white/[.10] dark:bg-[#38363c] sm:flex">
                 <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-[#0e74ff] to-[#073dbd] text-white"><Crown className="h-4 w-4 text-[#ffad16]" /></div>
-                <div className="leading-tight"><div className="text-xs font-bold">Admin</div><div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">مدير النظام</div></div>
+                <div className="leading-tight"><div className="text-xs font-bold">Admin</div><div className="mt-0.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]">مدير النظام</div></div>
               </div>
             </div>
           </div>
         </header>
 
         <main className="h-[calc(100dvh-74px)] overflow-hidden px-3 pb-[66px] pt-3 md:px-4 lg:px-5">
-          <div className="h-full overflow-y-auto rounded-[28px] border border-[#a9c8e8] bg-[#edf3f8]/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-[#27445f] dark:bg-[#091d32]/80 sm:p-4">
+          <div className="workspace-scroll h-full overflow-y-auto rounded-[28px] border border-[#a9c8e8] bg-[#edf3f8]/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-4 px-1">
               <div>
                 <h1 className="text-lg font-bold sm:text-xl">{currentTitle}</h1>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">مركز التحكم والمراقبة لشبكة LORD RADIUS</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-[#b9b3bd]">مركز التحكم والمراقبة لشبكة LORD RADIUS</p>
               </div>
-              <div className="hidden items-center gap-2 rounded-2xl border border-[#d4e1ed] bg-white px-3 py-2 text-xs text-slate-500 dark:border-white/[.08] dark:bg-[#0d243c] dark:text-slate-400 md:flex"><ShieldCheck className="h-4 w-4 text-emerald-500" /> جميع الخدمات مستقرة</div>
+              <div className="hidden items-center gap-2 rounded-2xl border border-[#d4e1ed] bg-white px-3 py-2 text-xs text-slate-500 dark:border-white/[.10] dark:bg-[#302e33] dark:text-[#b9b3bd] md:flex"><ShieldCheck className="h-4 w-4 text-emerald-500" /> جميع الخدمات مستقرة</div>
             </div>
 
             <div className="min-w-0">{children}</div>
 
             <div className="mt-4">
-              <div className="mx-auto flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-[24px] border border-[#d3e0ec] bg-white/95 p-2 shadow-[0_12px_30px_rgba(48,78,110,.12)] dark:border-white/[.08] dark:bg-[#0d243c]/95 dark:shadow-[0_12px_30px_rgba(0,0,0,.20)]">
+              <div className="mx-auto flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-[24px] border border-[#d3e0ec] bg-white/95 p-2 shadow-[0_12px_30px_rgba(48,78,110,.12)] dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-none">
                 {shortcuts.map(({ label, icon: Icon }) => (
-                  <button key={label} className="flex h-11 shrink-0 items-center gap-2 rounded-[17px] px-3 text-xs font-semibold text-[#17386d] transition hover:bg-[#edf5ff] dark:text-slate-200 dark:hover:bg-white/[.06] sm:px-4">
-                    <Icon className="h-[18px] w-[18px] text-[#0758e9] dark:text-[#4da0ff]" />
+                  <button key={label} className="flex h-11 shrink-0 items-center gap-2 rounded-[17px] px-3 text-xs font-semibold text-[#17386d] transition hover:bg-[#edf5ff] dark:text-[#f4f1f5] dark:hover:bg-[#38363c] sm:px-4">
+                    <Icon className="h-[18px] w-[18px] text-[#0758e9] dark:text-[#6aa8ff]" />
                     <span>{label}</span>
                   </button>
                 ))}
@@ -256,17 +256,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </main>
 
         <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap}`}>
-          <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[18px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:text-slate-400">
+          <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[18px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-none">
             <div className="flex items-center gap-2"><Database className="h-4 w-4 text-[#0758e9]" /><span>radius.lord.local</span></div>
             <div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 sm:block" />
-            <div><span className="font-semibold text-slate-700 dark:text-slate-200">Ubuntu 22.04.4 LTS</span></div>
+            <div><span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">Ubuntu 22.04.4 LTS</span></div>
             <div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 md:block" />
             <div className="hidden items-center gap-2 md:flex"><span>CPU</span><span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full w-[23%] rounded-full bg-[#ffad16]" /></span><b>23%</b></div>
             <div className="hidden items-center gap-2 lg:flex"><span>RAM</span><span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full w-[42%] rounded-full bg-[#1479ff]" /></span><b>42%</b></div>
             <div className="mr-auto flex items-center gap-4">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />FreeRADIUS</span>
               <span className="hidden items-center gap-1.5 sm:flex"><span className="h-2 w-2 rounded-full bg-emerald-500" />MySQL</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">10:24:45 AM</span>
+              <span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">10:24:45 AM</span>
             </div>
           </div>
         </footer>
