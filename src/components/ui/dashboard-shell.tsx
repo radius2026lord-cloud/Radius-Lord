@@ -162,7 +162,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   );
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#07182a] dark:text-slate-100">
+    <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#07182a] dark:text-slate-100">
       <aside className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[28px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.28)] lg:block`}>
         <SidebarContent />
         <button
@@ -184,8 +184,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </div>
       )}
 
-      <div className={`${mainGap} min-w-0 transition-all duration-300`}>
-        <header className="sticky top-0 z-30 px-3 pt-3 md:px-4 lg:px-5">
+      <div className={`${mainGap} h-screen min-w-0 overflow-hidden transition-all duration-300`}>
+        <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5">
           <div className="flex min-h-[74px] items-center gap-3 rounded-[26px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.24)] sm:px-5">
             <button onClick={() => setMobileOpen(true)} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-white/[.04] dark:text-white lg:hidden" aria-label="فتح القائمة">
               <Menu className="h-5 w-5" />
@@ -230,8 +230,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </header>
 
-        <main className="px-3 pb-2 pt-3 md:px-4 lg:px-5">
-          <div className="overflow-hidden rounded-[28px] border border-[#a9c8e8] bg-[#edf3f8]/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-[#27445f] dark:bg-[#091d32]/80 sm:p-4">
+        <main className="h-[calc(100dvh-86px)] overflow-hidden px-3 pb-[82px] pt-3 md:px-4 lg:px-5">
+          <div className="h-full overflow-y-auto rounded-[28px] border border-[#a9c8e8] bg-[#edf3f8]/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-[#27445f] dark:bg-[#091d32]/80 sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-4 px-1">
               <div>
                 <h1 className="text-lg font-bold sm:text-xl">{currentTitle}</h1>
