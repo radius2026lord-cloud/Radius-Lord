@@ -67,6 +67,80 @@ a {
   background: #2563eb;
 }
 
+/* Workspace scrollbar: hidden until the pointer is over the workspace. */
+main > div:first-child {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+main > div:first-child:hover {
+  scrollbar-color: rgba(59, 130, 246, 0.72) transparent;
+}
+
+main > div:first-child::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+main > div:first-child::-webkit-scrollbar-track {
+  margin-block: 18px;
+  background: transparent;
+}
+
+main > div:first-child::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+main > div:first-child:hover::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.72);
+  background-clip: padding-box;
+}
+
+main > div:first-child::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.92);
+  background-clip: padding-box;
+}
+
+.dark main > div:first-child:hover {
+  scrollbar-color: rgba(96, 165, 250, 0.74) transparent;
+}
+
+.dark main > div:first-child:hover::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.74);
+  background-clip: padding-box;
+}
+
+.dark main > div:first-child::-webkit-scrollbar-thumb:hover {
+  background: rgba(147, 197, 253, 0.92);
+  background-clip: padding-box;
+}
+
+/* Keep the quick-shortcuts row compact to leave more vertical workspace. */
+main > div:first-child > div.mt-4 {
+  margin-top: 0.65rem;
+}
+
+main > div:first-child > div.mt-4 > div {
+  padding: 0.3rem;
+  border-radius: 18px;
+}
+
+main > div:first-child > div.mt-4 button {
+  height: 36px;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+  border-radius: 13px;
+}
+
+main > div:first-child > div.mt-4 button svg {
+  width: 16px;
+  height: 16px;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
