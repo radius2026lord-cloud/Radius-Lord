@@ -95,28 +95,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [footerVisible, setFooterVisible] = useState(true);
 
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const onScroll = () => {
-      setFooterVisible(false);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setFooterVisible(true), 240);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
 
   const isDark = mounted && theme === "dark";
   const sidebarWidth = collapsed ? "lg:w-[92px]" : "lg:w-[232px]";
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
-  const footerGap = collapsed ? "lg:right-[112px]" : "lg:right-[252px]";
+  const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
 
   const currentTitle = useMemo(() => {
     for (const group of navGroups) {
@@ -270,7 +255,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </main>
 
-        <footer className={`fixed bottom-3 left-3 right-3 z-30 transition-all duration-300 md:left-4 lg:left-5 ${footerGap} ${footerVisible ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0 pointer-events-none"}`}>
+        <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap}`}>
           <div className="flex min-h-[58px] flex-wrap items-center gap-x-5 gap-y-2 rounded-[22px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-2 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:text-slate-400">
             <div className="flex items-center gap-2"><Database className="h-4 w-4 text-[#0758e9]" /><span>radius.lord.local</span></div>
             <div className="hidden h-6 w-px bg-slate-200 dark:bg-white/10 sm:block" />
