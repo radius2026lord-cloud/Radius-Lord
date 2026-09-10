@@ -167,10 +167,21 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   return (
     <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5]">
       <aside
-        onMouseEnter={() => setCollapsed(false)}
-        onMouseLeave={() => setCollapsed(true)}
+        onMouseLeave={(event) => {
+          if (collapsed) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          const exitedThroughLeft = event.clientX <= rect.left && event.clientY >= rect.top && event.clientY <= rect.bottom;
+          if (exitedThroughLeft) setCollapsed(true);
+        }}
         className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}
       >
+        {collapsed && (
+          <div
+            aria-hidden="true"
+            onMouseEnter={() => setCollapsed(false)}
+            className="absolute inset-y-0 left-0 z-50 w-3"
+          />
+        )}
         <SidebarContent />
       </aside>
 
