@@ -7,8 +7,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Bell,
-  ChevronLeft,
-  ChevronRight,
   CircleDollarSign,
   Clock3,
   Crown,
@@ -43,7 +41,7 @@ const navGroups = [
       { label: "سجلات RADIUS", href: "/Dashboard/radius-logs", icon: FileClock },
     ],
   },
- {
+  {
     label: "المشتركون",
     items: [
       { label: "المشتركون", href: "/Dashboard/subscribers", icon: Users },
@@ -93,7 +91,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -122,7 +120,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         )}
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <nav className="sidebar min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {navGroups.map((group) => (
           <div key={group.label} className="mb-5">
             {(!collapsed || mobile) && <div className="mb-2 px-3 text-[11px] font-semibold text-slate-400 dark:text-slate-500">{group.label}</div>}
@@ -163,16 +161,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   return (
     <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5]">
-      <aside className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
+      <aside
+        onMouseEnter={() => setCollapsed(false)}
+        onMouseLeave={() => setCollapsed(true)}
+        className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}
+      >
         <SidebarContent />
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="absolute -left-3 top-14 z-50 grid h-8 w-8 place-items-center rounded-full border border-[#bdd4ed] bg-white text-[#0758e9] shadow-lg transition hover:scale-105 dark:border-white/10 dark:bg-[#38363c] dark:text-[#6aa8ff]"
-          aria-label={collapsed ? "فتح الشريط الجانبي" : "طي الشريط الجانبي"}
-        >
-          {collapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
       </aside>
 
       {mobileOpen && (
