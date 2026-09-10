@@ -72,17 +72,15 @@ const shortcuts = [
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-3 min-w-0">
-      <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#0a70ff] to-[#063bbd] text-white shadow-[0_10px_25px_rgba(26,111,255,.28)]">
+    <div className={`flex min-w-0 items-center transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "justify-center gap-0" : "gap-3"}`}>
+      <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#0a70ff] to-[#063bbd] text-white shadow-[0_10px_25px_rgba(26,111,255,.28)] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]">
         <Crown className="h-6 w-6 text-[#ffad16]" strokeWidth={2.2} />
         <Radio className="absolute bottom-1.5 h-3.5 w-3.5" strokeWidth={2.5} />
       </div>
-      {!compact && (
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-[15px] font-bold text-[#102a63] dark:text-white">اللورد لخدمات الإنترنت</div>
-          <div className="mt-1 text-[11px] font-semibold tracking-wide text-[#e99100]">LORD RADIUS</div>
-        </div>
-      )}
+      <div className={`overflow-hidden whitespace-nowrap leading-tight transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100"}`}>
+        <div className="truncate text-[15px] font-bold text-[#102a63] dark:text-white">اللورد لخدمات الإنترنت</div>
+        <div className="mt-1 text-[11px] font-semibold tracking-wide text-[#e99100]">LORD RADIUS</div>
+      </div>
     </div>
   );
 }
@@ -100,6 +98,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const sidebarWidth = collapsed ? "lg:w-[92px]" : "lg:w-[232px]";
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
+  const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
 
   const currentTitle = useMemo(() => {
     for (const group of navGroups) {
@@ -109,62 +108,68 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     return "لوحة التحكم";
   }, [pathname]);
 
-  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 px-3 pb-4 pt-3">
-        <Brand compact={!mobile && collapsed} />
-        {mobile && (
-          <button onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200/80 dark:border-white/10" aria-label="إغلاق القائمة">
-            <X className="h-5 w-5" />
-          </button>
-        )}
-      </div>
+  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => {
+    const compact = !mobile && collapsed;
 
-      <nav className="sidebar min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {navGroups.map((group) => (
-          <div key={group.label} className="mb-5">
-            {(!collapsed || mobile) && <div className="mb-2 px-3 text-[11px] font-semibold text-slate-400 dark:text-slate-500">{group.label}</div>}
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => mobile && setMobileOpen(false)}
-                    title={collapsed && !mobile ? item.label : undefined}
-                    className={`group flex min-h-11 items-center rounded-xl px-3 text-sm font-medium transition-all ${
-                      active
-                        ? "bg-gradient-to-l from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_22px_rgba(17,105,240,.22)]"
-                        : "text-slate-600 hover:bg-[#eaf3ff] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.055] dark:hover:text-white"
-                    } ${collapsed && !mobile ? "justify-center" : "gap-3"}`}
-                  >
-                    <Icon className="h-[19px] w-[19px] shrink-0" />
-                    {(!collapsed || mobile) && <span className="truncate">{item.label}</span>}
-                  </Link>
-                );
-              })}
+    return (
+      <div className="flex h-full flex-col">
+        <div className={`flex items-center pb-4 pt-3 ${shellMotion} ${compact ? "justify-center px-0" : "justify-between px-3"}`}>
+          <Brand compact={compact} />
+          {mobile && (
+            <button onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200/80 dark:border-white/10" aria-label="إغلاق القائمة">
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+
+        <nav className={`sidebar min-h-0 flex-1 overflow-y-auto pb-3 ${shellMotion} ${compact ? "px-3" : "px-2"}`}>
+          {navGroups.map((group) => (
+            <div key={group.label} className="mb-5">
+              <div className={`overflow-hidden px-3 text-[11px] font-semibold text-slate-400 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:text-slate-500 ${compact ? "mb-0 max-h-0 -translate-x-2 opacity-0" : "mb-2 max-h-6 translate-x-0 opacity-100"}`}>
+                {group.label}
+              </div>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => mobile && setMobileOpen(false)}
+                      title={compact ? item.label : undefined}
+                      className={`group flex min-h-11 items-center rounded-xl text-sm font-medium ${shellMotion} ${
+                        active
+                          ? "bg-gradient-to-l from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_22px_rgba(17,105,240,.22)]"
+                          : "text-slate-600 hover:bg-[#eaf3ff] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.055] dark:hover:text-white"
+                      } ${compact ? "justify-center px-0" : "gap-3 px-3"}`}
+                    >
+                      <Icon className="h-[19px] w-[19px] shrink-0" />
+                      <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] translate-x-0 opacity-100"}`}>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </nav>
+          ))}
+        </nav>
 
-      <div className="p-2">
-        <Link href="/login" className={`flex min-h-11 items-center rounded-xl border border-red-200/80 px-3 text-sm font-semibold text-red-500 hover:bg-red-50 dark:border-red-400/15 dark:hover:bg-red-500/10 ${collapsed && !mobile ? "justify-center" : "gap-3"}`}>
-          <LogOut className="h-[19px] w-[19px]" />
-          {(!collapsed || mobile) && <span>تسجيل الخروج</span>}
-        </Link>
+        <div className={`p-2 ${shellMotion}`}>
+          <Link href="/login" className={`flex min-h-11 items-center rounded-xl border border-red-200/80 text-sm font-semibold text-red-500 hover:bg-red-50 dark:border-red-400/15 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-3"}`}>
+            <LogOut className="h-[19px] w-[19px] shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>تسجيل الخروج</span>
+          </Link>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5]">
       <aside
         onMouseEnter={() => setCollapsed(false)}
         onMouseLeave={() => setCollapsed(true)}
-        className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}
+        className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}
       >
         <SidebarContent />
       </aside>
@@ -178,7 +183,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </div>
       )}
 
-      <div className={`${mainGap} h-screen min-w-0 overflow-hidden transition-all duration-300`}>
+      <div className={`${mainGap} h-screen min-w-0 overflow-hidden ${shellMotion}`}>
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5">
           <div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
             <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة">
@@ -249,7 +254,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </main>
 
-        <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap}`}>
+        <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap} ${shellMotion}`}>
           <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[12px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
             <div className="flex items-center gap-2"><Database className="h-4 w-4 text-[#0758e9]" /><span>radius.lord.local</span></div>
             <div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 sm:block" />
