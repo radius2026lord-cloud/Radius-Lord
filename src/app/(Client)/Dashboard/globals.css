@@ -54,10 +54,15 @@ a {
   touch-action: manipulation;
 }
 
-/* Sidebar scrollbar: same hover-only treatment as the workspace. */
+/* Sidebar scrollbar: right side, hover-only and eased to match sidebar motion. */
 .sidebar {
+  direction: ltr;
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
+}
+
+.sidebar > * {
+  direction: rtl;
 }
 
 .sidebar:hover {
@@ -78,18 +83,17 @@ a {
   min-height: 48px;
   border: 2px solid transparent;
   border-radius: 999px;
-  background: transparent;
+  background-color: transparent;
   background-clip: padding-box;
+  transition: background-color 500ms cubic-bezier(.22,.8,.25,1);
 }
 
 .sidebar:hover::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.72);
-  background-clip: padding-box;
+  background-color: rgba(59, 130, 246, 0.72);
 }
 
 .sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(37, 99, 235, 0.92);
-  background-clip: padding-box;
+  background-color: rgba(37, 99, 235, 0.92);
 }
 
 .dark .sidebar:hover {
@@ -97,16 +101,14 @@ a {
 }
 
 .dark .sidebar:hover::-webkit-scrollbar-thumb {
-  background: rgba(126, 164, 255, 0.78);
-  background-clip: padding-box;
+  background-color: rgba(126, 164, 255, 0.78);
 }
 
 .dark .sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(166, 190, 255, 0.96);
-  background-clip: padding-box;
+  background-color: rgba(166, 190, 255, 0.96);
 }
 
-/* Workspace scrollbar: hidden until the pointer is over the workspace. */
+/* Workspace scrollbar: hidden until hover, with the same slow reveal/hide motion. */
 main > div:first-child {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -130,18 +132,17 @@ main > div:first-child::-webkit-scrollbar-thumb {
   min-height: 48px;
   border: 2px solid transparent;
   border-radius: 999px;
-  background: transparent;
+  background-color: transparent;
   background-clip: padding-box;
+  transition: background-color 500ms cubic-bezier(.22,.8,.25,1);
 }
 
 main > div:first-child:hover::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.72);
-  background-clip: padding-box;
+  background-color: rgba(59, 130, 246, 0.72);
 }
 
 main > div:first-child::-webkit-scrollbar-thumb:hover {
-  background: rgba(37, 99, 235, 0.92);
-  background-clip: padding-box;
+  background-color: rgba(37, 99, 235, 0.92);
 }
 
 .dark main > div:first-child:hover {
@@ -149,13 +150,11 @@ main > div:first-child::-webkit-scrollbar-thumb:hover {
 }
 
 .dark main > div:first-child:hover::-webkit-scrollbar-thumb {
-  background: rgba(126, 164, 255, 0.78);
-  background-clip: padding-box;
+  background-color: rgba(126, 164, 255, 0.78);
 }
 
 .dark main > div:first-child::-webkit-scrollbar-thumb:hover {
-  background: rgba(166, 190, 255, 0.96);
-  background-clip: padding-box;
+  background-color: rgba(166, 190, 255, 0.96);
 }
 
 /* Keep the quick-shortcuts row compact to leave more vertical workspace. */
