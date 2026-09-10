@@ -138,13 +138,21 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       href={item.href}
                       onClick={() => mobile && setMobileOpen(false)}
                       title={compact ? item.label : undefined}
-                      className={`group flex min-h-11 items-center rounded-xl text-sm font-medium ${shellMotion} ${
+                      className={`group flex min-h-12 items-center rounded-[18px] text-sm font-medium ${shellMotion} ${
                         active
-                          ? "bg-gradient-to-l from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_22px_rgba(17,105,240,.22)]"
-                          : "text-slate-600 hover:bg-[#eaf3ff] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.055] dark:hover:text-white"
-                      } ${compact ? "justify-center px-0" : "gap-3 px-3"}`}
+                          ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white"
+                          : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"
+                      } ${compact ? "justify-center px-0" : "gap-3 px-2"}`}
                     >
-                      <Icon className="h-[19px] w-[19px] shrink-0" />
+                      <span
+                        className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${
+                          active
+                            ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]"
+                            : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8] dark:group-hover:bg-[#454149] dark:group-hover:text-[#8ab5ff]"
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </span>
                       <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] translate-x-0 opacity-100"}`}>{item.label}</span>
                     </Link>
                   );
@@ -155,8 +163,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </nav>
 
         <div className={`p-2 ${shellMotion}`}>
-          <Link href="/login" className={`flex min-h-11 items-center rounded-xl border border-red-200/80 text-sm font-semibold text-red-500 hover:bg-red-50 dark:border-red-400/15 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-3"}`}>
-            <LogOut className="h-[19px] w-[19px] shrink-0" />
+          <Link href="/login" className={`flex min-h-12 items-center rounded-[18px] text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400">
+              <LogOut className="h-5 w-5" />
+            </span>
             <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>تسجيل الخروج</span>
           </Link>
         </div>
