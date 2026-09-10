@@ -21,10 +21,33 @@ import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/componen
 
 type Mode = "login" | "signup";
 
+const networkDots = [
+  { left: "5%", top: "14%", size: 4, delay: "-1.5s", duration: "7s", tone: "blue" },
+  { left: "12%", top: "34%", size: 3, delay: "-4s", duration: "8.5s", tone: "soft" },
+  { left: "20%", top: "72%", size: 5, delay: "-2s", duration: "9s", tone: "blue" },
+  { left: "28%", top: "20%", size: 3, delay: "-6s", duration: "10s", tone: "soft" },
+  { left: "35%", top: "84%", size: 4, delay: "-3s", duration: "7.8s", tone: "amber" },
+  { left: "43%", top: "11%", size: 3, delay: "-5s", duration: "9.8s", tone: "soft" },
+  { left: "48%", top: "63%", size: 4, delay: "-1s", duration: "8.2s", tone: "blue" },
+  { left: "57%", top: "27%", size: 5, delay: "-7s", duration: "10.5s", tone: "soft" },
+  { left: "64%", top: "78%", size: 3, delay: "-2.5s", duration: "7.4s", tone: "blue" },
+  { left: "72%", top: "16%", size: 4, delay: "-4.5s", duration: "9.4s", tone: "amber" },
+  { left: "80%", top: "46%", size: 3, delay: "-6.5s", duration: "8.8s", tone: "soft" },
+  { left: "89%", top: "25%", size: 5, delay: "-3.5s", duration: "10.8s", tone: "blue" },
+  { left: "94%", top: "69%", size: 3, delay: "-1.8s", duration: "8s", tone: "soft" },
+  { left: "8%", top: "88%", size: 3, delay: "-5.2s", duration: "9.2s", tone: "amber" },
+  { left: "24%", top: "49%", size: 4, delay: "-2.8s", duration: "8.6s", tone: "soft" },
+  { left: "39%", top: "38%", size: 3, delay: "-7.5s", duration: "11s", tone: "blue" },
+  { left: "53%", top: "91%", size: 4, delay: "-4.2s", duration: "9.6s", tone: "soft" },
+  { left: "68%", top: "55%", size: 5, delay: "-1.2s", duration: "8.4s", tone: "blue" },
+  { left: "77%", top: "88%", size: 3, delay: "-6.2s", duration: "10.2s", tone: "soft" },
+  { left: "91%", top: "8%", size: 4, delay: "-3.2s", duration: "7.6s", tone: "amber" },
+];
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex flex-col items-center text-center" dir="ltr">
-      <div className={`relative grid place-items-center rounded-[18px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] shadow-[0_12px_30px_rgba(20,121,255,.24)] ${compact ? "h-12 w-12" : "h-16 w-16"}`}>
+      <div className={`auth-brand-icon relative grid place-items-center rounded-[18px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] shadow-[0_12px_30px_rgba(20,121,255,.24)] ${compact ? "h-12 w-12" : "h-16 w-16"}`}>
         <Crown className={`${compact ? "h-6 w-6" : "h-8 w-8"} text-[#ffad16]`} strokeWidth={2.2} />
         <Radio className={`absolute bottom-1.5 text-white ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} strokeWidth={2.5} />
       </div>
@@ -44,15 +67,16 @@ const features = [
 function VisualPanel() {
   return (
     <section className="relative hidden h-full overflow-hidden bg-[#211a25] min-[1024px]:block">
-      <div className="absolute -left-28 -top-24 h-72 w-72 rounded-full bg-[#1479ff]/10 blur-[90px]" />
-      <div className="absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-[#ffad16]/5 blur-[90px]" />
+      <div className="auth-panel-glow absolute -left-28 -top-24 h-72 w-72 rounded-full bg-[#1479ff]/10 blur-[90px]" />
+      <div className="auth-panel-glow auth-panel-glow-delay absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-[#ffad16]/5 blur-[90px]" />
+      <div className="absolute inset-0 opacity-[.08] [background-image:linear-gradient(rgba(138,181,255,.18)_1px,transparent_1px),linear-gradient(90deg,rgba(138,181,255,.18)_1px,transparent_1px)] [background-size:34px_34px]" />
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-10 text-center">
         <Brand />
         <h2 className="mt-7 text-[21px] font-black text-[#f4f1f5]">{radiusAuthContent.title}</h2>
         <p className="mx-auto mt-3 max-w-[420px] text-[11px] leading-6 text-[#b9b3bd]">{radiusAuthContent.description}</p>
         <div className="mt-8 grid w-full max-w-[430px] grid-cols-2 gap-3">
-          {features.map(({ label, icon: Icon }) => (
-            <div key={label} className="flex min-h-[72px] items-center gap-3 rounded-[18px] border border-white/[.08] bg-[#302e33] px-4 text-right">
+          {features.map(({ label, icon: Icon }, index) => (
+            <div key={label} className="auth-feature-card flex min-h-[72px] items-center gap-3 rounded-[18px] border border-white/[.08] bg-[#302e33] px-4 text-right" style={{ animationDelay: `${index * 160}ms` }}>
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#3b383e] text-[#8ab5ff]"><Icon className="h-5 w-5" /></span>
               <span className="text-[12px] font-bold text-[#ece8ee]">{label}</span>
             </div>
@@ -137,9 +161,37 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-        <div className="absolute -left-32 top-[8%] h-[360px] w-[360px] rounded-full bg-[#1479ff]/10 blur-[120px]" />
-        <div className="absolute -right-28 bottom-[5%] h-[300px] w-[300px] rounded-full bg-[#ffad16]/5 blur-[120px]" />
-        <div className="absolute inset-0 opacity-[.16] [background-image:radial-gradient(circle,rgba(138,181,255,.38)_1px,transparent_1px)] [background-size:28px_28px]" />
+        <div className="auth-bg-grid absolute inset-0" />
+        <div className="auth-bg-scan absolute inset-[-25%]" />
+        <div className="auth-orbit auth-orbit-a absolute left-[7%] top-[10%] h-[270px] w-[270px] rounded-full border border-[#1479ff]/10" />
+        <div className="auth-orbit auth-orbit-b absolute bottom-[5%] right-[7%] h-[220px] w-[220px] rounded-full border border-[#ffad16]/10" />
+        <div className="auth-glow auth-glow-blue absolute -left-32 top-[8%] h-[360px] w-[360px] rounded-full bg-[#1479ff]/11 blur-[120px]" />
+        <div className="auth-glow auth-glow-amber absolute -right-28 bottom-[5%] h-[300px] w-[300px] rounded-full bg-[#ffad16]/6 blur-[120px]" />
+
+        <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="auth-network-lines absolute inset-0 h-full w-full opacity-[.20]">
+          <g fill="none" stroke="#7ea4ff" strokeWidth="1">
+            <path d="M0 180 L145 118 L310 204 L452 112 L612 245" />
+            <path d="M0 645 L170 730 L326 588 L486 700 L640 560" />
+            <path d="M1600 170 L1450 250 L1300 118 L1155 240 L1015 146" />
+            <path d="M1600 680 L1458 570 L1292 720 L1142 590 L1002 760" />
+            <path d="M145 118 L170 730 M452 112 L486 700 M1450 250 L1458 570 M1155 240 L1142 590" opacity=".45" />
+          </g>
+        </svg>
+
+        {networkDots.map((dot, index) => (
+          <span
+            key={index}
+            className={`auth-network-dot absolute rounded-full ${dot.tone === "amber" ? "bg-[#ffad16]" : dot.tone === "blue" ? "bg-[#6aa8ff]" : "bg-[#8f8795]"}`}
+            style={{
+              left: dot.left,
+              top: dot.top,
+              width: dot.size,
+              height: dot.size,
+              animationDelay: dot.delay,
+              animationDuration: dot.duration,
+            }}
+          />
+        ))}
       </div>
 
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
@@ -159,12 +211,13 @@ export default function LordAuth({ mode }: { mode: Mode }) {
               signup ? "min-h-[calc(100dvh-32px)] py-7 min-[1024px]:min-h-0" : "min-h-[610px] py-8"
             }`}
           >
+            <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/5 blur-[70px]" />
             <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "max-w-[410px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
               <div className="text-center">
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
+                <div className="auth-login-icon mx-auto grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
                   {signup ? <UserRound className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
                 </div>
                 <h1 className="mt-3 text-[24px] font-black text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
@@ -207,6 +260,93 @@ export default function LordAuth({ mode }: { mode: Mode }) {
           </section>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes authDotPulse {
+          0%, 100% { transform: translate3d(0,0,0) scale(.75); opacity: .22; box-shadow: 0 0 0 rgba(106,168,255,0); }
+          45% { transform: translate3d(6px,-9px,0) scale(1.35); opacity: .9; box-shadow: 0 0 14px rgba(106,168,255,.52); }
+          70% { transform: translate3d(-4px,-3px,0) scale(.95); opacity: .42; }
+        }
+        @keyframes authGridDrift {
+          from { background-position: 0 0, 0 0; }
+          to { background-position: 52px 36px, 52px 36px; }
+        }
+        @keyframes authScanMove {
+          0% { transform: translate3d(-14%,-8%,0) rotate(-8deg); opacity: 0; }
+          18% { opacity: .28; }
+          55% { opacity: .12; }
+          100% { transform: translate3d(16%,10%,0) rotate(-8deg); opacity: 0; }
+        }
+        @keyframes authOrbitFloat {
+          0%,100% { transform: translate3d(0,0,0) scale(1); opacity: .55; }
+          50% { transform: translate3d(18px,-12px,0) scale(1.08); opacity: .18; }
+        }
+        @keyframes authNetworkFlow {
+          0%,100% { transform: translate3d(0,0,0); opacity: .16; }
+          50% { transform: translate3d(8px,-5px,0); opacity: .28; }
+        }
+        @keyframes authGlowFloat {
+          0%,100% { transform: translate3d(0,0,0) scale(1); }
+          50% { transform: translate3d(22px,-14px,0) scale(1.08); }
+        }
+        @keyframes authBrandFloat {
+          0%,100% { transform: translateY(0); box-shadow: 0 12px 30px rgba(20,121,255,.24); }
+          50% { transform: translateY(-5px); box-shadow: 0 18px 38px rgba(20,121,255,.34); }
+        }
+        @keyframes authIconPulse {
+          0%,100% { transform: scale(1); box-shadow: 0 10px 24px rgba(20,121,255,.22); }
+          50% { transform: scale(1.06); box-shadow: 0 14px 34px rgba(20,121,255,.36); }
+        }
+        @keyframes authCardRise {
+          0% { transform: translateY(8px); opacity: .55; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes authPanelGlow {
+          0%,100% { transform: translate3d(0,0,0); opacity: .8; }
+          50% { transform: translate3d(18px,-10px,0); opacity: .45; }
+        }
+
+        .auth-bg-grid {
+          opacity: .18;
+          background-image:
+            linear-gradient(rgba(126,164,255,.10) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(126,164,255,.10) 1px, transparent 1px);
+          background-size: 46px 46px;
+          mask-image: radial-gradient(circle at center, #000 15%, rgba(0,0,0,.68) 56%, transparent 96%);
+          animation: authGridDrift 24s linear infinite;
+        }
+        .auth-bg-scan {
+          background: linear-gradient(90deg, transparent 38%, rgba(20,121,255,.06) 49%, rgba(126,164,255,.12) 50%, rgba(20,121,255,.06) 51%, transparent 62%);
+          animation: authScanMove 11s ease-in-out infinite;
+        }
+        .auth-network-dot { animation-name: authDotPulse; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+        .auth-network-lines { animation: authNetworkFlow 9s ease-in-out infinite; }
+        .auth-orbit { animation: authOrbitFloat 12s ease-in-out infinite; box-shadow: inset 0 0 40px rgba(20,121,255,.025); }
+        .auth-orbit-b { animation-delay: -5s; animation-duration: 15s; }
+        .auth-glow { animation: authGlowFloat 14s ease-in-out infinite; }
+        .auth-glow-amber { animation-delay: -6s; animation-duration: 17s; }
+        .auth-brand-icon { animation: authBrandFloat 5.5s ease-in-out infinite; }
+        .auth-login-icon { animation: authIconPulse 3.6s ease-in-out infinite; }
+        .auth-card-glow { animation: authGlowFloat 9s ease-in-out infinite; }
+        .auth-feature-card { animation: authCardRise .7s cubic-bezier(.22,.8,.25,1) both; transition: transform .4s cubic-bezier(.22,.8,.25,1), background-color .4s ease, border-color .4s ease; }
+        .auth-feature-card:hover { transform: translateY(-3px); border-color: rgba(106,168,255,.22); background: #38363c; }
+        .auth-panel-glow { animation: authPanelGlow 10s ease-in-out infinite; }
+        .auth-panel-glow-delay { animation-delay: -4s; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .auth-bg-grid,
+          .auth-bg-scan,
+          .auth-network-dot,
+          .auth-network-lines,
+          .auth-orbit,
+          .auth-glow,
+          .auth-brand-icon,
+          .auth-login-icon,
+          .auth-card-glow,
+          .auth-feature-card,
+          .auth-panel-glow { animation: none !important; }
+        }
+      `}</style>
     </main>
   );
 }
