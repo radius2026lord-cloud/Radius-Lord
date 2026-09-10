@@ -30,8 +30,8 @@ export function CompactField({
       <span className="mb-2 block text-[11px] font-bold text-[#17386d] dark:text-[#f4f1f5] sm:text-[12px]">
         {label}
       </span>
-      <div className="relative">
-        <span className="absolute right-2.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] dark:text-[#8ab5ff]">
+      <div className="group relative">
+        <span className="absolute right-2.5 top-1/2 z-10 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] group-focus-within:scale-[1.08] group-focus-within:bg-[#dceaff] dark:bg-[#38363c] dark:text-[#8ab5ff] dark:group-focus-within:bg-[#454149]">
           <Icon className="h-4 w-4" />
         </span>
         <input
@@ -39,7 +39,7 @@ export function CompactField({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="h-[48px] w-full rounded-[16px] border border-[#ccd9e7] bg-white pr-12 pl-10 text-[12px] text-[#17386d] outline-none transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-slate-400 hover:border-[#aebfd2] focus:border-[#4c8dff]/80 focus:ring-4 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.18] dark:hover:bg-[#26202a] dark:focus:border-[#6aa8ff] dark:focus:bg-[#211a25] dark:focus:ring-[#1479ff]/20 sm:text-[13px]"
+          className="h-[48px] w-full origin-center rounded-[16px] border border-[#ccd9e7] bg-white pr-12 pl-10 text-[12px] text-[#17386d] outline-none transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-slate-400 hover:border-[#aebfd2] focus:-translate-y-px focus:scale-[1.018] focus:border-[#4c8dff]/80 focus:shadow-[0_10px_28px_rgba(20,121,255,.14)] focus:ring-4 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.18] dark:hover:bg-[#26202a] dark:focus:border-[#6aa8ff] dark:focus:bg-[#211a25] dark:focus:shadow-[0_12px_32px_rgba(20,121,255,.16)] dark:focus:ring-[#1479ff]/20 sm:text-[13px]"
         />
         {suffix}
       </div>
