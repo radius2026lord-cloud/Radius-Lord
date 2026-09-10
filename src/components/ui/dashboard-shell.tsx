@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Bell,
@@ -93,20 +93,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    if (!accountOpen) return;
-    const closeOnOutside = (event: MouseEvent) => {
-      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
-        setAccountOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", closeOnOutside);
-    return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [accountOpen]);
 
   const isDark = mounted && theme === "dark";
   const sidebarWidth = collapsed ? "lg:w-[92px]" : "lg:w-[232px]";
@@ -256,7 +244,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 {mounted && isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
 
-              <div ref={accountMenuRef} className="relative hidden sm:block">
+              <div
+                className="relative hidden sm:block"
+                onMouseEnter={() => setAccountOpen(true)}
+                onMouseLeave={() => setAccountOpen(false)}
+              >
                 <button
                   type="button"
                   onClick={() => setAccountOpen((open) => !open)}
@@ -270,7 +262,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
                 <div
                   role="menu"
-                  className={`absolute left-0 top-[calc(100%+10px)] z-[70] w-[225px] origin-top-left rounded-[20px] border border-white/80 bg-[#f9fbfe]/98 p-2 shadow-[0_18px_45px_rgba(44,65,92,.18)] backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.10] dark:bg-[#302e33]/98 dark:shadow-[0_22px_55px_rgba(0,0,0,.32)] ${accountOpen ? "visible translate-y-0 scale-100 opacity-100" : "invisible -translate-y-2 scale-[.97] opacity-0 pointer-events-none"}`}
+                  className={`absolute left-0 top-[calc(100%+6px)] z-[70] w-[225px] origin-top-left rounded-[20px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-[0_18px_45px_rgba(44,65,92,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.12] dark:bg-[#302e33] dark:shadow-[0_22px_55px_rgba(0,0,0,.38)] ${accountOpen ? "visible translate-y-0 scale-100 opacity-100" : "invisible -translate-y-2 scale-[.97] opacity-0 pointer-events-none"}`}
                 >
                   <div className="mb-2 flex items-center gap-3 rounded-[16px] bg-[#edf4fb] px-3 py-2.5 dark:bg-[#38363c]">
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#0e74ff] to-[#073dbd] text-white"><Crown className="h-5 w-5 text-[#ffad16]" /></div>
@@ -280,12 +272,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     </div>
                   </div>
 
-                  <Link href="/Dashboard/profile" onClick={() => setAccountOpen(false)} role="menuitem" className="group flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-white/[.055] dark:hover:text-white">
+                  <Link href="/Dashboard/profile" onClick={() => setAccountOpen(false)} role="menuitem" className="group flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-[#38363c] dark:hover:text-white">
                     <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e2e9f1] text-[#315985] transition group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8]"><UserRound className="h-4 w-4" /></span>
                     <span>معلومات الحساب</span>
                   </Link>
 
-                  <Link href="/Dashboard/settings" onClick={() => setAccountOpen(false)} role="menuitem" className="group mt-1 flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-white/[.055] dark:hover:text-white">
+                  <Link href="/Dashboard/settings" onClick={() => setAccountOpen(false)} role="menuitem" className="group mt-1 flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-[#38363c] dark:hover:text-white">
                     <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e2e9f1] text-[#315985] transition group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8]"><Settings className="h-4 w-4" /></span>
                     <span>إعدادات الحساب</span>
                   </Link>
