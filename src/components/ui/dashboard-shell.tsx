@@ -93,8 +93,23 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => setMounted(true), []);
+
+  const logout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setAccountOpen(false);
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      window.location.href = "/login";
+    }
+  };
 
   const isDark = mounted && theme === "dark";
   const sidebarWidth = collapsed ? "lg:w-[92px]" : "lg:w-[232px]";
@@ -165,12 +180,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </nav>
 
         <div className={`p-2 ${shellMotion}`}>
-          <Link href="/login" className={`flex min-h-12 items-center rounded-[18px] border border-red-500 text-sm font-semibold text-red-500 hover:bg-red-50 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+          <button
+            type="button"
+            onClick={logout}
+            disabled={loggingOut}
+            className={`flex min-h-12 w-full items-center rounded-[18px] border border-red-500 text-sm font-semibold text-red-500 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}
+          >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400">
               <LogOut className="h-5 w-5" />
             </span>
-            <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>تسجيل الخروج</span>
-          </Link>
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>{loggingOut ? "جارٍ تسجيل الخروج..." : "تسجيل الخروج"}</span>
+          </button>
         </div>
       </div>
     );
@@ -284,10 +304,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
                   <div className="my-2 h-px bg-slate-200/80 dark:bg-white/[.08]" />
 
-                  <Link href="/login" onClick={() => setAccountOpen(false)} role="menuitem" className="group flex min-h-11 items-center gap-3 rounded-[14px] border border-red-400/70 px-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:bg-red-50 dark:border-red-400/55 dark:text-red-400 dark:hover:bg-red-500/10">
+                  <button
+                    type="button"
+                    onClick={logout}
+                    disabled={loggingOut}
+                    role="menuitem"
+                    className="group flex min-h-11 w-full items-center gap-3 rounded-[14px] border border-red-400/70 px-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400/55 dark:text-red-400 dark:hover:bg-red-500/10"
+                  >
                     <span className="grid h-8 w-8 place-items-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400"><LogOut className="h-4 w-4" /></span>
-                    <span>تسجيل الخروج</span>
-                  </Link>
+                    <span>{loggingOut ? "جارٍ تسجيل الخروج..." : "تسجيل الخروج"}</span>
+                  </button>
                 </div>
               </div>
             </div>
