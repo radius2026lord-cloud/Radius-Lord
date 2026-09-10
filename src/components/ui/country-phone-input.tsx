@@ -31,11 +31,11 @@ export function CountryPhoneInput({
 }: CountryPhoneInputProps) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-1.5 block text-[11px] font-bold text-[#17386d] dark:text-slate-200 sm:text-[12px]">
+      <span className="mb-1.5 block text-[11px] font-bold text-[#17386d] dark:text-[#f6f2f7] sm:text-[12px]">
         {label}
       </span>
       <div
-        className="relative flex h-[44px] rounded-[10px] border border-[#ccd9e7] bg-white dark:border-[#304861] dark:bg-[#091c30]"
+        className="relative flex h-[44px] rounded-[12px] border border-[#ccd9e7] bg-white dark:border-white/[.09] dark:bg-[#37343a]"
         dir="ltr"
       >
         <SelectDropdown
@@ -43,8 +43,8 @@ export function CountryPhoneInput({
           items={countries}
           getKey={(item) => `${item.name}-${item.code}`}
           onChange={onCountryChange}
-          className="h-full w-[142px] shrink-0 border-r border-[#dbe5ef] dark:border-[#304861] sm:w-[154px]"
-          buttonClassName="px-2 text-[10px] font-semibold text-[#17386d] dark:text-white sm:text-[11px]"
+          className="h-full w-[142px] shrink-0 border-r border-[#dbe5ef] dark:border-white/[.09] sm:w-[154px]"
+          buttonClassName="px-2 text-[10px] font-semibold text-[#17386d] dark:text-[#f6f2f7] sm:text-[11px]"
           menuClassName="w-[230px]"
           align="left"
           renderValue={(item) => (
@@ -66,13 +66,13 @@ export function CountryPhoneInput({
         />
 
         <div className="relative min-w-0 flex-1" dir="rtl">
-          <Phone className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Phone className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-[#b8b0bc]" />
           <input
             value={phone}
             onChange={(event) => onPhoneChange(event.target.value)}
             placeholder={placeholder}
             inputMode="tel"
-            className="h-full w-full bg-transparent pr-10 pl-3 text-[12px] text-[#17386d] outline-none placeholder:text-slate-400 dark:text-white sm:text-[13px]"
+            className="h-full w-full bg-transparent pr-10 pl-3 text-[12px] text-[#17386d] outline-none placeholder:text-slate-400 dark:text-[#f6f2f7] dark:placeholder:text-[#8f8795] sm:text-[13px]"
           />
         </div>
       </div>
