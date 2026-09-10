@@ -54,28 +54,56 @@ a {
   touch-action: manipulation;
 }
 
+/* Sidebar scrollbar: same hover-only treatment as the workspace. */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebar:hover {
+  scrollbar-color: rgba(59, 130, 246, 0.72) transparent;
+}
+
 .sidebar::-webkit-scrollbar {
-  width: 8px;
-  height: 0;
-  background: transparent;
+  width: 7px;
+  height: 7px;
 }
 
 .sidebar::-webkit-scrollbar-track {
+  margin-block: 18px;
   background: transparent;
 }
 
 .sidebar::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
   background: transparent;
-  border-radius: 10px;
-  transition: background 0.3s ease;
+  background-clip: padding-box;
 }
 
 .sidebar:hover::-webkit-scrollbar-thumb {
-  background: #3b82f6;
+  background: rgba(59, 130, 246, 0.72);
+  background-clip: padding-box;
 }
 
-.sidebar::-webkit-scrollbar-thumb:active {
-  background: #2563eb;
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.92);
+  background-clip: padding-box;
+}
+
+.dark .sidebar:hover {
+  scrollbar-color: rgba(126, 164, 255, 0.78) transparent;
+}
+
+.dark .sidebar:hover::-webkit-scrollbar-thumb {
+  background: rgba(126, 164, 255, 0.78);
+  background-clip: padding-box;
+}
+
+.dark .sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(166, 190, 255, 0.96);
+  background-clip: padding-box;
 }
 
 /* Workspace scrollbar: hidden until the pointer is over the workspace. */
