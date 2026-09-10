@@ -163,7 +163,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </nav>
 
         <div className={`p-2 ${shellMotion}`}>
-          <Link href="/login" className={`flex min-h-12 items-center rounded-[18px] text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+          <Link href="/login" className={`flex min-h-12 items-center rounded-[18px] border border-red-500 text-sm font-semibold text-red-500 hover:bg-red-50 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400">
               <LogOut className="h-5 w-5" />
             </span>
