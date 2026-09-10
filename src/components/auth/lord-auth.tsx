@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import {
   Activity,
   Crown,
@@ -9,9 +10,11 @@ import {
   EyeOff,
   LockKeyhole,
   Mail,
+  Moon,
   Radio,
   Server,
   ShieldCheck,
+  Sun,
   UserRound,
   Users,
 } from "lucide-react";
@@ -51,8 +54,8 @@ function Brand({ compact = false }: { compact?: boolean }) {
         <Crown className={`${compact ? "h-6 w-6" : "h-8 w-8"} text-[#ffad16]`} strokeWidth={2.2} />
         <Radio className={`absolute bottom-1.5 text-white ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} strokeWidth={2.5} />
       </div>
-      <div className={`${compact ? "mt-2 text-[20px]" : "mt-3 text-[28px]"} font-black leading-none tracking-tight text-white`}>LORD</div>
-      <div className={`${compact ? "text-[9px]" : "text-[11px]"} mt-1 font-extrabold tracking-[.08em] text-[#ffad16]`}>RADIUS LORD</div>
+      <div className={`${compact ? "mt-2 text-[20px]" : "mt-3 text-[28px]"} font-black leading-none tracking-tight text-[#102a63] dark:text-white`}>LORD</div>
+      <div className={`${compact ? "text-[9px]" : "text-[11px]"} mt-1 font-extrabold tracking-[.08em] text-[#e99100] dark:text-[#ffad16]`}>RADIUS LORD</div>
     </div>
   );
 }
@@ -66,19 +69,19 @@ const features = [
 
 function VisualPanel() {
   return (
-    <section className="relative hidden h-full overflow-hidden bg-[#211a25] min-[1024px]:block">
-      <div className="auth-panel-glow absolute -left-28 -top-24 h-72 w-72 rounded-full bg-[#1479ff]/10 blur-[90px]" />
-      <div className="auth-panel-glow auth-panel-glow-delay absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-[#ffad16]/5 blur-[90px]" />
-      <div className="absolute inset-0 opacity-[.08] [background-image:linear-gradient(rgba(138,181,255,.18)_1px,transparent_1px),linear-gradient(90deg,rgba(138,181,255,.18)_1px,transparent_1px)] [background-size:34px_34px]" />
+    <section className="relative hidden h-full overflow-hidden bg-[#edf3f8] dark:bg-[#211a25] min-[1024px]:block">
+      <div className="auth-panel-glow absolute -left-28 -top-24 h-72 w-72 rounded-full bg-[#1479ff]/12 blur-[90px]" />
+      <div className="auth-panel-glow auth-panel-glow-delay absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-[#ffad16]/8 blur-[90px] dark:bg-[#ffad16]/5" />
+      <div className="absolute inset-0 opacity-[.10] [background-image:linear-gradient(rgba(20,121,255,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(20,121,255,.16)_1px,transparent_1px)] [background-size:34px_34px] dark:opacity-[.08]" />
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-10 text-center">
         <Brand />
-        <h2 className="mt-7 text-[21px] font-black text-[#f4f1f5]">{radiusAuthContent.title}</h2>
-        <p className="mx-auto mt-3 max-w-[420px] text-[11px] leading-6 text-[#b9b3bd]">{radiusAuthContent.description}</p>
+        <h2 className="mt-7 text-[21px] font-black text-[#102a63] dark:text-[#f4f1f5]">{radiusAuthContent.title}</h2>
+        <p className="mx-auto mt-3 max-w-[420px] text-[11px] leading-6 text-slate-600 dark:text-[#b9b3bd]">{radiusAuthContent.description}</p>
         <div className="mt-8 grid w-full max-w-[430px] grid-cols-2 gap-3">
           {features.map(({ label, icon: Icon }, index) => (
-            <div key={label} className="auth-feature-card flex min-h-[72px] items-center gap-3 rounded-[18px] border border-white/[.08] bg-[#302e33] px-4 text-right" style={{ animationDelay: `${index * 160}ms` }}>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#3b383e] text-[#8ab5ff]"><Icon className="h-5 w-5" /></span>
-              <span className="text-[12px] font-bold text-[#ece8ee]">{label}</span>
+            <div key={label} className="auth-feature-card flex min-h-[72px] items-center gap-3 rounded-[18px] border border-[#d4e1ed] bg-white px-4 text-right shadow-sm dark:border-white/[.08] dark:bg-[#302e33] dark:shadow-none" style={{ animationDelay: `${index * 160}ms` }}>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e2e9f1] text-[#0758e9] dark:bg-[#3b383e] dark:text-[#8ab5ff]"><Icon className="h-5 w-5" /></span>
+              <span className="text-[12px] font-bold text-[#17386d] dark:text-[#ece8ee]">{label}</span>
             </div>
           ))}
         </div>
@@ -89,6 +92,8 @@ function VisualPanel() {
 
 export default function LordAuth({ mode }: { mode: Mode }) {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>(mode);
   const [transitioning, setTransitioning] = useState(false);
   const signup = activeMode === "signup";
@@ -103,6 +108,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [terms, setTerms] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => setMounted(true), []);
+
+  const isDark = mounted && theme === "dark";
 
   const switchMode = (nextMode: Mode) => {
     if (transitioning || nextMode === activeMode) return;
@@ -147,7 +156,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     <button
       type="button"
       onClick={toggle}
-      className="absolute left-2.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-[#b9b3bd] transition-all duration-300 hover:bg-[#454149] hover:text-white"
+      className="absolute left-2.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition-all duration-300 hover:bg-[#e8eff6] hover:text-[#0758e9] dark:text-[#b9b3bd] dark:hover:bg-[#454149] dark:hover:text-white"
       aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
     >
       {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -157,19 +166,29 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   return (
     <main
       dir="rtl"
-      className="relative min-h-[100dvh] overflow-x-hidden bg-[#1d1721] text-[#f4f1f5]"
+      className="relative min-h-[100dvh] overflow-x-hidden bg-[#dce5ef] text-[#102a63] transition-colors duration-500 dark:bg-[#1d1721] dark:text-[#f4f1f5]"
       style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}
     >
+      <button
+        type="button"
+        onClick={() => setTheme(isDark ? "light" : "dark")}
+        className="fixed left-5 top-5 z-30 grid h-11 w-11 place-items-center rounded-full border border-[#cbd9e7] bg-[#f9fbfe] text-[#102a63] shadow-[0_10px_30px_rgba(53,83,116,.14)] transition-all duration-500 hover:-translate-y-0.5 hover:border-[#7fb1e8] hover:text-[#0758e9] dark:border-white/[.10] dark:bg-[#302e33] dark:text-[#f4f1f5] dark:shadow-[0_12px_32px_rgba(0,0,0,.26)] dark:hover:border-white/20 dark:hover:text-[#8ab5ff]"
+        aria-label={isDark ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+        title={isDark ? "الوضع الفاتح" : "الوضع الداكن"}
+      >
+        {mounted && isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
+
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         <div className="auth-bg-grid absolute inset-0" />
         <div className="auth-bg-scan absolute inset-[-25%]" />
-        <div className="auth-orbit auth-orbit-a absolute left-[7%] top-[10%] h-[270px] w-[270px] rounded-full border border-[#1479ff]/10" />
-        <div className="auth-orbit auth-orbit-b absolute bottom-[5%] right-[7%] h-[220px] w-[220px] rounded-full border border-[#ffad16]/10" />
-        <div className="auth-glow auth-glow-blue absolute -left-32 top-[8%] h-[360px] w-[360px] rounded-full bg-[#1479ff]/11 blur-[120px]" />
-        <div className="auth-glow auth-glow-amber absolute -right-28 bottom-[5%] h-[300px] w-[300px] rounded-full bg-[#ffad16]/6 blur-[120px]" />
+        <div className="auth-orbit auth-orbit-a absolute left-[7%] top-[10%] h-[270px] w-[270px] rounded-full border border-[#1479ff]/15 dark:border-[#1479ff]/10" />
+        <div className="auth-orbit auth-orbit-b absolute bottom-[5%] right-[7%] h-[220px] w-[220px] rounded-full border border-[#ffad16]/15 dark:border-[#ffad16]/10" />
+        <div className="auth-glow auth-glow-blue absolute -left-32 top-[8%] h-[360px] w-[360px] rounded-full bg-[#1479ff]/12 blur-[120px] dark:bg-[#1479ff]/11" />
+        <div className="auth-glow auth-glow-amber absolute -right-28 bottom-[5%] h-[300px] w-[300px] rounded-full bg-[#ffad16]/9 blur-[120px] dark:bg-[#ffad16]/6" />
 
-        <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="auth-network-lines absolute inset-0 h-full w-full opacity-[.20]">
-          <g fill="none" stroke="#7ea4ff" strokeWidth="1">
+        <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="auth-network-lines absolute inset-0 h-full w-full opacity-[.26] dark:opacity-[.20]">
+          <g fill="none" stroke="currentColor" className="text-[#5f8fc8] dark:text-[#7ea4ff]" strokeWidth="1">
             <path d="M0 180 L145 118 L310 204 L452 112 L612 245" />
             <path d="M0 645 L170 730 L326 588 L486 700 L640 560" />
             <path d="M1600 170 L1450 250 L1300 118 L1155 240 L1015 146" />
@@ -181,7 +200,13 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         {networkDots.map((dot, index) => (
           <span
             key={index}
-            className={`auth-network-dot absolute rounded-full ${dot.tone === "amber" ? "bg-[#ffad16]" : dot.tone === "blue" ? "bg-[#6aa8ff]" : "bg-[#8f8795]"}`}
+            className={`auth-network-dot absolute rounded-full ${
+              dot.tone === "amber"
+                ? "bg-[#f3a000] dark:bg-[#ffad16]"
+                : dot.tone === "blue"
+                  ? "bg-[#1479ff] dark:bg-[#6aa8ff]"
+                  : "bg-[#7693b1] dark:bg-[#8f8795]"
+            }`}
             style={{
               left: dot.left,
               top: dot.top,
@@ -197,7 +222,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
         <div
           dir="ltr"
-          className={`auth-shell relative w-full overflow-hidden rounded-[22px] border border-white/[.10] bg-[#302e33] shadow-[0_28px_80px_rgba(0,0,0,.36)] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${
+          className={`auth-shell relative w-full overflow-hidden rounded-[22px] border border-white/80 bg-[#f9fbfe] shadow-[0_24px_70px_rgba(53,83,116,.18)] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.10] dark:bg-[#302e33] dark:shadow-[0_28px_80px_rgba(0,0,0,.36)] ${
             signup
               ? "grid max-w-[1020px] min-[1024px]:h-[610px] min-[1024px]:grid-cols-2"
               : "max-w-[500px]"
@@ -207,11 +232,11 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
           <section
             dir="rtl"
-            className={`relative flex h-full items-center justify-center bg-[#302e33] px-5 sm:px-8 ${
+            className={`relative flex h-full items-center justify-center bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33] sm:px-8 ${
               signup ? "min-h-[calc(100dvh-32px)] py-7 min-[1024px]:min-h-0" : "min-h-[610px] py-8"
             }`}
           >
-            <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/5 blur-[70px]" />
+            <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
             <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "max-w-[410px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
@@ -220,8 +245,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 <div className="auth-login-icon mx-auto grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
                   {signup ? <UserRound className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
                 </div>
-                <h1 className="mt-3 text-[24px] font-black text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-2 max-w-[360px] text-[11px] leading-5 text-[#b9b3bd]">
+                <h1 className="mt-3 text-[24px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
+                <p className="mx-auto mt-2 max-w-[360px] text-[11px] leading-5 text-slate-500 dark:text-[#b9b3bd]">
                   {signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}
                 </p>
               </div>
@@ -234,25 +259,25 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                     <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                    <label className="flex items-start gap-2 text-[10px] leading-5 text-[#b9b3bd] sm:col-span-2">
+                    <label className="flex items-start gap-2 text-[10px] leading-5 text-slate-600 dark:text-[#b9b3bd] sm:col-span-2">
                       <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#1479ff]" />
-                      <span>أوافق على <button type="button" className="font-semibold text-[#8ab5ff]">الشروط والأحكام وسياسة الخصوصية</button></span>
+                      <span>أوافق على <button type="button" className="font-semibold text-[#0758e9] dark:text-[#8ab5ff]">الشروط والأحكام وسياسة الخصوصية</button></span>
                     </label>
-                    {message && <div className="rounded-[14px] border border-[#ffad16]/25 bg-[#ffad16]/10 px-3 py-2.5 text-[10px] text-[#ffc45c] sm:col-span-2">{message}</div>}
+                    {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
                     <div className="sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
-                    <div className="flex items-center gap-3 text-[9px] text-[#8f8795] sm:col-span-2"><span className="h-px flex-1 bg-white/[.08]" />أو<span className="h-px flex-1 bg-white/[.08]" /></div>
+                    <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795] sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
                     <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
-                    <div className="text-center text-[10px] text-[#b9b3bd] sm:col-span-2">لديك حساب بالفعل؟ <button type="button" onClick={() => switchMode("login")} className="mr-2 font-bold text-[#8ab5ff]">تسجيل الدخول</button></div>
+                    <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">لديك حساب بالفعل؟ <button type="button" onClick={() => switchMode("login")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</button></div>
                   </div>
                 ) : (
                   <div className="space-y-4.5">
                     <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
-                    {message && <div className="rounded-[14px] border border-[#ffad16]/25 bg-[#ffad16]/10 px-3 py-2.5 text-[10px] text-[#ffc45c]">{message}</div>}
+                    {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
                     <div className="pt-1"><PrimaryFormButton>تسجيل الدخول <span>←</span></PrimaryFormButton></div>
-                    <div className="flex items-center gap-3 text-[9px] text-[#8f8795]"><span className="h-px flex-1 bg-white/[.08]" />أو<span className="h-px flex-1 bg-white/[.08]" /></div>
+                    <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795]"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
                     <SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> تسجيل الدخول باستخدام Google</SecondaryFormButton>
-                    <div className="pt-1 text-center text-[10px] text-[#b9b3bd]">ليس لديك حساب؟ <button type="button" onClick={() => switchMode("signup")} className="mr-2 font-bold text-[#8ab5ff] transition-colors hover:text-white">إنشاء حساب جديد</button></div>
+                    <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd]">ليس لديك حساب؟ <button type="button" onClick={() => switchMode("signup")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">إنشاء حساب جديد</button></div>
                   </div>
                 )}
               </form>
@@ -307,16 +332,22 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         }
 
         .auth-bg-grid {
-          opacity: .18;
+          opacity: .24;
           background-image:
-            linear-gradient(rgba(126,164,255,.10) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(126,164,255,.10) 1px, transparent 1px);
+            linear-gradient(rgba(20,121,255,.12) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(20,121,255,.12) 1px, transparent 1px);
           background-size: 46px 46px;
           mask-image: radial-gradient(circle at center, #000 15%, rgba(0,0,0,.68) 56%, transparent 96%);
           animation: authGridDrift 24s linear infinite;
         }
+        .dark .auth-bg-grid {
+          opacity: .18;
+          background-image:
+            linear-gradient(rgba(126,164,255,.10) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(126,164,255,.10) 1px, transparent 1px);
+        }
         .auth-bg-scan {
-          background: linear-gradient(90deg, transparent 38%, rgba(20,121,255,.06) 49%, rgba(126,164,255,.12) 50%, rgba(20,121,255,.06) 51%, transparent 62%);
+          background: linear-gradient(90deg, transparent 38%, rgba(20,121,255,.06) 49%, rgba(20,121,255,.11) 50%, rgba(20,121,255,.06) 51%, transparent 62%);
           animation: authScanMove 11s ease-in-out infinite;
         }
         .auth-network-dot { animation-name: authDotPulse; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
@@ -329,7 +360,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .auth-login-icon { animation: authIconPulse 3.6s ease-in-out infinite; }
         .auth-card-glow { animation: authGlowFloat 9s ease-in-out infinite; }
         .auth-feature-card { animation: authCardRise .7s cubic-bezier(.22,.8,.25,1) both; transition: transform .4s cubic-bezier(.22,.8,.25,1), background-color .4s ease, border-color .4s ease; }
-        .auth-feature-card:hover { transform: translateY(-3px); border-color: rgba(106,168,255,.22); background: #38363c; }
+        .auth-feature-card:hover { transform: translateY(-3px); border-color: rgba(20,121,255,.28); background: #edf5ff; }
+        .dark .auth-feature-card:hover { border-color: rgba(106,168,255,.22); background: #38363c; }
         .auth-panel-glow { animation: authPanelGlow 10s ease-in-out infinite; }
         .auth-panel-glow-delay { animation-delay: -4s; }
 
