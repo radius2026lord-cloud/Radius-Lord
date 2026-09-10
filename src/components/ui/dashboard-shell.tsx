@@ -163,7 +163,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   return (
     <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5]">
-      <aside className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[26px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
+      <aside className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl transition-all duration-300 dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
         <SidebarContent />
         <button
           type="button"
@@ -178,7 +178,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       {mobileOpen && (
         <div className="fixed inset-0 z-[80] lg:hidden">
           <button className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" />
-          <aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[26px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]">
+          <aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]">
             <SidebarContent mobile />
           </aside>
         </div>
@@ -186,7 +186,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
       <div className={`${mainGap} h-screen min-w-0 overflow-hidden transition-all duration-300`}>
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5">
-          <div className="flex min-h-[62px] items-center gap-3 rounded-[20px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
+          <div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
             <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة">
               <Menu className="h-5 w-5" />
             </button>
@@ -231,7 +231,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </header>
 
         <main className="h-[calc(100dvh-74px)] overflow-hidden px-3 pb-[66px] pt-3 md:px-4 lg:px-5">
-          <div className="workspace-scroll h-full overflow-y-auto rounded-[26px] border border-[#a9c8e8] bg-[#edf3f8]/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none sm:p-4">
+          <div className="workspace-scroll h-full overflow-y-auto rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-4 px-1">
               <div>
                 <h1 className="text-lg font-bold sm:text-xl">{currentTitle}</h1>
@@ -256,7 +256,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </main>
 
         <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap}`}>
-          <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[14px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
+          <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[12px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
             <div className="flex items-center gap-2"><Database className="h-4 w-4 text-[#0758e9]" /><span>radius.lord.local</span></div>
             <div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 sm:block" />
             <div><span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">Ubuntu 22.04.4 LTS</span></div>
