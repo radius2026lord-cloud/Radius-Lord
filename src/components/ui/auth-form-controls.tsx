@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
 
 type IconType = ComponentType<{ className?: string }>;
 export type PrimaryButtonStatus = "idle" | "loading" | "success" | "error";
@@ -57,48 +57,56 @@ export function CompactField({
           navigation: auto;
         }
 
+        ::view-transition-group(root) {
+          animation-duration: .42s;
+          animation-timing-function: cubic-bezier(.22,.8,.25,1);
+        }
+
         ::view-transition-old(root) {
-          animation: authPageOut .42s cubic-bezier(.4,0,.35,1) both;
+          animation: authPageOut .30s cubic-bezier(.4,0,.35,1) both;
         }
 
         ::view-transition-new(root) {
-          animation: authPageIn .56s cubic-bezier(.22,.8,.25,1) both;
+          animation: authPageIn .42s cubic-bezier(.22,.8,.25,1) both;
         }
 
         @keyframes authPageOut {
-          from { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-          to { opacity: 0; transform: translateY(-3px) scale(.996); filter: blur(1.5px); }
+          from { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+          to { opacity: .08; transform: translate3d(0,-2px,0) scale(.998); }
         }
 
         @keyframes authPageIn {
-          from { opacity: 0; transform: translateY(5px) scale(.997); filter: blur(1.5px); }
-          58% { opacity: .94; filter: blur(.25px); }
-          to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+          from { opacity: .08; transform: translate3d(0,3px,0) scale(.998); }
+          60% { opacity: .96; }
+          to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
         }
 
         @keyframes authModeContentIn {
-          0% { opacity: 0; transform: translateY(9px) scale(.988); filter: blur(3px); }
-          58% { opacity: .92; transform: translateY(1px) scale(.998); filter: blur(.35px); }
-          100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+          0% { opacity: 0; transform: translate3d(0,6px,0) scale(.995); }
+          62% { opacity: .94; transform: translate3d(0,1px,0) scale(.999); }
+          100% { opacity: 1; transform: translate3d(0,0,0) scale(1); }
         }
 
         @keyframes authFeaturePanelIn {
-          0% { opacity: 0; transform: translateX(-14px); filter: blur(3px); }
-          100% { opacity: 1; transform: translateX(0); filter: blur(0); }
+          0% { opacity: 0; transform: translate3d(-10px,0,0); }
+          100% { opacity: 1; transform: translate3d(0,0,0); }
         }
 
         .auth-shell {
-          transition-duration: 560ms !important;
+          transition-duration: 520ms !important;
           transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
+          will-change: width, max-width, transform, opacity;
         }
 
         .auth-login-content,
         .auth-signup-content {
-          animation: authModeContentIn .48s cubic-bezier(.22,.8,.25,1) both;
+          animation: authModeContentIn .42s cubic-bezier(.22,.8,.25,1) both;
+          will-change: transform, opacity;
         }
 
         .auth-shell:has(.auth-signup-content) > section:first-child {
-          animation: authFeaturePanelIn .52s .05s cubic-bezier(.22,.8,.25,1) both;
+          animation: authFeaturePanelIn .46s .04s cubic-bezier(.22,.8,.25,1) both;
+          will-change: transform, opacity;
         }
 
         .dark main:has(.auth-shell) {
@@ -312,8 +320,30 @@ export function PrimaryFormButton({
   const busy = effectiveStatus === "loading" || effectiveStatus === "success";
   const showStatusIndicator = effectiveStatus === "loading" || effectiveStatus === "success";
 
-  const startLocalSubmitAnimation = () => {
+  const startLocalSubmitAnimation = (event: MouseEvent<HTMLButtonElement>) => {
     if (controlled || localStatus !== "idle") return;
+
+    const form = event.currentTarget.form;
+    const signupRoot = event.currentTarget.closest(".auth-signup-content");
+
+    if (signupRoot && form) {
+      const requiredNames = ["name", "email", "phone", "new-password", "confirm-password"];
+      const requiredInputs = requiredNames
+        .map((name) => form.querySelector<HTMLInputElement>(`input[name="${name}"]`))
+        .filter((input): input is HTMLInputElement => Boolean(input));
+      const terms = form.querySelector<HTMLInputElement>('input[type="checkbox"]');
+      const password = form.querySelector<HTMLInputElement>('input[name="new-password"]');
+      const confirmPassword = form.querySelector<HTMLInputElement>('input[name="confirm-password"]');
+      const hasEmptyRequired = requiredInputs.length !== requiredNames.length || requiredInputs.some((input) => !input.value.trim());
+      const passwordsMismatch = Boolean(password && confirmPassword && password.value !== confirmPassword.value);
+
+      if (hasEmptyRequired || !terms?.checked || passwordsMismatch) {
+        setLocalStatus("error");
+        window.setTimeout(() => setLocalStatus("idle"), 560);
+        return;
+      }
+    }
+
     setLocalStatus("loading");
     window.setTimeout(() => setLocalStatus("success"), 420);
     window.setTimeout(() => setLocalStatus("idle"), 1050);
