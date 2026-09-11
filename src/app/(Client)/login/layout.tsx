@@ -1,4 +1,5 @@
 import "@/app/(Client)/Dashboard/globals.css";
+import "@/components/auth/auth-transition-fix.css";
 import styles from "./Login.module.css";
 import { ThemeProvider } from "next-themes";
 
