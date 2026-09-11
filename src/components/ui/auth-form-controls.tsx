@@ -114,14 +114,40 @@ export function CompactField({
           max-width: 418px !important;
         }
 
+        .auth-signup-content form {
+          margin-top: 28px !important;
+        }
+
         .auth-signup-content form > div {
           grid-template-columns: minmax(0, 1fr) !important;
-          row-gap: 18px !important;
+          row-gap: 16px !important;
         }
 
         .auth-signup-content form > div > * {
           grid-column: 1 / -1 !important;
           width: 100%;
+        }
+
+        .auth-signup-content form > div > div:has(> button[type="submit"]) {
+          padding-top: 12px;
+        }
+
+        @media (min-width: 1024px) {
+          .auth-shell:has(.auth-signup-content) {
+            max-width: 1160px !important;
+            height: min(820px, calc(100dvh - 24px)) !important;
+            grid-template-columns: minmax(0, 1.28fr) minmax(0, .92fr) !important;
+          }
+
+          .auth-shell:has(.auth-signup-content) > section:last-child {
+            padding-left: 32px !important;
+            padding-right: 32px !important;
+          }
+
+          .auth-shell:has(.auth-signup-content) > section:first-child > div.relative {
+            padding-left: 54px !important;
+            padding-right: 54px !important;
+          }
         }
 
         @keyframes authButtonShake {
