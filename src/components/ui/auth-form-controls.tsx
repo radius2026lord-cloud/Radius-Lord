@@ -114,18 +114,86 @@ export function CompactField({
           max-width: 418px !important;
         }
 
+        .auth-signup-content > .text-center .auth-login-icon {
+          width: 44px !important;
+          height: 44px !important;
+        }
+
+        .auth-signup-content > .text-center h1 {
+          margin-top: 8px !important;
+          font-size: 22px !important;
+          line-height: 1.2 !important;
+        }
+
+        .auth-signup-content > .text-center p {
+          margin-top: 4px !important;
+          font-size: 11px !important;
+          line-height: 16px !important;
+        }
+
         .auth-signup-content form {
-          margin-top: 16px !important;
+          margin-top: 12px !important;
         }
 
         .auth-signup-content form > div {
           grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          column-gap: 16px !important;
-          row-gap: 10px !important;
+          column-gap: 14px !important;
+          row-gap: 7px !important;
+        }
+
+        .auth-signup-content label > span:first-child {
+          margin-bottom: 5px !important;
+          font-size: 11px !important;
+          line-height: 14px !important;
+        }
+
+        .auth-signup-content label > .group > input {
+          height: 44px !important;
+          border-radius: 14px !important;
+          padding-right: 52px !important;
+          font-size: 12px !important;
+        }
+
+        .auth-signup-content label > .group > span.absolute:not(.pointer-events-none) {
+          right: 8px !important;
+          width: 34px !important;
+          height: 34px !important;
+        }
+
+        .auth-signup-content label > .group > div[dir="ltr"] {
+          height: 44px !important;
+          border-radius: 14px !important;
+        }
+
+        .auth-signup-content label > .group > div[dir="ltr"] span.absolute {
+          right: 8px !important;
+          width: 34px !important;
+          height: 34px !important;
+        }
+
+        .auth-signup-content label > .group > div[dir="ltr"] input {
+          padding-right: 52px !important;
+          font-size: 12px !important;
+        }
+
+        .auth-signup-content form button[type="submit"],
+        .auth-signup-content form button[type="button"]:not(label button) {
+          height: 44px !important;
+          border-radius: 14px !important;
         }
 
         .auth-signup-content form > div > div:has(> button[type="submit"]) {
-          padding-top: 2px;
+          padding-top: 1px;
+        }
+
+        .auth-signup-content form > div > label.flex {
+          font-size: 9px !important;
+          line-height: 16px !important;
+        }
+
+        .auth-signup-content form > div > .text-center,
+        .auth-signup-content form > div > .flex.items-center {
+          font-size: 9px !important;
         }
 
         @media (min-width: 1024px) {
@@ -136,7 +204,7 @@ export function CompactField({
           }
 
           .auth-shell:has(.auth-signup-content) > section:last-child {
-            padding: 16px 32px !important;
+            padding: 14px 32px !important;
           }
         }
 
