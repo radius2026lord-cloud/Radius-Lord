@@ -169,9 +169,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       const data = await response.json();
       if (response.ok && data.success) {
         setLoginStatus("success");
-        window.setTimeout(() => {
+        window.requestAnimationFrame(() => {
           window.location.href = "/Dashboard";
-        }, 720);
+        });
       } else {
         triggerLoginError(data.message || "فشل تسجيل الدخول.");
       }
