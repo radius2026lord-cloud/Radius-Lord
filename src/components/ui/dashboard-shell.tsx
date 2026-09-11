@@ -111,7 +111,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       });
     } finally {
       const elapsed = performance.now() - startedAt;
-      const remaining = Math.max(0, 340 - elapsed);
+      const remaining = Math.max(0, 1400 - elapsed);
       window.setTimeout(() => {
         window.location.replace("/login");
       }, remaining);
