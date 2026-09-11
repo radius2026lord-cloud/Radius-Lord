@@ -1,0 +1,44 @@
+/* Keep the login/signup morph on one continuous animation timeline.
+   The component already swaps modes internally; disabling document view-transition
+   snapshots prevents the second animation pass that caused the visible hitch. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
+}
+
+.auth-shell {
+  opacity: 1 !important;
+  transform: none !important;
+  transition-property: max-width, width, background-color, border-color, box-shadow !important;
+  transition-duration: 520ms !important;
+  transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-login-content,
+.auth-signup-content {
+  animation: none !important;
+}
+
+.auth-shell:has(.auth-signup-content) > section:first-child {
+  transform-origin: left center;
+  animation: authFeaturePanelSmoothIn 420ms 70ms cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+@keyframes authFeaturePanelSmoothIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell,
+  .auth-shell:has(.auth-signup-content) > section:first-child {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
