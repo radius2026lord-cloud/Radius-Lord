@@ -169,9 +169,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       const data = await response.json();
       if (response.ok && data.success) {
         setLoginStatus("success");
-        window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
           window.location.href = "/Dashboard";
-        });
+        }, 1400);
       } else {
         triggerLoginError(data.message || "فشل تسجيل الدخول.");
       }
@@ -279,14 +279,14 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 </p>
               </div>
 
-              <form onSubmit={submit} className={signup ? "mt-6" : "mt-7"}>
+              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-7"}>
                 {signup ? (
                   <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
-                    <CompactField label="الاسم الكامل *" icon={UserRound} value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
-                    <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
+                    <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
+                    <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" name="email" autoComplete="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
                     <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
-                    <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
-                    <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
+                    <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
+                    <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
                     <label className="flex items-start gap-2 text-[10px] leading-5 text-slate-600 dark:text-[#b9b3bd] sm:col-span-2">
                       <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#1479ff]" />
                       <span>أوافق على <button type="button" className="font-semibold text-[#0758e9] dark:text-[#8ab5ff]">الشروط والأحكام وسياسة الخصوصية</button></span>
@@ -299,8 +299,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   </div>
                 ) : (
                   <div className="space-y-4.5">
-                    <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
-                    <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
+                    <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
+                    <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
                     <div className="pt-3"><PrimaryFormButton status={loginStatus} disabled={loginStatus !== "idle" && loginStatus !== "error"}>تسجيل الدخول <span>←</span></PrimaryFormButton></div>
                     <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795]"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
