@@ -95,7 +95,7 @@ export function CompactField({
         @keyframes authArrowLaunch {
           0% { transform: translateX(0) scale(.82); opacity: .35; }
           28% { transform: translateX(-3px) scale(1); opacity: 1; }
-          100% { transform: translateX(-18px) scale(1.08); opacity: 1; }
+          100% { transform: translateX(-20px) scale(1.1); opacity: 1; }
         }
         @keyframes authStatusMorphIn {
           0% { transform: scale(.45); opacity: 0; }
@@ -120,7 +120,7 @@ export function PrimaryFormButton({
   disabled?: boolean;
 }) {
   const busy = status === "loading" || status === "success";
-  const isLoginFlow = status !== "idle" || disabled;
+  const showStatusIndicator = status === "loading" || status === "success";
 
   return (
     <button
@@ -128,11 +128,11 @@ export function PrimaryFormButton({
       disabled={disabled || busy}
       className={`relative flex h-[52px] w-full items-center justify-center overflow-hidden rounded-[17px] bg-gradient-to-l from-[#1479ff] to-[#0758e9] px-6 text-[13px] font-bold text-white shadow-[0_10px_28px_rgba(20,121,255,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_14px_34px_rgba(20,121,255,.30)] active:translate-y-0 disabled:cursor-wait sm:text-[14px] ${status === "error" ? "auth-primary-error" : ""}`}
     >
-      <span className={`flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "opacity-100" : "opacity-100"}`}>
+      <span className={`auth-primary-content flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "[&>span:last-child]:scale-50 [&>span:last-child]:opacity-0" : ""}`}>
         {children}
       </span>
 
-      {isLoginFlow && (
+      {showStatusIndicator && (
         <span className="pointer-events-none absolute left-[calc(50%-78px)] top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center">
           {status === "loading" && (
             <span className="auth-primary-spinner h-[19px] w-[19px] rounded-full border-2 border-white/35 border-t-white" />
