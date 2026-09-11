@@ -101,13 +101,20 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     if (loggingOut) return;
     setLoggingOut(true);
     setAccountOpen(false);
+    setMobileOpen(false);
+
+    const startedAt = performance.now();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
       });
     } finally {
-      window.location.href = "/login";
+      const elapsed = performance.now() - startedAt;
+      const remaining = Math.max(0, 340 - elapsed);
+      window.setTimeout(() => {
+        window.location.replace("/login");
+      }, remaining);
     }
   };
 
@@ -197,7 +204,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   };
 
   return (
-    <div dir="rtl" className="h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5]">
+    <div dir="rtl" className={`dashboard-shell-root relative h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
       <aside
         onMouseLeave={(event) => {
           if (collapsed) return;
@@ -205,7 +212,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           const exitedThroughLeft = event.clientX <= rect.left && event.clientY >= rect.top && event.clientY <= rect.bottom;
           if (exitedThroughLeft) setCollapsed(true);
         }}
-        className={`fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}
+        className={`dashboard-logout-surface fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}
       >
         {collapsed && (
           <div
@@ -218,7 +225,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       </aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-[80] lg:hidden">
+        <div className="dashboard-logout-surface fixed inset-0 z-[80] lg:hidden">
           <button className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" />
           <aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]">
             <SidebarContent mobile />
@@ -226,7 +233,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </div>
       )}
 
-      <div className={`${mainGap} h-screen min-w-0 overflow-hidden ${shellMotion}`}>
+      <div className={`dashboard-main-shell dashboard-logout-surface ${mainGap} h-screen min-w-0 overflow-hidden ${shellMotion}`}>
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5">
           <div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
             <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة">
@@ -361,6 +368,69 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </footer>
       </div>
+
+      {loggingOut && (
+        <div className="dashboard-logout-overlay fixed inset-0 z-[120] flex items-center justify-center bg-[#dce5ef]/30 backdrop-blur-[3px] dark:bg-[#1d1721]/35" aria-live="polite" aria-label="جارٍ تسجيل الخروج">
+          <div className="dashboard-logout-card flex min-w-[210px] flex-col items-center rounded-[24px] border border-white/70 bg-white/88 px-8 py-7 shadow-[0_24px_70px_rgba(31,54,83,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/88 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
+            <div className="dashboard-logout-icon relative grid h-16 w-16 place-items-center rounded-full bg-red-500/10 text-red-500 dark:bg-red-400/10 dark:text-red-400">
+              <span className="dashboard-logout-ring absolute inset-0 rounded-full border-2 border-red-500/20 border-t-red-500 dark:border-red-400/20 dark:border-t-red-400" />
+              <LogOut className="dashboard-logout-arrow h-7 w-7" />
+            </div>
+            <div className="mt-4 text-sm font-bold text-[#102a63] dark:text-[#f4f1f5]">تسجيل الخروج</div>
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-[#b9b3bd]">جارٍ إنهاء الجلسة بأمان...</div>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @keyframes dashboardLogoutFade {
+          from { opacity: 1; transform: scale(1); filter: blur(0); }
+          to { opacity: .28; transform: scale(.988); filter: blur(2px); }
+        }
+        @keyframes dashboardLogoutOverlayIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes dashboardLogoutCardIn {
+          0% { opacity: 0; transform: translateY(8px) scale(.94); }
+          70% { opacity: 1; transform: translateY(-1px) scale(1.015); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes dashboardLogoutRingSpin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes dashboardLogoutArrow {
+          0%, 100% { transform: translateX(2px); opacity: .72; }
+          50% { transform: translateX(-4px); opacity: 1; }
+        }
+
+        .dashboard-logout-active .dashboard-logout-surface {
+          pointer-events: none;
+          animation: dashboardLogoutFade .34s cubic-bezier(.22,.8,.25,1) both;
+        }
+        .dashboard-logout-overlay {
+          animation: dashboardLogoutOverlayIn .18s ease-out both;
+        }
+        .dashboard-logout-card {
+          animation: dashboardLogoutCardIn .30s cubic-bezier(.22,.8,.25,1) both;
+        }
+        .dashboard-logout-ring {
+          animation: dashboardLogoutRingSpin .72s linear infinite;
+        }
+        .dashboard-logout-arrow {
+          animation: dashboardLogoutArrow .72s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .dashboard-logout-active .dashboard-logout-surface,
+          .dashboard-logout-overlay,
+          .dashboard-logout-card,
+          .dashboard-logout-ring,
+          .dashboard-logout-arrow {
+            animation: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
