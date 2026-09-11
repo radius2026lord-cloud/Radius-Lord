@@ -52,20 +52,21 @@ export function CompactField({
         }
 
         ::view-transition-old(root) {
-          animation: authPageOut .22s cubic-bezier(.4,0,1,1) both;
+          animation: authPageOut .34s cubic-bezier(.4,0,.35,1) both;
         }
 
         ::view-transition-new(root) {
-          animation: authPageIn .34s cubic-bezier(.22,.8,.25,1) both;
+          animation: authPageIn .46s cubic-bezier(.22,.8,.25,1) both;
         }
 
         @keyframes authPageOut {
           from { opacity: 1; transform: scale(1); filter: blur(0); }
-          to { opacity: 0; transform: scale(.992); filter: blur(2px); }
+          to { opacity: .18; transform: scale(.988); filter: blur(2px); }
         }
 
         @keyframes authPageIn {
-          from { opacity: 0; transform: translateY(5px) scale(.994); filter: blur(3px); }
+          from { opacity: 0; transform: translateY(6px) scale(.994); filter: blur(2px); }
+          55% { opacity: .9; }
           to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
 
@@ -124,13 +125,40 @@ export function CompactField({
           70% { transform: scale(1.1); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
+        @keyframes authSuccessOverlayIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes authSuccessCardIn {
+          0% { opacity: 0; transform: translateY(10px) scale(.93); }
+          70% { opacity: 1; transform: translateY(-1px) scale(1.018); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes authSuccessRing {
+          0% { transform: scale(.72); opacity: .25; }
+          70% { transform: scale(1.08); opacity: .75; }
+          100% { transform: scale(1); opacity: .55; }
+        }
+        @keyframes authSuccessArrowCard {
+          0% { transform: translateX(5px) scale(.82); opacity: 0; }
+          45% { opacity: 1; }
+          100% { transform: translateX(-5px) scale(1); opacity: 1; }
+        }
         .auth-primary-error { animation: authButtonShake .46s ease-in-out; }
         .auth-primary-spinner { animation: authButtonSpin .68s linear infinite, authStatusMorphIn .24s ease-out both; }
         .auth-primary-success-arrow { animation: authArrowLaunch .58s cubic-bezier(.22,.8,.25,1) both; }
+        .auth-success-overlay { animation: authSuccessOverlayIn .16s ease-out both; }
+        .auth-success-card { animation: authSuccessCardIn .34s cubic-bezier(.22,.8,.25,1) both; }
+        .auth-success-ring { animation: authSuccessRing .38s cubic-bezier(.22,.8,.25,1) both; }
+        .auth-success-card-arrow { animation: authSuccessArrowCard .42s .08s cubic-bezier(.22,.8,.25,1) both; }
 
         @media (prefers-reduced-motion: reduce) {
           ::view-transition-old(root),
-          ::view-transition-new(root) { animation-duration: .01ms !important; }
+          ::view-transition-new(root),
+          .auth-success-overlay,
+          .auth-success-card,
+          .auth-success-ring,
+          .auth-success-card-arrow { animation-duration: .01ms !important; }
         }
       `}</style>
     </label>
@@ -150,26 +178,41 @@ export function PrimaryFormButton({
   const showStatusIndicator = status === "loading" || status === "success";
 
   return (
-    <button
-      type="submit"
-      disabled={disabled || busy}
-      className={`relative flex h-[52px] w-full items-center justify-center overflow-hidden rounded-[17px] bg-gradient-to-l from-[#1479ff] to-[#0758e9] px-6 text-[13px] font-bold text-white shadow-[0_10px_28px_rgba(20,121,255,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_14px_34px_rgba(20,121,255,.30)] active:translate-y-0 disabled:cursor-wait sm:text-[14px] ${status === "error" ? "auth-primary-error" : ""}`}
-    >
-      <span className={`auth-primary-content flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "[&>span:last-child]:scale-50 [&>span:last-child]:opacity-0" : ""}`}>
-        {children}
-      </span>
-
-      {showStatusIndicator && (
-        <span className="pointer-events-none absolute left-[calc(50%-78px)] top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center">
-          {status === "loading" && (
-            <span className="auth-primary-spinner h-[19px] w-[19px] rounded-full border-2 border-white/35 border-t-white" />
-          )}
-          {status === "success" && (
-            <span className="auth-primary-success-arrow text-[20px] font-black leading-none">←</span>
-          )}
+    <>
+      <button
+        type="submit"
+        disabled={disabled || busy}
+        className={`relative flex h-[52px] w-full items-center justify-center overflow-hidden rounded-[17px] bg-gradient-to-l from-[#1479ff] to-[#0758e9] px-6 text-[13px] font-bold text-white shadow-[0_10px_28px_rgba(20,121,255,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_14px_34px_rgba(20,121,255,.30)] active:translate-y-0 disabled:cursor-wait sm:text-[14px] ${status === "error" ? "auth-primary-error" : ""}`}
+      >
+        <span className={`auth-primary-content flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "[&>span:last-child]:scale-50 [&>span:last-child]:opacity-0" : ""}`}>
+          {children}
         </span>
+
+        {showStatusIndicator && (
+          <span className="pointer-events-none absolute left-[calc(50%-78px)] top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center">
+            {status === "loading" && (
+              <span className="auth-primary-spinner h-[19px] w-[19px] rounded-full border-2 border-white/35 border-t-white" />
+            )}
+            {status === "success" && (
+              <span className="auth-primary-success-arrow text-[20px] font-black leading-none">←</span>
+            )}
+          </span>
+        )}
+      </button>
+
+      {status === "success" && (
+        <div className="auth-success-overlay fixed inset-0 z-[140] flex items-center justify-center bg-[#dce5ef]/20 backdrop-blur-[2px] dark:bg-[#1d1721]/25" aria-live="polite" aria-label="تم تسجيل الدخول بنجاح">
+          <div className="auth-success-card flex min-w-[220px] flex-col items-center rounded-[24px] border border-white/75 bg-white/90 px-8 py-7 shadow-[0_24px_72px_rgba(31,74,132,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/90 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
+            <div className="relative grid h-16 w-16 place-items-center rounded-full bg-[#1479ff]/10 text-[#0758e9] dark:bg-[#6aa8ff]/10 dark:text-[#8ab5ff]">
+              <span className="auth-success-ring absolute inset-0 rounded-full border-2 border-[#1479ff]/30 dark:border-[#6aa8ff]/30" />
+              <span className="auth-success-card-arrow text-[28px] font-black leading-none">←</span>
+            </div>
+            <div className="mt-4 text-sm font-black text-[#102a63] dark:text-[#f4f1f5]">تم تسجيل الدخول بنجاح</div>
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-[#b9b3bd]">جارٍ فتح لوحة التحكم...</div>
+          </div>
+        </div>
       )}
-    </button>
+    </>
   );
 }
 
