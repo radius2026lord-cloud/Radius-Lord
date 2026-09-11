@@ -1,0 +1,27 @@
+@keyframes lordDashboardEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(7px) scale(0.996);
+    filter: blur(2px);
+  }
+  45% {
+    opacity: 0.82;
+    filter: blur(0.6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.dashboard-enter {
+  animation: lordDashboardEnter 720ms cubic-bezier(.22,.8,.25,1) both;
+  transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-enter {
+    animation: none;
+  }
+}
