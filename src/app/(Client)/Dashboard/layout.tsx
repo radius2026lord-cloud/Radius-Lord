@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Changa } from "next/font/google";
 import "./globals.css";
+import "./dashboard-entry.css";
 
 import { ThemeProvider } from "next-themes";
 import DashboardShell from "@/components/ui/dashboard-shell";
