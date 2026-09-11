@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -243,6 +244,11 @@ export default function LordAuth({ mode }: { mode: Mode }) {
             <path d="M1600 680 L1458 570 L1292 720 L1142 590 L1002 760" />
             <path d="M145 118 L170 730 M452 112 L486 700 M1450 250 L1458 570 M1155 240 L1142 590" opacity=".45" />
           </g>
+          <g fill="none" stroke="currentColor" className="auth-night-extra-lines text-[#7ea4ff]" strokeWidth="1">
+            <path d="M0 360 L180 302 L355 382 L528 310 L700 392 L860 326" />
+            <path d="M1600 420 L1430 350 L1260 432 L1090 348 L920 438 L760 370" />
+            <path d="M355 382 L326 588 M700 392 L640 560 M1260 432 L1292 720 M920 438 L1002 760" opacity=".58" />
+          </g>
         </svg>
 
         {networkDots.map((dot, index) => (
@@ -285,7 +291,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
             }`}
           >
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "auth-login-content max-w-[418px]"}`}>
+            <div className={`relative z-10 w-full ${signup ? "auth-signup-content max-w-[470px]" : "auth-login-content max-w-[418px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
@@ -315,7 +321,19 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                     <div className="sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
                     <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795] sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
                     <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
-                    <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">لديك حساب بالفعل؟ <button type="button" onClick={() => switchMode("login")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</button></div>
+                    <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
+                      لديك حساب بالفعل؟
+                      <Link
+                        href="/login"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          switchMode("login");
+                        }}
+                        className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white"
+                      >
+                        تسجيل الدخول
+                      </Link>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4.5">
@@ -400,6 +418,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         }
         .auth-network-dot { animation-name: authDotPulse; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
         .auth-network-lines { animation: authNetworkFlow 9s ease-in-out infinite; }
+        .auth-night-extra-lines { opacity: 0; transition: opacity .5s ease; }
+        .dark .auth-night-extra-lines { opacity: .55; }
         .auth-orbit { animation: authOrbitFloat 12s ease-in-out infinite; box-shadow: inset 0 0 40px rgba(20,121,255,.025); }
         .auth-orbit-b { animation-delay: -5s; animation-duration: 15s; }
         .auth-glow { animation: authGlowFloat 14s ease-in-out infinite; }
@@ -412,7 +432,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .dark .auth-feature-card:hover { border-color: rgba(106,168,255,.22); background: rgba(56,54,60,.92); }
         .auth-panel-glow { animation: authPanelGlow 10s ease-in-out infinite; }
         .auth-panel-glow-delay { animation-delay: -4s; }
-        .auth-login-content { transition: transform .4s cubic-bezier(.22,.8,.25,1); transform-origin: center center; }
+        .auth-login-content,
+        .auth-signup-content { transition: transform .4s cubic-bezier(.22,.8,.25,1); transform-origin: center center; }
 
         @media (max-height: 800px) {
           .auth-login-content { transform: scale(.92); width: 108.7%; max-width: none; }
