@@ -81,16 +81,16 @@ export function CompactField({
         }
 
         .dark .auth-bg-grid {
-          opacity: .52 !important;
+          opacity: .68 !important;
           background-image:
-            linear-gradient(rgba(126,164,255,.24) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(126,164,255,.24) 1px, transparent 1px) !important;
-          background-size: 32px 32px !important;
+            linear-gradient(rgba(126,164,255,.30) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(126,164,255,.30) 1px, transparent 1px) !important;
+          background-size: 28px 28px !important;
         }
 
         .dark .auth-network-lines {
-          opacity: .48 !important;
-          filter: drop-shadow(0 0 6px rgba(106,168,255,.28));
+          opacity: .66 !important;
+          filter: drop-shadow(0 0 8px rgba(106,168,255,.34));
         }
 
         .dark .auth-network-dot {
@@ -108,6 +108,20 @@ export function CompactField({
         .dark .auth-shell > section:last-child {
           background: rgba(48,46,51,.95) !important;
           backdrop-filter: blur(12px);
+        }
+
+        .auth-signup-content {
+          max-width: 418px !important;
+        }
+
+        .auth-signup-content form > div {
+          grid-template-columns: minmax(0, 1fr) !important;
+          row-gap: 18px !important;
+        }
+
+        .auth-signup-content form > div > * {
+          grid-column: 1 / -1 !important;
+          width: 100%;
         }
 
         @keyframes authButtonShake {
