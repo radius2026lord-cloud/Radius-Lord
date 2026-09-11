@@ -68,13 +68,15 @@ export function CompactField({
         }
 
         .dark .auth-shell {
-          background: #302e33 !important;
+          background: rgba(48,46,51,.94) !important;
           border-color: rgba(255,255,255,.10) !important;
           box-shadow: 0 28px 80px rgba(0,0,0,.30) !important;
+          backdrop-filter: blur(14px);
         }
 
         .dark .auth-shell > section:last-child {
-          background: #302e33 !important;
+          background: rgba(48,46,51,.92) !important;
+          backdrop-filter: blur(12px);
         }
       `}</style>
     </label>
