@@ -24,6 +24,7 @@ import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/componen
 
 type Mode = "login" | "signup";
 type LoginStatus = "idle" | "loading" | "success" | "error";
+type PasswordCredentialConstructor = new (data: { id: string; password: string; name?: string }) => Credential;
 
 const networkDots = [
   { left: "5%", top: "14%", size: 4, delay: "-1.5s", duration: "7s", tone: "blue" },
@@ -133,6 +134,24 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     window.setTimeout(() => setLoginStatus("idle"), 560);
   };
 
+  const requestBrowserCredentialSave = async () => {
+    if (typeof window === "undefined" || !window.isSecureContext || !navigator.credentials?.store) return;
+
+    const PasswordCredentialCtor = (window as typeof window & { PasswordCredential?: PasswordCredentialConstructor }).PasswordCredential;
+    if (!PasswordCredentialCtor) return;
+
+    try {
+      const credential = new PasswordCredentialCtor({
+        id: email,
+        password,
+        name: email,
+      });
+      await navigator.credentials.store(credential);
+    } catch {
+      // The browser may decline, block, or not support credential saving for this context.
+    }
+  };
+
   const switchMode = (nextMode: Mode) => {
     if (transitioning || nextMode === activeMode) return;
     setTransitioning(true);
@@ -169,6 +188,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       const data = await response.json();
       if (response.ok && data.success) {
         setLoginStatus("success");
+        await requestBrowserCredentialSave();
         window.setTimeout(() => {
           window.location.href = "/Dashboard";
         }, 1400);
