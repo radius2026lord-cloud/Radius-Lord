@@ -47,6 +47,28 @@ export function CompactField({
       </div>
 
       <style jsx global>{`
+        @view-transition {
+          navigation: auto;
+        }
+
+        ::view-transition-old(root) {
+          animation: authPageOut .22s cubic-bezier(.4,0,1,1) both;
+        }
+
+        ::view-transition-new(root) {
+          animation: authPageIn .34s cubic-bezier(.22,.8,.25,1) both;
+        }
+
+        @keyframes authPageOut {
+          from { opacity: 1; transform: scale(1); filter: blur(0); }
+          to { opacity: 0; transform: scale(.992); filter: blur(2px); }
+        }
+
+        @keyframes authPageIn {
+          from { opacity: 0; transform: translateY(5px) scale(.994); filter: blur(3px); }
+          to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+
         .dark main:has(.auth-shell) {
           background: #1d1721 !important;
         }
@@ -105,6 +127,11 @@ export function CompactField({
         .auth-primary-error { animation: authButtonShake .46s ease-in-out; }
         .auth-primary-spinner { animation: authButtonSpin .68s linear infinite, authStatusMorphIn .24s ease-out both; }
         .auth-primary-success-arrow { animation: authArrowLaunch .58s cubic-bezier(.22,.8,.25,1) both; }
+
+        @media (prefers-reduced-motion: reduce) {
+          ::view-transition-old(root),
+          ::view-transition-new(root) { animation-duration: .01ms !important; }
+        }
       `}</style>
     </label>
   );
