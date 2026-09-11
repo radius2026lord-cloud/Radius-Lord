@@ -1,0 +1,34 @@
+:global(::view-transition-old(root)) {
+  animation: authLoginPageOutRestore .34s cubic-bezier(.4,0,.35,1) both !important;
+}
+
+:global(::view-transition-new(root)) {
+  animation: authLoginPageInRestore .46s cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+@keyframes authLoginPageOutRestore {
+  from { opacity: 1; transform: scale(1); filter: blur(0); }
+  to { opacity: .18; transform: scale(.988); filter: blur(2px); }
+}
+
+@keyframes authLoginPageInRestore {
+  from { opacity: 0; transform: translateY(6px) scale(.994); filter: blur(2px); }
+  55% { opacity: .9; }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+:global(.auth-login-content) {
+  animation: none !important;
+}
+
+:global(.auth-shell:not(:has(.auth-signup-content))) {
+  transition-duration: 500ms !important;
+  transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(::view-transition-old(root)),
+  :global(::view-transition-new(root)) {
+    animation-duration: .01ms !important;
+  }
+}
