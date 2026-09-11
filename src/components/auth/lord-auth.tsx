@@ -23,6 +23,7 @@ import { CountryPhoneInput } from "@/components/ui/country-phone-input";
 import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/components/auth/auth-content";
 
 type Mode = "login" | "signup";
+type LoginStatus = "idle" | "loading" | "success" | "error";
 
 const networkDots = [
   { left: "5%", top: "14%", size: 4, delay: "-1.5s", duration: "7s", tone: "blue" },
@@ -62,12 +63,12 @@ const networkDots = [
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex flex-col items-center text-center" dir="ltr">
-      <div className={`auth-brand-icon relative grid place-items-center rounded-[18px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] shadow-[0_12px_30px_rgba(20,121,255,.24)] ${compact ? "h-12 w-12" : "h-16 w-16"}`}>
-        <Crown className={`${compact ? "h-6 w-6" : "h-8 w-8"} text-[#ffad16]`} strokeWidth={2.2} />
-        <Radio className={`absolute bottom-1.5 text-white ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} strokeWidth={2.5} />
+      <div className={`auth-brand-icon relative grid place-items-center rounded-[19px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] shadow-[0_12px_30px_rgba(20,121,255,.24)] ${compact ? "h-12 w-12" : "h-[68px] w-[68px]"}`}>
+        <Crown className={`${compact ? "h-6 w-6" : "h-9 w-9"} text-[#ffad16]`} strokeWidth={2.2} />
+        <Radio className={`absolute bottom-1.5 text-white ${compact ? "h-3.5 w-3.5" : "h-[17px] w-[17px]"}`} strokeWidth={2.5} />
       </div>
-      <div className={`${compact ? "mt-2 text-[20px]" : "mt-3 text-[28px]"} font-black leading-none tracking-tight text-[#102a63] dark:text-white`}>LORD</div>
-      <div className={`${compact ? "text-[9px]" : "text-[11px]"} mt-1 font-extrabold tracking-[.08em] text-[#e99100] dark:text-[#ffad16]`}>RADIUS LORD</div>
+      <div className={`${compact ? "mt-2 text-[20px]" : "mt-3 text-[30px]"} font-black leading-none tracking-tight text-[#102a63] dark:text-white`}>LORD</div>
+      <div className={`${compact ? "text-[9px]" : "text-[12px]"} mt-1 font-extrabold tracking-[.08em] text-[#e99100] dark:text-[#ffad16]`}>RADIUS LORD</div>
     </div>
   );
 }
@@ -87,13 +88,13 @@ function VisualPanel() {
       <div className="absolute inset-0 opacity-[.10] [background-image:linear-gradient(rgba(20,121,255,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(20,121,255,.16)_1px,transparent_1px)] [background-size:34px_34px] dark:opacity-[.10]" />
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-10 text-center">
         <Brand />
-        <h2 className="mt-7 text-[21px] font-black text-[#102a63] dark:text-[#f4f1f5]">{radiusAuthContent.title}</h2>
-        <p className="mx-auto mt-3 max-w-[420px] text-[11px] leading-6 text-slate-600 dark:text-[#b9b3bd]">{radiusAuthContent.description}</p>
+        <h2 className="mt-7 text-[22px] font-black text-[#102a63] dark:text-[#f4f1f5]">{radiusAuthContent.title}</h2>
+        <p className="mx-auto mt-3 max-w-[420px] text-[12px] leading-6 text-slate-600 dark:text-[#b9b3bd]">{radiusAuthContent.description}</p>
         <div className="mt-8 grid w-full max-w-[430px] grid-cols-2 gap-3">
           {features.map(({ label, icon: Icon }, index) => (
-            <div key={label} className="auth-feature-card flex min-h-[72px] items-center gap-3 rounded-[18px] border border-[#d4e1ed] bg-white px-4 text-right shadow-sm dark:border-white/[.08] dark:bg-[#302e33]/90 dark:shadow-none" style={{ animationDelay: `${index * 160}ms` }}>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e2e9f1] text-[#0758e9] dark:bg-[#3b383e] dark:text-[#8ab5ff]"><Icon className="h-5 w-5" /></span>
-              <span className="text-[12px] font-bold text-[#17386d] dark:text-[#ece8ee]">{label}</span>
+            <div key={label} className="auth-feature-card flex min-h-[76px] items-center gap-3 rounded-[18px] border border-[#d4e1ed] bg-white px-4 text-right shadow-sm dark:border-white/[.08] dark:bg-[#302e33]/90 dark:shadow-none" style={{ animationDelay: `${index * 160}ms` }}>
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#e2e9f1] text-[#0758e9] dark:bg-[#3b383e] dark:text-[#8ab5ff]"><Icon className="h-[21px] w-[21px]" /></span>
+              <span className="text-[13px] font-bold text-[#17386d] dark:text-[#ece8ee]">{label}</span>
             </div>
           ))}
         </div>
@@ -108,6 +109,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [mounted, setMounted] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>(mode);
   const [transitioning, setTransitioning] = useState(false);
+  const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const signup = activeMode === "signup";
 
   const [email, setEmail] = useState("");
@@ -125,10 +127,17 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
   const isDark = mounted && theme === "dark";
 
+  const triggerLoginError = (text: string) => {
+    setMessage(text);
+    setLoginStatus("error");
+    window.setTimeout(() => setLoginStatus("idle"), 560);
+  };
+
   const switchMode = (nextMode: Mode) => {
     if (transitioning || nextMode === activeMode) return;
     setTransitioning(true);
     setMessage("");
+    setLoginStatus("idle");
     window.setTimeout(() => setActiveMode(nextMode), 160);
     window.setTimeout(() => {
       router.push(nextMode === "login" ? "/login" : "/signup");
@@ -147,8 +156,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
     }
 
-    if (!email || !password) return setMessage("يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.");
+    if (!email || !password) return triggerLoginError("يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.");
 
+    setLoginStatus("loading");
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -157,10 +167,16 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         body: JSON.stringify({ username: email, password }),
       });
       const data = await response.json();
-      if (response.ok && data.success) window.location.href = "/Dashboard";
-      else setMessage(data.message || "فشل تسجيل الدخول.");
+      if (response.ok && data.success) {
+        setLoginStatus("success");
+        window.setTimeout(() => {
+          window.location.href = "/Dashboard";
+        }, 720);
+      } else {
+        triggerLoginError(data.message || "فشل تسجيل الدخول.");
+      }
     } catch {
-      setMessage("تعذر الاتصال بالخادم.");
+      triggerLoginError("تعذر الاتصال بالخادم.");
     }
   };
 
@@ -168,10 +184,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     <button
       type="button"
       onClick={toggle}
-      className="absolute left-2.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition-all duration-300 hover:bg-[#e8eff6] hover:text-[#0758e9] dark:text-[#b9b3bd] dark:hover:bg-[#454149] dark:hover:text-white"
+      className="absolute left-2.5 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition-all duration-300 hover:scale-105 hover:bg-[#e8eff6] hover:text-[#0758e9] dark:text-[#b9b3bd] dark:hover:bg-[#454149] dark:hover:text-white"
       aria-label={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
     >
-      {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      {visible ? <EyeOff className="h-[17px] w-[17px]" /> : <Eye className="h-[17px] w-[17px]" />}
     </button>
   );
 
@@ -249,21 +265,21 @@ export default function LordAuth({ mode }: { mode: Mode }) {
             }`}
           >
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "auth-login-content max-w-[410px]"}`}>
+            <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "auth-login-content max-w-[418px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
               <div className="text-center">
-                <div className="auth-login-icon mx-auto grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
-                  {signup ? <UserRound className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
+                <div className="auth-login-icon mx-auto grid h-[52px] w-[52px] place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
+                  {signup ? <UserRound className="h-[22px] w-[22px]" /> : <LockKeyhole className="h-[22px] w-[22px]" />}
                 </div>
-                <h1 className="mt-3 text-[24px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-2 max-w-[360px] text-[11px] leading-5 text-slate-500 dark:text-[#b9b3bd]">
+                <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
+                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">
                   {signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}
                 </p>
               </div>
 
-              <form onSubmit={submit} className={signup ? "mt-6" : "mt-8"}>
+              <form onSubmit={submit} className={signup ? "mt-6" : "mt-7"}>
                 {signup ? (
                   <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
                     <CompactField label="الاسم الكامل *" icon={UserRound} value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
@@ -286,7 +302,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                     <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
-                    <div className="pt-1"><PrimaryFormButton>تسجيل الدخول <span>←</span></PrimaryFormButton></div>
+                    <div className="pt-3"><PrimaryFormButton status={loginStatus} disabled={loginStatus !== "idle" && loginStatus !== "error"}>تسجيل الدخول <span>←</span></PrimaryFormButton></div>
                     <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795]"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
                     <SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> تسجيل الدخول باستخدام Google</SecondaryFormButton>
                     <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd]">ليس لديك حساب؟ <button type="button" onClick={() => switchMode("signup")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">إنشاء حساب جديد</button></div>
