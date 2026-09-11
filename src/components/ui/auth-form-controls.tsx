@@ -85,7 +85,7 @@ export function CompactField({
           background-image:
             linear-gradient(rgba(126,164,255,.24) 1px, transparent 1px),
             linear-gradient(90deg, rgba(126,164,255,.24) 1px, transparent 1px) !important;
-          background-size: 40px 40px !important;
+          background-size: 32px 32px !important;
         }
 
         .dark .auth-network-lines {
