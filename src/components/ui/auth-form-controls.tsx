@@ -14,6 +14,8 @@ type CompactFieldProps = {
   placeholder: string;
   suffix?: ReactNode;
   className?: string;
+  name?: string;
+  autoComplete?: string;
 };
 
 export function CompactField({
@@ -25,6 +27,8 @@ export function CompactField({
   placeholder,
   suffix,
   className = "",
+  name,
+  autoComplete,
 }: CompactFieldProps) {
   return (
     <label className={`block ${className}`}>
@@ -38,6 +42,8 @@ export function CompactField({
         </span>
         <input
           type={type}
+          name={name}
+          autoComplete={autoComplete}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
