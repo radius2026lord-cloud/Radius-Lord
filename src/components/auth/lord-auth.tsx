@@ -45,6 +45,18 @@ const networkDots = [
   { left: "68%", top: "55%", size: 5, delay: "-1.2s", duration: "8.4s", tone: "blue" },
   { left: "77%", top: "88%", size: 3, delay: "-6.2s", duration: "10.2s", tone: "soft" },
   { left: "91%", top: "8%", size: 4, delay: "-3.2s", duration: "7.6s", tone: "amber" },
+  { left: "15%", top: "9%", size: 3, delay: "-2.3s", duration: "8.1s", tone: "amber" },
+  { left: "18%", top: "57%", size: 4, delay: "-5.6s", duration: "9.1s", tone: "blue" },
+  { left: "31%", top: "66%", size: 3, delay: "-4.8s", duration: "8.7s", tone: "amber" },
+  { left: "46%", top: "24%", size: 4, delay: "-6.8s", duration: "9.9s", tone: "blue" },
+  { left: "52%", top: "46%", size: 3, delay: "-3.7s", duration: "7.9s", tone: "amber" },
+  { left: "61%", top: "9%", size: 4, delay: "-1.7s", duration: "8.9s", tone: "blue" },
+  { left: "70%", top: "35%", size: 3, delay: "-5.9s", duration: "9.7s", tone: "amber" },
+  { left: "75%", top: "68%", size: 4, delay: "-2.7s", duration: "8.3s", tone: "blue" },
+  { left: "84%", top: "13%", size: 3, delay: "-6.4s", duration: "10.1s", tone: "amber" },
+  { left: "86%", top: "78%", size: 4, delay: "-4.4s", duration: "9.3s", tone: "blue" },
+  { left: "96%", top: "42%", size: 3, delay: "-2.1s", duration: "8.5s", tone: "amber" },
+  { left: "3%", top: "61%", size: 4, delay: "-5.1s", duration: "9.5s", tone: "blue" },
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -69,17 +81,17 @@ const features = [
 
 function VisualPanel() {
   return (
-    <section className="relative hidden h-full overflow-hidden bg-[#edf3f8] dark:bg-[#211a25] min-[1024px]:block">
+    <section className="relative hidden h-full overflow-hidden bg-[#edf3f8] dark:bg-[#211a25]/95 min-[1024px]:block">
       <div className="auth-panel-glow absolute -left-28 -top-24 h-72 w-72 rounded-full bg-[#1479ff]/12 blur-[90px]" />
       <div className="auth-panel-glow auth-panel-glow-delay absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-[#ffad16]/8 blur-[90px] dark:bg-[#ffad16]/5" />
-      <div className="absolute inset-0 opacity-[.10] [background-image:linear-gradient(rgba(20,121,255,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(20,121,255,.16)_1px,transparent_1px)] [background-size:34px_34px] dark:opacity-[.08]" />
+      <div className="absolute inset-0 opacity-[.10] [background-image:linear-gradient(rgba(20,121,255,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(20,121,255,.16)_1px,transparent_1px)] [background-size:34px_34px] dark:opacity-[.10]" />
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-10 text-center">
         <Brand />
         <h2 className="mt-7 text-[21px] font-black text-[#102a63] dark:text-[#f4f1f5]">{radiusAuthContent.title}</h2>
         <p className="mx-auto mt-3 max-w-[420px] text-[11px] leading-6 text-slate-600 dark:text-[#b9b3bd]">{radiusAuthContent.description}</p>
         <div className="mt-8 grid w-full max-w-[430px] grid-cols-2 gap-3">
           {features.map(({ label, icon: Icon }, index) => (
-            <div key={label} className="auth-feature-card flex min-h-[72px] items-center gap-3 rounded-[18px] border border-[#d4e1ed] bg-white px-4 text-right shadow-sm dark:border-white/[.08] dark:bg-[#302e33] dark:shadow-none" style={{ animationDelay: `${index * 160}ms` }}>
+            <div key={label} className="auth-feature-card flex min-h-[72px] items-center gap-3 rounded-[18px] border border-[#d4e1ed] bg-white px-4 text-right shadow-sm dark:border-white/[.08] dark:bg-[#302e33]/90 dark:shadow-none" style={{ animationDelay: `${index * 160}ms` }}>
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e2e9f1] text-[#0758e9] dark:bg-[#3b383e] dark:text-[#8ab5ff]"><Icon className="h-5 w-5" /></span>
               <span className="text-[12px] font-bold text-[#17386d] dark:text-[#ece8ee]">{label}</span>
             </div>
@@ -166,13 +178,13 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   return (
     <main
       dir="rtl"
-      className="relative min-h-[100dvh] overflow-x-hidden bg-[#dce5ef] text-[#102a63] transition-colors duration-500 dark:bg-[#1d1721] dark:text-[#f4f1f5]"
+      className="relative h-[100dvh] overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors duration-500 dark:bg-[#1d1721] dark:text-[#f4f1f5]"
       style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}
     >
       <button
         type="button"
         onClick={() => setTheme(isDark ? "light" : "dark")}
-        className="fixed left-5 top-5 z-30 grid h-11 w-11 place-items-center rounded-full border border-[#cbd9e7] bg-[#f9fbfe] text-[#102a63] shadow-[0_10px_30px_rgba(53,83,116,.14)] transition-all duration-500 hover:-translate-y-0.5 hover:border-[#7fb1e8] hover:text-[#0758e9] dark:border-white/[.10] dark:bg-[#302e33] dark:text-[#f4f1f5] dark:shadow-[0_12px_32px_rgba(0,0,0,.26)] dark:hover:border-white/20 dark:hover:text-[#8ab5ff]"
+        className="fixed left-5 top-5 z-30 grid h-11 w-11 place-items-center rounded-full border border-[#cbd9e7] bg-[#f9fbfe] text-[#102a63] shadow-[0_10px_30px_rgba(53,83,116,.14)] transition-all duration-500 hover:-translate-y-0.5 hover:border-[#7fb1e8] hover:text-[#0758e9] dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#f4f1f5] dark:shadow-[0_12px_32px_rgba(0,0,0,.26)] dark:hover:border-white/20 dark:hover:text-[#8ab5ff]"
         aria-label={isDark ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
         title={isDark ? "الوضع الفاتح" : "الوضع الداكن"}
       >
@@ -219,25 +231,25 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         ))}
       </div>
 
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
+      <div className="relative z-10 flex h-full min-h-0 items-center justify-center p-3 sm:p-4">
         <div
           dir="ltr"
-          className={`auth-shell relative w-full overflow-hidden rounded-[22px] border border-white/80 bg-[#f9fbfe] shadow-[0_24px_70px_rgba(53,83,116,.18)] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.10] dark:bg-[#302e33] dark:shadow-[0_28px_80px_rgba(0,0,0,.36)] ${
+          className={`auth-shell relative w-full overflow-hidden rounded-[22px] border border-white/80 bg-[#f9fbfe] shadow-[0_24px_70px_rgba(53,83,116,.18)] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_28px_80px_rgba(0,0,0,.36)] dark:backdrop-blur-xl ${
             signup
-              ? "grid max-w-[1020px] min-[1024px]:h-[610px] min-[1024px]:grid-cols-2"
-              : "max-w-[500px]"
+              ? "grid max-w-[1020px] min-[1024px]:h-[min(610px,calc(100dvh-24px))] min-[1024px]:grid-cols-2"
+              : "max-w-[500px] h-[min(610px,calc(100dvh-24px))]"
           } ${transitioning ? "scale-[.985] opacity-80" : "scale-100 opacity-100"}`}
         >
           {signup && <VisualPanel />}
 
           <section
             dir="rtl"
-            className={`relative flex h-full items-center justify-center bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33] sm:px-8 ${
-              signup ? "min-h-[calc(100dvh-32px)] py-7 min-[1024px]:min-h-0" : "min-h-[610px] py-8"
+            className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${
+              signup ? "py-5" : "auth-login-section py-4 sm:py-5"
             }`}
           >
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "max-w-[410px]"}`}>
+            <div className={`relative z-10 w-full ${signup ? "max-w-[470px]" : "auth-login-content max-w-[410px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
@@ -341,10 +353,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
           animation: authGridDrift 24s linear infinite;
         }
         .dark .auth-bg-grid {
-          opacity: .18;
+          opacity: .20;
           background-image:
-            linear-gradient(rgba(126,164,255,.10) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(126,164,255,.10) 1px, transparent 1px);
+            linear-gradient(rgba(126,164,255,.11) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(126,164,255,.11) 1px, transparent 1px);
         }
         .auth-bg-scan {
           background: linear-gradient(90deg, transparent 38%, rgba(20,121,255,.06) 49%, rgba(20,121,255,.11) 50%, rgba(20,121,255,.06) 51%, transparent 62%);
@@ -361,9 +373,18 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .auth-card-glow { animation: authGlowFloat 9s ease-in-out infinite; }
         .auth-feature-card { animation: authCardRise .7s cubic-bezier(.22,.8,.25,1) both; transition: transform .4s cubic-bezier(.22,.8,.25,1), background-color .4s ease, border-color .4s ease; }
         .auth-feature-card:hover { transform: translateY(-3px); border-color: rgba(20,121,255,.28); background: #edf5ff; }
-        .dark .auth-feature-card:hover { border-color: rgba(106,168,255,.22); background: #38363c; }
+        .dark .auth-feature-card:hover { border-color: rgba(106,168,255,.22); background: rgba(56,54,60,.92); }
         .auth-panel-glow { animation: authPanelGlow 10s ease-in-out infinite; }
         .auth-panel-glow-delay { animation-delay: -4s; }
+        .auth-login-content { transition: transform .4s cubic-bezier(.22,.8,.25,1); transform-origin: center center; }
+
+        @media (max-height: 800px) {
+          .auth-login-content { transform: scale(.92); width: 108.7%; max-width: none; }
+        }
+
+        @media (max-height: 730px) {
+          .auth-login-content { transform: scale(.84); width: 119%; }
+        }
 
         @media (prefers-reduced-motion: reduce) {
           .auth-bg-grid,
