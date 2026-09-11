@@ -1,12 +1,13 @@
 @keyframes lordDashboardEnter {
   0% {
     opacity: 0;
-    transform: translateY(7px) scale(0.996);
-    filter: blur(2px);
+    transform: translateY(6px) scale(0.994);
+    filter: blur(1.5px);
   }
-  45% {
-    opacity: 0.82;
-    filter: blur(0.6px);
+  58% {
+    opacity: 0.92;
+    transform: translateY(1px) scale(0.999);
+    filter: blur(0.25px);
   }
   100% {
     opacity: 1;
@@ -16,8 +17,9 @@
 }
 
 .dashboard-enter {
-  animation: lordDashboardEnter 720ms cubic-bezier(.22,.8,.25,1) both;
+  animation: lordDashboardEnter 480ms cubic-bezier(.22,.8,.25,1) both;
   transform-origin: center center;
+  will-change: transform, opacity, filter;
 }
 
 @media (prefers-reduced-motion: reduce) {
