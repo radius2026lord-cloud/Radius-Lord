@@ -55,6 +55,35 @@
   letter-spacing: 0 !important;
 }
 
+/* When a signup warning appears, compact only enough to keep everything inside the card. */
+.auth-signup-content:has(.auth-field-warning) form > div {
+  row-gap: 4px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) label > span:first-child {
+  margin-bottom: 3px !important;
+  line-height: 12px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) label > .group > input,
+.auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"],
+.auth-signup-content:has(.auth-field-warning) form button[type="submit"],
+.auth-signup-content:has(.auth-field-warning) form button[type="button"]:not(label button) {
+  height: 40px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) label > .group > span.absolute:not(.pointer-events-none),
+.auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"] span.absolute {
+  width: 30px !important;
+  height: 30px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) .auth-field-warning {
+  margin-top: 2px !important;
+  font-size: 8px !important;
+  line-height: 11px !important;
+}
+
 /* Login must use the exact same inner width and vertical scale as signup's form panel. */
 .auth-shell:not(:has(.auth-signup-content)) > section:last-child {
   padding-left: 32px !important;
