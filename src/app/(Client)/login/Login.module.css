@@ -30,7 +30,7 @@
 /* Give the main login action extra breathing room above and below. */
 .loginScope :global(.auth-login-content form > div > div.pt-3) {
   padding-top: 0 !important;
-  margin-top: 14px !important;
+  margin-top: 18px !important;
   margin-bottom: 14px !important;
 }
 
