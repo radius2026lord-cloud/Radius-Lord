@@ -164,25 +164,25 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       window.setTimeout(() => {
         setActiveMode("signup");
         requestAnimationFrame(() => setTransitionPhase("in"));
-      }, 360);
+      }, 590);
       window.setTimeout(() => {
         window.history.replaceState(window.history.state, "", "/signup");
         setTransitionPhase("idle");
         setTransitioning(false);
-      }, 680);
+      }, 900);
       return;
     }
 
     window.setTimeout(() => {
       setActiveMode("login");
-      setLayoutMode("login");
-    }, 220);
-    window.setTimeout(() => setTransitionPhase("in"), 430);
+      requestAnimationFrame(() => setLayoutMode("login"));
+    }, 200);
+    window.setTimeout(() => setTransitionPhase("in"), 790);
     window.setTimeout(() => {
       window.history.replaceState(window.history.state, "", "/login");
       setTransitionPhase("idle");
       setTransitioning(false);
-    }, 700);
+    }, 1050);
   };
 
   const submit = async (event: FormEvent) => {
@@ -369,12 +369,19 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .auth-mode-content {
           opacity: 1;
           transform: translate3d(0,0,0);
-          transition: opacity 190ms ease, transform 260ms cubic-bezier(.22,.8,.25,1);
+          transition: opacity 170ms ease, transform 220ms cubic-bezier(.22,.8,.25,1);
           will-change: opacity, transform;
+          backface-visibility: hidden;
         }
-        .auth-mode-content.auth-mode-out { opacity: 0; transform: translate3d(0,4px,0); }
+        .auth-mode-content.auth-mode-out { opacity: 0; transform: translate3d(0,2px,0); }
         .auth-mode-content.auth-mode-in { opacity: 1; transform: translate3d(0,0,0); }
 
+        .auth-shell.auth-is-transitioning {
+          contain: layout paint;
+        }
+        .auth-shell.auth-is-transitioning .auth-mode-content {
+          min-height: 1px;
+        }
         .auth-shell.auth-is-transitioning > section:first-child,
         .auth-shell.auth-is-transitioning .auth-feature-card { animation: none !important; }
 
