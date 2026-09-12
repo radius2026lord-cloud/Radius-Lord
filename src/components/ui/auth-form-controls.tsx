@@ -30,6 +30,8 @@ export function CompactField({
   name,
   autoComplete,
 }: CompactFieldProps) {
+  const emailField = type === "email";
+
   return (
     <label className={`block ${className}`}>
       <span className="mb-2.5 block text-[12px] font-bold text-[#17386d] dark:text-[#f4f1f5] sm:text-[13px]">
@@ -47,6 +49,11 @@ export function CompactField({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
+          inputMode={emailField ? "email" : undefined}
+          maxLength={emailField ? 254 : undefined}
+          pattern={emailField ? "[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}" : undefined}
+          autoCapitalize={emailField ? "none" : undefined}
+          spellCheck={emailField ? false : undefined}
           className="relative h-[52px] w-full origin-center rounded-[17px] border border-[#ccd9e7] bg-white pr-[58px] pl-11 text-[13px] text-[#17386d] outline-none transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-slate-400 hover:-translate-y-[1px] hover:border-[#9eb6d0] hover:shadow-[0_8px_22px_rgba(20,121,255,.08)] focus:-translate-y-[2px] focus:scale-[1.018] focus:border-[#4c8dff]/90 focus:shadow-[0_13px_34px_rgba(20,121,255,.17)] focus:ring-4 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.20] dark:hover:bg-[#26202a] dark:focus:border-[#6aa8ff] dark:focus:bg-[#211a25] dark:focus:shadow-[0_14px_36px_rgba(20,121,255,.20)] dark:focus:ring-[#1479ff]/20 sm:text-[14px]"
         />
         {suffix}
@@ -185,6 +192,20 @@ export function CompactField({
           border-radius: 14px !important;
           padding-right: 52px !important;
           font-size: 12px !important;
+        }
+
+        .auth-signup-content input[name="email"] {
+          direction: ltr !important;
+          text-align: left !important;
+          padding-left: 12px !important;
+          padding-right: 48px !important;
+          font-size: 11px !important;
+          letter-spacing: -.01em;
+        }
+
+        .auth-signup-content input[name="email"]::placeholder {
+          font-size: 10.5px !important;
+          letter-spacing: 0;
         }
 
         .auth-signup-content label > .group > span.absolute:not(.pointer-events-none) {
@@ -336,8 +357,14 @@ export function PrimaryFormButton({
       const confirmPassword = form.querySelector<HTMLInputElement>('input[name="confirm-password"]');
       const hasEmptyRequired = requiredInputs.length !== requiredNames.length || requiredInputs.some((input) => !input.value.trim());
       const passwordsMismatch = Boolean(password && confirmPassword && password.value !== confirmPassword.value);
+      const hasInvalidField = !form.checkValidity();
 
-      if (hasEmptyRequired || !terms?.checked || passwordsMismatch) {
+      if (hasInvalidField) {
+        event.preventDefault();
+        form.reportValidity();
+      }
+
+      if (hasEmptyRequired || !terms?.checked || passwordsMismatch || hasInvalidField) {
         setLocalStatus("error");
         window.setTimeout(() => setLocalStatus("idle"), 560);
         return;
