@@ -207,12 +207,12 @@
 .auth-shell .auth-signup-content form label:focus-within > div.group {
   z-index: 20 !important;
   transform: translateY(-2px) scale(1.004) !important;
-  filter: drop-shadow(0 3px 4px rgba(20,121,255,.045)) !important;
+  filter: drop-shadow(0 3px 5px rgba(20,121,255,.06)) !important;
 }
 
 .auth-shell .auth-login-content form label:focus-within > div.group > span.pointer-events-none,
 .auth-shell .auth-signup-content form label:focus-within > div.group > span.pointer-events-none {
-  opacity: .09 !important;
+  opacity: .12 !important;
   transform: scale(1.002) !important;
   filter: blur(5px) !important;
   animation: none !important;
@@ -221,14 +221,14 @@
 .auth-shell .auth-login-content form label:focus-within > div.group input,
 .auth-shell .auth-signup-content form label:focus-within > div.group input,
 .auth-shell .auth-signup-content form label:focus-within > div.group > div[dir="ltr"] {
-  border-color: rgba(106,168,255,.44) !important;
-  box-shadow: 0 0 0 1px rgba(106,168,255,.08), 0 2px 6px rgba(20,121,255,.05) !important;
+  border-color: rgba(106,168,255,.48) !important;
+  box-shadow: 0 0 0 1px rgba(106,168,255,.10), 0 2px 7px rgba(20,121,255,.065) !important;
 }
 
 .auth-shell .auth-login-content form label:focus-within > div.group .auth-input-icon,
 .auth-shell .auth-signup-content form label:focus-within > div.group .auth-input-icon,
 .auth-shell .auth-signup-content form label:focus-within > div.group span.absolute:not(.pointer-events-none) {
   transform: translate(-1px,-50%) scale(1.015) !important;
-  box-shadow: 0 0 3px rgba(20,121,255,.05) !important;
+  box-shadow: 0 0 4px rgba(20,121,255,.065) !important;
   animation: none !important;
 }
