@@ -232,3 +232,10 @@
   box-shadow: 0 0 4px rgba(20,121,255,.065) !important;
   animation: none !important;
 }
+
+/* Dark mode only: make the background network grid denser and more visible. */
+.dark .auth-bg-grid {
+  opacity: .30 !important;
+  background-image: linear-gradient(rgba(126,164,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(126,164,255,.15) 1px, transparent 1px) !important;
+  background-size: 38px 38px !important;
+}
