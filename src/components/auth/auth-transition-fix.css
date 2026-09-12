@@ -151,65 +151,6 @@
   padding-top: 0 !important;
 }
 
-/* Remove the old strong value-based glow/lift. Filled fields stay calm. */
-.auth-login-content label > div.group,
-.auth-signup-content label > div.group {
-  transform: none !important;
-  filter: none !important;
-  animation: none !important;
-}
-
-.auth-login-content label > div.group > span.pointer-events-none,
-.auth-signup-content label > div.group > span.pointer-events-none {
-  opacity: 0 !important;
-  transform: scale(.98) !important;
-  filter: blur(7px) !important;
-  animation: none !important;
-}
-
-.auth-login-content label:not(:focus-within) > div.group input,
-.auth-signup-content label:not(:focus-within) > div.group input {
-  box-shadow: none !important;
-}
-
-.auth-signup-content label:not(:focus-within) > div.group > div[dir="ltr"] {
-  box-shadow: none !important;
-}
-
-/* Selected field: tiny lift + narrow soft glow only while focused. */
-.auth-login-content label:focus-within > div.group,
-.auth-signup-content label:focus-within > div.group {
-  z-index: 20 !important;
-  transform: translateY(-2px) scale(1.006) !important;
-  filter: drop-shadow(0 4px 5px rgba(20,121,255,.055)) !important;
-}
-
-.auth-login-content label:focus-within > div.group > span.pointer-events-none,
-.auth-signup-content label:focus-within > div.group > span.pointer-events-none {
-  opacity: .13 !important;
-  transform: scale(1.002) !important;
-  filter: blur(6px) !important;
-}
-
-.auth-login-content label:focus-within > div.group input,
-.auth-signup-content label:focus-within > div.group input {
-  border-color: rgba(106,168,255,.48) !important;
-  box-shadow: 0 0 0 1px rgba(106,168,255,.09), 0 3px 8px rgba(20,121,255,.055) !important;
-}
-
-/* Phone field uses the same restrained focus treatment. */
-.auth-signup-content label:focus-within > div.group > div[dir="ltr"] {
-  border-color: rgba(106,168,255,.48) !important;
-  box-shadow: 0 0 0 1px rgba(106,168,255,.09), 0 3px 8px rgba(20,121,255,.055) !important;
-}
-
-.auth-login-content label:focus-within > div.group .auth-input-icon,
-.auth-signup-content label:focus-within > div.group .auth-input-icon {
-  transform: translate(-1px,-50%) scale(1.02) !important;
-  box-shadow: 0 0 4px rgba(20,121,255,.07) !important;
-  animation: none !important;
-}
-
 @keyframes authFeaturePanelSmoothIn {
   from {
     opacity: 0;
@@ -227,4 +168,67 @@
     transition-duration: .01ms !important;
     animation-duration: .01ms !important;
   }
+}
+
+/* Final auth-field override: filled fields stay completely calm; focus gets only a tiny lift and tiny glow. */
+.auth-shell .auth-login-content form label > div.group,
+.auth-shell .auth-signup-content form label > div.group {
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+  transition: transform 260ms cubic-bezier(.22,.8,.25,1), filter 260ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-shell .auth-login-content form label > div.group > span.pointer-events-none,
+.auth-shell .auth-signup-content form label > div.group > span.pointer-events-none {
+  opacity: 0 !important;
+  transform: scale(.995) !important;
+  filter: blur(5px) !important;
+  animation: none !important;
+  transition: opacity 260ms ease, transform 260ms ease !important;
+}
+
+.auth-shell .auth-login-content form label:not(:focus-within) > div.group input,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group input,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group > div[dir="ltr"] {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.auth-shell .auth-login-content form label:not(:focus-within) > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group span.absolute:not(.pointer-events-none) {
+  transform: translateY(-50%) scale(1) !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group,
+.auth-shell .auth-signup-content form label:focus-within > div.group {
+  z-index: 20 !important;
+  transform: translateY(-2px) scale(1.004) !important;
+  filter: drop-shadow(0 3px 4px rgba(20,121,255,.045)) !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group > span.pointer-events-none,
+.auth-shell .auth-signup-content form label:focus-within > div.group > span.pointer-events-none {
+  opacity: .09 !important;
+  transform: scale(1.002) !important;
+  filter: blur(5px) !important;
+  animation: none !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group input,
+.auth-shell .auth-signup-content form label:focus-within > div.group input,
+.auth-shell .auth-signup-content form label:focus-within > div.group > div[dir="ltr"] {
+  border-color: rgba(106,168,255,.44) !important;
+  box-shadow: 0 0 0 1px rgba(106,168,255,.08), 0 2px 6px rgba(20,121,255,.05) !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:focus-within > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:focus-within > div.group span.absolute:not(.pointer-events-none) {
+  transform: translate(-1px,-50%) scale(1.015) !important;
+  box-shadow: 0 0 3px rgba(20,121,255,.05) !important;
+  animation: none !important;
 }
