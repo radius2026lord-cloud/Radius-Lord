@@ -55,9 +55,27 @@
   letter-spacing: 0 !important;
 }
 
-/* Login keeps its card, but uses the same visual proportions as signup. */
+/* Login must use the exact same inner width and vertical scale as signup's form panel. */
+.auth-shell:not(:has(.auth-signup-content)) > section:last-child {
+  padding-left: 32px !important;
+  padding-right: 32px !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+
 .auth-login-content {
-  max-width: 418px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+}
+
+/* Cancel the old low-height-only login shrinking so login never becomes visually smaller than signup. */
+@media (max-height: 800px), (max-height: 730px) {
+  .auth-login-content {
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 
 .auth-login-content > .mb-7 {
@@ -88,10 +106,12 @@
 
 .auth-login-content form {
   margin-top: 12px !important;
+  width: 100% !important;
 }
 
 .auth-login-content form > div {
   row-gap: 7px !important;
+  width: 100% !important;
 }
 
 .auth-login-content form > div > div.pt-3 {
