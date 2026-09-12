@@ -24,22 +24,34 @@
   animation: authFeaturePanelSmoothIn 420ms 70ms cubic-bezier(.22,.8,.25,1) both !important;
 }
 
-/* Give the signup email field more real width without changing card size or row count. */
+/* Keep every signup row inside the same left/right boundaries. */
+.auth-signup-content {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.auth-signup-content form,
+.auth-signup-content form > div {
+  width: 100% !important;
+}
+
 @media (min-width: 640px) {
-  .auth-signup-content label:has(input[name="name"]) {
-    width: 82%;
-    justify-self: end;
+  .auth-signup-content form > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .auth-signup-content label:has(input[name="name"]),
   .auth-signup-content label:has(input[name="email"]) {
-    width: 118%;
-    justify-self: start;
+    width: 100% !important;
+    justify-self: stretch !important;
   }
 }
 
+/* Email uses the same LBC typography as the rest of the form. */
 .auth-signup-content input[name="email"] {
   font-family: LBC, Tahoma, Arial, sans-serif !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
   letter-spacing: 0 !important;
 }
 
