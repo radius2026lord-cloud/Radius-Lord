@@ -55,6 +55,53 @@
   letter-spacing: 0 !important;
 }
 
+/* Login keeps its card, but uses the same visual proportions as signup. */
+.auth-login-content {
+  max-width: 418px !important;
+}
+
+.auth-login-content > .mb-7 {
+  margin-bottom: 20px !important;
+}
+
+.auth-login-content > .text-center .auth-login-icon {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+.auth-login-content > .text-center .auth-login-icon svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+
+.auth-login-content > .text-center h1 {
+  margin-top: 8px !important;
+  font-size: 22px !important;
+  line-height: 1.2 !important;
+}
+
+.auth-login-content > .text-center p {
+  margin-top: 4px !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+}
+
+.auth-login-content form {
+  margin-top: 12px !important;
+}
+
+.auth-login-content form > div {
+  row-gap: 7px !important;
+}
+
+.auth-login-content form > div > div.pt-3 {
+  padding-top: 1px !important;
+}
+
+.auth-login-content form > div > .pt-1 {
+  padding-top: 0 !important;
+}
+
 @keyframes authFeaturePanelSmoothIn {
   from {
     opacity: 0;
