@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 
 type SelectDropdownProps<T> = {
@@ -17,6 +18,7 @@ type SelectDropdownProps<T> = {
 };
 
 const ANIMATION_MS = 360;
+const MENU_GAP = 6;
 
 export function SelectDropdown<T>({
   value,
@@ -32,11 +34,25 @@ export function SelectDropdown<T>({
 }: SelectDropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateMenuPosition = () => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setMenuStyle(
+      align === "right"
+        ? { top: rect.bottom + MENU_GAP, right: window.innerWidth - rect.right }
+        : { top: rect.bottom + MENU_GAP, left: rect.left }
+    );
+  };
 
   const openMenu = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    updateMenuPosition();
     setMounted(true);
     requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)));
   };
@@ -54,7 +70,8 @@ export function SelectDropdown<T>({
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) closeMenu();
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) closeMenu();
     };
     document.addEventListener("mousedown", close);
     return () => {
@@ -63,6 +80,43 @@ export function SelectDropdown<T>({
     };
   }, []);
 
+  useEffect(() => {
+    if (!mounted) return;
+
+    const reposition = () => updateMenuPosition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [mounted, align]);
+
+  const menu = mounted ? (
+    <div
+      ref={menuRef}
+      style={menuStyle}
+      className={`select-dropdown-menu ${open ? "is-open" : "is-closing"} fixed z-[300] max-h-64 overflow-auto rounded-[13px] border border-[#ccd9e7] bg-white p-1.5 shadow-[0_16px_42px_rgba(29,58,91,.20)] dark:border-white/[.09] dark:bg-[#37343a] dark:shadow-[0_18px_46px_rgba(0,0,0,.32)] ${menuClassName}`}
+    >
+      {items.map((item) => {
+        const active = getKey(item) === getKey(value);
+        return (
+          <button
+            key={getKey(item)}
+            type="button"
+            onClick={() => {
+              onChange(item);
+              closeMenu();
+            }}
+            className={`block w-full rounded-[10px] transition-colors duration-200 ${active ? "bg-[#edf5ff] text-[#0b5fd7] dark:bg-[#4c8dff]/15 dark:text-[#8db5ff]" : "text-[#17386d] hover:bg-[#f3f7fb] dark:text-[#f6f2f7] dark:hover:bg-white/[.06]"}`}
+          >
+            {renderItem(item, active)}
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button type="button" onClick={toggleMenu} className={`flex h-full w-full items-center justify-between gap-2 ${buttonClassName}`} aria-expanded={open}>
@@ -70,18 +124,7 @@ export function SelectDropdown<T>({
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ease-out ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {mounted && (
-        <div className={`select-dropdown-menu ${open ? "is-open" : "is-closing"} absolute top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-[13px] border border-[#ccd9e7] bg-white p-1.5 shadow-[0_16px_42px_rgba(29,58,91,.20)] dark:border-white/[.09] dark:bg-[#37343a] dark:shadow-[0_18px_46px_rgba(0,0,0,.32)] ${align === "right" ? "right-0" : "left-0"} ${menuClassName}`}>
-          {items.map((item) => {
-            const active = getKey(item) === getKey(value);
-            return (
-              <button key={getKey(item)} type="button" onClick={() => { onChange(item); closeMenu(); }} className={`block w-full rounded-[10px] transition-colors duration-200 ${active ? "bg-[#edf5ff] text-[#0b5fd7] dark:bg-[#4c8dff]/15 dark:text-[#8db5ff]" : "text-[#17386d] hover:bg-[#f3f7fb] dark:text-[#f6f2f7] dark:hover:bg-white/[.06]"}`}>
-                {renderItem(item, active)}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {typeof document !== "undefined" && menu ? createPortal(menu, document.body) : null}
 
       <style jsx global>{`
         .select-dropdown-menu { transform-origin: top center; will-change: opacity, transform, filter; transition: opacity ${ANIMATION_MS}ms cubic-bezier(.22,.75,.24,1), transform ${ANIMATION_MS}ms cubic-bezier(.22,.75,.24,1), filter ${ANIMATION_MS}ms ease; }
