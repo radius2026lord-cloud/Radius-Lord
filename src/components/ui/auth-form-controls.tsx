@@ -38,11 +38,11 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
 
   return (
     <label className={`block ${className}`}>
-      <span className="mb-2.5 block text-[12px] font-bold text-[#17386d] dark:text-[#f4f1f5] sm:text-[13px]">{label}</span>
+      <span className="mb-[5px] block text-[11px] font-bold leading-[14px] text-[#17386d] dark:text-[#f4f1f5]">{label}</span>
       <div className="group relative">
-        <span className="pointer-events-none absolute inset-[-3px] rounded-[19px] bg-gradient-to-l from-[#1479ff]/0 via-[#1479ff]/0 to-[#8ab5ff]/0 opacity-0 blur-md transition-all duration-300 group-hover:opacity-30 group-focus-within:from-[#1479ff]/35 group-focus-within:via-[#5d9bff]/15 group-focus-within:to-[#8ab5ff]/30 group-focus-within:opacity-100" />
-        <span className={`absolute right-2.5 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] transition-all duration-200 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "pointer-events-none scale-75 opacity-0" : "opacity-100 group-hover:scale-[1.05] group-focus-within:rotate-[4deg] group-focus-within:scale-[1.12] group-focus-within:bg-[#dceaff] group-focus-within:shadow-[0_6px_18px_rgba(20,121,255,.18)] dark:group-focus-within:bg-[#454149]"}`}>
-          <Icon className="h-5 w-5" />
+        <span className="pointer-events-none absolute inset-[-3px] rounded-[16px] bg-gradient-to-l from-[#1479ff]/0 via-[#1479ff]/0 to-[#8ab5ff]/0 opacity-0 blur-md transition-all duration-300 group-hover:opacity-30 group-focus-within:from-[#1479ff]/35 group-focus-within:via-[#5d9bff]/15 group-focus-within:to-[#8ab5ff]/30 group-focus-within:opacity-100" />
+        <span className={`absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] transition-all duration-200 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "pointer-events-none scale-75 opacity-0" : "opacity-100 group-hover:scale-[1.05] group-focus-within:rotate-[4deg] group-focus-within:scale-[1.08] group-focus-within:bg-[#dceaff] dark:group-focus-within:bg-[#454149]"}`}>
+          <Icon className="h-[18px] w-[18px]" />
         </span>
         <input
           type={type}
@@ -58,11 +58,8 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
           spellCheck={emailField ? false : undefined}
           lang={emailField ? "en" : undefined}
           dir={emailField ? "ltr" : undefined}
-          style={{
-            fontFamily: "LBC, Tahoma, Arial, sans-serif",
-            fontSize: `${adaptiveInputFontSize(value)}px`,
-          }}
-          className={`relative h-[52px] w-full origin-center rounded-[17px] border border-[#ccd9e7] bg-white text-[#17386d] outline-none transition-[transform,border-color,box-shadow,background-color,font-size,padding] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-[12px] placeholder:text-slate-400 hover:-translate-y-[1px] hover:border-[#9eb6d0] hover:shadow-[0_8px_22px_rgba(20,121,255,.08)] focus:-translate-y-[2px] focus:scale-[1.018] focus:border-[#4c8dff]/90 focus:shadow-[0_13px_34px_rgba(20,121,255,.17)] focus:ring-4 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.20] dark:hover:bg-[#26202a] dark:focus:border-[#6aa8ff] dark:focus:bg-[#211a25] dark:focus:shadow-[0_14px_36px_rgba(20,121,255,.20)] dark:focus:ring-[#1479ff]/20 ${hasValue ? (suffix ? "pr-3 pl-11" : "px-3") : "pr-[58px] pl-11"}`}
+          style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif", fontSize: `${adaptiveInputFontSize(value)}px` }}
+          className={`relative h-[44px] w-full origin-center rounded-[14px] border border-[#ccd9e7] bg-white text-[#17386d] outline-none transition-[transform,border-color,box-shadow,background-color,font-size,padding] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-[11px] placeholder:text-slate-400 hover:border-[#9eb6d0] focus:border-[#4c8dff]/90 focus:ring-3 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.20] dark:focus:border-[#6aa8ff] dark:focus:ring-[#1479ff]/20 ${hasValue ? (suffix ? "pr-3 pl-10" : "px-3") : "pr-[52px] pl-10"}`}
         />
         {suffix}
       </div>
@@ -78,7 +75,7 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
           text-align: left !important;
           unicode-bidi: plaintext;
           font-family: LBC, Tahoma, Arial, sans-serif !important;
-          font-size: 12px !important;
+          font-size: 11px !important;
           letter-spacing: 0 !important;
         }
       `}</style>
@@ -119,11 +116,11 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
   };
 
   return <>
-    <button type="submit" onClick={startLocalSubmitAnimation} disabled={disabled || busy} className={`relative flex h-[52px] w-full items-center justify-center overflow-hidden rounded-[17px] bg-gradient-to-l from-[#1479ff] to-[#0758e9] px-6 text-[13px] font-bold text-white shadow-[0_10px_28px_rgba(20,121,255,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_14px_34px_rgba(20,121,255,.30)] active:translate-y-0 disabled:cursor-wait sm:text-[14px] ${effectiveStatus === "error" ? "auth-primary-error" : ""}`}>
+    <button type="submit" onClick={startLocalSubmitAnimation} disabled={disabled || busy} className={`relative flex h-[44px] w-full items-center justify-center overflow-hidden rounded-[14px] bg-gradient-to-l from-[#1479ff] to-[#0758e9] px-5 text-[12px] font-bold text-white shadow-[0_8px_22px_rgba(20,121,255,.20)] transition-all duration-300 hover:brightness-105 active:translate-y-0 disabled:cursor-wait ${effectiveStatus === "error" ? "auth-primary-error" : ""}`}>
       <span className={`auth-primary-content flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "[&>span:last-child]:scale-50 [&>span:last-child]:opacity-0 [&>svg:last-child]:scale-50 [&>svg:last-child]:opacity-0" : ""}`}>{children}</span>
-      {showStatusIndicator && <span className="pointer-events-none absolute left-[calc(50%-78px)] top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center">
-        {effectiveStatus === "loading" && <span className="auth-primary-spinner h-[19px] w-[19px] rounded-full border-2 border-white/35 border-t-white" />}
-        {effectiveStatus === "success" && <span className="auth-primary-success-arrow text-[20px] font-black leading-none">←</span>}
+      {showStatusIndicator && <span className="pointer-events-none absolute left-[calc(50%-72px)] top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center">
+        {effectiveStatus === "loading" && <span className="auth-primary-spinner h-[17px] w-[17px] rounded-full border-2 border-white/35 border-t-white" />}
+        {effectiveStatus === "success" && <span className="auth-primary-success-arrow text-[18px] font-black leading-none">←</span>}
       </span>}
     </button>
     {controlled && effectiveStatus === "success" && <div className="auth-success-overlay fixed inset-0 z-[140] flex items-center justify-center bg-[#dce5ef]/20 backdrop-blur-[2px] dark:bg-[#1d1721]/25" aria-live="polite" aria-label="تم تسجيل الدخول بنجاح">
@@ -137,5 +134,5 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
 }
 
 export function SecondaryFormButton({ children }: { children: ReactNode }) {
-  return <button type="button" className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[17px] border border-[#ccd9e7] bg-white text-[12px] font-bold text-[#17386d] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] hover:bg-[#f3f7fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#f4f1f5] dark:hover:border-white/[.18] dark:hover:bg-[#454149] sm:text-[13px]">{children}</button>;
+  return <button type="button" className="flex h-[44px] w-full items-center justify-center gap-2 rounded-[14px] border border-[#ccd9e7] bg-white text-[11px] font-bold text-[#17386d] transition-all duration-300 hover:bg-[#f3f7fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#f4f1f5] dark:hover:border-white/[.18] dark:hover:bg-[#454149]">{children}</button>;
 }
