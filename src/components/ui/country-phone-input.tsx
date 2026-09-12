@@ -47,12 +47,12 @@ export function CountryPhoneInput({ label = "رقم الهاتف *", countries, 
   return (
     <label className={`block ${className}`}>
       <span className="mb-[5px] block text-[11px] font-bold leading-[14px] text-[#17386d] dark:text-[#f4f1f5]">{label}</span>
-      <div className={`group relative origin-center transition-transform duration-300 ease-[cubic-bezier(.22,.8,.25,1)] ${hasValue ? "scale-[1.015]" : "scale-100"}`}>
-        <span className="pointer-events-none absolute inset-[-3px] rounded-[16px] bg-gradient-to-l from-[#1479ff]/0 via-[#1479ff]/0 to-[#8ab5ff]/0 opacity-0 blur-md transition-all duration-300 group-hover:opacity-30 group-focus-within:from-[#1479ff]/35 group-focus-within:via-[#5d9bff]/15 group-focus-within:to-[#8ab5ff]/30 group-focus-within:opacity-100" />
-        <div className="relative flex h-[44px] origin-center overflow-visible rounded-[14px] border border-[#ccd9e7] bg-white transition-all duration-300 dark:border-white/[.10] dark:bg-[#211a25]" dir="ltr">
+      <div className={`group relative origin-center transition-[transform,filter] duration-[620ms] ease-[cubic-bezier(.16,1,.3,1)] ${hasValue ? "scale-[1.018]" : "scale-100"}`}>
+        <span className={`pointer-events-none absolute inset-[-5px] rounded-[18px] bg-gradient-to-l from-[#1479ff]/35 via-[#5d9bff]/20 to-[#8ab5ff]/35 blur-[10px] transition-all duration-[620ms] ease-[cubic-bezier(.16,1,.3,1)] ${hasValue ? "scale-[1.015] opacity-65" : "scale-95 opacity-0 group-hover:opacity-25 group-focus-within:scale-100 group-focus-within:opacity-55"}`} />
+        <div className={`relative flex h-[44px] origin-center overflow-visible rounded-[14px] border bg-white transition-[border-color,box-shadow,background-color] duration-[620ms] ease-[cubic-bezier(.16,1,.3,1)] dark:bg-[#211a25] ${hasValue ? "border-[#6aa8ff] shadow-[0_0_0_1px_rgba(20,121,255,.16),0_8px_24px_rgba(20,121,255,.10)] dark:border-[#6aa8ff]/80 dark:shadow-[0_0_0_1px_rgba(106,168,255,.12),0_8px_26px_rgba(20,121,255,.10)]" : "border-[#ccd9e7] dark:border-white/[.10]"}`} dir="ltr">
           <SelectDropdown value={country} items={countries} getKey={(item) => `${item.name}-${item.code}`} onChange={onCountryChange} className="h-full w-[142px] shrink-0 border-r border-[#dbe5ef] dark:border-white/[.09] sm:w-[154px]" buttonClassName="px-2 text-[10px] font-semibold text-[#17386d] dark:text-[#f4f1f5]" menuClassName="w-[240px]" align="left" renderValue={(item) => <span className="flex min-w-0 items-center justify-center gap-1.5"><CountryFlag country={item} /><span className="truncate">{item.name}</span><span dir="ltr" className="shrink-0">{item.code}</span></span>} renderItem={(item, active) => <span className={`flex w-full items-center justify-between px-2.5 py-2 text-[11px] ${active ? "font-bold" : ""}`} dir="rtl"><span className="flex min-w-0 items-center gap-2.5"><CountryFlag country={item} size="large" /><span className="truncate">{item.name}</span></span><span dir="ltr" className="shrink-0 font-semibold">{item.code}</span></span>} />
           <div className="relative min-w-0 flex-1" dir="rtl">
-            <span className={`pointer-events-none absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] opacity-100 transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "scale-[1.06]" : "scale-100"}`}><Phone className="h-[18px] w-[18px]" /></span>
+            <span className={`pointer-events-none absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] opacity-100 transition-[transform,background-color,box-shadow] duration-[620ms] ease-[cubic-bezier(.16,1,.3,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "translate-x-[-2px] rotate-[3deg] scale-[1.10] shadow-[0_0_14px_rgba(20,121,255,.20)] dark:shadow-[0_0_16px_rgba(106,168,255,.18)]" : "scale-100"}`}><Phone className="h-[18px] w-[18px]" /></span>
             <input
               name={name}
               autoComplete={autoComplete}
@@ -63,7 +63,7 @@ export function CountryPhoneInput({ label = "رقم الهاتف *", countries, 
               maxLength={25}
               pattern="[0-9]{1,25}"
               style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif", fontSize: `${adaptivePhoneFontSize(phone)}px` }}
-              className="h-full w-full bg-transparent pr-[52px] pl-3 text-[#17386d] outline-none transition-[font-size,padding] duration-300 placeholder:text-[11px] placeholder:text-slate-400 dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894]"
+              className="h-full w-full bg-transparent pr-[52px] pl-3 text-[#17386d] outline-none transition-[font-size,padding] duration-[620ms] ease-[cubic-bezier(.16,1,.3,1)] placeholder:text-[11px] placeholder:text-slate-400 dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894]"
             />
           </div>
         </div>
