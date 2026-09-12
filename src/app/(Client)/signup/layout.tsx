@@ -1,4 +1,5 @@
 import "@/app/(Client)/Dashboard/globals.css";
+import "@/components/auth/auth-transition-fix.css";
 import { ThemeProvider } from "next-themes";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

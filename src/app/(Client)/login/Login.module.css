@@ -1,0 +1,49 @@
+.loginScope :global(.auth-login-content) {
+  animation: none !important;
+}
+
+.loginScope :global(.auth-shell:not(:has(.auth-signup-content))) {
+  transition-duration: 500ms !important;
+  transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
+}
+
+/* Login only: match signup control heights exactly. */
+.loginScope :global(.auth-login-content label > .group > input) {
+  height: 44px !important;
+}
+
+.loginScope :global(.auth-login-content label > .group > span.absolute:not(.pointer-events-none)) {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > div.pt-3 > button[type="submit"]),
+.loginScope :global(.auth-login-content form > div > button[type="button"]) {
+  height: 44px !important;
+}
+
+/* Keep clear spacing between all main login form elements. */
+.loginScope :global(.auth-login-content form > div > * + *) {
+  margin-top: 10px !important;
+}
+
+/* Give the main login action extra breathing room above and below. */
+.loginScope :global(.auth-login-content form > div > div.pt-3) {
+  padding-top: 0 !important;
+  margin-top: 18px !important;
+  margin-bottom: 14px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > div.pt-3 + div) {
+  margin-top: 0 !important;
+}
+
+/* Separate the Google button from the account action below it. */
+.loginScope :global(.auth-login-content form > div > button[type="button"]) {
+  margin-bottom: 12px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > button[type="button"] + .pt-1) {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}

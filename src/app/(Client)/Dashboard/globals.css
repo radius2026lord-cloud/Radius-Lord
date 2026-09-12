@@ -1,38 +1,281 @@
-/* ===== Scrollbar for Sidebar ===== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* شريط التمرير مخفي افتراضياً */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root) {
+  animation: dashboardPageOut .22s cubic-bezier(.4,0,1,1) both;
+}
+
+::view-transition-new(root) {
+  animation: dashboardPageIn .34s cubic-bezier(.22,.8,.25,1) both;
+}
+
+@keyframes dashboardPageOut {
+  from { opacity: 1; transform: scale(1); filter: blur(0); }
+  to { opacity: 0; transform: scale(.992); filter: blur(2px); }
+}
+
+@keyframes dashboardPageIn {
+  from { opacity: 0; transform: translateY(5px) scale(.994); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+  --oneui-bg: #1d1721;
+  --oneui-workspace: #211a25;
+  --oneui-surface: #302e33;
+  --oneui-surface-2: #37343a;
+  --oneui-surface-3: #3e3a42;
+  --oneui-border: rgba(255, 255, 255, 0.09);
+  --oneui-border-strong: rgba(255, 255, 255, 0.14);
+  --oneui-text: #f6f2f7;
+  --oneui-muted: #b8b0bc;
+  --oneui-blue: #4c8dff;
+  --oneui-orange: #ffb34d;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* Sidebar scrollbar: right side, hover-only and eased to match sidebar motion. */
+.sidebar {
+  direction: ltr;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebar > * {
+  direction: rtl;
+}
+
+.sidebar:hover {
+  scrollbar-color: rgba(59, 130, 246, 0.72) transparent;
+}
+
 .sidebar::-webkit-scrollbar {
-  width: 8px; /* شريط رأسي فقط */
-  height: 0px; /* يمنع الشريط الأفقي */
-  background: transparent;
+  width: 7px;
+  height: 7px;
 }
 
-/* مسار الشريط */
 .sidebar::-webkit-scrollbar-track {
+  margin-block: 18px;
   background: transparent;
 }
 
-/* مقبض الشريط (Thumb) */
 .sidebar::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 10px;
-  transition: background 0.3s ease;
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: transparent;
+  background-clip: padding-box;
+  transition: background-color 500ms cubic-bezier(.22,.8,.25,1);
 }
 
-/* يظهر فقط عند مرور الماوس */
 .sidebar:hover::-webkit-scrollbar-thumb {
-  background: #3b82f6; /* blue-500 */
+  background-color: rgba(59, 130, 246, 0.72);
 }
 
-/* عند الضغط */
-.sidebar::-webkit-scrollbar-thumb:active {
-  background: #2563eb; /* blue-600 */
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(37, 99, 235, 0.92);
 }
 
-/* ===== Animations ===== */
+.dark .sidebar:hover {
+  scrollbar-color: rgba(126, 164, 255, 0.78) transparent;
+}
+
+.dark .sidebar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(126, 164, 255, 0.78);
+}
+
+.dark .sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(166, 190, 255, 0.96);
+}
+
+/* Workspace scrollbar: hidden until hover, with the same slow reveal/hide motion. */
+main > div:first-child {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+main > div:first-child:hover {
+  scrollbar-color: rgba(59, 130, 246, 0.72) transparent;
+}
+
+main > div:first-child::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+main > div:first-child::-webkit-scrollbar-track {
+  margin-block: 18px;
+  background: transparent;
+}
+
+main > div:first-child::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: transparent;
+  background-clip: padding-box;
+  transition: background-color 500ms cubic-bezier(.22,.8,.25,1);
+}
+
+main > div:first-child:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(59, 130, 246, 0.72);
+}
+
+main > div:first-child::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(37, 99, 235, 0.92);
+}
+
+.dark main > div:first-child:hover {
+  scrollbar-color: rgba(126, 164, 255, 0.78) transparent;
+}
+
+.dark main > div:first-child:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(126, 164, 255, 0.78);
+}
+
+.dark main > div:first-child::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(166, 190, 255, 0.96);
+}
+
+/* Keep the quick-shortcuts row compact to leave more vertical workspace. */
+main > div:first-child > div.mt-4 {
+  margin-top: 0.65rem;
+}
+
+main > div:first-child > div.mt-4 > div {
+  padding: 0.3rem;
+  border-radius: 18px;
+}
+
+main > div:first-child > div.mt-4 button {
+  height: 36px;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+  border-radius: 13px;
+}
+
+main > div:first-child > div.mt-4 button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* One UI-inspired dark treatment for every page rendered inside Dashboard layout. */
+.dark body {
+  background: var(--oneui-bg);
+  color: var(--oneui-text);
+}
+
+.dark main > div:first-child {
+  background-color: var(--oneui-workspace) !important;
+  border-color: var(--oneui-border) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035) !important;
+}
+
+.dark [class*="dark:bg-[#0d243b]"],
+.dark [class*="dark:bg-[#0d243c]"],
+.dark [class*="dark:bg-[#0b2036]"],
+.dark [class*="dark:bg-[#0a1f35]"],
+.dark [class*="dark:bg-[#0a1b2e]"],
+.dark [class*="dark:bg-[#091d32]"],
+.dark [class*="dark:bg-[#081b2f]"],
+.dark [class*="dark:bg-[#102942]"] {
+  background-color: var(--oneui-surface) !important;
+}
+
+.dark [class*="dark:bg-white/[.04]"],
+.dark [class*="dark:bg-white/[.05]"],
+.dark [class*="dark:bg-white/[.055]"],
+.dark [class*="dark:bg-white/[.06]"] {
+  background-color: rgba(255,255,255,.055) !important;
+}
+
+.dark [class*="dark:border-white/[.07]"],
+.dark [class*="dark:border-white/[.08]"],
+.dark [class*="dark:border-white/[.09]"],
+.dark [class*="dark:border-white/10"] {
+  border-color: var(--oneui-border) !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--oneui-surface-2) !important;
+  border-color: var(--oneui-border) !important;
+  color: var(--oneui-text) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #8f8795 !important;
+}
+
+.dark button:not([class*="from-"]):not([class*="bg-red"]):not([class*="bg-blue"]):hover,
+.dark a:not([class*="from-"]):hover {
+  border-color: var(--oneui-border-strong);
+}
+
+.dark .text-slate-300 {
+  color: #d8d2dc !important;
+}
+
+.dark .text-slate-400,
+.dark .text-slate-500 {
+  color: var(--oneui-muted) !important;
+}
+
+.dark .divide-white\/\[\.07\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255,255,255,.075) !important;
+}
+
+.dark table tbody tr {
+  transition: background-color .2s ease;
+}
+
+.dark table tbody tr:hover {
+  background-color: rgba(255,255,255,.035);
+}
 
 @keyframes slideDown {
   from {
@@ -62,4 +305,28 @@
 
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
+}
+
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

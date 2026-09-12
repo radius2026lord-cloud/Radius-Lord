@@ -1,0 +1,241 @@
+/* Keep the login/signup morph on one continuous animation timeline.
+   The component already swaps modes internally; disabling document view-transition
+   snapshots prevents the second animation pass that caused the visible hitch. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
+}
+
+.auth-shell {
+  opacity: 1 !important;
+  transform: none !important;
+  transition-property: max-width, width, background-color, border-color, box-shadow !important;
+  transition-duration: 520ms !important;
+  transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-login-content,
+.auth-signup-content {
+  animation: none !important;
+}
+
+.auth-shell:has(.auth-signup-content) > section:first-child {
+  transform-origin: left center;
+  animation: authFeaturePanelSmoothIn 420ms 70ms cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+/* Keep every signup row inside the same left/right boundaries. */
+.auth-signup-content {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.auth-signup-content form,
+.auth-signup-content form > div {
+  width: 100% !important;
+}
+
+@media (min-width: 640px) {
+  .auth-signup-content form > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .auth-signup-content label:has(input[name="name"]),
+  .auth-signup-content label:has(input[name="email"]) {
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+}
+
+/* Email uses the same LBC typography as the rest of the form. */
+.auth-signup-content input[name="email"] {
+  font-family: LBC, Tahoma, Arial, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+
+/* When a signup warning appears, compact only enough to keep everything inside the card. */
+.auth-signup-content:has(.auth-field-warning) form > div {
+  row-gap: 4px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) label > span:first-child {
+  margin-bottom: 3px !important;
+  line-height: 12px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) label > .group > input,
+.auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"],
+.auth-signup-content:has(.auth-field-warning) form button[type="submit"],
+.auth-signup-content:has(.auth-field-warning) form button[type="button"]:not(label button) {
+  height: 40px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) label > .group > span.absolute:not(.pointer-events-none),
+.auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"] span.absolute {
+  width: 30px !important;
+  height: 30px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) .auth-field-warning {
+  margin-top: 2px !important;
+  font-size: 8px !important;
+  line-height: 11px !important;
+}
+
+/* Login must use the exact same inner width and vertical scale as signup's form panel. */
+.auth-shell:not(:has(.auth-signup-content)) > section:last-child {
+  padding-left: 32px !important;
+  padding-right: 32px !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+
+.auth-login-content {
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+}
+
+/* Cancel the old low-height-only login shrinking so login never becomes visually smaller than signup. */
+@media (max-height: 800px), (max-height: 730px) {
+  .auth-login-content {
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+.auth-login-content > .mb-7 {
+  margin-bottom: 20px !important;
+}
+
+.auth-login-content > .text-center .auth-login-icon {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+.auth-login-content > .text-center .auth-login-icon svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+
+.auth-login-content > .text-center h1 {
+  margin-top: 8px !important;
+  font-size: 22px !important;
+  line-height: 1.2 !important;
+}
+
+.auth-login-content > .text-center p {
+  margin-top: 4px !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+}
+
+.auth-login-content form {
+  margin-top: 12px !important;
+  width: 100% !important;
+}
+
+.auth-login-content form > div {
+  row-gap: 7px !important;
+  width: 100% !important;
+}
+
+.auth-login-content form > div > div.pt-3 {
+  padding-top: 1px !important;
+}
+
+.auth-login-content form > div > .pt-1 {
+  padding-top: 0 !important;
+}
+
+@keyframes authFeaturePanelSmoothIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell,
+  .auth-shell:has(.auth-signup-content) > section:first-child {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
+
+/* Final auth-field override: filled fields stay completely calm; focus gets only a tiny lift and tiny glow. */
+.auth-shell .auth-login-content form label > div.group,
+.auth-shell .auth-signup-content form label > div.group {
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+  transition: transform 260ms cubic-bezier(.22,.8,.25,1), filter 260ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-shell .auth-login-content form label > div.group > span.pointer-events-none,
+.auth-shell .auth-signup-content form label > div.group > span.pointer-events-none {
+  opacity: 0 !important;
+  transform: scale(.995) !important;
+  filter: blur(5px) !important;
+  animation: none !important;
+  transition: opacity 260ms ease, transform 260ms ease !important;
+}
+
+.auth-shell .auth-login-content form label:not(:focus-within) > div.group input,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group input,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group > div[dir="ltr"] {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.auth-shell .auth-login-content form label:not(:focus-within) > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:not(:focus-within) > div.group span.absolute:not(.pointer-events-none) {
+  transform: translateY(-50%) scale(1) !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group,
+.auth-shell .auth-signup-content form label:focus-within > div.group {
+  z-index: 20 !important;
+  transform: translateY(-2px) scale(1.004) !important;
+  filter: drop-shadow(0 3px 5px rgba(20,121,255,.06)) !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group > span.pointer-events-none,
+.auth-shell .auth-signup-content form label:focus-within > div.group > span.pointer-events-none {
+  opacity: .12 !important;
+  transform: scale(1.002) !important;
+  filter: blur(5px) !important;
+  animation: none !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group input,
+.auth-shell .auth-signup-content form label:focus-within > div.group input,
+.auth-shell .auth-signup-content form label:focus-within > div.group > div[dir="ltr"] {
+  border-color: rgba(106,168,255,.48) !important;
+  box-shadow: 0 0 0 1px rgba(106,168,255,.10), 0 2px 7px rgba(20,121,255,.065) !important;
+}
+
+.auth-shell .auth-login-content form label:focus-within > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:focus-within > div.group .auth-input-icon,
+.auth-shell .auth-signup-content form label:focus-within > div.group span.absolute:not(.pointer-events-none) {
+  transform: translate(-1px,-50%) scale(1.015) !important;
+  box-shadow: 0 0 4px rgba(20,121,255,.065) !important;
+  animation: none !important;
+}
+
+/* Dark mode only: make the background network grid denser and more visible. */
+.dark .auth-bg-grid {
+  opacity: .30 !important;
+  background-image: linear-gradient(rgba(126,164,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(126,164,255,.15) 1px, transparent 1px) !important;
+  background-size: 38px 38px !important;
+}
