@@ -6,3 +6,29 @@
   transition-duration: 500ms !important;
   transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
 }
+
+/* Login only: keep the controls slightly shorter while preserving the signup proportions. */
+.loginScope :global(.auth-login-content label > .group > input) {
+  height: 42px !important;
+}
+
+.loginScope :global(.auth-login-content label > .group > span.absolute:not(.pointer-events-none)) {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > div.pt-3 > button[type="submit"]),
+.loginScope :global(.auth-login-content form > div > button[type="button"]) {
+  height: 42px !important;
+}
+
+/* Give the main login action its own breathing room above and below. */
+.loginScope :global(.auth-login-content form > div > div.pt-3) {
+  padding-top: 8px !important;
+  margin-top: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > div.pt-3 + div) {
+  margin-top: 0 !important;
+}
