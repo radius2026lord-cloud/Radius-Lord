@@ -53,22 +53,26 @@ export function CountryPhoneInput({
             onChange={onCountryChange}
             className="h-full w-[142px] shrink-0 border-r border-[#dbe5ef] dark:border-white/[.09] sm:w-[154px]"
             buttonClassName="px-2 text-[10px] font-semibold text-[#17386d] transition-colors duration-300 dark:text-[#f4f1f5] sm:text-[11px]"
-            menuClassName="w-[230px]"
+            menuClassName="w-[240px]"
             align="left"
             renderValue={(item) => (
               <span className="flex min-w-0 items-center justify-center gap-1.5">
-                <span className="text-[16px] leading-none" style={emojiStyle} aria-hidden="true">{item.flag}</span>
+                <span className="grid h-6 w-7 shrink-0 place-items-center rounded-md bg-[#edf3f8] text-[18px] leading-none shadow-sm dark:bg-white/[.07]" style={emojiStyle} aria-hidden="true">
+                  {item.flag}
+                </span>
                 <span className="truncate">{item.name}</span>
                 <span dir="ltr" className="shrink-0">{item.code}</span>
               </span>
             )}
             renderItem={(item, active) => (
               <span className={`flex w-full items-center justify-between px-2.5 py-2 text-[11px] ${active ? "font-bold" : ""}`} dir="rtl">
-                <span className="flex items-center gap-2">
-                  <span className="text-[17px] leading-none" style={emojiStyle} aria-hidden="true">{item.flag}</span>
-                  <span>{item.name}</span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid h-7 w-8 shrink-0 place-items-center rounded-md bg-[#edf3f8] text-[20px] leading-none shadow-sm dark:bg-white/[.07]" style={emojiStyle} aria-hidden="true">
+                    {item.flag}
+                  </span>
+                  <span className="truncate">{item.name}</span>
                 </span>
-                <span dir="ltr">{item.code}</span>
+                <span dir="ltr" className="shrink-0 font-semibold">{item.code}</span>
               </span>
             )}
           />
