@@ -32,6 +32,16 @@ export function CompactField({
 }: CompactFieldProps) {
   const emailField = type === "email";
 
+  const handleChange = (nextValue: string) => {
+    if (!emailField) {
+      onChange(nextValue);
+      return;
+    }
+
+    const englishEmailOnly = nextValue.replace(/[^A-Za-z0-9.!#$%&'*+/=?^_`{|}~@-]/g, "");
+    onChange(englishEmailOnly);
+  };
+
   return (
     <label className={`block ${className}`}>
       <span className="mb-2.5 block text-[12px] font-bold text-[#17386d] dark:text-[#f4f1f5] sm:text-[13px]">
@@ -47,13 +57,15 @@ export function CompactField({
           name={name}
           autoComplete={autoComplete}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => handleChange(event.target.value)}
           placeholder={placeholder}
           inputMode={emailField ? "email" : undefined}
           maxLength={emailField ? 254 : undefined}
-          pattern={emailField ? "[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}" : undefined}
+          pattern={emailField ? "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}" : undefined}
           autoCapitalize={emailField ? "none" : undefined}
           spellCheck={emailField ? false : undefined}
+          lang={emailField ? "en" : undefined}
+          dir={emailField ? "ltr" : undefined}
           className="relative h-[52px] w-full origin-center rounded-[17px] border border-[#ccd9e7] bg-white pr-[58px] pl-11 text-[13px] text-[#17386d] outline-none transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-slate-400 hover:-translate-y-[1px] hover:border-[#9eb6d0] hover:shadow-[0_8px_22px_rgba(20,121,255,.08)] focus:-translate-y-[2px] focus:scale-[1.018] focus:border-[#4c8dff]/90 focus:shadow-[0_13px_34px_rgba(20,121,255,.17)] focus:ring-4 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.20] dark:hover:bg-[#26202a] dark:focus:border-[#6aa8ff] dark:focus:bg-[#211a25] dark:focus:shadow-[0_14px_36px_rgba(20,121,255,.20)] dark:focus:ring-[#1479ff]/20 sm:text-[14px]"
         />
         {suffix}
@@ -197,15 +209,23 @@ export function CompactField({
         .auth-signup-content input[name="email"] {
           direction: ltr !important;
           text-align: left !important;
-          padding-left: 12px !important;
-          padding-right: 48px !important;
-          font-size: 11px !important;
-          letter-spacing: -.01em;
+          padding-left: 8px !important;
+          padding-right: 8px !important;
+          font-family: Arial, Helvetica, sans-serif !important;
+          font-size: 10px !important;
+          letter-spacing: -.025em;
         }
 
         .auth-signup-content input[name="email"]::placeholder {
-          font-size: 10.5px !important;
+          padding-right: 40px;
+          font-size: 10px !important;
           letter-spacing: 0;
+        }
+
+        .auth-signup-content label:has(input[name="email"]:not(:placeholder-shown)) > .group > span.absolute:not(.pointer-events-none) {
+          opacity: 0 !important;
+          transform: translateY(-50%) scale(.72) !important;
+          pointer-events: none !important;
         }
 
         .auth-signup-content label > .group > span.absolute:not(.pointer-events-none) {
