@@ -48,17 +48,13 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
     onChange(nextValue);
   };
 
-  const hideIcon = hasValue && !loginEnglishOnly;
+  const hideIcon = hasValue;
   const inputFontSize = loginEnglishOnly ? 12 : adaptiveInputFontSize(value);
-  const inputPadding = loginEnglishOnly
+  const inputPadding = hasValue
     ? suffix
-      ? "pr-[52px] pl-10"
-      : "pr-[52px] pl-3"
-    : hasValue
-      ? suffix
-        ? "pr-3 pl-10"
-        : "px-3"
-      : "pr-[52px] pl-10";
+      ? "pr-3 pl-10"
+      : "px-3"
+    : "pr-[52px] pl-10";
 
   return (
     <label className={`block ${className}`}>
