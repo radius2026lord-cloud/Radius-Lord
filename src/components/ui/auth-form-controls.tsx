@@ -121,6 +121,46 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
         .auth-input-stage-active .auth-input-icon {
           animation: authInputIconFloat 2.6s ease-in-out infinite;
         }
+
+        /* Focus is the main attention state: make the selected field unmistakable. */
+        .auth-login-content label:focus-within > div.group,
+        .auth-signup-content label:focus-within > div.group {
+          z-index: 30 !important;
+          transform: scale(1.065) translateY(-1px) !important;
+          filter: drop-shadow(0 14px 22px rgba(20,121,255,.34));
+          animation: authFieldFocusLift 1.15s cubic-bezier(.16,1,.3,1) both;
+        }
+        .auth-login-content label:focus-within > div.group > span.pointer-events-none,
+        .auth-signup-content label:focus-within > div.group > span.pointer-events-none {
+          opacity: 1 !important;
+          transform: scale(1.12) !important;
+          filter: saturate(1.65) blur(17px) !important;
+          animation: authFieldFocusGlow 1.45s ease-in-out infinite !important;
+        }
+        .auth-login-content label:focus-within > div.group input,
+        .auth-signup-content label:focus-within > div.group input {
+          border-color: #6aa8ff !important;
+          box-shadow: 0 0 0 2px rgba(106,168,255,.48), 0 0 14px rgba(20,121,255,.60), 0 0 34px rgba(20,121,255,.48), 0 18px 42px rgba(20,121,255,.24) !important;
+        }
+        .auth-login-content label:focus-within > div.group .auth-input-icon,
+        .auth-signup-content label:focus-within > div.group .auth-input-icon {
+          transform: translate(-7px,-50%) rotate(8deg) scale(1.22) !important;
+          box-shadow: 0 0 0 2px rgba(106,168,255,.20), 0 0 24px rgba(20,121,255,.55) !important;
+          animation: authFocusedIcon 1.45s ease-in-out infinite !important;
+        }
+        @keyframes authFieldFocusLift {
+          0% { transform: scale(1) translateY(0); filter: drop-shadow(0 0 0 rgba(20,121,255,0)); }
+          45% { transform: scale(1.075) translateY(-2px); filter: drop-shadow(0 18px 30px rgba(20,121,255,.42)); }
+          100% { transform: scale(1.065) translateY(-1px); filter: drop-shadow(0 14px 22px rgba(20,121,255,.34)); }
+        }
+        @keyframes authFieldFocusGlow {
+          0%, 100% { opacity: .78; transform: scale(1.04); filter: saturate(1.35) blur(14px); }
+          50% { opacity: 1; transform: scale(1.15); filter: saturate(1.9) blur(19px); }
+        }
+        @keyframes authFocusedIcon {
+          0%, 100% { margin-top: 0; }
+          50% { margin-top: -3px; }
+        }
         @keyframes authInputGlowPulse {
           0%, 100% { opacity: .72; transform: scale(1.02); filter: saturate(1); }
           50% { opacity: 1; transform: scale(1.075); filter: saturate(1.35); }
@@ -131,7 +171,13 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
         }
         @media (prefers-reduced-motion: reduce) {
           .auth-input-stage-active .auth-input-glow,
-          .auth-input-stage-active .auth-input-icon { animation: none !important; }
+          .auth-input-stage-active .auth-input-icon,
+          .auth-login-content label:focus-within > div.group,
+          .auth-signup-content label:focus-within > div.group,
+          .auth-login-content label:focus-within > div.group > span.pointer-events-none,
+          .auth-signup-content label:focus-within > div.group > span.pointer-events-none,
+          .auth-login-content label:focus-within > div.group .auth-input-icon,
+          .auth-signup-content label:focus-within > div.group .auth-input-icon { animation: none !important; }
         }
       `}</style>
     </label>
