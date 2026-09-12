@@ -89,7 +89,7 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
       </div>
 
       {(loginEnglishOnly || signupEnglishOnly) && languageWarning && (
-        <span className="mt-1 block text-[9px] font-semibold text-[#c2410c] dark:text-[#ffb067]">
+        <span className="auth-field-warning mt-1 block text-[9px] font-semibold text-[#c2410c] dark:text-[#ffb067]">
           يرجى استخدام الأحرف الإنكليزية والأرقام والرموز فقط.
         </span>
       )}
