@@ -17,9 +17,27 @@ type CountryPhoneInputProps = {
   autoComplete?: string;
 };
 
-const emojiStyle = {
-  fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
-};
+function CountryFlag({ country, size = "small" }: { country: ArabCountry; size?: "small" | "large" }) {
+  const width = size === "large" ? 28 : 24;
+  const height = size === "large" ? 21 : 18;
+
+  return (
+    <span
+      className={`grid shrink-0 place-items-center overflow-hidden rounded-[5px] bg-[#edf3f8] shadow-sm ring-1 ring-black/[.05] dark:bg-white/[.07] dark:ring-white/[.08] ${size === "large" ? "h-[23px] w-[30px]" : "h-5 w-[26px]"}`}
+      aria-hidden="true"
+    >
+      <img
+        src={`https://flagcdn.com/${width}x${height}/${country.iso2}.png`}
+        srcSet={`https://flagcdn.com/${width * 2}x${height * 2}/${country.iso2}.png 2x`}
+        width={width}
+        height={height}
+        alt=""
+        className="block h-auto max-h-full w-auto max-w-full object-cover"
+        loading="lazy"
+      />
+    </span>
+  );
+}
 
 export function CountryPhoneInput({
   label = "رقم الهاتف *",
@@ -57,9 +75,7 @@ export function CountryPhoneInput({
             align="left"
             renderValue={(item) => (
               <span className="flex min-w-0 items-center justify-center gap-1.5">
-                <span className="grid h-6 w-7 shrink-0 place-items-center rounded-md bg-[#edf3f8] text-[18px] leading-none shadow-sm dark:bg-white/[.07]" style={emojiStyle} aria-hidden="true">
-                  {item.flag}
-                </span>
+                <CountryFlag country={item} />
                 <span className="truncate">{item.name}</span>
                 <span dir="ltr" className="shrink-0">{item.code}</span>
               </span>
@@ -67,9 +83,7 @@ export function CountryPhoneInput({
             renderItem={(item, active) => (
               <span className={`flex w-full items-center justify-between px-2.5 py-2 text-[11px] ${active ? "font-bold" : ""}`} dir="rtl">
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <span className="grid h-7 w-8 shrink-0 place-items-center rounded-md bg-[#edf3f8] text-[20px] leading-none shadow-sm dark:bg-white/[.07]" style={emojiStyle} aria-hidden="true">
-                    {item.flag}
-                  </span>
+                  <CountryFlag country={item} size="large" />
                   <span className="truncate">{item.name}</span>
                 </span>
                 <span dir="ltr" className="shrink-0 font-semibold">{item.code}</span>
