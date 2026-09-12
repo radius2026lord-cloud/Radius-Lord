@@ -151,6 +151,40 @@
   padding-top: 0 !important;
 }
 
+/* Focus attention: a restrained glow and a small icon response, only while the field is selected. */
+.auth-login-content label:focus-within > div.group,
+.auth-signup-content label:focus-within > div.group {
+  transform: scale(1.025) translateY(-1px) !important;
+  filter: drop-shadow(0 7px 12px rgba(20,121,255,.13)) !important;
+  animation: none !important;
+}
+
+.auth-login-content label:focus-within > div.group > span.pointer-events-none,
+.auth-signup-content label:focus-within > div.group > span.pointer-events-none {
+  opacity: .48 !important;
+  transform: scale(1.025) !important;
+  filter: saturate(1.15) blur(10px) !important;
+  animation: authFocusSoftGlow 1.8s ease-in-out infinite !important;
+}
+
+.auth-login-content label:focus-within > div.group input,
+.auth-signup-content label:focus-within > div.group input {
+  border-color: rgba(106,168,255,.82) !important;
+  box-shadow: 0 0 0 1px rgba(106,168,255,.22), 0 0 12px rgba(20,121,255,.18), 0 8px 18px rgba(20,121,255,.08) !important;
+}
+
+.auth-login-content label:focus-within > div.group .auth-input-icon,
+.auth-signup-content label:focus-within > div.group .auth-input-icon {
+  transform: translate(-3px,-50%) rotate(2deg) scale(1.08) !important;
+  box-shadow: 0 0 10px rgba(20,121,255,.18) !important;
+  animation: none !important;
+}
+
+@keyframes authFocusSoftGlow {
+  0%, 100% { opacity: .34; transform: scale(1.01); }
+  50% { opacity: .52; transform: scale(1.035); }
+}
+
 @keyframes authFeaturePanelSmoothIn {
   from {
     opacity: 0;
@@ -167,5 +201,10 @@
   .auth-shell:has(.auth-signup-content) > section:first-child {
     transition-duration: .01ms !important;
     animation-duration: .01ms !important;
+  }
+
+  .auth-login-content label:focus-within > div.group > span.pointer-events-none,
+  .auth-signup-content label:focus-within > div.group > span.pointer-events-none {
+    animation: none !important;
   }
 }
