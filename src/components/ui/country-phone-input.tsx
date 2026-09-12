@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Phone } from "lucide-react";
 import type { ArabCountry } from "@/components/auth/auth-content";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
@@ -35,8 +36,12 @@ function adaptivePhoneFontSize(value: string) {
 
 export function CountryPhoneInput({ label = "رقم الهاتف *", countries, country, onCountryChange, phone, onPhoneChange, placeholder = "أدخل رقم الهاتف", className = "", name = "phone", autoComplete = "tel" }: CountryPhoneInputProps) {
   const hasValue = phone.length > 0;
+  const [numberWarning, setNumberWarning] = useState(false);
+
   const handlePhoneChange = (nextValue: string) => {
-    onPhoneChange(nextValue.replace(/[^0-9]/g, "").slice(0, 25));
+    const digitsOnly = nextValue.replace(/[^0-9]/g, "");
+    setNumberWarning(digitsOnly !== nextValue);
+    onPhoneChange(digitsOnly.slice(0, 25));
   };
 
   return (
@@ -63,6 +68,11 @@ export function CountryPhoneInput({ label = "رقم الهاتف *", countries, 
           </div>
         </div>
       </div>
+      {numberWarning && (
+        <span className="auth-field-warning mt-1 block text-[9px] font-semibold text-[#c2410c] dark:text-[#ffb067]">
+          يرجى استخدام الأرقام الإنكليزية من 0 إلى 9 فقط.
+        </span>
+      )}
     </label>
   );
 }
