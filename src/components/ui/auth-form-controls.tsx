@@ -31,24 +31,21 @@ function adaptiveInputFontSize(value: string) {
 export function CompactField({ label, icon: Icon, type = "text", value, onChange, placeholder, suffix, className = "", name, autoComplete }: CompactFieldProps) {
   const emailField = type === "email";
   const loginEnglishOnly = name === "username" || name === "password";
+  const signupEnglishOnly = name === "email" || name === "new-password" || name === "confirm-password";
   const hasValue = value.length > 0;
   const [languageWarning, setLanguageWarning] = useState(false);
 
   const handleChange = (nextValue: string) => {
-    if (loginEnglishOnly) {
-      const englishOnly = nextValue.replace(/[^\x21-\x7E]/g, "");
+    if (loginEnglishOnly || signupEnglishOnly) {
+      const englishOnly = emailField
+        ? nextValue.replace(/[^A-Za-z0-9.!#$%&'*+/=?^_`{|}~@-]/g, "")
+        : nextValue.replace(/[^\x21-\x7E]/g, "");
       setLanguageWarning(englishOnly !== nextValue);
       onChange(englishOnly);
       return;
     }
 
-    if (!emailField) {
-      onChange(nextValue);
-      return;
-    }
-
-    const englishEmailOnly = nextValue.replace(/[^A-Za-z0-9.!#$%&'*+/=?^_`{|}~@-]/g, "");
-    onChange(englishEmailOnly);
+    onChange(nextValue);
   };
 
   const hideIcon = hasValue && !loginEnglishOnly;
@@ -81,17 +78,17 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
           inputMode={emailField ? "email" : undefined}
           maxLength={emailField ? 254 : undefined}
           pattern={emailField ? "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}" : undefined}
-          autoCapitalize={emailField || loginEnglishOnly ? "none" : undefined}
-          spellCheck={emailField || loginEnglishOnly ? false : undefined}
-          lang={emailField || loginEnglishOnly ? "en" : undefined}
-          dir={emailField || loginEnglishOnly ? "ltr" : undefined}
+          autoCapitalize={emailField || loginEnglishOnly || signupEnglishOnly ? "none" : undefined}
+          spellCheck={emailField || loginEnglishOnly || signupEnglishOnly ? false : undefined}
+          lang={emailField || loginEnglishOnly || signupEnglishOnly ? "en" : undefined}
+          dir={emailField || loginEnglishOnly || signupEnglishOnly ? "ltr" : undefined}
           style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif", fontSize: `${inputFontSize}px` }}
           className={`relative h-[44px] w-full origin-center rounded-[14px] border border-[#ccd9e7] bg-white text-[#17386d] outline-none transition-[transform,border-color,box-shadow,background-color,font-size,padding] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] placeholder:text-[11px] placeholder:text-slate-400 hover:border-[#9eb6d0] focus:border-[#4c8dff]/90 focus:ring-3 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] dark:hover:border-white/[.20] dark:focus:border-[#6aa8ff] dark:focus:ring-[#1479ff]/20 ${inputPadding}`}
         />
         {suffix}
       </div>
 
-      {loginEnglishOnly && languageWarning && (
+      {(loginEnglishOnly || signupEnglishOnly) && languageWarning && (
         <span className="mt-1 block text-[9px] font-semibold text-[#c2410c] dark:text-[#ffb067]">
           يرجى استخدام الأحرف الإنكليزية والأرقام والرموز فقط.
         </span>
@@ -117,6 +114,12 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
           direction: ltr !important;
           text-align: left !important;
           font-size: 12px !important;
+        }
+        .auth-login-content input[name="username"]::placeholder,
+        .auth-login-content input[name="password"]::placeholder {
+          direction: rtl !important;
+          text-align: right !important;
+          unicode-bidi: plaintext;
         }
       `}</style>
     </label>
