@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Activity,
@@ -25,6 +24,7 @@ import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/componen
 
 type Mode = "login" | "signup";
 type LoginStatus = "idle" | "loading" | "success" | "error";
+type TransitionPhase = "idle" | "out" | "in";
 type PasswordCredentialConstructor = new (data: { id: string; password: string; name?: string }) => Credential;
 
 const networkDots = [
@@ -106,13 +106,15 @@ function VisualPanel() {
 }
 
 export default function LordAuth({ mode }: { mode: Mode }) {
-  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>(mode);
+  const [layoutMode, setLayoutMode] = useState<Mode>(mode);
   const [transitioning, setTransitioning] = useState(false);
+  const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>("idle");
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const signup = activeMode === "signup";
+  const layoutSignup = layoutMode === "signup";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -142,11 +144,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     if (!PasswordCredentialCtor) return;
 
     try {
-      const credential = new PasswordCredentialCtor({
-        id: email,
-        password,
-        name: email,
-      });
+      const credential = new PasswordCredentialCtor({ id: email, password, name: email });
       await navigator.credentials.store(credential);
     } catch {
       // The browser may decline, block, or not support credential saving for this context.
@@ -155,14 +153,36 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
   const switchMode = (nextMode: Mode) => {
     if (transitioning || nextMode === activeMode) return;
+
     setTransitioning(true);
+    setTransitionPhase("out");
     setMessage("");
     setLoginStatus("idle");
-    window.setTimeout(() => setActiveMode(nextMode), 160);
+
+    if (nextMode === "signup") {
+      setLayoutMode("signup");
+      window.setTimeout(() => {
+        setActiveMode("signup");
+        requestAnimationFrame(() => setTransitionPhase("in"));
+      }, 360);
+      window.setTimeout(() => {
+        window.history.replaceState(window.history.state, "", "/signup");
+        setTransitionPhase("idle");
+        setTransitioning(false);
+      }, 680);
+      return;
+    }
+
     window.setTimeout(() => {
-      router.push(nextMode === "login" ? "/login" : "/signup");
+      setActiveMode("login");
+      setLayoutMode("login");
+    }, 220);
+    window.setTimeout(() => setTransitionPhase("in"), 430);
+    window.setTimeout(() => {
+      window.history.replaceState(window.history.state, "", "/login");
+      setTransitionPhase("idle");
       setTransitioning(false);
-    }, 560);
+    }, 700);
   };
 
   const submit = async (event: FormEvent) => {
@@ -190,9 +210,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       if (response.ok && data.success) {
         setLoginStatus("success");
         await requestBrowserCredentialSave();
-        window.setTimeout(() => {
-          window.location.href = "/Dashboard";
-        }, 1400);
+        window.setTimeout(() => { window.location.href = "/Dashboard"; }, 1400);
       } else {
         triggerLoginError(data.message || "فشل تسجيل الدخول.");
       }
@@ -213,11 +231,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   );
 
   return (
-    <main
-      dir="rtl"
-      className="relative h-[100dvh] overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors duration-500 dark:bg-[#1d1721] dark:text-[#f4f1f5]"
-      style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}
-    >
+    <main dir="rtl" className="relative h-[100dvh] overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors duration-500 dark:bg-[#1d1721] dark:text-[#f4f1f5]" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }}>
       <button
         type="button"
         onClick={() => setTheme(isDark ? "light" : "dark")}
@@ -235,7 +249,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         <div className="auth-orbit auth-orbit-b absolute bottom-[5%] right-[7%] h-[220px] w-[220px] rounded-full border border-[#ffad16]/15 dark:border-[#ffad16]/10" />
         <div className="auth-glow auth-glow-blue absolute -left-32 top-[8%] h-[360px] w-[360px] rounded-full bg-[#1479ff]/12 blur-[120px] dark:bg-[#1479ff]/11" />
         <div className="auth-glow auth-glow-amber absolute -right-28 bottom-[5%] h-[300px] w-[300px] rounded-full bg-[#ffad16]/9 blur-[120px] dark:bg-[#ffad16]/6" />
-
         <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="auth-network-lines absolute inset-0 h-full w-full opacity-[.26] dark:opacity-[.20]">
           <g fill="none" stroke="currentColor" className="text-[#5f8fc8] dark:text-[#7ea4ff]" strokeWidth="1">
             <path d="M0 180 L145 118 L310 204 L452 112 L612 245" />
@@ -250,48 +263,21 @@ export default function LordAuth({ mode }: { mode: Mode }) {
             <path d="M355 382 L326 588 M700 392 L640 560 M1260 432 L1292 720 M920 438 L1002 760" opacity=".58" />
           </g>
         </svg>
-
         {networkDots.map((dot, index) => (
-          <span
-            key={index}
-            className={`auth-network-dot absolute rounded-full ${
-              dot.tone === "amber"
-                ? "bg-[#f3a000] dark:bg-[#ffad16]"
-                : dot.tone === "blue"
-                  ? "bg-[#1479ff] dark:bg-[#6aa8ff]"
-                  : "bg-[#7693b1] dark:bg-[#8f8795]"
-            }`}
-            style={{
-              left: dot.left,
-              top: dot.top,
-              width: dot.size,
-              height: dot.size,
-              animationDelay: dot.delay,
-              animationDuration: dot.duration,
-            }}
-          />
+          <span key={index} className={`auth-network-dot absolute rounded-full ${dot.tone === "amber" ? "bg-[#f3a000] dark:bg-[#ffad16]" : dot.tone === "blue" ? "bg-[#1479ff] dark:bg-[#6aa8ff]" : "bg-[#7693b1] dark:bg-[#8f8795]"}`} style={{ left: dot.left, top: dot.top, width: dot.size, height: dot.size, animationDelay: dot.delay, animationDuration: dot.duration }} />
         ))}
       </div>
 
       <div className="relative z-10 flex h-full min-h-0 items-center justify-center p-3 sm:p-4">
         <div
           dir="ltr"
-          className={`auth-shell relative w-full overflow-hidden rounded-[22px] border border-white/80 bg-[#f9fbfe] shadow-[0_24px_70px_rgba(53,83,116,.18)] transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_28px_80px_rgba(0,0,0,.36)] dark:backdrop-blur-xl ${
-            signup
-              ? "grid max-w-[1020px] min-[1024px]:h-[min(610px,calc(100dvh-24px))] min-[1024px]:grid-cols-2"
-              : "max-w-[500px] h-[min(610px,calc(100dvh-24px))]"
-          } ${transitioning ? "scale-[.985] opacity-80" : "scale-100 opacity-100"}`}
+          className={`auth-shell ${transitioning ? "auth-is-transitioning" : ""} relative w-full overflow-hidden rounded-[22px] border border-white/80 bg-[#f9fbfe] shadow-[0_24px_70px_rgba(53,83,116,.18)] transition-[max-width] duration-[560ms] ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_28px_80px_rgba(0,0,0,.36)] dark:backdrop-blur-xl ${layoutSignup ? "max-w-[1000px] h-[min(610px,calc(100dvh-24px))]" : "max-w-[500px] h-[min(610px,calc(100dvh-24px))]"} ${signup ? "min-[1024px]:grid min-[1024px]:grid-cols-2" : ""}`}
         >
           {signup && <VisualPanel />}
 
-          <section
-            dir="rtl"
-            className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${
-              signup ? "py-5" : "auth-login-section py-4 sm:py-5"
-            }`}
-          >
+          <section dir="rtl" className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${signup ? "py-5" : "auth-login-section py-4 sm:py-5"}`}>
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`relative z-10 w-full ${signup ? "auth-signup-content max-w-[470px]" : "auth-login-content max-w-[418px]"}`}>
+            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? "auth-signup-content max-w-[470px]" : "auth-login-content max-w-[418px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
@@ -300,9 +286,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   {signup ? <UserRound className="h-[22px] w-[22px]" /> : <LockKeyhole className="h-[22px] w-[22px]" />}
                 </div>
                 <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">
-                  {signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}
-                </p>
+                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
               <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-7"}>
@@ -323,16 +307,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                     <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
                     <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
                       لديك حساب بالفعل؟
-                      <Link
-                        href="/login"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          switchMode("login");
-                        }}
-                        className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white"
-                      >
-                        تسجيل الدخول
-                      </Link>
+                      <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
                     </div>
                   </div>
                 ) : (
@@ -358,64 +333,19 @@ export default function LordAuth({ mode }: { mode: Mode }) {
           45% { transform: translate3d(6px,-9px,0) scale(1.35); opacity: .9; box-shadow: 0 0 14px rgba(106,168,255,.52); }
           70% { transform: translate3d(-4px,-3px,0) scale(.95); opacity: .42; }
         }
-        @keyframes authGridDrift {
-          from { background-position: 0 0, 0 0; }
-          to { background-position: 52px 36px, 52px 36px; }
-        }
-        @keyframes authScanMove {
-          0% { transform: translate3d(-14%,-8%,0) rotate(-8deg); opacity: 0; }
-          18% { opacity: .28; }
-          55% { opacity: .12; }
-          100% { transform: translate3d(16%,10%,0) rotate(-8deg); opacity: 0; }
-        }
-        @keyframes authOrbitFloat {
-          0%,100% { transform: translate3d(0,0,0) scale(1); opacity: .55; }
-          50% { transform: translate3d(18px,-12px,0) scale(1.08); opacity: .18; }
-        }
-        @keyframes authNetworkFlow {
-          0%,100% { transform: translate3d(0,0,0); opacity: .16; }
-          50% { transform: translate3d(8px,-5px,0); opacity: .28; }
-        }
-        @keyframes authGlowFloat {
-          0%,100% { transform: translate3d(0,0,0) scale(1); }
-          50% { transform: translate3d(22px,-14px,0) scale(1.08); }
-        }
-        @keyframes authBrandFloat {
-          0%,100% { transform: translateY(0); box-shadow: 0 12px 30px rgba(20,121,255,.24); }
-          50% { transform: translateY(-5px); box-shadow: 0 18px 38px rgba(20,121,255,.34); }
-        }
-        @keyframes authIconPulse {
-          0%,100% { transform: scale(1); box-shadow: 0 10px 24px rgba(20,121,255,.22); }
-          50% { transform: scale(1.06); box-shadow: 0 14px 34px rgba(20,121,255,.36); }
-        }
-        @keyframes authCardRise {
-          0% { transform: translateY(8px); opacity: .55; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes authPanelGlow {
-          0%,100% { transform: translate3d(0,0,0); opacity: .8; }
-          50% { transform: translate3d(18px,-10px,0); opacity: .45; }
-        }
+        @keyframes authGridDrift { from { background-position: 0 0, 0 0; } to { background-position: 52px 36px, 52px 36px; } }
+        @keyframes authScanMove { 0% { transform: translate3d(-14%,-8%,0) rotate(-8deg); opacity: 0; } 18% { opacity: .28; } 55% { opacity: .12; } 100% { transform: translate3d(16%,10%,0) rotate(-8deg); opacity: 0; } }
+        @keyframes authOrbitFloat { 0%,100% { transform: translate3d(0,0,0) scale(1); opacity: .55; } 50% { transform: translate3d(18px,-12px,0) scale(1.08); opacity: .18; } }
+        @keyframes authNetworkFlow { 0%,100% { transform: translate3d(0,0,0); opacity: .16; } 50% { transform: translate3d(8px,-5px,0); opacity: .28; } }
+        @keyframes authGlowFloat { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(22px,-14px,0) scale(1.08); } }
+        @keyframes authBrandFloat { 0%,100% { transform: translateY(0); box-shadow: 0 12px 30px rgba(20,121,255,.24); } 50% { transform: translateY(-5px); box-shadow: 0 18px 38px rgba(20,121,255,.34); } }
+        @keyframes authIconPulse { 0%,100% { transform: scale(1); box-shadow: 0 10px 24px rgba(20,121,255,.22); } 50% { transform: scale(1.06); box-shadow: 0 14px 34px rgba(20,121,255,.36); } }
+        @keyframes authCardRise { 0% { transform: translateY(8px); opacity: .55; } 100% { transform: translateY(0); opacity: 1; } }
+        @keyframes authPanelGlow { 0%,100% { transform: translate3d(0,0,0); opacity: .8; } 50% { transform: translate3d(18px,-10px,0); opacity: .45; } }
 
-        .auth-bg-grid {
-          opacity: .24;
-          background-image:
-            linear-gradient(rgba(20,121,255,.12) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(20,121,255,.12) 1px, transparent 1px);
-          background-size: 46px 46px;
-          mask-image: radial-gradient(circle at center, #000 15%, rgba(0,0,0,.68) 56%, transparent 96%);
-          animation: authGridDrift 24s linear infinite;
-        }
-        .dark .auth-bg-grid {
-          opacity: .20;
-          background-image:
-            linear-gradient(rgba(126,164,255,.11) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(126,164,255,.11) 1px, transparent 1px);
-        }
-        .auth-bg-scan {
-          background: linear-gradient(90deg, transparent 38%, rgba(20,121,255,.06) 49%, rgba(20,121,255,.11) 50%, rgba(20,121,255,.06) 51%, transparent 62%);
-          animation: authScanMove 11s ease-in-out infinite;
-        }
+        .auth-bg-grid { opacity: .24; background-image: linear-gradient(rgba(20,121,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(20,121,255,.12) 1px, transparent 1px); background-size: 46px 46px; mask-image: radial-gradient(circle at center, #000 15%, rgba(0,0,0,.68) 56%, transparent 96%); animation: authGridDrift 24s linear infinite; }
+        .dark .auth-bg-grid { opacity: .20; background-image: linear-gradient(rgba(126,164,255,.11) 1px, transparent 1px), linear-gradient(90deg, rgba(126,164,255,.11) 1px, transparent 1px); }
+        .auth-bg-scan { background: linear-gradient(90deg, transparent 38%, rgba(20,121,255,.06) 49%, rgba(20,121,255,.11) 50%, rgba(20,121,255,.06) 51%, transparent 62%); animation: authScanMove 11s ease-in-out infinite; }
         .auth-network-dot { animation-name: authDotPulse; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
         .auth-network-lines { animation: authNetworkFlow 9s ease-in-out infinite; }
         .auth-night-extra-lines { opacity: 0; transition: opacity .5s ease; }
@@ -432,29 +362,31 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .dark .auth-feature-card:hover { border-color: rgba(106,168,255,.22); background: rgba(56,54,60,.92); }
         .auth-panel-glow { animation: authPanelGlow 10s ease-in-out infinite; }
         .auth-panel-glow-delay { animation-delay: -4s; }
+
         .auth-login-content,
-        .auth-signup-content { transition: transform .4s cubic-bezier(.22,.8,.25,1); transform-origin: center center; }
+        .auth-signup-content { animation: none !important; transform-origin: center center; }
+
+        .auth-mode-content {
+          opacity: 1;
+          transform: translate3d(0,0,0);
+          transition: opacity 190ms ease, transform 260ms cubic-bezier(.22,.8,.25,1);
+          will-change: opacity, transform;
+        }
+        .auth-mode-content.auth-mode-out { opacity: 0; transform: translate3d(0,4px,0); }
+        .auth-mode-content.auth-mode-in { opacity: 1; transform: translate3d(0,0,0); }
+
+        .auth-shell.auth-is-transitioning > section:first-child,
+        .auth-shell.auth-is-transitioning .auth-feature-card { animation: none !important; }
 
         @media (max-height: 800px) {
           .auth-login-content { transform: scale(.92); width: 108.7%; max-width: none; }
         }
-
         @media (max-height: 730px) {
           .auth-login-content { transform: scale(.84); width: 119%; }
         }
-
         @media (prefers-reduced-motion: reduce) {
-          .auth-bg-grid,
-          .auth-bg-scan,
-          .auth-network-dot,
-          .auth-network-lines,
-          .auth-orbit,
-          .auth-glow,
-          .auth-brand-icon,
-          .auth-login-icon,
-          .auth-card-glow,
-          .auth-feature-card,
-          .auth-panel-glow { animation: none !important; }
+          .auth-bg-grid, .auth-bg-scan, .auth-network-dot, .auth-network-lines, .auth-orbit, .auth-glow, .auth-brand-icon, .auth-login-icon, .auth-card-glow, .auth-feature-card, .auth-panel-glow { animation: none !important; }
+          .auth-mode-content, .auth-shell { transition-duration: .01ms !important; }
         }
       `}</style>
     </main>
