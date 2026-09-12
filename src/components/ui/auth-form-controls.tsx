@@ -48,20 +48,15 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
     onChange(nextValue);
   };
 
-  const hideIcon = hasValue;
   const inputFontSize = loginEnglishOnly ? 12 : adaptiveInputFontSize(value);
-  const inputPadding = hasValue
-    ? suffix
-      ? "pr-3 pl-10"
-      : "px-3"
-    : "pr-[52px] pl-10";
+  const inputPadding = suffix ? "pr-[52px] pl-10" : "pr-[52px] pl-3";
 
   return (
     <label className={`block ${className}`}>
       <span className="mb-[5px] block text-[11px] font-bold leading-[14px] text-[#17386d] dark:text-[#f4f1f5]">{label}</span>
-      <div className="group relative">
+      <div className={`group relative origin-center transition-transform duration-300 ease-[cubic-bezier(.22,.8,.25,1)] ${hasValue ? "scale-[1.015]" : "scale-100"}`}>
         <span className="pointer-events-none absolute inset-[-3px] rounded-[16px] bg-gradient-to-l from-[#1479ff]/0 via-[#1479ff]/0 to-[#8ab5ff]/0 opacity-0 blur-md transition-all duration-300 group-hover:opacity-30 group-focus-within:from-[#1479ff]/35 group-focus-within:via-[#5d9bff]/15 group-focus-within:to-[#8ab5ff]/30 group-focus-within:opacity-100" />
-        <span className={`absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] transition-all duration-200 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hideIcon ? "pointer-events-none scale-75 opacity-0" : "opacity-100 group-hover:scale-[1.05] group-focus-within:rotate-[4deg] group-focus-within:scale-[1.08] group-focus-within:bg-[#dceaff] dark:group-focus-within:bg-[#454149]"}`}>
+        <span className={`absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] opacity-100 transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "scale-[1.06]" : "scale-100 group-hover:scale-[1.05] group-focus-within:rotate-[4deg] group-focus-within:scale-[1.08] group-focus-within:bg-[#dceaff] dark:group-focus-within:bg-[#454149]"}`}>
           <Icon className="h-[18px] w-[18px]" />
         </span>
         <input
