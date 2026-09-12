@@ -151,33 +151,62 @@
   padding-top: 0 !important;
 }
 
-/* Selected field: only a very soft glow and a small upward lift. */
+/* Remove the old strong value-based glow/lift. Filled fields stay calm. */
+.auth-login-content label > div.group,
+.auth-signup-content label > div.group {
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+}
+
+.auth-login-content label > div.group > span.pointer-events-none,
+.auth-signup-content label > div.group > span.pointer-events-none {
+  opacity: 0 !important;
+  transform: scale(.98) !important;
+  filter: blur(7px) !important;
+  animation: none !important;
+}
+
+.auth-login-content label:not(:focus-within) > div.group input,
+.auth-signup-content label:not(:focus-within) > div.group input {
+  box-shadow: none !important;
+}
+
+.auth-signup-content label:not(:focus-within) > div.group > div[dir="ltr"] {
+  box-shadow: none !important;
+}
+
+/* Selected field: tiny lift + narrow soft glow only while focused. */
 .auth-login-content label:focus-within > div.group,
 .auth-signup-content label:focus-within > div.group {
   z-index: 20 !important;
-  transform: translateY(-3px) scale(1.012) !important;
-  filter: drop-shadow(0 6px 8px rgba(20,121,255,.08)) !important;
-  animation: none !important;
+  transform: translateY(-2px) scale(1.006) !important;
+  filter: drop-shadow(0 4px 5px rgba(20,121,255,.055)) !important;
 }
 
 .auth-login-content label:focus-within > div.group > span.pointer-events-none,
 .auth-signup-content label:focus-within > div.group > span.pointer-events-none {
-  opacity: .22 !important;
-  transform: scale(1.01) !important;
-  filter: blur(8px) !important;
-  animation: none !important;
+  opacity: .13 !important;
+  transform: scale(1.002) !important;
+  filter: blur(6px) !important;
 }
 
 .auth-login-content label:focus-within > div.group input,
 .auth-signup-content label:focus-within > div.group input {
-  border-color: rgba(106,168,255,.58) !important;
-  box-shadow: 0 0 0 1px rgba(106,168,255,.12), 0 5px 12px rgba(20,121,255,.08) !important;
+  border-color: rgba(106,168,255,.48) !important;
+  box-shadow: 0 0 0 1px rgba(106,168,255,.09), 0 3px 8px rgba(20,121,255,.055) !important;
+}
+
+/* Phone field uses the same restrained focus treatment. */
+.auth-signup-content label:focus-within > div.group > div[dir="ltr"] {
+  border-color: rgba(106,168,255,.48) !important;
+  box-shadow: 0 0 0 1px rgba(106,168,255,.09), 0 3px 8px rgba(20,121,255,.055) !important;
 }
 
 .auth-login-content label:focus-within > div.group .auth-input-icon,
 .auth-signup-content label:focus-within > div.group .auth-input-icon {
-  transform: translate(-2px,-50%) scale(1.04) !important;
-  box-shadow: 0 0 7px rgba(20,121,255,.10) !important;
+  transform: translate(-1px,-50%) scale(1.02) !important;
+  box-shadow: 0 0 4px rgba(20,121,255,.07) !important;
   animation: none !important;
 }
 
