@@ -54,9 +54,9 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
   return (
     <label className={`block ${className}`}>
       <span className="mb-[5px] block text-[11px] font-bold leading-[14px] text-[#17386d] dark:text-[#f4f1f5]">{label}</span>
-      <div className={`group relative z-0 origin-center transition-[transform,filter] duration-[820ms] ease-[cubic-bezier(.16,1,.3,1)] ${hasValue ? "z-10 scale-[1.04]" : "scale-100"}`}>
-        <span className={`pointer-events-none absolute inset-[-7px] -z-10 rounded-[20px] bg-gradient-to-l from-[#1479ff]/55 via-[#5d9bff]/35 to-[#8ab5ff]/55 blur-[13px] transition-[opacity,transform] duration-[820ms] ease-[cubic-bezier(.16,1,.3,1)] ${hasValue ? "scale-[1.035] opacity-100" : "scale-90 opacity-0 group-hover:opacity-20 group-focus-within:scale-100 group-focus-within:opacity-55"}`} />
-        <span className={`absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] opacity-100 transition-[transform,background-color,box-shadow] duration-[820ms] ease-[cubic-bezier(.16,1,.3,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "translate-x-[-5px] rotate-[7deg] scale-[1.16] bg-[#dceaff] shadow-[0_0_18px_rgba(20,121,255,.34)] dark:bg-[#454149] dark:shadow-[0_0_20px_rgba(106,168,255,.28)]" : "scale-100 group-hover:scale-[1.04] group-focus-within:rotate-[2deg] group-focus-within:scale-[1.07] group-focus-within:bg-[#dceaff] dark:group-focus-within:bg-[#454149]"}`}>
+      <div className={`group auth-input-stage relative z-0 origin-center transition-[transform,filter] duration-[900ms] ease-[cubic-bezier(.16,1,.3,1)] ${hasValue ? "auth-input-stage-active z-10 scale-[1.055]" : "scale-100"}`}>
+        <span className={`auth-input-glow pointer-events-none absolute inset-[-9px] -z-10 rounded-[22px] bg-gradient-to-l from-[#1479ff]/70 via-[#5d9bff]/45 to-[#8ab5ff]/70 blur-[16px] transition-[opacity,transform,filter] duration-[900ms] ease-[cubic-bezier(.16,1,.3,1)] ${hasValue ? "scale-[1.055] opacity-100" : "scale-90 opacity-0 group-hover:opacity-20 group-focus-within:scale-100 group-focus-within:opacity-60"}`} />
+        <span className={`auth-input-icon absolute right-2 top-1/2 z-10 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center rounded-full bg-[#e8eff6] text-[#0758e9] opacity-100 transition-[transform,background-color,box-shadow] duration-[900ms] ease-[cubic-bezier(.16,1,.3,1)] dark:bg-[#38363c] dark:text-[#8ab5ff] ${hasValue ? "translate-x-[-6px] rotate-[9deg] scale-[1.20] bg-[#dceaff] shadow-[0_0_22px_rgba(20,121,255,.46)] dark:bg-[#454149] dark:shadow-[0_0_24px_rgba(106,168,255,.38)]" : "scale-100 group-hover:scale-[1.04] group-focus-within:rotate-[2deg] group-focus-within:scale-[1.07] group-focus-within:bg-[#dceaff] dark:group-focus-within:bg-[#454149]"}`}>
           <Icon className="h-[18px] w-[18px]" />
         </span>
         <input
@@ -74,7 +74,7 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
           lang={emailField || loginEnglishOnly || signupEnglishOnly ? "en" : undefined}
           dir={emailField || loginEnglishOnly || signupEnglishOnly ? "ltr" : undefined}
           style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif", fontSize: `${inputFontSize}px` }}
-          className={`relative h-[44px] w-full origin-center rounded-[14px] border bg-white text-[#17386d] outline-none transition-[border-color,box-shadow,background-color,font-size,padding] duration-[820ms] ease-[cubic-bezier(.16,1,.3,1)] placeholder:text-[11px] placeholder:text-slate-400 dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] ${hasValue ? "border-[#4c8dff] shadow-[0_0_0_2px_rgba(20,121,255,.22),0_0_22px_rgba(20,121,255,.22),0_12px_32px_rgba(20,121,255,.12)] dark:border-[#6aa8ff] dark:shadow-[0_0_0_2px_rgba(106,168,255,.18),0_0_24px_rgba(106,168,255,.18),0_12px_34px_rgba(20,121,255,.12)]" : "border-[#ccd9e7] hover:border-[#9eb6d0] focus:border-[#4c8dff]/90 focus:ring-3 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:hover:border-white/[.20] dark:focus:border-[#6aa8ff] dark:focus:ring-[#1479ff]/20"} ${inputPadding}`}
+          className={`auth-input-control relative h-[44px] w-full origin-center rounded-[14px] border bg-white text-[#17386d] outline-none transition-[border-color,box-shadow,background-color,font-size,padding] duration-[900ms] ease-[cubic-bezier(.16,1,.3,1)] placeholder:text-[11px] placeholder:text-slate-400 dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894] ${hasValue ? "border-[#4c8dff] shadow-[0_0_0_2px_rgba(20,121,255,.30),0_0_30px_rgba(20,121,255,.32),0_16px_38px_rgba(20,121,255,.18)] dark:border-[#6aa8ff] dark:shadow-[0_0_0_2px_rgba(106,168,255,.24),0_0_32px_rgba(106,168,255,.26),0_16px_40px_rgba(20,121,255,.18)]" : "border-[#ccd9e7] hover:border-[#9eb6d0] focus:border-[#4c8dff]/90 focus:ring-3 focus:ring-[#1479ff]/10 dark:border-white/[.10] dark:hover:border-white/[.20] dark:focus:border-[#6aa8ff] dark:focus:ring-[#1479ff]/20"} ${inputPadding}`}
         />
         {suffix}
       </div>
@@ -111,6 +111,27 @@ export function CompactField({ label, icon: Icon, type = "text", value, onChange
           direction: rtl !important;
           text-align: right !important;
           unicode-bidi: plaintext;
+        }
+        .auth-input-stage-active {
+          filter: drop-shadow(0 12px 18px rgba(20,121,255,.14));
+        }
+        .auth-input-stage-active .auth-input-glow {
+          animation: authInputGlowPulse 2.2s ease-in-out infinite;
+        }
+        .auth-input-stage-active .auth-input-icon {
+          animation: authInputIconFloat 2.6s ease-in-out infinite;
+        }
+        @keyframes authInputGlowPulse {
+          0%, 100% { opacity: .72; transform: scale(1.02); filter: saturate(1); }
+          50% { opacity: 1; transform: scale(1.075); filter: saturate(1.35); }
+        }
+        @keyframes authInputIconFloat {
+          0%, 100% { margin-top: 0; }
+          50% { margin-top: -2px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .auth-input-stage-active .auth-input-glow,
+          .auth-input-stage-active .auth-input-icon { animation: none !important; }
         }
       `}</style>
     </label>
