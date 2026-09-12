@@ -22,11 +22,16 @@
   height: 44px !important;
 }
 
-/* Give the main login action clear breathing room above and below. */
+/* Keep clear spacing between all main login form elements. */
+.loginScope :global(.auth-login-content form > div > * + *) {
+  margin-top: 10px !important;
+}
+
+/* Give the main login action extra breathing room above and below. */
 .loginScope :global(.auth-login-content form > div > div.pt-3) {
   padding-top: 0 !important;
-  margin-top: 12px !important;
-  margin-bottom: 12px !important;
+  margin-top: 14px !important;
+  margin-bottom: 14px !important;
 }
 
 .loginScope :global(.auth-login-content form > div > div.pt-3 + div) {
