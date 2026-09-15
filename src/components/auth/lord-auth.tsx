@@ -125,6 +125,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [terms, setTerms] = useState(false);
+  const [signupStep, setSignupStep] = useState<1 | 2>(1);
+  const [networkName, setNetworkName] = useState("");
+  const [networkAddress, setNetworkAddress] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => setMounted(true), []);
@@ -158,6 +161,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     setTransitionPhase("out");
     setMessage("");
     setLoginStatus("idle");
+    setSignupStep(1);
 
     if (nextMode === "signup") {
       setLayoutMode("signup");
@@ -190,9 +194,15 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     setMessage("");
 
     if (signup) {
-      if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
-      if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
-      if (!terms) return setMessage("يرجى الموافقة على الشروط والأحكام وسياسة الخصوصية.");
+      if (signupStep === 1) {
+        if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
+        if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
+        if (!terms) return setMessage("يرجى الموافقة على الشروط والأحكام وسياسة الخصوصية.");
+        setSignupStep(2);
+        return;
+      }
+
+      if (!networkName || !networkAddress) return setMessage("يرجى إدخال اسم الشبكة والعنوان الرئيسي للشبكة.");
       return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
     }
 
@@ -283,33 +293,43 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
               <div className="text-center">
                 <div className="auth-login-icon mx-auto grid h-[52px] w-[52px] place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
-                  {signup ? <UserRound className="h-[22px] w-[22px]" /> : <LockKeyhole className="h-[22px] w-[22px]" />}
+                  {signup ? (signupStep === 1 ? <UserRound className="h-[22px] w-[22px]" /> : <Server className="h-[22px] w-[22px]" />) : <LockKeyhole className="h-[22px] w-[22px]" />}
                 </div>
-                <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
+                <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? (signupStep === 1 ? "إنشاء حساب جديد" : "بيانات الشبكة") : "تسجيل الدخول"}</h1>
+                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? (signupStep === 1 ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم الشبكة والعنوان الرئيسي للشبكة لإكمال إنشاء الحساب") : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
               <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-7"}>
                 {signup ? (
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
-                    <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
-                    <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" name="email" autoComplete="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
-                    <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
-                    <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
-                    <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                    <label className="flex items-start gap-2 text-[10px] leading-5 text-slate-600 dark:text-[#b9b3bd] sm:col-span-2">
-                      <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#1479ff]" />
-                      <span>أوافق على <button type="button" className="font-semibold text-[#0758e9] dark:text-[#8ab5ff]">الشروط والأحكام وسياسة الخصوصية</button></span>
-                    </label>
-                    {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
-                    <div className="sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
-                    <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795] sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
-                    <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
-                    <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
-                      لديك حساب بالفعل؟
-                      <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
+                  signupStep === 1 ? (
+                    <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
+                      <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
+                      <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" name="email" autoComplete="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
+                      <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
+                      <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
+                      <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
+                      <label className="flex items-start gap-2 text-[10px] leading-5 text-slate-600 dark:text-[#b9b3bd] sm:col-span-2">
+                        <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#1479ff]" />
+                        <span>أوافق على <button type="button" className="font-semibold text-[#0758e9] dark:text-[#8ab5ff]">الشروط والأحكام وسياسة الخصوصية</button></span>
+                      </label>
+                      {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
+                      <div className="sm:col-span-2"><PrimaryFormButton>متابعة <span>←</span></PrimaryFormButton></div>
+                      <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795] sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
+                      <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
+                      <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
+                        لديك حساب بالفعل؟
+                        <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <CompactField label="اسم الشبكة *" icon={Server} name="network-name" value={networkName} onChange={setNetworkName} placeholder="أدخل اسم الشبكة" />
+                      <CompactField label="العنوان الرئيسي للشبكة *" icon={Radio} name="network-address" value={networkAddress} onChange={setNetworkAddress} placeholder="أدخل العنوان الرئيسي للشبكة" />
+                      {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
+                      <div className="pt-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
+                      <button type="button" onClick={() => { setMessage(""); setSignupStep(1); }} className="mx-auto block text-[10px] font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">العودة إلى بيانات الحساب</button>
+                    </div>
+                  )
                 ) : (
                   <div className="space-y-4.5">
                     <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
