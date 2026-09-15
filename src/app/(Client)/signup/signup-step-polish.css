@@ -1,18 +1,19 @@
-/* Signup-only polish: two-step progress, centered network step, network-specific icon. */
-.auth-signup-content::before { content:""; position:absolute; left:50%; bottom:-38px; width:112px; height:2px; transform:translateX(-50%); border-radius:999px; background:#d6e1ec; z-index:30; }
+/* Signup-only polish: visible two-step progress, centered network step, network-specific icon. */
+.auth-signup-content { padding-bottom:34px; }
+.auth-signup-content::before { content:""; position:absolute; left:50%; bottom:10px; width:112px; height:2px; transform:translateX(-50%); border-radius:999px; background:#d6e1ec; z-index:30; }
 .dark .auth-signup-content::before { background:rgba(255,255,255,.12); }
 /* RTL order: step 1 on the right, step 2 on the left. */
-.auth-signup-content::after { content:"1"; position:absolute; left:calc(50% + 32px); bottom:-49px; display:grid; width:24px; height:24px; place-items:center; border-radius:999px; background:linear-gradient(135deg,#1479ff,#0758e9); color:white; font-size:11px; font-weight:900; box-shadow:0 5px 14px rgba(20,121,255,.22); z-index:31; }
-.auth-signup-content form::after { content:"2"; position:absolute; left:calc(50% - 56px); bottom:-49px; display:grid; width:24px; height:24px; place-items:center; border:1px solid #cbd9e7; border-radius:999px; background:#f9fbfe; color:#8292a5; font-size:11px; font-weight:900; z-index:31; }
+.auth-signup-content::after { content:"1"; position:absolute; left:calc(50% + 32px); bottom:-1px; display:grid; width:24px; height:24px; place-items:center; border-radius:999px; background:linear-gradient(135deg,#1479ff,#0758e9); color:white; font-size:11px; font-weight:900; box-shadow:0 5px 14px rgba(20,121,255,.22); z-index:31; }
+.auth-signup-content form::after { content:"2"; position:absolute; left:calc(50% - 56px); bottom:-1px; display:grid; width:24px; height:24px; place-items:center; border:1px solid #cbd9e7; border-radius:999px; background:#f9fbfe; color:#8292a5; font-size:11px; font-weight:900; z-index:31; }
 .dark .auth-signup-content form::after { border-color:rgba(255,255,255,.14); background:#302e33; color:#9e98a2; }
 .auth-signup-content:has(input[name="network-name"])::before { background:linear-gradient(90deg,#1479ff,#0758e9); }
 .auth-signup-content:has(input[name="network-name"])::after { background:#dce8f5; color:#0758e9; box-shadow:none; }
 .dark .auth-signup-content:has(input[name="network-name"])::after { background:rgba(106,168,255,.14); color:#8ab5ff; }
 .auth-signup-content:has(input[name="network-name"]) form::after { border-color:transparent; background:linear-gradient(135deg,#1479ff,#0758e9); color:white; box-shadow:0 5px 14px rgba(20,121,255,.22); }
-/* Only step 2 is vertically centered; step 1 keeps its original full layout space. */
-.auth-signup-content:has(input[name="network-name"]) { min-height:calc(100% - 12px); display:flex; flex-direction:column; justify-content:center; padding-bottom:4px; }
+/* Only step 2 is vertically centered; step 1 keeps its original layout. */
+.auth-signup-content:has(input[name="network-name"]) { min-height:100%; display:flex; flex-direction:column; justify-content:center; padding-bottom:34px; }
 .auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top:0 !important; }
 .auth-signup-content:has(input[name="network-name"]) form { margin-top:22px !important; }
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon svg { display:none; }
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon::before { content:""; width:25px; height:25px; background:currentColor; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='5' rx='1'/%3E%3Crect x='3' y='17' width='6' height='5' rx='1'/%3E%3Crect x='15' y='17' width='6' height='5' rx='1'/%3E%3Cpath d='M12 7v4M6 17v-3h12v3M18 14v3'/%3E%3C/svg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='5' rx='1'/%3E%3Crect x='3' y='17' width='6' height='5' rx='1'/%3E%3Crect x='15' y='17' width='6' height='5' rx='1'/%3E%3Cpath d='M12 7v4M6 17v-3h12v3M18 14v3'/%3E%3C/svg%3E") center/contain no-repeat; }
-@media (max-width:639px) { .auth-signup-content::before { bottom:-34px; } .auth-signup-content::after,.auth-signup-content form::after { bottom:-45px; } }
+@media (max-width:639px) { .auth-signup-content { padding-bottom:30px; } .auth-signup-content:has(input[name="network-name"]) { padding-bottom:30px; } }
