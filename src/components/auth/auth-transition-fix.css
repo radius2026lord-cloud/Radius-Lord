@@ -129,6 +129,20 @@
   row-gap: 5px !important;
 }
 
+/* Give warning messages on both auth pages one calm, short attention shake. */
+.auth-field-warning,
+.auth-login-content form [class*="border-[#e5a42e]"],
+.auth-signup-content form [class*="border-[#e5a42e]"] {
+  animation: authWarningSoftShake 420ms cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+@keyframes authWarningSoftShake {
+  0%, 100% { transform: translateX(0); }
+  24% { transform: translateX(2px); }
+  48% { transform: translateX(-2px); }
+  72% { transform: translateX(1px); }
+}
+
 /* Cancel the old low-height-only login shrinking so login never becomes visually smaller than signup. */
 @media (max-height: 800px), (max-height: 730px) {
   .auth-login-content {
@@ -200,6 +214,12 @@
   .auth-shell,
   .auth-shell:has(.auth-signup-content) > section:first-child {
     transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+
+  .auth-field-warning,
+  .auth-login-content form [class*="border-[#e5a42e]"],
+  .auth-signup-content form [class*="border-[#e5a42e]"] {
     animation-duration: .01ms !important;
   }
 }
