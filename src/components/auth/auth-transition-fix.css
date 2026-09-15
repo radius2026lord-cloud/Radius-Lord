@@ -25,20 +25,6 @@
   animation: authFeaturePanelSmoothIn 420ms 70ms cubic-bezier(.22,.8,.25,1) both !important;
 }
 
-/* Readability-first warning layout: keep controls/text at their normal size and let the card use more vertical room. */
-.auth-shell:has(.auth-field-warning),
-.auth-shell:has(form [class*="border-[#e5a42e]"]) {
-  height: min(680px, calc(100dvh - 24px)) !important;
-}
-
-.auth-shell:has(.auth-field-warning) > section:last-child,
-.auth-shell:has(form [class*="border-[#e5a42e]"]) > section:last-child {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  scrollbar-width: thin;
-  overscroll-behavior: contain;
-}
-
 .auth-signup-content {
   width: 100% !important;
   max-width: 100% !important;
@@ -68,27 +54,6 @@
   letter-spacing: 0 !important;
 }
 
-/* Warnings consume spacing, not readability: only tighten vertical gaps. */
-.auth-signup-content:has(.auth-field-warning) > .mb-5,
-.auth-signup-content:has(form [class*="border-[#e5a42e]"]) > .mb-5 {
-  margin-bottom: 12px !important;
-}
-
-.auth-signup-content:has(.auth-field-warning) form,
-.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form {
-  margin-top: 12px !important;
-}
-
-.auth-signup-content:has(.auth-field-warning) form > div,
-.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form > div {
-  row-gap: 7px !important;
-}
-
-.auth-signup-content:has(.auth-field-warning) label > span:first-child,
-.auth-signup-content:has(form [class*="border-[#e5a42e]"]) label > span:first-child {
-  margin-bottom: 4px !important;
-}
-
 .auth-field-warning {
   margin-top: 3px !important;
   font-size: 10px !important;
@@ -116,25 +81,6 @@
   max-width: 100% !important;
 }
 
-.auth-login-content:has(.auth-field-warning) > .mb-7,
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) > .mb-7 {
-  margin-bottom: 12px !important;
-}
-
-.auth-login-content:has(.auth-field-warning) form,
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) form {
-  margin-top: 9px !important;
-}
-
-.auth-login-content:has(.auth-field-warning) form > div,
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div {
-  row-gap: 6px !important;
-}
-
-.auth-login-content:has(.auth-field-warning) form label > span:first-child {
-  margin-bottom: 4px !important;
-}
-
 /* Give warning messages on both auth pages one calm, short attention shake. */
 .auth-field-warning,
 .auth-login-content form [class*="border-[#e5a42e]"],
@@ -147,21 +93,6 @@
   24% { transform: translateX(2px); }
   48% { transform: translateX(-2px); }
   72% { transform: translateX(1px); }
-}
-
-/* On short screens preserve readable sizes and use a quiet internal scroll only when needed. */
-@media (max-height: 700px) {
-  .auth-shell:has(.auth-field-warning),
-  .auth-shell:has(form [class*="border-[#e5a42e]"]) {
-    height: calc(100dvh - 24px) !important;
-  }
-
-  .auth-shell:has(.auth-field-warning) > section:last-child,
-  .auth-shell:has(form [class*="border-[#e5a42e]"]) > section:last-child {
-    align-items: flex-start !important;
-    padding-top: 16px !important;
-    padding-bottom: 16px !important;
-  }
 }
 
 @media (max-height: 800px), (max-height: 730px) {
@@ -311,32 +242,32 @@
   background-size: 38px 38px !important;
 }
 
-/* Login warning choreography: grow only by the space actually consumed, keep balanced gaps, and animate the reflow. */
+/* Login warning choreography: add only the warning's real height, not a large empty tail. */
 .auth-shell:not(:has(.auth-signup-content)):has(.auth-field-warning) {
-  height: min(632px, calc(100dvh - 24px)) !important;
+  height: min(626px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:not(:has(.auth-signup-content)):has(form > div > label:has(.auth-field-warning) ~ label:has(.auth-field-warning)) {
-  height: min(652px, calc(100dvh - 24px)) !important;
+  height: min(642px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:not(:has(.auth-signup-content)):has(form [class*="border-[#e5a42e]"]) {
-  height: min(648px, calc(100dvh - 24px)) !important;
+  height: min(638px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:not(:has(.auth-signup-content)):has(.auth-field-warning):has(form [class*="border-[#e5a42e]"]) {
-  height: min(668px, calc(100dvh - 24px)) !important;
+  height: min(654px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:not(:has(.auth-signup-content)):has(form > div > label:has(.auth-field-warning) ~ label:has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
-  height: min(688px, calc(100dvh - 24px)) !important;
+  height: min(670px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:not(:has(.auth-signup-content)):has(.auth-field-warning) > section:last-child,
 .auth-shell:not(:has(.auth-signup-content)):has(form [class*="border-[#e5a42e]"]) > section:last-child {
   overflow-y: hidden !important;
-  padding-top: 16px !important;
-  padding-bottom: 16px !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
   transition: padding 420ms cubic-bezier(.22,.8,.25,1) !important;
 }
 
@@ -349,80 +280,58 @@
 
 .auth-login-content:has(.auth-field-warning) > .mb-7,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) > .mb-7 {
-  margin-bottom: 16px !important;
+  margin-bottom: 14px !important;
 }
 
 .auth-login-content:has(.auth-field-warning) form,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form {
-  margin-top: 11px !important;
+  margin-top: 10px !important;
 }
 
 .auth-login-content:has(.auth-field-warning) form > div > * + *,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div > * + * {
-  margin-top: 9px !important;
+  margin-top: 7px !important;
 }
 
 .auth-login-content:has(.auth-field-warning) form > div > div.pt-3,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div > div.pt-3 {
-  margin-top: 13px !important;
+  margin-top: 10px !important;
 }
 
-.auth-login-content:has(.auth-field-warning) form > div > div.pt-3 + div,
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div > div.pt-3 + div {
-  margin-top: 9px !important;
-}
-
-.auth-login-content:has(.auth-field-warning) form > div > button[type="button"],
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div > button[type="button"] {
-  margin-bottom: 9px !important;
-}
-
-@media (max-height: 700px) {
-  .auth-shell:not(:has(.auth-signup-content)):has(.auth-field-warning),
-  .auth-shell:not(:has(.auth-signup-content)):has(form [class*="border-[#e5a42e]"]) {
-    height: calc(100dvh - 24px) !important;
-  }
-
-  .auth-shell:not(:has(.auth-signup-content)):has(.auth-field-warning) > section:last-child,
-  .auth-shell:not(:has(.auth-signup-content)):has(form [class*="border-[#e5a42e]"]) > section:last-child {
-    overflow-y: auto !important;
-  }
-}
-
-/* Signup warning choreography: mirror login behavior without shrinking readable controls. */
+/* Signup warning choreography: same compact growth, with both panels ending close to their content. */
 .auth-shell:has(.auth-signup-content):has(.auth-field-warning) {
-  height: min(632px, calc(100dvh - 24px)) !important;
+  height: min(626px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
-  height: min(652px, calc(100dvh - 24px)) !important;
+  height: min(642px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
-  height: min(672px, calc(100dvh - 24px)) !important;
+  height: min(658px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) {
-  height: min(648px, calc(100dvh - 24px)) !important;
+  height: min(638px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(.auth-field-warning):has(form [class*="border-[#e5a42e]"]) {
-  height: min(668px, calc(100dvh - 24px)) !important;
+  height: min(654px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
-  height: min(688px, calc(100dvh - 24px)) !important;
+  height: min(670px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
-  height: min(708px, calc(100dvh - 24px)) !important;
+  height: min(686px, calc(100dvh - 24px)) !important;
 }
 
 .auth-shell:has(.auth-signup-content):has(.auth-field-warning) > section:last-child,
 .auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) > section:last-child {
   overflow-y: hidden !important;
-  padding-top: 16px !important;
-  padding-bottom: 16px !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
   transition: padding 420ms cubic-bezier(.22,.8,.25,1) !important;
 }
 
@@ -436,38 +345,41 @@
 
 .auth-signup-content:has(.auth-field-warning) > .mb-5,
 .auth-signup-content:has(form [class*="border-[#e5a42e]"]) > .mb-5 {
-  margin-bottom: 14px !important;
+  margin-bottom: 12px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form,
 .auth-signup-content:has(form [class*="border-[#e5a42e]"]) form {
-  margin-top: 11px !important;
+  margin-top: 10px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form > div,
 .auth-signup-content:has(form [class*="border-[#e5a42e]"]) form > div {
-  row-gap: 9px !important;
+  row-gap: 7px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form > div > :has(.auth-field-warning),
 .auth-signup-content:has(form [class*="border-[#e5a42e]"]) form > div > :has(.auth-field-warning) {
-  margin-bottom: 2px !important;
+  margin-bottom: 1px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form [class*="border-[#e5a42e]"],
 .auth-signup-content:has(form [class*="border-[#e5a42e]"]) form [class*="border-[#e5a42e]"] {
-  margin-top: 2px !important;
-  margin-bottom: 2px !important;
+  margin-top: 1px !important;
+  margin-bottom: 1px !important;
 }
 
 @media (max-height: 700px) {
-  .auth-shell:has(.auth-signup-content):has(.auth-field-warning),
-  .auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) {
+  .auth-shell:has(.auth-field-warning),
+  .auth-shell:has(form [class*="border-[#e5a42e]"]) {
     height: calc(100dvh - 24px) !important;
   }
 
-  .auth-shell:has(.auth-signup-content):has(.auth-field-warning) > section:last-child,
-  .auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) > section:last-child {
+  .auth-shell:has(.auth-field-warning) > section:last-child,
+  .auth-shell:has(form [class*="border-[#e5a42e]"]) > section:last-child {
     overflow-y: auto !important;
+    align-items: flex-start !important;
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
   }
 }
