@@ -388,3 +388,86 @@
     overflow-y: auto !important;
   }
 }
+
+/* Signup warning choreography: mirror login behavior without shrinking readable controls. */
+.auth-shell:has(.auth-signup-content):has(.auth-field-warning) {
+  height: min(632px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
+  height: min(652px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
+  height: min(672px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) {
+  height: min(648px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(.auth-field-warning):has(form [class*="border-[#e5a42e]"]) {
+  height: min(668px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
+  height: min(688px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
+  height: min(708px, calc(100dvh - 24px)) !important;
+}
+
+.auth-shell:has(.auth-signup-content):has(.auth-field-warning) > section:last-child,
+.auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) > section:last-child {
+  overflow-y: hidden !important;
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+  transition: padding 420ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-signup-content > .mb-5,
+.auth-signup-content form,
+.auth-signup-content form > div,
+.auth-signup-content form > div > *,
+.auth-signup-content form label > span:first-child {
+  transition: margin 420ms cubic-bezier(.22,.8,.25,1), padding 420ms cubic-bezier(.22,.8,.25,1), gap 420ms cubic-bezier(.22,.8,.25,1), transform 420ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) > .mb-5,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) > .mb-5 {
+  margin-bottom: 14px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) form,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form {
+  margin-top: 11px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) form > div,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form > div {
+  row-gap: 9px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) form > div > :has(.auth-field-warning),
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form > div > :has(.auth-field-warning) {
+  margin-bottom: 2px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) form [class*="border-[#e5a42e]"],
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form [class*="border-[#e5a42e]"] {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+@media (max-height: 700px) {
+  .auth-shell:has(.auth-signup-content):has(.auth-field-warning),
+  .auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) {
+    height: calc(100dvh - 24px) !important;
+  }
+
+  .auth-shell:has(.auth-signup-content):has(.auth-field-warning) > section:last-child,
+  .auth-shell:has(.auth-signup-content):has(form [class*="border-[#e5a42e]"]) > section:last-child {
+    overflow-y: auto !important;
+  }
+}
