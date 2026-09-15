@@ -55,7 +55,20 @@
   letter-spacing: 0 !important;
 }
 
-/* When a signup warning appears, compact only enough to keep everything inside the card. */
+/* When a signup warning appears, compact the whole signup content dynamically so every element remains inside the card. */
+.auth-signup-content:has(.auth-field-warning) {
+  transform: scale(.94) !important;
+  transform-origin: center center !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) > .mb-5 {
+  margin-bottom: 12px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) form {
+  margin-top: 12px !important;
+}
+
 .auth-signup-content:has(.auth-field-warning) form > div {
   row-gap: 4px !important;
 }
