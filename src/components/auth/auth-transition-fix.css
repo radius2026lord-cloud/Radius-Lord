@@ -24,7 +24,6 @@
   animation: authFeaturePanelSmoothIn 420ms 70ms cubic-bezier(.22,.8,.25,1) both !important;
 }
 
-/* Keep every signup row inside the same left/right boundaries. */
 .auth-signup-content {
   width: 100% !important;
   max-width: 100% !important;
@@ -47,7 +46,6 @@
   }
 }
 
-/* Email uses the same LBC typography as the rest of the form. */
 .auth-signup-content input[name="email"] {
   font-family: LBC, Tahoma, Arial, sans-serif !important;
   font-size: 12px !important;
@@ -55,30 +53,35 @@
   letter-spacing: 0 !important;
 }
 
-/* Any field warning makes signup adapt as one unit, leaving enough room even when several warnings are visible. */
+/* Progressive signup fit: shrink only as much as the number of visible field warnings requires. */
 .auth-signup-content:has(.auth-field-warning) {
-  transform: scale(.89) !important;
+  transform: scale(.97) !important;
   transform-origin: center center !important;
+  transition: transform 260ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
+  transform: scale(.94) !important;
+}
+
+.auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
+  transform: scale(.91) !important;
+}
+
+.auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
+  transform: scale(.89) !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) > .mb-5 {
-  margin-bottom: 8px !important;
-}
-
-.auth-signup-content:has(.auth-field-warning) > .text-center h1 {
-  margin-top: 7px !important;
-}
-
-.auth-signup-content:has(.auth-field-warning) > .text-center p {
-  margin-top: 3px !important;
+  margin-bottom: 10px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form {
-  margin-top: 8px !important;
+  margin-top: 10px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form > div {
-  row-gap: 3px !important;
+  row-gap: 4px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) label > span:first-child {
@@ -90,13 +93,13 @@
 .auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"],
 .auth-signup-content:has(.auth-field-warning) form button[type="submit"],
 .auth-signup-content:has(.auth-field-warning) form button[type="button"]:not(label button) {
-  height: 38px !important;
+  height: 40px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) label > .group > span.absolute:not(.pointer-events-none),
 .auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"] span.absolute {
-  width: 29px !important;
-  height: 29px !important;
+  width: 30px !important;
+  height: 30px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) .auth-field-warning {
@@ -105,7 +108,6 @@
   line-height: 10px !important;
 }
 
-/* Login must use the exact same inner width and vertical scale as signup's form panel. */
 .auth-shell:not(:has(.auth-signup-content)) > section:last-child {
   padding-left: 32px !important;
   padding-right: 32px !important;
@@ -119,36 +121,32 @@
   transform: none !important;
 }
 
-/* Login adapts for both field-level warnings and submit/status warnings. */
+/* Progressive login fit: one warning gets a tiny reduction; two warnings get only the extra reduction they need. */
 .auth-login-content:has(.auth-field-warning),
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) {
-  transform: scale(.89) !important;
+  transform: scale(.96) !important;
   transform-origin: center center !important;
+  transition: transform 260ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-login-content:has(form > div > label:has(.auth-field-warning) ~ label:has(.auth-field-warning)),
+.auth-login-content:has(.auth-field-warning):has(form [class*="border-[#e5a42e]"]) {
+  transform: scale(.92) !important;
 }
 
 .auth-login-content:has(.auth-field-warning) > .mb-7,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) > .mb-7 {
-  margin-bottom: 8px !important;
-}
-
-.auth-login-content:has(.auth-field-warning) > .text-center h1,
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) > .text-center h1 {
-  margin-top: 6px !important;
-}
-
-.auth-login-content:has(.auth-field-warning) > .text-center p,
-.auth-login-content:has(form [class*="border-[#e5a42e]"]) > .text-center p {
-  margin-top: 2px !important;
+  margin-bottom: 10px !important;
 }
 
 .auth-login-content:has(.auth-field-warning) form,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form {
-  margin-top: 6px !important;
+  margin-top: 8px !important;
 }
 
 .auth-login-content:has(.auth-field-warning) form > div,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div {
-  row-gap: 3px !important;
+  row-gap: 4px !important;
 }
 
 .auth-login-content:has(.auth-field-warning) form label > span:first-child {
@@ -168,7 +166,6 @@
   line-height: 10px !important;
 }
 
-/* Give warning messages on both auth pages one calm, short attention shake. */
 .auth-field-warning,
 .auth-login-content form [class*="border-[#e5a42e]"],
 .auth-signup-content form [class*="border-[#e5a42e]"] {
@@ -182,7 +179,6 @@
   72% { transform: translateX(1px); }
 }
 
-/* Cancel the old low-height-only login shrinking so login never becomes visually smaller than signup. */
 @media (max-height: 800px), (max-height: 730px) {
   .auth-login-content {
     width: 100% !important;
@@ -326,7 +322,6 @@
   animation: none !important;
 }
 
-/* Dark mode only: make the background network grid denser and more visible. */
 .dark .auth-bg-grid {
   opacity: .30 !important;
   background-image: linear-gradient(rgba(126,164,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(126,164,255,.15) 1px, transparent 1px) !important;
