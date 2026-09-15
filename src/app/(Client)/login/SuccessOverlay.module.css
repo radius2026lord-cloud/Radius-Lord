@@ -2,37 +2,59 @@
   display: contents;
 }
 
-/* Login success: mirror the approved logout overlay/card exactly, using blue success accents. */
+/* The overlay only positions the two independent layers. Never blur the card itself. */
 .scope :global(.auth-success-overlay) {
-  background: rgba(220, 229, 239, .30) !important;
-  -webkit-backdrop-filter: blur(3px) !important;
-  backdrop-filter: blur(3px) !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  z-index: 9999 !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  isolation: isolate !important;
   animation: loginSuccessOverlayIn .18s ease-out both !important;
 }
 
-:global(.dark) .scope :global(.auth-success-overlay) {
+/* Full-page blur layer: this is behind the success card. */
+.scope :global(.auth-success-screen-blur) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+  background: rgba(220, 229, 239, .30) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  backdrop-filter: blur(14px) !important;
+  pointer-events: none !important;
+}
+
+:global(.dark) .scope :global(.auth-success-screen-blur) {
   background: rgba(29, 23, 33, .35) !important;
 }
 
+/* Card is a separate foreground layer and stays sharp. */
 .scope :global(.auth-success-card) {
+  position: relative !important;
+  z-index: 10 !important;
   min-width: 210px !important;
   border-radius: 24px !important;
   border-color: rgba(255, 255, 255, .70) !important;
   background: rgba(255, 255, 255, .88) !important;
   padding: 28px 32px !important;
   box-shadow: 0 24px 70px rgba(31, 54, 83, .20) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
-  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
   animation: loginSuccessCardIn .30s cubic-bezier(.22,.8,.25,1) both !important;
 }
 
 :global(.dark) .scope :global(.auth-success-card) {
   border-color: rgba(255, 255, 255, .10) !important;
-  background: rgba(48, 46, 51, .88) !important;
+  background: rgba(48, 46, 51, .94) !important;
   box-shadow: 0 26px 80px rgba(0, 0, 0, .34) !important;
 }
 
-/* The circular success indicator uses the same moving ring language as logout. */
 .scope :global(.auth-success-card > div:first-child) {
   width: 64px !important;
   height: 64px !important;
