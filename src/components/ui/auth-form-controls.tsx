@@ -93,20 +93,8 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
 
   const startLocalSubmitAnimation = (event: MouseEvent<HTMLButtonElement>) => {
     if (controlled || localStatus !== "idle") return;
-    const form = event.currentTarget.form;
     const signupRoot = event.currentTarget.closest(".auth-signup-content");
-    if (signupRoot && form) {
-      const requiredNames = ["name", "email", "phone", "new-password", "confirm-password"];
-      const requiredInputs = requiredNames.map((n) => form.querySelector<HTMLInputElement>(`input[name="${n}"]`)).filter((i): i is HTMLInputElement => Boolean(i));
-      const terms = form.querySelector<HTMLInputElement>('input[type="checkbox"]');
-      const password = form.querySelector<HTMLInputElement>('input[name="new-password"]');
-      const confirmPassword = form.querySelector<HTMLInputElement>('input[name="confirm-password"]');
-      const hasEmptyRequired = requiredInputs.length !== requiredNames.length || requiredInputs.some((input) => !input.value.trim());
-      const passwordsMismatch = Boolean(password && confirmPassword && password.value !== confirmPassword.value);
-      const hasInvalidField = !form.checkValidity();
-      if (hasInvalidField) { event.preventDefault(); form.reportValidity(); }
-      if (hasEmptyRequired || !terms?.checked || passwordsMismatch || hasInvalidField) { setLocalStatus("error"); window.setTimeout(() => setLocalStatus("idle"), 560); return; }
-    }
+    if (signupRoot) return;
     setLocalStatus("loading");
     window.setTimeout(() => setLocalStatus("success"), 420);
     window.setTimeout(() => setLocalStatus("idle"), 1050);
