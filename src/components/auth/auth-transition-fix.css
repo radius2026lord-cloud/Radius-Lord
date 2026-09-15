@@ -55,46 +55,54 @@
   letter-spacing: 0 !important;
 }
 
-/* When a signup warning appears, compact the whole signup content dynamically so every element remains inside the card. */
+/* Any field warning makes signup adapt as one unit, leaving enough room even when several warnings are visible. */
 .auth-signup-content:has(.auth-field-warning) {
-  transform: scale(.94) !important;
+  transform: scale(.89) !important;
   transform-origin: center center !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) > .mb-5 {
-  margin-bottom: 12px !important;
+  margin-bottom: 8px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) > .text-center h1 {
+  margin-top: 7px !important;
+}
+
+.auth-signup-content:has(.auth-field-warning) > .text-center p {
+  margin-top: 3px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form {
-  margin-top: 12px !important;
+  margin-top: 8px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) form > div {
-  row-gap: 4px !important;
+  row-gap: 3px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) label > span:first-child {
-  margin-bottom: 3px !important;
-  line-height: 12px !important;
+  margin-bottom: 2px !important;
+  line-height: 11px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) label > .group > input,
 .auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"],
 .auth-signup-content:has(.auth-field-warning) form button[type="submit"],
 .auth-signup-content:has(.auth-field-warning) form button[type="button"]:not(label button) {
-  height: 40px !important;
+  height: 38px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) label > .group > span.absolute:not(.pointer-events-none),
 .auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"] span.absolute {
-  width: 30px !important;
-  height: 30px !important;
+  width: 29px !important;
+  height: 29px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) .auth-field-warning {
-  margin-top: 2px !important;
+  margin-top: 1px !important;
   font-size: 8px !important;
-  line-height: 11px !important;
+  line-height: 10px !important;
 }
 
 /* Login must use the exact same inner width and vertical scale as signup's form panel. */
@@ -111,22 +119,53 @@
   transform: none !important;
 }
 
-/* When a login status message appears, compact the whole content just enough so every action stays inside the fixed card. */
+/* Login adapts for both field-level warnings and submit/status warnings. */
+.auth-login-content:has(.auth-field-warning),
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) {
-  transform: scale(.94) !important;
+  transform: scale(.89) !important;
   transform-origin: center center !important;
 }
 
+.auth-login-content:has(.auth-field-warning) > .mb-7,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) > .mb-7 {
-  margin-bottom: 12px !important;
+  margin-bottom: 8px !important;
 }
 
+.auth-login-content:has(.auth-field-warning) > .text-center h1,
+.auth-login-content:has(form [class*="border-[#e5a42e]"]) > .text-center h1 {
+  margin-top: 6px !important;
+}
+
+.auth-login-content:has(.auth-field-warning) > .text-center p,
+.auth-login-content:has(form [class*="border-[#e5a42e]"]) > .text-center p {
+  margin-top: 2px !important;
+}
+
+.auth-login-content:has(.auth-field-warning) form,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form {
-  margin-top: 8px !important;
+  margin-top: 6px !important;
 }
 
+.auth-login-content:has(.auth-field-warning) form > div,
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div {
-  row-gap: 5px !important;
+  row-gap: 3px !important;
+}
+
+.auth-login-content:has(.auth-field-warning) form label > span:first-child {
+  margin-bottom: 2px !important;
+  line-height: 11px !important;
+}
+
+.auth-login-content:has(.auth-field-warning) form label > .group > input,
+.auth-login-content:has(.auth-field-warning) form button[type="submit"],
+.auth-login-content:has(.auth-field-warning) form > div > button[type="button"] {
+  height: 40px !important;
+}
+
+.auth-login-content:has(.auth-field-warning) .auth-field-warning {
+  margin-top: 1px !important;
+  font-size: 8px !important;
+  line-height: 10px !important;
 }
 
 /* Give warning messages on both auth pages one calm, short attention shake. */
@@ -150,7 +189,7 @@
     max-width: 100% !important;
   }
 
-  .auth-login-content:not(:has(form [class*="border-[#e5a42e]"])) {
+  .auth-login-content:not(:has(.auth-field-warning)):not(:has(form [class*="border-[#e5a42e]"])) {
     transform: none !important;
   }
 }
