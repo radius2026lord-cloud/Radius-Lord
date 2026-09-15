@@ -1,0 +1,101 @@
+.scope {
+  display: contents;
+}
+
+/* Login success: mirror the approved logout overlay/card exactly, using blue success accents. */
+.scope :global(.auth-success-overlay) {
+  background: rgba(220, 229, 239, .30) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+  backdrop-filter: blur(3px) !important;
+  animation: loginSuccessOverlayIn .18s ease-out both !important;
+}
+
+:global(.dark) .scope :global(.auth-success-overlay) {
+  background: rgba(29, 23, 33, .35) !important;
+}
+
+.scope :global(.auth-success-card) {
+  min-width: 210px !important;
+  border-radius: 24px !important;
+  border-color: rgba(255, 255, 255, .70) !important;
+  background: rgba(255, 255, 255, .88) !important;
+  padding: 28px 32px !important;
+  box-shadow: 0 24px 70px rgba(31, 54, 83, .20) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  backdrop-filter: blur(24px) !important;
+  animation: loginSuccessCardIn .30s cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+:global(.dark) .scope :global(.auth-success-card) {
+  border-color: rgba(255, 255, 255, .10) !important;
+  background: rgba(48, 46, 51, .88) !important;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .34) !important;
+}
+
+/* The circular success indicator uses the same moving ring language as logout. */
+.scope :global(.auth-success-card > div:first-child) {
+  width: 64px !important;
+  height: 64px !important;
+  background: rgba(20, 121, 255, .10) !important;
+  color: #0758e9 !important;
+}
+
+:global(.dark) .scope :global(.auth-success-card > div:first-child) {
+  background: rgba(106, 168, 255, .10) !important;
+  color: #8ab5ff !important;
+}
+
+.scope :global(.auth-success-ring) {
+  border: 2px solid rgba(20, 121, 255, .20) !important;
+  border-top-color: #1479ff !important;
+  animation: loginSuccessRingSpin .72s linear infinite !important;
+}
+
+:global(.dark) .scope :global(.auth-success-ring) {
+  border-color: rgba(106, 168, 255, .20) !important;
+  border-top-color: #8ab5ff !important;
+}
+
+.scope :global(.auth-success-card-arrow) {
+  animation: loginSuccessArrow .72s ease-in-out infinite !important;
+}
+
+.scope :global(.auth-success-card > div:nth-child(2)) {
+  margin-top: 16px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.scope :global(.auth-success-card > div:nth-child(3)) {
+  margin-top: 4px !important;
+  font-size: 11px !important;
+}
+
+@keyframes loginSuccessOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loginSuccessCardIn {
+  0% { opacity: 0; transform: translateY(8px) scale(.94); }
+  70% { opacity: 1; transform: translateY(-1px) scale(1.015); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes loginSuccessRingSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loginSuccessArrow {
+  0%, 100% { transform: translateX(2px); opacity: .72; }
+  50% { transform: translateX(-4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scope :global(.auth-success-overlay),
+  .scope :global(.auth-success-card),
+  .scope :global(.auth-success-ring),
+  .scope :global(.auth-success-card-arrow) {
+    animation: none !important;
+  }
+}
