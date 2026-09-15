@@ -18,36 +18,36 @@
   animation: loginSuccessOverlayIn .18s ease-out both !important;
 }
 
-/* Only this layer blurs the login page underneath. */
+/* Full-screen blur stays below the success card. */
 .scope :global(.auth-success-screen-blur) {
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
   height: 100dvh !important;
   z-index: 1 !important;
-  background: rgba(220, 229, 239, .30) !important;
+  background: rgba(220, 229, 239, .34) !important;
   -webkit-backdrop-filter: blur(14px) !important;
   backdrop-filter: blur(14px) !important;
   pointer-events: none !important;
 }
 
 :global(.dark) .scope :global(.auth-success-screen-blur) {
-  background: rgba(29, 23, 33, .35) !important;
+  background: rgba(29, 23, 33, .40) !important;
 }
 
-/* Success card is always a sharp foreground layer above the blurred login page. */
+/* Green success card remains fully visible and sharp above the blur. */
 .scope :global(.auth-success-card) {
   position: fixed !important;
   left: 50% !important;
   top: 50% !important;
-  z-index: 2 !important;
+  z-index: 100 !important;
   transform: translate(-50%, -50%) !important;
   min-width: 210px !important;
   border-radius: 24px !important;
-  border: 1px solid rgba(255, 255, 255, .70) !important;
-  background: rgba(255, 255, 255, .94) !important;
+  border: 1px solid rgba(34, 197, 94, .28) !important;
+  background: rgba(248, 255, 250, .98) !important;
   padding: 28px 32px !important;
-  box-shadow: 0 24px 70px rgba(31, 54, 83, .20) !important;
+  box-shadow: 0 24px 70px rgba(22, 101, 52, .22) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   filter: none !important;
@@ -57,47 +57,62 @@
 }
 
 :global(.dark) .scope :global(.auth-success-card) {
-  border-color: rgba(255, 255, 255, .10) !important;
-  background: rgba(48, 46, 51, .96) !important;
-  box-shadow: 0 26px 80px rgba(0, 0, 0, .34) !important;
+  border-color: rgba(74, 222, 128, .25) !important;
+  background: rgba(31, 45, 36, .98) !important;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .38), 0 0 34px rgba(34, 197, 94, .10) !important;
 }
 
 .scope :global(.auth-success-card > div:first-child) {
   width: 64px !important;
   height: 64px !important;
-  background: rgba(20, 121, 255, .10) !important;
-  color: #0758e9 !important;
+  background: rgba(34, 197, 94, .12) !important;
+  color: #16a34a !important;
 }
 
 :global(.dark) .scope :global(.auth-success-card > div:first-child) {
-  background: rgba(106, 168, 255, .10) !important;
-  color: #8ab5ff !important;
+  background: rgba(74, 222, 128, .12) !important;
+  color: #4ade80 !important;
 }
 
 .scope :global(.auth-success-ring) {
-  border: 2px solid rgba(20, 121, 255, .20) !important;
-  border-top-color: #1479ff !important;
+  border: 2px solid rgba(34, 197, 94, .22) !important;
+  border-top-color: #16a34a !important;
   animation: loginSuccessRingSpin .72s linear infinite !important;
 }
 
 :global(.dark) .scope :global(.auth-success-ring) {
-  border-color: rgba(106, 168, 255, .20) !important;
-  border-top-color: #8ab5ff !important;
+  border-color: rgba(74, 222, 128, .22) !important;
+  border-top-color: #4ade80 !important;
 }
 
 .scope :global(.auth-success-card-arrow) {
+  color: #16a34a !important;
   animation: loginSuccessArrow .72s ease-in-out infinite !important;
+}
+
+:global(.dark) .scope :global(.auth-success-card-arrow) {
+  color: #4ade80 !important;
 }
 
 .scope :global(.auth-success-card > div:nth-child(2)) {
   margin-top: 16px !important;
   font-size: 14px !important;
   font-weight: 700 !important;
+  color: #166534 !important;
+}
+
+:global(.dark) .scope :global(.auth-success-card > div:nth-child(2)) {
+  color: #dcfce7 !important;
 }
 
 .scope :global(.auth-success-card > div:nth-child(3)) {
   margin-top: 4px !important;
   font-size: 11px !important;
+  color: #64748b !important;
+}
+
+:global(.dark) .scope :global(.auth-success-card > div:nth-child(3)) {
+  color: #b9c7bd !important;
 }
 
 @keyframes loginSuccessOverlayIn {
