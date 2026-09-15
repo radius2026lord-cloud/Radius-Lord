@@ -1,20 +1,23 @@
 "use client";
 
 import { LogIn, LogOut } from "lucide-react";
+import { createPortal } from "react-dom";
 
 type TransitionOverlayProps = {
   variant: "login" | "logout";
 };
 
 export default function TransitionOverlay({ variant }: TransitionOverlayProps) {
+  if (typeof document === "undefined") return null;
+
   const login = variant === "login";
   const Icon = login ? LogIn : LogOut;
   const title = login ? "تم تسجيل الدخول بنجاح" : "تسجيل الخروج";
   const subtitle = login ? "جارٍ فتح لوحة التحكم بأمان..." : "جارٍ إنهاء الجلسة بأمان...";
 
-  return (
-    <div className="transition-overlay fixed inset-0 z-[120] flex items-center justify-center bg-[#dce5ef]/30 backdrop-blur-[3px] dark:bg-[#1d1721]/35" aria-live="polite" aria-label={title}>
-      <div className="transition-card flex min-w-[210px] flex-col items-center rounded-[24px] border border-white/70 bg-white/88 px-8 py-7 shadow-[0_24px_70px_rgba(31,54,83,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/88 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
+  return createPortal(
+    <div className="transition-overlay fixed inset-0 z-[9999] flex h-[100dvh] w-[100vw] items-center justify-center bg-[#dce5ef]/30 backdrop-blur-[3px] dark:bg-[#1d1721]/35" aria-live="polite" aria-label={title}>
+      <div className="transition-card relative z-10 flex min-w-[210px] flex-col items-center rounded-[24px] border border-white/70 bg-white/88 px-8 py-7 shadow-[0_24px_70px_rgba(31,54,83,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/88 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
         <div className={`relative grid h-16 w-16 place-items-center rounded-full ${login ? "bg-emerald-500/10 text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400" : "bg-red-500/10 text-red-500 dark:bg-red-400/10 dark:text-red-400"}`}>
           <span className={`transition-ring absolute inset-0 rounded-full border-2 ${login ? "border-emerald-500/20 border-t-emerald-500 dark:border-emerald-400/20 dark:border-t-emerald-400" : "border-red-500/20 border-t-red-500 dark:border-red-400/20 dark:border-t-red-400"}`} />
           <Icon className="transition-arrow h-7 w-7" />
@@ -43,6 +46,7 @@ export default function TransitionOverlay({ variant }: TransitionOverlayProps) {
           .transition-overlay, .transition-card, .transition-ring, .transition-arrow { animation: none !important; }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
