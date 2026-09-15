@@ -27,6 +27,8 @@
 .auth-signup-content {
   width: 100% !important;
   max-width: 100% !important;
+  transform-origin: center center !important;
+  transition: transform 260ms cubic-bezier(.22,.8,.25,1) !important;
 }
 
 .auth-signup-content form,
@@ -53,38 +55,57 @@
   letter-spacing: 0 !important;
 }
 
-/* Progressive signup fit: shrink only as much as the number of visible field warnings requires. */
+/* Signup validation fit: both inline field warnings and the form validation banner consume space.
+   Start with the smallest reduction needed, then progressively tighten only when warnings accumulate. */
 .auth-signup-content:has(.auth-field-warning) {
   transform: scale(.97) !important;
-  transform-origin: center center !important;
-  transition: transform 260ms cubic-bezier(.22,.8,.25,1) !important;
+}
+
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) {
+  transform: scale(.94) !important;
+}
+
+.auth-signup-content:has(.auth-field-warning):has(form [class*="border-[#e5a42e]"]) {
+  transform: scale(.91) !important;
 }
 
 .auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
   transform: scale(.94) !important;
 }
 
+.auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
+  transform: scale(.89) !important;
+}
+
 .auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
   transform: scale(.91) !important;
+}
+
+.auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)):has(form [class*="border-[#e5a42e]"]) {
+  transform: scale(.87) !important;
 }
 
 .auth-signup-content:has(form > div > :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning) ~ :has(.auth-field-warning)) {
   transform: scale(.89) !important;
 }
 
-.auth-signup-content:has(.auth-field-warning) > .mb-5 {
-  margin-bottom: 10px !important;
+.auth-signup-content:has(.auth-field-warning) > .mb-5,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) > .mb-5 {
+  margin-bottom: 9px !important;
 }
 
-.auth-signup-content:has(.auth-field-warning) form {
-  margin-top: 10px !important;
+.auth-signup-content:has(.auth-field-warning) form,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form {
+  margin-top: 8px !important;
 }
 
-.auth-signup-content:has(.auth-field-warning) form > div {
-  row-gap: 4px !important;
+.auth-signup-content:has(.auth-field-warning) form > div,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form > div {
+  row-gap: 3px !important;
 }
 
-.auth-signup-content:has(.auth-field-warning) label > span:first-child {
+.auth-signup-content:has(.auth-field-warning) label > span:first-child,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) label > span:first-child {
   margin-bottom: 2px !important;
   line-height: 11px !important;
 }
@@ -92,12 +113,18 @@
 .auth-signup-content:has(.auth-field-warning) label > .group > input,
 .auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"],
 .auth-signup-content:has(.auth-field-warning) form button[type="submit"],
-.auth-signup-content:has(.auth-field-warning) form button[type="button"]:not(label button) {
+.auth-signup-content:has(.auth-field-warning) form button[type="button"]:not(label button),
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) label > .group > input,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) label > .group > div[dir="ltr"],
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form button[type="submit"],
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) form button[type="button"]:not(label button) {
   height: 40px !important;
 }
 
 .auth-signup-content:has(.auth-field-warning) label > .group > span.absolute:not(.pointer-events-none),
-.auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"] span.absolute {
+.auth-signup-content:has(.auth-field-warning) label > .group > div[dir="ltr"] span.absolute,
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) label > .group > span.absolute:not(.pointer-events-none),
+.auth-signup-content:has(form [class*="border-[#e5a42e]"]) label > .group > div[dir="ltr"] span.absolute {
   width: 30px !important;
   height: 30px !important;
 }
@@ -106,6 +133,13 @@
   margin-top: 1px !important;
   font-size: 8px !important;
   line-height: 10px !important;
+}
+
+/* The validation banner itself becomes compact while preserving readability. */
+.auth-signup-content form [class*="border-[#e5a42e]"] {
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+  line-height: 13px !important;
 }
 
 .auth-shell:not(:has(.auth-signup-content)) > section:last-child {
@@ -121,7 +155,6 @@
   transform: none !important;
 }
 
-/* Progressive login fit: one warning gets a tiny reduction; two warnings get only the extra reduction they need. */
 .auth-login-content:has(.auth-field-warning),
 .auth-login-content:has(form [class*="border-[#e5a42e]"]) {
   transform: scale(.96) !important;
