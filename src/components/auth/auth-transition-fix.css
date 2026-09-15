@@ -98,12 +98,33 @@
   transform: none !important;
 }
 
+/* When a login status message appears, compact the whole content just enough so every action stays inside the fixed card. */
+.auth-login-content:has(form [class*="border-[#e5a42e]"]) {
+  transform: scale(.94) !important;
+  transform-origin: center center !important;
+}
+
+.auth-login-content:has(form [class*="border-[#e5a42e]"]) > .mb-7 {
+  margin-bottom: 12px !important;
+}
+
+.auth-login-content:has(form [class*="border-[#e5a42e]"]) form {
+  margin-top: 8px !important;
+}
+
+.auth-login-content:has(form [class*="border-[#e5a42e]"]) form > div {
+  row-gap: 5px !important;
+}
+
 /* Cancel the old low-height-only login shrinking so login never becomes visually smaller than signup. */
 @media (max-height: 800px), (max-height: 730px) {
   .auth-login-content {
-    transform: none !important;
     width: 100% !important;
     max-width: 100% !important;
+  }
+
+  .auth-login-content:not(:has(form [class*="border-[#e5a42e]"])) {
+    transform: none !important;
   }
 }
 
