@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "LORD Frontend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "E:\\LordRad\\Project\\lord-radius"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "lord-services",
+        "clear": false,
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "LORD Backend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "E:\\LordRad\\Project\\lord-radius\\src\\app\\backend"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "lord-services",
+        "clear": false,
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    }
+  ]
+}
