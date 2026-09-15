@@ -47,3 +47,30 @@
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
+
+/* Match the successful-login reveal exactly to the dashboard logout reveal. */
+.loginScope :global(.auth-success-overlay) {
+  animation: loginSuccessOverlayIn .18s ease-out both !important;
+}
+
+.loginScope :global(.auth-success-card) {
+  animation: loginSuccessCardIn .30s cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+@keyframes loginSuccessOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loginSuccessCardIn {
+  0% { opacity: 0; transform: translateY(8px) scale(.94); }
+  70% { opacity: 1; transform: translateY(-1px) scale(1.015); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loginScope :global(.auth-success-overlay),
+  .loginScope :global(.auth-success-card) {
+    animation: none !important;
+  }
+}
