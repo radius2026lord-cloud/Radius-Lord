@@ -94,7 +94,12 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
   const startLocalSubmitAnimation = (event: MouseEvent<HTMLButtonElement>) => {
     if (controlled || localStatus !== "idle") return;
     const signupRoot = event.currentTarget.closest(".auth-signup-content");
-    if (signupRoot) return;
+    if (signupRoot) {
+      event.preventDefault();
+      const form = event.currentTarget.form;
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      return;
+    }
     setLocalStatus("loading");
     window.setTimeout(() => setLocalStatus("success"), 420);
     window.setTimeout(() => setLocalStatus("idle"), 1050);
