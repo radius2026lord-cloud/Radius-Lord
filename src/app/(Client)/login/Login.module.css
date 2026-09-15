@@ -1,0 +1,76 @@
+.loginScope :global(.auth-login-content) {
+  animation: none !important;
+}
+
+.loginScope :global(.auth-shell:not(:has(.auth-signup-content))) {
+  transition-duration: 500ms !important;
+  transition-timing-function: cubic-bezier(.22,.8,.25,1) !important;
+}
+
+/* Login only: match signup control heights exactly. */
+.loginScope :global(.auth-login-content label > .group > input) {
+  height: 44px !important;
+}
+
+.loginScope :global(.auth-login-content label > .group > span.absolute:not(.pointer-events-none)) {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > div.pt-3 > button[type="submit"]),
+.loginScope :global(.auth-login-content form > div > button[type="button"]) {
+  height: 44px !important;
+}
+
+/* Keep clear spacing between all main login form elements. */
+.loginScope :global(.auth-login-content form > div > * + *) {
+  margin-top: 10px !important;
+}
+
+/* Give the main login action a little more breathing room above. */
+.loginScope :global(.auth-login-content form > div > div.pt-3) {
+  padding-top: 0 !important;
+  margin-top: 24px !important;
+  margin-bottom: 14px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > div.pt-3 + div) {
+  margin-top: 0 !important;
+}
+
+/* Separate the Google button from the account action below it. */
+.loginScope :global(.auth-login-content form > div > button[type="button"]) {
+  margin-bottom: 12px !important;
+}
+
+.loginScope :global(.auth-login-content form > div > button[type="button"] + .pt-1) {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Match the successful-login reveal exactly to the dashboard logout reveal. */
+.loginScope :global(.auth-success-overlay) {
+  animation: loginSuccessOverlayIn .18s ease-out both !important;
+}
+
+.loginScope :global(.auth-success-card) {
+  animation: loginSuccessCardIn .30s cubic-bezier(.22,.8,.25,1) both !important;
+}
+
+@keyframes loginSuccessOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loginSuccessCardIn {
+  0% { opacity: 0; transform: translateY(8px) scale(.94); }
+  70% { opacity: 1; transform: translateY(-1px) scale(1.015); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loginScope :global(.auth-success-overlay),
+  .loginScope :global(.auth-success-card) {
+    animation: none !important;
+  }
+}

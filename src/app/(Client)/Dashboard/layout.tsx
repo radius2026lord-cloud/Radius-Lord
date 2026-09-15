@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Changa } from "next/font/google";
 import "./globals.css";
+import "./dashboard-entry.css";
 
 import { ThemeProvider } from "next-themes";
 import DashboardShell from "@/components/ui/dashboard-shell";
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body className={changa.className}>
+      <body className={`${changa.className} dashboard-enter`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <DashboardShell>{children}</DashboardShell>
         </ThemeProvider>
