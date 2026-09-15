@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
+import TransitionOverlay from "@/components/ui/transition-overlay";
 
 type IconType = ComponentType<{ className?: string }>;
 export type PrimaryButtonStatus = "idle" | "loading" | "success" | "error";
@@ -116,27 +117,7 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
       <span className={`auth-primary-content flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "[&>span:last-child]:scale-50 [&>span:last-child]:opacity-0 [&>svg:last-child]:scale-50 [&>svg:last-child]:opacity-0" : ""}`}>{children}</span>
       {showStatusIndicator && <span className="pointer-events-none absolute left-[calc(50%-72px)] top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center">{effectiveStatus === "loading" && <span className="auth-primary-spinner h-[17px] w-[17px] rounded-full border-2 border-white/35 border-t-white" />}{effectiveStatus === "success" && <span className="auth-primary-success-arrow text-[18px] font-black leading-none">←</span>}</span>}
     </button>
-    {controlled && effectiveStatus === "success" && (
-      <div className="auth-success-overlay fixed inset-0 z-[9999] flex h-[100dvh] w-[100vw] items-center justify-center" aria-live="polite" aria-label="تم تسجيل الدخول بنجاح">
-        <div className="auth-success-screen-blur absolute inset-0 z-0 h-full w-full bg-[#dce5ef]/30 backdrop-blur-[14px] dark:bg-[#1d1721]/35" aria-hidden="true" />
-        <div className="auth-success-card relative z-10 flex min-w-[210px] flex-col items-center rounded-[24px] border border-white/70 bg-white/88 px-8 py-7 shadow-[0_24px_70px_rgba(31,54,83,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/88 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
-          <div className="auth-success-icon relative grid h-16 w-16 place-items-center rounded-full bg-[#1479ff]/10 text-[#0758e9] dark:bg-[#6aa8ff]/10 dark:text-[#8ab5ff]"><span className="auth-success-ring absolute inset-0 rounded-full border-2 border-[#1479ff]/20 border-t-[#1479ff] dark:border-[#6aa8ff]/20 dark:border-t-[#6aa8ff]" /><span className="auth-success-card-arrow text-[28px] font-black leading-none">←</span></div>
-          <div className="mt-4 text-sm font-bold text-[#102a63] dark:text-[#f4f1f5]">تم تسجيل الدخول بنجاح</div>
-          <div className="mt-1 text-[11px] text-slate-500 dark:text-[#b9b3bd]">جارٍ فتح لوحة التحكم بأمان...</div>
-        </div>
-      </div>
-    )}
-    <style jsx global>{`
-      @keyframes authSuccessOverlayIn { from { opacity: 0; } to { opacity: 1; } }
-      @keyframes authSuccessCardIn { 0% { opacity: 0; transform: translateY(8px) scale(.94); } 70% { opacity: 1; transform: translateY(-1px) scale(1.015); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
-      @keyframes authSuccessRingSpin { to { transform: rotate(360deg); } }
-      @keyframes authSuccessArrow { 0%, 100% { transform: translateX(2px); opacity: .72; } 50% { transform: translateX(-4px); opacity: 1; } }
-      .auth-success-overlay { animation: authSuccessOverlayIn .18s ease-out both; }
-      .auth-success-card { animation: authSuccessCardIn .30s cubic-bezier(.22,.8,.25,1) both; }
-      .auth-success-ring { animation: authSuccessRingSpin .72s linear infinite; }
-      .auth-success-card-arrow { animation: authSuccessArrow .72s ease-in-out infinite; }
-      @media (prefers-reduced-motion: reduce) { .auth-success-overlay, .auth-success-card, .auth-success-ring, .auth-success-card-arrow { animation: none !important; } }
-    `}</style>
+    {controlled && effectiveStatus === "success" && <TransitionOverlay variant="login" />}
   </>;
 }
 
