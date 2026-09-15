@@ -224,7 +224,7 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
         {effectiveStatus === "success" && <span className="auth-primary-success-arrow text-[18px] font-black leading-none">←</span>}
       </span>}
     </button>
-    {controlled && effectiveStatus === "success" && <div className="auth-success-overlay fixed inset-0 z-[140] flex items-center justify-center bg-[#0f172a]/55 backdrop-blur-[5px] dark:bg-black/60" aria-live="polite" aria-label="تم تسجيل الدخول بنجاح">
+    {controlled && effectiveStatus === "success" && <div className="auth-success-overlay fixed inset-0 z-[140] flex items-center justify-center bg-[#0f172a]/55 backdrop-blur-[12px] backdrop-saturate-50 dark:bg-black/60" aria-live="polite" aria-label="تم تسجيل الدخول بنجاح">
       <div className="auth-success-card flex min-w-[220px] flex-col items-center rounded-[24px] border border-white/75 bg-white/90 px-8 py-7 shadow-[0_24px_72px_rgba(31,74,132,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/90 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
         <div className="relative grid h-16 w-16 place-items-center rounded-full bg-[#1479ff]/10 text-[#0758e9] dark:bg-[#6aa8ff]/10 dark:text-[#8ab5ff]"><span className="auth-success-ring absolute inset-0 rounded-full border-2 border-[#1479ff]/30 dark:border-[#6aa8ff]/30" /><span className="auth-success-card-arrow text-[28px] font-black leading-none">←</span></div>
         <div className="mt-4 text-sm font-black text-[#102a63] dark:text-[#f4f1f5]">تم تسجيل الدخول بنجاح</div>
