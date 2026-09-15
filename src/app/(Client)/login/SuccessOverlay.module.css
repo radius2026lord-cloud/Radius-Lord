@@ -2,27 +2,29 @@
   display: contents;
 }
 
-/* The overlay only positions the two independent layers. Never blur the card itself. */
+/* Full viewport layer. The login page remains visible underneath it. */
 .scope :global(.auth-success-overlay) {
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
   height: 100dvh !important;
-  z-index: 9999 !important;
+  z-index: 2147483647 !important;
+  overflow: visible !important;
   background: transparent !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  filter: none !important;
   isolation: isolate !important;
   animation: loginSuccessOverlayIn .18s ease-out both !important;
 }
 
-/* Full-page blur layer: this is behind the success card. */
+/* Only this layer blurs the login page underneath. */
 .scope :global(.auth-success-screen-blur) {
-  position: absolute !important;
+  position: fixed !important;
   inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  z-index: 1 !important;
   background: rgba(220, 229, 239, .30) !important;
   -webkit-backdrop-filter: blur(14px) !important;
   backdrop-filter: blur(14px) !important;
@@ -33,25 +35,30 @@
   background: rgba(29, 23, 33, .35) !important;
 }
 
-/* Card is a separate foreground layer and stays sharp. */
+/* Success card is always a sharp foreground layer above the blurred login page. */
 .scope :global(.auth-success-card) {
-  position: relative !important;
-  z-index: 10 !important;
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  z-index: 2 !important;
+  transform: translate(-50%, -50%) !important;
   min-width: 210px !important;
   border-radius: 24px !important;
-  border-color: rgba(255, 255, 255, .70) !important;
-  background: rgba(255, 255, 255, .88) !important;
+  border: 1px solid rgba(255, 255, 255, .70) !important;
+  background: rgba(255, 255, 255, .94) !important;
   padding: 28px 32px !important;
   box-shadow: 0 24px 70px rgba(31, 54, 83, .20) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   filter: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
   animation: loginSuccessCardIn .30s cubic-bezier(.22,.8,.25,1) both !important;
 }
 
 :global(.dark) .scope :global(.auth-success-card) {
   border-color: rgba(255, 255, 255, .10) !important;
-  background: rgba(48, 46, 51, .94) !important;
+  background: rgba(48, 46, 51, .96) !important;
   box-shadow: 0 26px 80px rgba(0, 0, 0, .34) !important;
 }
 
@@ -99,9 +106,9 @@
 }
 
 @keyframes loginSuccessCardIn {
-  0% { opacity: 0; transform: translateY(8px) scale(.94); }
-  70% { opacity: 1; transform: translateY(-1px) scale(1.015); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.94); }
+  70% { opacity: 1; transform: translate(-50%, calc(-50% - 1px)) scale(1.015); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 @keyframes loginSuccessRingSpin {
