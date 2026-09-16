@@ -2,7 +2,7 @@
 .signup-stepper {
   position: fixed;
   left: 50%;
-  top: calc(50% + min(305px, calc((100dvh - 24px) / 2)) + 14px);
+  top: calc(50% + min(305px, calc((100dvh - 24px) / 2)) + 6px);
   z-index: 60;
   display: flex;
   width: 220px;
@@ -99,7 +99,7 @@ section:has(> .auth-signup-content)::after,
 }
 
 @media (max-height: 660px) {
-  .signup-stepper { top: auto; bottom: 4px; }
+  .signup-stepper { top: auto; bottom: 12px; }
 }
 @media (max-width: 639px) {
   .signup-stepper { width: 180px; }
