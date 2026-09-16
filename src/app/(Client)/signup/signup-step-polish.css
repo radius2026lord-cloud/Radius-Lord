@@ -54,10 +54,15 @@ section:has(> .auth-signup-content)::after,
   min-height: 0 !important;
   max-height: min(610px, calc(100dvh - 24px)) !important;
 }
+
+/* Center the complete step-2 block vertically as one unit.
+   Equal top/bottom free space is preserved whether validation is visible or not. */
 .auth-signup-content:has(input[name="network-name"]) {
+  height: 100% !important;
   min-height: 0 !important;
-  height: auto !important;
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
   padding-block: 0 !important;
 }
 .auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top: 0 !important; }
