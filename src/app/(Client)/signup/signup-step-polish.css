@@ -85,9 +85,21 @@ section:has(> .auth-signup-content)::after,
 .auth-signup-content::after,
 .auth-signup-content form::after { content: none !important; display: none !important; }
 
-.auth-signup-content:has(input[name="network-name"]) { min-height: 420px; display: flex; flex-direction: column; justify-content: center; }
-.auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top: 0 !important; }
-.auth-signup-content:has(input[name="network-name"]) form { margin-top: 22px !important; }
+/* Step 2: the complete network-data block stays vertically centered in the fixed auth card.
+   If validation appears, the group grows around the same center instead of changing card height. */
+.auth-signup-content:has(input[name="network-name"]) {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: 28px;
+  box-sizing: border-box;
+}
+.auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top: 0 !important; flex: 0 0 auto; }
+.auth-signup-content:has(input[name="network-name"]) form { margin-top: 22px !important; flex: 0 0 auto; }
+
+/* Network topology icon: visually identifies step 2 as network configuration. */
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon svg { display: none; }
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon::before {
   content: "";
@@ -100,11 +112,12 @@ section:has(> .auth-signup-content)::after,
 
 @media (max-height: 660px) {
   .signup-stepper { top: auto; bottom: 12px; }
+  .auth-signup-content:has(input[name="network-name"]) { padding-block: 18px; }
 }
 @media (max-width: 639px) {
   .signup-stepper { width: 180px; }
   .signup-stepper__step { width: 26px; height: 26px; flex-basis: 26px; }
-  .auth-signup-content:has(input[name="network-name"]) { min-height: 390px; }
+  .auth-signup-content:has(input[name="network-name"]) { padding-block: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .signup-stepper__step,
