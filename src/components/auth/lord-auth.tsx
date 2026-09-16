@@ -125,7 +125,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [terms, setTerms] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [signupStepPhase, setSignupStepPhase] = useState<SignupStepPhase>("idle");
   const [signupStepTransitioning, setSignupStepTransitioning] = useState(false);
@@ -236,7 +235,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       if (signupStep === 1) {
         if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
         if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
-        if (!terms) return setMessage("يرجى الموافقة على الشروط والأحكام وسياسة الخصوصية.");
         goToSignupStep(2);
         return;
       }
@@ -347,15 +345,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                       <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
                       <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                       <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                      <label className="flex items-start gap-2 text-[10px] leading-5 text-slate-600 dark:text-[#b9b3bd] sm:col-span-2">
-                        <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1 h-3.5 w-3.5 accent-[#1479ff]" />
-                        <span>أوافق على <button type="button" className="font-semibold text-[#0758e9] dark:text-[#8ab5ff]">الشروط والأحكام وسياسة الخصوصية</button></span>
-                      </label>
                       {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
-                      <div className="sm:col-span-2"><PrimaryFormButton>متابعة <span>←</span></PrimaryFormButton></div>
-                      <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795] sm:col-span-2"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
-                      <div className="sm:col-span-2"><SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> إنشاء حساب باستخدام Google</SecondaryFormButton></div>
-                      <div className="text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
+                      <div className="pt-1 sm:col-span-2"><PrimaryFormButton>متابعة <span>←</span></PrimaryFormButton></div>
+                      <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
                         لديك حساب بالفعل؟
                         <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
                       </div>
