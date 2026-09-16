@@ -30,49 +30,12 @@
   transition: background-color 320ms ease, border-color 320ms ease, color 320ms ease, box-shadow 320ms ease, transform 320ms cubic-bezier(.22,.8,.25,1);
 }
 
-.signup-stepper__track {
-  position: relative;
-  height: 2px;
-  flex: 1;
-  overflow: hidden;
-  background: rgba(20, 121, 255, .18);
-}
-
-.signup-stepper__progress {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #0758e9, #1479ff);
-  transform: scaleX(0);
-  transform-origin: right center;
-  transition: transform 320ms cubic-bezier(.22,.8,.25,1);
-  box-shadow: 0 0 8px rgba(20, 121, 255, .18);
-}
-
-.signup-stepper__step--one {
-  border-color: #1479ff;
-  background: linear-gradient(135deg, #1479ff, #0758e9);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(20, 121, 255, .20);
-  transform: scale(1.04);
-}
-
+.signup-stepper__track { position: relative; height: 2px; flex: 1; overflow: hidden; background: rgba(20, 121, 255, .18); }
+.signup-stepper__progress { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg, #0758e9, #1479ff); transform: scaleX(0); transform-origin: right center; transition: transform 320ms cubic-bezier(.22,.8,.25,1); box-shadow: 0 0 8px rgba(20, 121, 255, .18); }
+.signup-stepper__step--one { border-color: #1479ff; background: linear-gradient(135deg, #1479ff, #0758e9); color: #fff; box-shadow: 0 4px 12px rgba(20, 121, 255, .20); transform: scale(1.04); }
 .signup-page:has(input[name="network-name"]) .signup-stepper__progress { transform: scaleX(1); }
-.signup-page:has(input[name="network-name"]) .signup-stepper__step--one {
-  border-color: #9fc4f5;
-  background: #eaf3ff;
-  color: #0758e9;
-  box-shadow: 0 2px 7px rgba(20, 121, 255, .08);
-  transform: scale(.96);
-}
-.signup-page:has(input[name="network-name"]) .signup-stepper__step--two {
-  border-color: #1479ff;
-  background: linear-gradient(135deg, #1479ff, #0758e9);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(20, 121, 255, .20);
-  transform: scale(1.04);
-}
-
+.signup-page:has(input[name="network-name"]) .signup-stepper__step--one { border-color: #9fc4f5; background: #eaf3ff; color: #0758e9; box-shadow: 0 2px 7px rgba(20, 121, 255, .08); transform: scale(.96); }
+.signup-page:has(input[name="network-name"]) .signup-stepper__step--two { border-color: #1479ff; background: linear-gradient(135deg, #1479ff, #0758e9); color: #fff; box-shadow: 0 4px 12px rgba(20, 121, 255, .20); transform: scale(1.04); }
 .dark .signup-stepper__step { border-color: rgba(106, 168, 255, .30); background: #302e33; color: #8fa9c8; }
 .dark .signup-stepper__track { background: rgba(106, 168, 255, .18); }
 .dark .signup-stepper__progress { background: linear-gradient(90deg, #6aa8ff, #1479ff); }
@@ -85,17 +48,16 @@ section:has(> .auth-signup-content)::after,
 .auth-signup-content::after,
 .auth-signup-content form::after { content: none !important; display: none !important; }
 
-/* Step 2 stays inside the exact same fixed auth card dimensions as step 1. */
+/* Step 2 uses its natural content height. The parent auth section already centers it,
+   so the card remains exactly the same 610px shell used by step 1. */
 .auth-signup-content:has(input[name="network-name"]) {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding-block: 28px;
-  box-sizing: border-box;
+  min-height: 0 !important;
+  height: auto !important;
+  display: block !important;
+  padding-block: 0 !important;
 }
-.auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top: 0 !important; flex: 0 0 auto; }
-.auth-signup-content:has(input[name="network-name"]) form { margin-top: 22px !important; flex: 0 0 auto; }
+.auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top: 0 !important; }
+.auth-signup-content:has(input[name="network-name"]) form { margin-top: 22px !important; }
 
 /* Network topology icon for the step header. */
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon svg { display: none; }
@@ -108,11 +70,9 @@ section:has(> .auth-signup-content)::after,
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='5' rx='1'/%3E%3Crect x='3' y='17' width='6' height='5' rx='1'/%3E%3Crect x='15' y='17' width='6' height='5' rx='1'/%3E%3Cpath d='M12 7v4M6 17v-3h12v3M18 14v3'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
-/* Main network address: use a location/address pin instead of the radio icon. */
-.auth-signup-content input[name="network-address"] ~ span svg,
-.auth-signup-content input[name="network-address"] + span svg { display: none; }
-.auth-signup-content input[name="network-address"] ~ span::before,
-.auth-signup-content input[name="network-address"] + span::before {
+/* Main network address field: target the actual icon span BEFORE the input. */
+.auth-signup-content label:has(input[name="network-address"]) .auth-input-icon svg { display: none !important; }
+.auth-signup-content label:has(input[name="network-address"]) .auth-input-icon::before {
   content: "";
   display: block;
   width: 19px;
@@ -122,16 +82,6 @@ section:has(> .auth-signup-content)::after,
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z'/%3E%3Ccircle cx='12' cy='10' r='2.5'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
-@media (max-height: 660px) {
-  .signup-stepper { top: auto; bottom: 12px; }
-  .auth-signup-content:has(input[name="network-name"]) { padding-block: 18px; }
-}
-@media (max-width: 639px) {
-  .signup-stepper { width: 180px; }
-  .signup-stepper__step { width: 26px; height: 26px; flex-basis: 26px; }
-  .auth-signup-content:has(input[name="network-name"]) { padding-block: 20px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .signup-stepper__step,
-  .signup-stepper__progress { transition: none !important; }
-}
+@media (max-height: 660px) { .signup-stepper { top: auto; bottom: 12px; } }
+@media (max-width: 639px) { .signup-stepper { width: 180px; } .signup-stepper__step { width: 26px; height: 26px; flex-basis: 26px; } }
+@media (prefers-reduced-motion: reduce) { .signup-stepper__step, .signup-stepper__progress { transition: none !important; } }
