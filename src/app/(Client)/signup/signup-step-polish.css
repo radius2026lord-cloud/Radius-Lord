@@ -85,10 +85,8 @@ section:has(> .auth-signup-content)::after,
 .auth-signup-content::after,
 .auth-signup-content form::after { content: none !important; display: none !important; }
 
-/* Step 2: the complete network-data block stays vertically centered in the fixed auth card.
-   If validation appears, the group grows around the same center instead of changing card height. */
+/* Step 2 stays inside the exact same fixed auth card dimensions as step 1. */
 .auth-signup-content:has(input[name="network-name"]) {
-  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -99,7 +97,7 @@ section:has(> .auth-signup-content)::after,
 .auth-signup-content:has(input[name="network-name"]) > .text-center { margin-top: 0 !important; flex: 0 0 auto; }
 .auth-signup-content:has(input[name="network-name"]) form { margin-top: 22px !important; flex: 0 0 auto; }
 
-/* Network topology icon: visually identifies step 2 as network configuration. */
+/* Network topology icon for the step header. */
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon svg { display: none; }
 .auth-signup-content:has(input[name="network-name"]) .auth-login-icon::before {
   content: "";
@@ -108,6 +106,20 @@ section:has(> .auth-signup-content)::after,
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='5' rx='1'/%3E%3Crect x='3' y='17' width='6' height='5' rx='1'/%3E%3Crect x='15' y='17' width='6' height='5' rx='1'/%3E%3Cpath d='M12 7v4M6 17v-3h12v3M18 14v3'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='5' rx='1'/%3E%3Crect x='3' y='17' width='6' height='5' rx='1'/%3E%3Crect x='15' y='17' width='6' height='5' rx='1'/%3E%3Cpath d='M12 7v4M6 17v-3h12v3M18 14v3'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+/* Main network address: use a location/address pin instead of the radio icon. */
+.auth-signup-content input[name="network-address"] ~ span svg,
+.auth-signup-content input[name="network-address"] + span svg { display: none; }
+.auth-signup-content input[name="network-address"] ~ span::before,
+.auth-signup-content input[name="network-address"] + span::before {
+  content: "";
+  display: block;
+  width: 19px;
+  height: 19px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z'/%3E%3Ccircle cx='12' cy='10' r='2.5'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z'/%3E%3Ccircle cx='12' cy='10' r='2.5'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 @media (max-height: 660px) {
