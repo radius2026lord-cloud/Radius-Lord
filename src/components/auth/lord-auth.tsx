@@ -279,7 +279,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
           <section dir="rtl" className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${signup ? "py-5" : "auth-login-section py-4 sm:py-5"}`}>
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? `auth-signup-content flex h-full max-w-[470px] flex-col ${signupWarnings.length ? "justify-center" : "justify-between"} ${signupWarnings.length >= 2 ? "auth-signup-compact-2" : signupWarnings.length === 1 ? "auth-signup-compact-1" : ""}` : "auth-login-content max-w-[418px]"}`}>
+            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? `auth-signup-content flex h-full max-w-[470px] flex-col ${signupWarnings.length ? "justify-center" : "justify-between"} ${signupWarnings.length >= 2 ? "auth-signup-compact-2" : signupWarnings.length === 1 ? "auth-signup-compact-1" : ""}` : `auth-login-content flex h-full max-w-[418px] flex-col justify-center ${message ? "auth-login-compact" : ""}`}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
@@ -309,7 +309,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   </div>
                 </div>
                 ) : (
-                  <div className="flex min-h-[300px] flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-4">
                     <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
@@ -362,6 +362,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .auth-login-content,
         .auth-signup-content { animation: none !important; transform-origin: center center; }
         .auth-signup-content { transition: transform 260ms ease, gap 260ms ease; }
+        .auth-login-content { transition: transform 260ms ease; }
+        .auth-login-compact { transform: scale(.96); width: 104.17%; }
         .auth-signup-compact-1 { transform: scale(.96); width: 104.17%; }
         .auth-signup-compact-2 { transform: scale(.92); width: 108.7%; }
 
