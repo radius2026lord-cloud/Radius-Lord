@@ -18,7 +18,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { CompactField, PrimaryFormButton, SecondaryFormButton } from "@/components/ui/auth-form-controls";
+import { CompactField, PrimaryFormButton } from "@/components/ui/auth-form-controls";
 import { CountryPhoneInput } from "@/components/ui/country-phone-input";
 import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/components/auth/auth-content";
 
@@ -307,13 +307,11 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   </div>
                 </div>
                 ) : (
-                  <div className="space-y-4.5">
+                  <div className="flex min-h-[300px] flex-col justify-between gap-4">
                     <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
                     <div className="pt-3"><PrimaryFormButton status={loginStatus} disabled={loginStatus !== "idle" && loginStatus !== "error"}>تسجيل الدخول <span>←</span></PrimaryFormButton></div>
-                    <div className="flex items-center gap-3 text-[9px] text-slate-400 dark:text-[#8f8795]"><span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" />أو<span className="h-px flex-1 bg-slate-200 dark:bg-white/[.08]" /></div>
-                    <SecondaryFormButton><span className="text-sm font-black text-[#4285f4]">G</span> تسجيل الدخول باستخدام Google</SecondaryFormButton>
                     <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd]">ليس لديك حساب؟ <button type="button" onClick={() => switchMode("signup")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">إنشاء حساب جديد</button></div>
                   </div>
                 )}
