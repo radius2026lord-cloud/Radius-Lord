@@ -273,9 +273,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         >
           {signup && <VisualPanel />}
 
-          <section dir="rtl" className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${signup ? "py-6 sm:py-7" : "auth-login-section py-4 sm:py-5"}`}>
+          <section dir="rtl" className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${signup ? "py-5" : "auth-login-section py-4 sm:py-5"}`}>
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? "auth-signup-content flex h-full max-w-[470px] flex-col justify-center" : "auth-login-content max-w-[418px]"}`}>
+            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? "auth-signup-content max-w-[470px]" : "auth-login-content max-w-[418px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
@@ -287,15 +287,15 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
-              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-5" : "mt-7"}>
+              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-7"}>
                 {signup ? (
-                <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
                   <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
                   <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" name="email" autoComplete="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
                   <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
                   <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                   <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                  {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
+                  <div className="min-h-[38px] sm:col-span-2">{message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}</div>
                   <div className="pt-1 sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
                   <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
                     لديك حساب بالفعل؟
