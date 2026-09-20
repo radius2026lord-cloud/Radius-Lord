@@ -25,7 +25,6 @@ import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/componen
 type Mode = "login" | "signup";
 type LoginStatus = "idle" | "loading" | "success" | "error";
 type TransitionPhase = "idle" | "out" | "in";
-type SignupStepPhase = "idle" | "out-left" | "in-right" | "out-right" | "in-left";
 type PasswordCredentialConstructor = new (data: { id: string; password: string; name?: string }) => Credential;
 
 const networkDots = [
@@ -125,11 +124,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [signupStep, setSignupStep] = useState<1 | 2>(1);
-  const [signupStepPhase, setSignupStepPhase] = useState<SignupStepPhase>("idle");
-  const [signupStepTransitioning, setSignupStepTransitioning] = useState(false);
-  const [networkName, setNetworkName] = useState("");
-  const [networkAddress, setNetworkAddress] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => setMounted(true), []);
@@ -156,40 +150,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     }
   };
 
-  const goToSignupStep = (nextStep: 1 | 2) => {
-    if (signupStepTransitioning || nextStep === signupStep) return;
-
-    const forward = nextStep > signupStep;
-    setSignupStepTransitioning(true);
-    setMessage("");
-    setSignupStepPhase(forward ? "out-left" : "out-right");
-
-    window.setTimeout(() => {
-      setSignupStep(nextStep);
-      setSignupStepPhase(forward ? "in-right" : "in-left");
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setSignupStepPhase("idle"));
-      });
-    }, 260);
-
-    window.setTimeout(() => {
-      setSignupStepPhase("idle");
-      setSignupStepTransitioning(false);
-    }, 580);
-  };
-
-  const signupStepClass = signup
-    ? signupStepPhase === "out-left"
-      ? "auth-signup-step auth-signup-step-out-left"
-      : signupStepPhase === "in-right"
-        ? "auth-signup-step auth-signup-step-in-right"
-        : signupStepPhase === "out-right"
-          ? "auth-signup-step auth-signup-step-out-right"
-          : signupStepPhase === "in-left"
-            ? "auth-signup-step auth-signup-step-in-left"
-            : "auth-signup-step"
-    : "";
-
   const switchMode = (nextMode: Mode) => {
     if (transitioning || nextMode === activeMode) return;
 
@@ -197,9 +157,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     setTransitionPhase("out");
     setMessage("");
     setLoginStatus("idle");
-    setSignupStep(1);
-    setSignupStepPhase("idle");
-    setSignupStepTransitioning(false);
 
     if (nextMode === "signup") {
       setLayoutMode("signup");
@@ -232,14 +189,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     setMessage("");
 
     if (signup) {
-      if (signupStep === 1) {
-        if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
-        if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
-        goToSignupStep(2);
-        return;
-      }
-
-      if (!networkName || !networkAddress) return setMessage("يرجى إدخال اسم الشبكة والعنوان الرئيسي للشبكة.");
+      if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
+      if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
       return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
     }
 
@@ -328,39 +279,29 @@ export default function LordAuth({ mode }: { mode: Mode }) {
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
-              <div className={`text-center ${signupStepClass}`}>
+              <div className="text-center">
                 <div className="auth-login-icon mx-auto grid h-[52px] w-[52px] place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
-                  {signup ? (signupStep === 1 ? <UserRound className="h-[22px] w-[22px]" /> : <Server className="h-[22px] w-[22px]" />) : <LockKeyhole className="h-[22px] w-[22px]" />}
+                  {signup ? <UserRound className="h-[22px] w-[22px]" /> : <LockKeyhole className="h-[22px] w-[22px]" />}
                 </div>
-                <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? (signupStep === 1 ? "إنشاء حساب جديد" : "بيانات الشبكة") : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? (signupStep === 1 ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "أدخل اسم الشبكة والعنوان الرئيسي للشبكة لإكمال إنشاء الحساب") : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
+                <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
+                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
-              <form onSubmit={submit} autoComplete="on" className={`${signup ? "mt-6" : "mt-7"} ${signupStepClass}`}>
+              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-7"}>
                 {signup ? (
-                  signupStep === 1 ? (
-                    <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
-                      <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
-                      <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" name="email" autoComplete="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
-                      <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
-                      <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
-                      <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                      {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
-                      <div className="pt-1 sm:col-span-2"><PrimaryFormButton>متابعة <span>←</span></PrimaryFormButton></div>
-                      <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
-                        لديك حساب بالفعل؟
-                        <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
-                      </div>
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
+                    <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
+                    <CompactField label="البريد الإلكتروني *" icon={Mail} type="email" name="email" autoComplete="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" />
+                    <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
+                    <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
+                    <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
+                    {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c] sm:col-span-2">{message}</div>}
+                    <div className="pt-1 sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
+                    <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
+                      لديك حساب بالفعل؟
+                      <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <CompactField label="اسم الشبكة *" icon={Server} name="network-name" value={networkName} onChange={setNetworkName} placeholder="أدخل اسم الشبكة" />
-                      <CompactField label="العنوان الرئيسي للشبكة *" icon={Radio} name="network-address" value={networkAddress} onChange={setNetworkAddress} placeholder="أدخل العنوان الرئيسي للشبكة" />
-                      {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
-                      <div className="pt-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
-                      <button type="button" onClick={() => goToSignupStep(1)} className="mx-auto block text-[10px] font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">العودة إلى بيانات الحساب</button>
-                    </div>
-                  )
+                  </div>
                 ) : (
                   <div className="space-y-4.5">
                     <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
@@ -427,17 +368,6 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         .auth-mode-content.auth-mode-out { opacity: 0; transform: translate3d(0,2px,0); }
         .auth-mode-content.auth-mode-in { opacity: 1; transform: translate3d(0,0,0); }
 
-        .auth-signup-step {
-          opacity: 1;
-          transform: translate3d(0,0,0);
-          transition: opacity 260ms ease, transform 320ms cubic-bezier(.22,.8,.25,1);
-          will-change: opacity, transform;
-          backface-visibility: hidden;
-        }
-        .auth-signup-step-out-left { opacity: 0; transform: translate3d(-44px,0,0); }
-        .auth-signup-step-in-right { opacity: 0; transform: translate3d(44px,0,0); transition: none; }
-        .auth-signup-step-out-right { opacity: 0; transform: translate3d(44px,0,0); }
-        .auth-signup-step-in-left { opacity: 0; transform: translate3d(-44px,0,0); transition: none; }
 
         .auth-shell.auth-is-transitioning {
           contain: layout paint;
@@ -456,7 +386,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         }
         @media (prefers-reduced-motion: reduce) {
           .auth-bg-grid, .auth-bg-scan, .auth-network-dot, .auth-network-lines, .auth-orbit, .auth-glow, .auth-brand-icon, .auth-login-icon, .auth-card-glow, .auth-feature-card, .auth-panel-glow { animation: none !important; }
-          .auth-mode-content, .auth-shell, .auth-signup-step { transition-duration: .01ms !important; }
+          .auth-mode-content, .auth-shell { transition-duration: .01ms !important; }
         }
       `}</style>
     </main>
