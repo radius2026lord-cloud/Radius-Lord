@@ -125,6 +125,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [message, setMessage] = useState("");
+  const [signupWarnings, setSignupWarnings] = useState<string[]>([]);
 
   useEffect(() => setMounted(true), []);
 
@@ -189,8 +190,11 @@ export default function LordAuth({ mode }: { mode: Mode }) {
     setMessage("");
 
     if (signup) {
-      if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
-      if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
+      const warnings: string[] = [];
+      if (!fullName || !email || !phone || !password || !confirm) warnings.push("يرجى تعبئة جميع الحقول المطلوبة.");
+      if (password && confirm && password !== confirm) warnings.push("كلمتا المرور غير متطابقتين.");
+      setSignupWarnings(warnings);
+      if (warnings.length) return;
       return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
     }
 
@@ -275,7 +279,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
           <section dir="rtl" className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f9fbfe] px-5 transition-colors duration-500 dark:bg-[#302e33]/90 sm:px-8 ${signup ? "py-5" : "auth-login-section py-4 sm:py-5"}`}>
             <div className="auth-card-glow pointer-events-none absolute left-1/2 top-0 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[#1479ff]/7 blur-[70px] dark:bg-[#1479ff]/5" />
-            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? "auth-signup-content flex h-full max-w-[470px] flex-col justify-center" : "auth-login-content max-w-[418px]"}`}>
+            <div className={`auth-mode-content ${transitionPhase === "out" ? "auth-mode-out" : transitionPhase === "in" ? "auth-mode-in" : ""} relative z-10 w-full ${signup ? `auth-signup-content flex h-full max-w-[470px] flex-col ${signupWarnings.length ? "justify-center" : "justify-between"} ${signupWarnings.length >= 2 ? "auth-signup-compact-2" : signupWarnings.length === 1 ? "auth-signup-compact-1" : ""}` : "auth-login-content max-w-[418px]"}`}>
               {!signup && <div className="mb-7"><Brand /></div>}
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
@@ -295,8 +299,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country} onCountryChange={setCountry} phone={phone} onPhoneChange={setPhone} />
                   <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                   <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
-                  <div className="relative h-0 sm:col-span-2">{message && <div className="absolute inset-x-0 top-0 z-10 rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] shadow-sm dark:border-[#ffad16]/25 dark:bg-[#3b3328] dark:text-[#ffc45c]">{message}</div>}</div>
-                  <div className="mt-[34px] pt-1 sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
+                  <div className="space-y-2 sm:col-span-2">{signupWarnings.map((warning) => <div key={warning} className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{warning}</div>)}{message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}</div>
+                  <div className="pt-1 sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
                   <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
                     لديك حساب بالفعل؟
                     <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
@@ -357,6 +361,9 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
         .auth-login-content,
         .auth-signup-content { animation: none !important; transform-origin: center center; }
+        .auth-signup-content { transition: transform 260ms ease, gap 260ms ease; }
+        .auth-signup-compact-1 { transform: scale(.96); width: 104.17%; }
+        .auth-signup-compact-2 { transform: scale(.92); width: 108.7%; }
 
         .auth-mode-content {
           opacity: 1;
