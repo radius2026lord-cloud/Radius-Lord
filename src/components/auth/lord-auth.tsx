@@ -4,15 +4,11 @@ import Link from "next/link";
 import { useTheme } from "next-themes";
 import { FormEvent, useEffect, useState } from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
-  Building2,
   Crown,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
-  MapPin,
   Moon,
   Phone,
   Radio,
@@ -24,8 +20,6 @@ import {
 } from "lucide-react";
 
 type Mode = "login" | "signup";
-type SignupStep = 1 | 2;
-
 function Brand() {
   return (
     <div className="text-center">
@@ -76,8 +70,6 @@ function Field({ label, icon: Icon, type = "text", value, onChange, placeholder,
 
 export default function LordAuth({ mode }: { mode: Mode }) {
   const isSignup = mode === "signup";
-  const [signupStep, setSignupStep] = useState<SignupStep>(1);
-  const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [email, setEmail] = useState("");
@@ -85,41 +77,28 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [networkName, setNetworkName] = useState("");
-  const [networkAddress, setNetworkAddress] = useState("");
   const [remember, setRemember] = useState(false);
   const [message, setMessage] = useState("");
-
-  const nextStep = () => {
-    setMessage("");
-    if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
-    if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
-    setDirection("forward"); setSignupStep(2);
-  };
-  const previousStep = () => { setMessage(""); setDirection("back"); setSignupStep(1); };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setMessage("");
     if (isSignup) {
-      if (signupStep === 1) { nextStep(); return; }
-      if (!networkName.trim() || !networkAddress.trim()) return setMessage("يرجى إدخال اسم الشبكة وعنوانها.");
-      setMessage("بيانات الحساب والشبكة جاهزة للربط بخدمة التسجيل الخلفية."); return;
+      if (!fullName || !email || !phone || !password || !confirm) return setMessage("يرجى تعبئة جميع الحقول المطلوبة.");
+      if (password !== confirm) return setMessage("كلمتا المرور غير متطابقتين.");
+      setMessage("بيانات الحساب جاهزة للربط بخدمة التسجيل الخلفية."); return;
     }
     if (!email || !password) return setMessage("يرجى إدخال البريد الإلكتروني وكلمة المرور.");
     try { const res = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ username: email, password }) }); const data = await res.json(); if (res.ok && data.success) window.location.href = "/Dashboard"; else setMessage(data.message || "فشل تسجيل الدخول."); } catch { setMessage("تعذر الاتصال بالخادم."); }
   };
 
-  const stepAnimation = direction === "forward" ? "animate-[lordStepIn_.34s_cubic-bezier(.22,1,.36,1)]" : "animate-[lordStepBack_.34s_cubic-bezier(.22,1,.36,1)]";
 
   return <div dir="rtl" className="min-h-screen bg-[#dce5ef] p-3 text-[#102a63] transition-colors dark:bg-[#07182a] dark:text-slate-100 sm:p-5 lg:p-6">
-    <style jsx global>{`@keyframes lordStepIn{from{opacity:0;transform:translateX(-22px) scale(.99)}to{opacity:1;transform:translateX(0) scale(1)}}@keyframes lordStepBack{from{opacity:0;transform:translateX(22px) scale(.99)}to{opacity:1;transform:translateX(0) scale(1)}}`}</style>
     <ThemeButton />
     <div className={`mx-auto grid min-h-[calc(100vh-48px)] max-w-[1500px] gap-5 ${isSignup ? "lg:grid-cols-[1fr_1.08fr]" : "lg:grid-cols-[1fr_1fr]"}`}><InfoPanel />
       <section className="flex items-center justify-center rounded-[32px] border border-white/80 bg-[#f9fbfe]/95 p-4 shadow-[0_22px_60px_rgba(70,95,122,.12)] dark:border-white/[.08] dark:bg-[#0b2036]/95 dark:shadow-[0_22px_60px_rgba(0,0,0,.24)] sm:p-7 lg:p-9"><div className="w-full max-w-2xl"><div className="mb-8 lg:hidden"><Brand /></div>
-        <div className="text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[#e9f2ff] text-[#086df0] dark:bg-[#0e2b4b] dark:text-[#4da0ff]">{isSignup ? (signupStep === 1 ? <UserRound className="h-7 w-7" /> : <Building2 className="h-7 w-7" />) : <LockKeyhole className="h-7 w-7" />}</div><h1 className="mt-5 text-3xl font-black">{isSignup ? (signupStep === 1 ? "إنشاء حساب جديد" : "معلومات الشبكة") : "تسجيل الدخول"}</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{isSignup ? (signupStep === 1 ? "أنشئ حسابك الآن وابدأ إدارة شبكتك بسهولة وأمان" : "خطوة أخيرة، أدخل المعلومات الأساسية لشبكتك") : "مرحباً بك، يرجى تسجيل الدخول للوصول إلى لوحة التحكم"}</p></div>
-        {isSignup && <div className="mx-auto mt-8 max-w-lg"><div className="relative flex items-start justify-between"><div className="absolute right-[16%] left-[16%] top-4 h-[2px] bg-[#d9e4ef] dark:bg-white/10"><div className={`h-full bg-[#0d6ef0] transition-all duration-500 ${signupStep === 2 ? "w-full" : "w-0"}`} /></div>{[[1,"معلومات الحساب"],[2,"معلومات الشبكة"]].map(([step,label]) => { const active = signupStep >= Number(step); return <div key={step} className="relative z-10 flex w-1/3 flex-col items-center gap-2"><div className={`grid h-8 w-8 place-items-center rounded-full border text-xs font-bold transition-all duration-300 ${active ? "border-[#0d6ef0] bg-[#0d6ef0] text-white shadow-[0_5px_14px_rgba(13,110,240,.25)]" : "border-[#c8d7e6] bg-white text-slate-500 dark:border-white/15 dark:bg-[#0b2036]"}`}>{step}</div><span className={`text-xs transition-colors ${active ? "font-semibold text-[#0d6ef0]" : "text-slate-500 dark:text-slate-400"}`}>{label}</span></div>})}</div></div>}
+        <div className="text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[#e9f2ff] text-[#086df0] dark:bg-[#0e2b4b] dark:text-[#4da0ff]">{isSignup ? <UserRound className="h-7 w-7" /> : <LockKeyhole className="h-7 w-7" />}</div><h1 className="mt-5 text-3xl font-black">{isSignup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{isSignup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : "مرحباً بك، يرجى تسجيل الدخول للوصول إلى لوحة التحكم"}</p></div>
         <form onSubmit={submit} className="mt-8 space-y-4">
-          {isSignup ? <div key={signupStep} className={stepAnimation}>{signupStep === 1 ? <div className="space-y-4"><Field label="الاسم الكامل *" icon={UserRound} value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" /><Field label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" /><Field label="رقم الهاتف *" icon={Phone} value={phone} onChange={setPhone} placeholder="أدخل رقم الهاتف" /><Field label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={<button type="button" onClick={() => setShowPassword(v=>!v)} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{showPassword?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>} /><Field label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={<button type="button" onClick={() => setShowConfirm(v=>!v)} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{showConfirm?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>} /><button type="submit" className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-[#086df0] to-[#0757d7] font-bold text-white shadow-[0_10px_24px_rgba(8,109,240,.22)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(8,109,240,.28)]">التالي <ArrowLeft className="h-4 w-4" /></button></div> : <div className="space-y-4"><div className="mb-5 rounded-2xl border border-[#dbe8f5] bg-[#eef6ff]/70 p-4 text-sm leading-6 text-slate-600 dark:border-white/[.07] dark:bg-[#0e2945]/70 dark:text-slate-300">ستُستخدم هذه المعلومات لإنشاء مساحة شبكتك وربطها بحسابك.</div><Field label="اسم الشبكة *" icon={Building2} value={networkName} onChange={setNetworkName} placeholder="مثال: Easy Net" /><Field label="عنوان الشبكة *" icon={MapPin} value={networkAddress} onChange={setNetworkAddress} placeholder="مثال: حلب - الفرقان" /><div className="grid grid-cols-[.42fr_1fr] gap-3 pt-2"><button type="button" onClick={previousStep} className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#cfdeec] bg-white font-bold text-[#31527c] transition hover:bg-slate-50 dark:border-white/10 dark:bg-[#0b2036] dark:text-slate-200 dark:hover:bg-[#102943]"><ArrowRight className="h-4 w-4" /> السابق</button><button type="submit" className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-[#086df0] to-[#0757d7] font-bold text-white shadow-[0_10px_24px_rgba(8,109,240,.22)] transition hover:-translate-y-0.5">إنشاء الحساب <ShieldCheck className="h-4 w-4" /></button></div></div>}</div> : <><Field label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" /><Field label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={<button type="button" onClick={() => setShowPassword(v=>!v)} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{showPassword?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>} /><div className="flex items-center justify-between text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} /> تذكرني</label><Link href="#" className="font-semibold text-[#086df0]">نسيت كلمة المرور؟</Link></div><button type="submit" className="h-12 w-full rounded-2xl bg-gradient-to-l from-[#086df0] to-[#0757d7] font-bold text-white">تسجيل الدخول</button></>}
+          {isSignup ? <div className="space-y-4"><Field label="الاسم الكامل *" icon={UserRound} value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" /><Field label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" /><Field label="رقم الهاتف *" icon={Phone} value={phone} onChange={setPhone} placeholder="أدخل رقم الهاتف" /><Field label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={<button type="button" onClick={() => setShowPassword(v=>!v)} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{showPassword?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>} /><Field label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={<button type="button" onClick={() => setShowConfirm(v=>!v)} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{showConfirm?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>} /><button type="submit" className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-[#086df0] to-[#0757d7] font-bold text-white shadow-[0_10px_24px_rgba(8,109,240,.22)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(8,109,240,.28)]">إنشاء الحساب <ShieldCheck className="h-4 w-4" /></button></div> : <><Field label="البريد الإلكتروني *" icon={Mail} type="email" value={email} onChange={setEmail} placeholder="أدخل بريدك الإلكتروني" /><Field label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={<button type="button" onClick={() => setShowPassword(v=>!v)} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{showPassword?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>} /><div className="flex items-center justify-between text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} /> تذكرني</label><Link href="#" className="font-semibold text-[#086df0]">نسيت كلمة المرور؟</Link></div><button type="submit" className="h-12 w-full rounded-2xl bg-gradient-to-l from-[#086df0] to-[#0757d7] font-bold text-white">تسجيل الدخول</button></>}
           {message && <div className="mt-4 rounded-2xl border border-[#d7e3ef] bg-[#f2f7fc] px-4 py-3 text-center text-sm text-slate-600 dark:border-white/[.08] dark:bg-[#0e2945] dark:text-slate-300">{message}</div>}
         </form>
         <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">{isSignup ? <>لديك حساب بالفعل؟ <Link href="/login" className="font-bold text-[#086df0]">تسجيل الدخول</Link></> : <>ليس لديك حساب؟ <Link href="/signup" className="font-bold text-[#086df0]">إنشاء حساب جديد</Link></>}</div>
