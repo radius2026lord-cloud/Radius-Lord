@@ -284,14 +284,16 @@ export default function LordAuth({ mode }: { mode: Mode }) {
               {signup && <div className="mb-5 min-[1024px]:hidden"><Brand compact /></div>}
 
               <div className="text-center">
-                <div className="auth-login-icon mx-auto grid h-[52px] w-[52px] place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
-                  {signup ? <UserRound className="h-[22px] w-[22px]" /> : <LockKeyhole className="h-[22px] w-[22px]" />}
-                </div>
-                <h1 className="mt-3 text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]">{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
+                {signup && (
+                  <div className="auth-login-icon mx-auto grid h-[52px] w-[52px] place-items-center rounded-full bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_24px_rgba(20,121,255,.22)]">
+                    <UserRound className="h-[22px] w-[22px]" />
+                  </div>
+                )}
+                <h1 className={`${signup ? "mt-3" : "mt-1"} text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]`}>{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
                 <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
-              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-7"}>
+              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-6" : "mt-6"}>
                 {signup ? (
                 <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
                   <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
