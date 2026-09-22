@@ -24,6 +24,7 @@ import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/componen
 
 type Mode = "login" | "signup";
 type LoginStatus = "idle" | "loading" | "success" | "error";
+type SignupStatus = "idle" | "loading" | "success" | "error";
 type TransitionPhase = "idle" | "out" | "in";
 type PasswordCredentialConstructor = new (data: { id: string; password: string; name?: string }) => Credential;
 
@@ -126,6 +127,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [message, setMessage] = useState("");
   const [signupWarnings, setSignupWarnings] = useState<string[]>([]);
+  const [signupStatus, setSignupStatus] = useState<SignupStatus>("idle");
 
   useEffect(() => setMounted(true), []);
 
@@ -193,9 +195,45 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       const warnings: string[] = [];
       if (!fullName || !email || !phone || !password || !confirm) warnings.push("يرجى تعبئة جميع الحقول المطلوبة.");
       if (password && confirm && password !== confirm) warnings.push("كلمتا المرور غير متطابقتين.");
+      if (password && password.length < 8) warnings.push("يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.");
       setSignupWarnings(warnings);
-      if (warnings.length) return;
-      return setMessage(`واجهة إنشاء الحساب جاهزة للربط الخلفي (${country.code}${phone}).`);
+      if (warnings.length) {
+        setSignupStatus("error");
+        return;
+      }
+
+      setSignupStatus("loading");
+      try {
+        const response = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName,
+            email,
+            phone: `${country.code}${phone}`,
+            country: country.name,
+            password,
+          }),
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          const apiWarnings = Array.isArray(data.errors)
+            ? data.errors.map((item: { message?: string }) => item.message).filter(Boolean)
+            : [data.message || "تعذر إنشاء الحساب."];
+          setSignupWarnings(apiWarnings);
+          setSignupStatus("error");
+          return;
+        }
+
+        setSignupWarnings([]);
+        setSignupStatus("success");
+        setMessage(`تم إنشاء الحساب بنجاح. اسم المستخدم: ${data.customer.username}`);
+      } catch {
+        setSignupWarnings(["تعذر الاتصال بالخادم."]);
+        setSignupStatus("error");
+      }
+      return;
     }
 
     if (!email || !password) return triggerLoginError("يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.");
@@ -302,7 +340,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="new-password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                   <CompactField label="تأكيد كلمة المرور *" icon={LockKeyhole} type={showConfirm ? "text" : "password"} name="confirm-password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="أعد إدخال كلمة المرور" suffix={eye(showConfirm, () => setShowConfirm((value) => !value))} />
                   <div className="space-y-2 sm:col-span-2">{signupWarnings.map((warning) => <div key={warning} className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{warning}</div>)}{message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}</div>
-                  <div className="pt-1 sm:col-span-2"><PrimaryFormButton>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
+                  <div className="pt-1 sm:col-span-2"><PrimaryFormButton status={signupStatus} disabled={signupStatus === "loading" || signupStatus === "success"}>إنشاء الحساب <UserRound className="h-4 w-4" /></PrimaryFormButton></div>
                   <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd] sm:col-span-2">
                     لديك حساب بالفعل؟
                     <Link href="/login" onClick={(event) => { event.preventDefault(); switchMode("login"); }} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">تسجيل الدخول</Link>
