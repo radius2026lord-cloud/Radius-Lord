@@ -32,7 +32,7 @@ export function ActionSuccessCard({
   const card = (
     <div className={`action-success-card mx-auto flex w-full max-w-[410px] flex-col items-center rounded-[24px] ${modal ? "border border-white/80 bg-[#f9fbfe] p-6 shadow-[0_28px_90px_rgba(15,42,99,.28)] dark:border-white/[.10] dark:bg-[#302e33] dark:shadow-[0_32px_100px_rgba(0,0,0,.55)] sm:p-8" : ""} text-center`} role="status" aria-live="polite">
       <div className="action-success-icon grid h-[70px] w-[70px] place-items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 shadow-[0_12px_34px_rgba(16,185,129,.16)] dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">
-        <Check className="h-9 w-9" strokeWidth={2.6} />
+        <Check className="action-success-check h-9 w-9" strokeWidth={2.6} />
       </div>
       <h2 className="mt-5 text-[24px] font-black text-[#102a63] dark:text-[#f4f1f5]">{title}</h2>
       {description && <p className="mt-2 max-w-[350px] text-[12px] leading-6 text-slate-500 dark:text-[#b9b3bd]">{description}</p>}
@@ -60,10 +60,10 @@ export function ActionSuccessCard({
 
       <style jsx global>{`
         @keyframes actionSuccessEnter { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes actionSuccessIcon { 0% { transform: scale(.7); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes actionSuccessIcon { 0% { transform: scale(.45); opacity: 0; } 55% { transform: scale(1.12); opacity: 1; } 78% { transform: scale(.96); } 100% { transform: scale(1); opacity: 1; } }\n        @keyframes actionSuccessCheck { 0% { stroke-dashoffset: 48; opacity: 0; } 20% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
         .action-success-card { animation: actionSuccessEnter .45s cubic-bezier(.22,.8,.25,1) both; }
-        .action-success-icon { animation: actionSuccessIcon .55s cubic-bezier(.22,.8,.25,1) .08s both; }
-        @media (prefers-reduced-motion: reduce) { .action-success-card, .action-success-icon { animation: none !important; } }
+        .action-success-icon { animation: actionSuccessIcon .62s cubic-bezier(.22,.8,.25,1) .08s both; }\n        .action-success-check { stroke-dasharray: 48; stroke-dashoffset: 48; animation: actionSuccessCheck .48s ease-out .28s forwards; }
+        @media (prefers-reduced-motion: reduce) { .action-success-card, .action-success-icon, .action-success-check { animation: none !important; stroke-dashoffset: 0 !important; } }
       `}</style>
     </div>
   );
