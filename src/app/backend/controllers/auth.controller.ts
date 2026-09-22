@@ -138,7 +138,6 @@ export const signupController = async (req: Request, res: Response) => {
 
 export const loginController = async (req: Request, res: Response) => {
   try {
-    console.log('BODY:', req.body);
     const parsed = loginSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -168,6 +167,8 @@ export const loginController = async (req: Request, res: Response) => {
     return res.json({
       success: true,
       user: result.user,
+      accountType: result.accountType,
+      redirectTo: result.redirectTo,
     });
   } catch (err) {
     console.error('Login error:', err);
