@@ -333,18 +333,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
-              {signup && signupStatus === "success" && createdUsername ? (
-                <div className="mt-6 flex flex-1 items-center justify-center">
-                  <ActionSuccessCard
-                    title="تم إنشاء الحساب بنجاح"
-                    description="تم إنشاء حسابك في Lord Radius. احتفظ باسم المستخدم لأنه سيُستخدم لتسجيل الدخول."
-                    valueLabel="اسم المستخدم"
-                    value={createdUsername}
-                    primaryAction={{ label: "تسجيل الدخول", onClick: () => switchMode("login") }}
-                  />
-                </div>
-              ) : (
-                            <form onSubmit={submit} autoComplete="on" className={signup ? "mt-5 flex flex-1 flex-col justify-center" : "mt-6"}>
+              <form onSubmit={submit} autoComplete="on" className={signup ? "mt-5 flex flex-1 flex-col justify-center" : "mt-6"}>
                 {signup ? (
                 <div className={`grid grid-cols-1 gap-x-4 sm:grid-cols-2 ${signupWarnings.length ? "gap-y-3" : "content-between gap-y-4"}`}>
                   <CompactField label="الاسم الكامل *" icon={UserRound} name="name" autoComplete="name" value={fullName} onChange={setFullName} placeholder="أدخل اسمك الكامل" />
@@ -369,11 +358,21 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                   </div>
                 )}
               </form>
-              )}
             </div>
           </section>
         </div>
       </div>
+
+      {signup && signupStatus === "success" && createdUsername && (
+        <ActionSuccessCard
+          modal
+          title="تم إنشاء الحساب بنجاح"
+          description="تم إنشاء حسابك في Lord Radius. احتفظ باسم المستخدم لأنه سيُستخدم لتسجيل الدخول."
+          valueLabel="اسم المستخدم"
+          value={createdUsername}
+          primaryAction={{ label: "تسجيل الدخول", onClick: () => switchMode("login") }}
+        />
+      )}
 
       <style jsx global>{`
         @keyframes authDotPulse {
