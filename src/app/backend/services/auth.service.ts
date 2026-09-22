@@ -3,18 +3,21 @@ import jwt from 'jsonwebtoken';
 
 import { db } from '../config/db';
 import { env } from '../config/env';
-import { Manager } from '../models/manger_Model';
+
+type AccountType = 'master_admin' | 'customer';
 
 interface LoginSuccess {
   success: true;
   status: number;
   token: string;
+  accountType: AccountType;
+  redirectTo: '/admin/dashboard' | '/customer/dashboard';
   user: {
     id: number;
-    first_name: string;
-    last_name: string;
-    phone: string;
-    username: string;
+    fullName: string;
+    username: string | null;
+    email: string;
+    accountType: AccountType;
   };
 }
 
@@ -26,41 +29,84 @@ interface LoginFail {
 
 export type LoginResult = LoginSuccess | LoginFail;
 
+type AuthAccount = {
+  id: number;
+  full_name: string;
+  username: string | null;
+  email: string;
+  password_hash: string;
+  status: string;
+};
+
 export class AuthService {
-  static async login(username: string, password: string): Promise<LoginResult> {
+  private static async findAccount(table: 'master_admins' | 'customers', identifier: string) {
     const result = await db.query(
-      'SELECT * FROM lord_manger WHERE username = ? LIMIT 1',
-      [username],
+      `SELECT id, full_name, username, email, password_hash, status
+       FROM ${table}
+       WHERE username = ? OR email = ?
+       LIMIT 1`,
+      [identifier, identifier],
     );
 
-    const rows = result[0] as Manager[];
-    const user = rows.length > 0 ? rows[0] : null;
+    const rows = result[0] as AuthAccount[];
+    return rows[0] ?? null;
+  }
 
-    if (!user) {
-      return { success: false, status: 404, message: 'المستخدم غير موجود' };
+  static async login(identifier: string, password: string): Promise<LoginResult> {
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+
+    // One login endpoint, while each account type remains isolated in its own table.
+    let account = await this.findAccount('master_admins', normalizedIdentifier);
+    let accountType: AccountType = 'master_admin';
+
+    if (!account) {
+      account = await this.findAccount('customers', normalizedIdentifier);
+      accountType = 'customer';
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    // Keep one generic response so login does not reveal which identifiers exist.
+    if (!account) {
+      return { success: false, status: 401, message: 'بيانات تسجيل الدخول غير صحيحة' };
+    }
+
+    if (account.status !== 'active') {
+      return { success: false, status: 403, message: 'هذا الحساب غير نشط حاليًا' };
+    }
+
+    const isMatch = await bcrypt.compare(password, account.password_hash);
     if (!isMatch) {
-      return { success: false, status: 401, message: 'كلمة المرور غير صحيحة' };
+      return { success: false, status: 401, message: 'بيانات تسجيل الدخول غير صحيحة' };
     }
 
     const token = jwt.sign(
-      { id: user.id, username: user.username },
+      {
+        sub: account.id,
+        accountType,
+        username: account.username,
+      },
       env.JWT_SECRET,
       { expiresIn: '1h' },
     );
 
+    const table = accountType === 'master_admin' ? 'master_admins' : 'customers';
+    await db.query(`UPDATE ${table} SET last_login_at = NOW() WHERE id = ?`, [account.id]);
+
+    const redirectTo = accountType === 'master_admin'
+      ? '/admin/dashboard'
+      : '/customer/dashboard';
+
     return {
       success: true,
       status: 200,
-      token: token,
+      token,
+      accountType,
+      redirectTo,
       user: {
-        id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        phone: user.phone,
-        username: user.username,
+        id: account.id,
+        fullName: account.full_name,
+        username: account.username,
+        email: account.email,
+        accountType,
       },
     };
   }
