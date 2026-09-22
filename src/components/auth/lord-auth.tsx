@@ -21,6 +21,7 @@ import {
 import { CompactField, PrimaryFormButton } from "@/components/ui/auth-form-controls";
 import { CountryPhoneInput } from "@/components/ui/country-phone-input";
 import { ActionSuccessCard } from "@/components/ui/action-success-card";
+import TransitionOverlay from "@/components/ui/transition-overlay";
 import { arabCountries, defaultArabCountry, radiusAuthContent } from "@/components/auth/auth-content";
 
 type Mode = "login" | "signup";
@@ -394,11 +395,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       )}
 
       {!signup && loginStatus === "success" && (
-        <ActionSuccessCard
-          modal
-          title="تم تسجيل الدخول بنجاح"
-          description="جارٍ فتح لوحة التحكم..."
-        />
+        <TransitionOverlay variant="login" />
       )}
 
       <style jsx global>{`
