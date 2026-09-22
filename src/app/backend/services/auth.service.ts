@@ -11,7 +11,7 @@ interface LoginSuccess {
   status: number;
   token: string;
   accountType: AccountType;
-  redirectTo: '/admin/dashboard' | '/customer/dashboard';
+  redirectTo: '/Dashboard';
   user: {
     id: number;
     fullName: string;
@@ -91,9 +91,7 @@ export class AuthService {
     const table = accountType === 'master_admin' ? 'master_admins' : 'customers';
     await db.query(`UPDATE ${table} SET last_login_at = NOW() WHERE id = ?`, [account.id]);
 
-    const redirectTo = accountType === 'master_admin'
-      ? '/admin/dashboard'
-      : '/customer/dashboard';
+    const redirectTo = '/Dashboard' as const;
 
     return {
       success: true,
