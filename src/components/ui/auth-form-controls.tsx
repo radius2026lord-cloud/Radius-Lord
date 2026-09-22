@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
-import TransitionOverlay from "@/components/ui/transition-overlay";
 
 type IconType = ComponentType<{ className?: string }>;
 export type PrimaryButtonStatus = "idle" | "loading" | "success" | "error";
@@ -110,7 +109,6 @@ export function PrimaryFormButton({ children, status, disabled = false }: { chil
       <span className={`auth-primary-content flex items-center justify-center gap-2 transition-all duration-300 ${busy ? "[&>span:last-child]:scale-50 [&>span:last-child]:opacity-0 [&>svg:last-child]:scale-50 [&>svg:last-child]:opacity-0" : ""}`}>{children}</span>
       {showStatusIndicator && <span className="pointer-events-none absolute left-[calc(50%-72px)] top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center">{effectiveStatus === "loading" && <span className="auth-primary-spinner h-[17px] w-[17px] rounded-full border-2 border-white/35 border-t-white" />}{effectiveStatus === "success" && <span className="auth-primary-success-arrow text-[18px] font-black leading-none">←</span>}</span>}
     </button>
-    {controlled && effectiveStatus === "success" && <TransitionOverlay variant="login" />}
   </>;
 }
 
