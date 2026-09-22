@@ -393,6 +393,14 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         />
       )}
 
+      {!signup && loginStatus === "success" && (
+        <ActionSuccessCard
+          modal
+          title="تم تسجيل الدخول بنجاح"
+          description="جارٍ فتح لوحة التحكم..."
+        />
+      )}
+
       <style jsx global>{`
         @keyframes authDotPulse {
           0%, 100% { transform: translate3d(0,0,0) scale(.75); opacity: .22; box-shadow: 0 0 0 rgba(106,168,255,0); }
