@@ -131,7 +131,22 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("idle");
   const [signupCompleted, setSignupCompleted] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+
+    if (mode === "login") {
+      const pendingCredentials = sessionStorage.getItem("lord-radius-signup-credentials");
+      if (pendingCredentials) {
+        try {
+          const credentials = JSON.parse(pendingCredentials) as { email?: string; password?: string };
+          if (credentials.email) setEmail(credentials.email);
+          if (credentials.password) setPassword(credentials.password);
+        } finally {
+          sessionStorage.removeItem("lord-radius-signup-credentials");
+        }
+      }
+    }
+  }, [mode]);
 
   const isDark = mounted && theme === "dark";
 
@@ -231,6 +246,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         setSignupWarnings([]);
         setSignupStatus("success");
         setSignupCompleted(true);
+        sessionStorage.setItem(
+          "lord-radius-signup-credentials",
+          JSON.stringify({ email, password }),
+        );
         window.setTimeout(() => {
           window.location.href = "/login";
         }, 2000);
