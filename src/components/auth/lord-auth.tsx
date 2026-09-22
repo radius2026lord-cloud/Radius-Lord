@@ -274,7 +274,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       if (response.ok && data.success) {
         setLoginStatus("success");
         await requestBrowserCredentialSave();
-        window.setTimeout(() => { window.location.href = "/Dashboard"; }, 1400);
+        const redirectTo = data.redirectTo === "/admin/dashboard" ? "/admin/dashboard" : "/customer/dashboard";
+        window.setTimeout(() => { window.location.href = redirectTo; }, 1400);
       } else {
         triggerLoginError(data.message || "فشل تسجيل الدخول.");
       }
