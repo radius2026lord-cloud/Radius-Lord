@@ -129,7 +129,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   const [message, setMessage] = useState("");
   const [signupWarnings, setSignupWarnings] = useState<string[]>([]);
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("idle");
-  const [createdUsername, setCreatedUsername] = useState("");
+  const [signupCompleted, setSignupCompleted] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -230,7 +230,10 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
         setSignupWarnings([]);
         setSignupStatus("success");
-        setCreatedUsername(data.customer.username);
+        setSignupCompleted(true);
+        window.setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
       } catch {
         setSignupWarnings(["تعذر الاتصال بالخادم."]);
         setSignupStatus("error");
@@ -363,14 +366,11 @@ export default function LordAuth({ mode }: { mode: Mode }) {
         </div>
       </div>
 
-      {signup && signupStatus === "success" && createdUsername && (
+      {signup && signupStatus === "success" && signupCompleted && (
         <ActionSuccessCard
           modal
           title="تم إنشاء الحساب بنجاح"
-          description="تم إنشاء حسابك في Lord Radius. احتفظ باسم المستخدم لأنه سيُستخدم لتسجيل الدخول."
-          valueLabel="اسم المستخدم"
-          value={createdUsername}
-          primaryAction={{ label: "تسجيل الدخول", onClick: () => switchMode("login") }}
+          description="سيتم تحويلك إلى صفحة تسجيل الدخول..."
         />
       )}
 
