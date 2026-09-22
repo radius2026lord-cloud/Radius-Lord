@@ -11,6 +11,7 @@ type ActionSuccessCardProps = {
   primaryAction?: { label: string; onClick: () => void };
   secondaryAction?: { label: string; onClick: () => void };
   children?: ReactNode;
+  modal?: boolean;
 };
 
 export function ActionSuccessCard({
@@ -21,14 +22,15 @@ export function ActionSuccessCard({
   primaryAction,
   secondaryAction,
   children,
+  modal = false,
 }: ActionSuccessCardProps) {
   const copyValue = async () => {
     if (!value || !navigator.clipboard) return;
     await navigator.clipboard.writeText(value);
   };
 
-  return (
-    <div className="action-success-card mx-auto flex w-full max-w-[410px] flex-col items-center text-center" role="status" aria-live="polite">
+  const card = (
+    <div className={`action-success-card mx-auto flex w-full max-w-[410px] flex-col items-center rounded-[24px] ${modal ? "border border-white/80 bg-[#f9fbfe] p-6 shadow-[0_28px_90px_rgba(15,42,99,.28)] dark:border-white/[.10] dark:bg-[#302e33] dark:shadow-[0_32px_100px_rgba(0,0,0,.55)] sm:p-8" : ""} text-center`} role="status" aria-live="polite">
       <div className="action-success-icon grid h-[70px] w-[70px] place-items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 shadow-[0_12px_34px_rgba(16,185,129,.16)] dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">
         <Check className="h-9 w-9" strokeWidth={2.6} />
       </div>
@@ -63,6 +65,15 @@ export function ActionSuccessCard({
         .action-success-icon { animation: actionSuccessIcon .55s cubic-bezier(.22,.8,.25,1) .08s both; }
         @media (prefers-reduced-motion: reduce) { .action-success-card, .action-success-icon { animation: none !important; } }
       `}</style>
+    </div>
+  );
+
+  if (!modal) return card;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#102a63]/28 p-4 backdrop-blur-[7px] dark:bg-black/55" role="dialog" aria-modal="true">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(20,121,255,.12),transparent_58%)]" />
+      <div className="relative z-10 w-full max-w-[410px]">{card}</div>
     </div>
   );
 }
