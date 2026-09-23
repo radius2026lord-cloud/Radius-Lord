@@ -27,6 +27,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | Customer["status"]>("all");
   const { view, setView, selected, setSelected, selectionMode: gridSelectionMode, setSelectionMode: setGridSelectionMode, toggle: toggleCustomer, setAll: setAllCustomers } = useCollectionState<number>("customers", "row");
   const [bulkAction, setBulkAction] = useState("");
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -41,14 +42,22 @@ export default function CustomersPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const statusCounts = useMemo(() => ({
+    all: customers.length,
+    active: customers.filter((customer) => customer.status === "active").length,
+    suspended: customers.filter((customer) => customer.status === "suspended").length,
+    disabled: customers.filter((customer) => customer.status === "disabled").length,
+  }), [customers]);
+
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) return customers;
-    return customers.filter((customer) =>
-      [customer.fullName, customer.username, customer.email, customer.phone, customer.country]
-        .filter(Boolean).some((field) => String(field).toLowerCase().includes(value)),
-    );
-  }, [customers, query]);
+    return customers.filter((customer) => {
+      if (statusFilter !== "all" && customer.status !== statusFilter) return false;
+      if (!value) return true;
+      return [customer.fullName, customer.username, customer.email, customer.phone, customer.country]
+        .filter(Boolean).some((field) => String(field).toLowerCase().includes(value));
+    });
+  }, [customers, query, statusFilter]);
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((customer) => selected.has(customer.id));
   const toggleAllVisible = () => setAllCustomers(filtered.map((customer) => customer.id), !allVisibleSelected);
@@ -74,6 +83,26 @@ export default function CustomersPage() {
             )}
             <CollectionViewToggle value={view} onChange={setView} />
           </div>
+        </div>
+      </section>
+
+      <section className="overflow-x-auto rounded-[18px] border border-white/90 bg-white p-1.5 shadow-[0_6px_18px_rgba(58,84,112,.06)] dark:border-white/[.07] dark:bg-[#0d243b]">
+        <div className="flex min-w-max items-center gap-1.5">
+          {([
+            ["all", "الكل", "bg-[#0758e9]"],
+            ["active", "نشط", "bg-emerald-500"],
+            ["suspended", "معلّق", "bg-amber-500"],
+            ["disabled", "معطّل", "bg-red-500"],
+          ] as const).map(([value, label, dot]) => {
+            const active = statusFilter === value;
+            return (
+              <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 items-center gap-2 rounded-[13px] border px-3 text-xs font-bold transition-all duration-250 ${active ? "border-[#9fc4ec] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(20,121,255,.08)] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-transparent text-slate-500 hover:border-[#d7e3ef] hover:bg-[#f5f8fc] hover:text-[#17386d] dark:text-slate-400 dark:hover:border-white/[.10] dark:hover:bg-white/[.04] dark:hover:text-white"}`}>
+                <span className={`h-2 w-2 rounded-full ${dot}`} />
+                <span>{label}</span>
+                <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] ${active ? "bg-white/80 text-[#0758e9] dark:bg-white/[.10] dark:text-white" : "bg-slate-100 text-slate-500 dark:bg-white/[.06] dark:text-slate-400"}`}>{statusCounts[value]}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
