@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Activity, ChevronDown, ChevronUp, Clock3, FileClock, Search, ShieldCheck, UserRound } from "lucide-react";
 import CollectionViewToggle, { CollectionViewMode } from "@/components/ui/collection-view-toggle";
 
@@ -29,15 +30,20 @@ const filterTone:Record<string,string>={
 const fieldLabel:Record<string,string>={full_name:"الاسم الكامل",username:"اسم المستخدم",email:"البريد الإلكتروني",phone:"رقم الهاتف",country:"الدولة"};
 
 export default function AdminActivityPage(){
+  const searchParams=useSearchParams();
+  const scopedEntityType=searchParams.get("entityType");
+  const scopedEntityId=searchParams.get("entityId");
   const [logs,setLogs]=useState<AuditLog[]>([]); const [loading,setLoading]=useState(true);
   const [query,setQuery]=useState(""); const [filter,setFilter]=useState("ALL");
   const [view,setView]=useState<CollectionViewMode>("row"); const [open,setOpen]=useState<number|null>(null);
   useEffect(()=>{fetch("/api/admin/audit-logs",{credentials:"include",cache:"no-store"}).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>setLogs(d.logs??[])).finally(()=>setLoading(false))},[]);
   const filtered=useMemo(()=>logs.filter(log=>{
+    if(scopedEntityType && log.entityTypeCode!==scopedEntityType)return false;
+    if(scopedEntityId && String(log.entityId)!==scopedEntityId)return false;
     if(filter!=="ALL"&&log.actionCode!==filter)return false;
     const q=query.trim().toLowerCase(); if(!q)return true;
     return [log.adminName,log.adminUsername,log.entityName,log.description,log.actionName,log.entityTypeName,String(log.entityId??"")].filter(Boolean).some(v=>String(v).toLowerCase().includes(q));
-  }),[logs,query,filter]);
+  }),[logs,query,filter,scopedEntityType,scopedEntityId]);
   const today=new Date().toDateString();
   const todayLogs=logs.filter(l=>new Date(l.createdAt).toDateString()===today);
   const summary=[["أحداث اليوم",todayLogs.length],["تعديلات اليوم",todayLogs.filter(l=>l.actionCode==="UPDATE").length],["عمليات الإضافة",logs.filter(l=>l.actionCode==="CREATE").length],["إجمالي السجل",logs.length]];
