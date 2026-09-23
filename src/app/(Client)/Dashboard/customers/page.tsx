@@ -85,9 +85,9 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[560px]" dir="ltr">
+          <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[clamp(390px,34vw,560px)]" dir="ltr">
             <CollectionViewToggle value={view} onChange={setView} />
-            <div className="relative min-w-0 flex-1" dir="rtl">
+            <div className="relative min-w-[180px] flex-1" dir="rtl">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
             </div>
