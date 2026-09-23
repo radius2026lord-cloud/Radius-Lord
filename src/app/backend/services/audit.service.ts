@@ -18,7 +18,11 @@ function requestIp(req: AuthenticatedRequest) {
 
 export async function writeAuditLog(req: AuthenticatedRequest, input: AuditInput) {
   if (req.auth?.accountType !== 'master_admin') return;
+  await writeMasterAdminAuditLog(req, req.auth.accountId, input);
 
+}
+
+export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminId: number, input: AuditInput) {
   const lookup = await db.query(
     `SELECT
        (SELECT id FROM audit_actions WHERE code = ? AND is_active = 1 LIMIT 1) AS action_id,
@@ -35,7 +39,7 @@ export async function writeAuditLog(req: AuthenticatedRequest, input: AuditInput
       (admin_id, tenant_id, action_id, entity_type_id, entity_id, description, ip_address, user_agent, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      req.auth.accountId,
+      adminId,
       input.tenantId ?? null,
       ids.action_id,
       ids.entity_type_id,
