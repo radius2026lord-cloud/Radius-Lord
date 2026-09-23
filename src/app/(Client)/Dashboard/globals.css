@@ -379,24 +379,58 @@ textarea,
 
 /* Radius Lord card-border standard: clearly separate cards from their workspace. */
 main [class*="rounded-"][class*="border"] {
-  border-color: #b8cee3 !important;
+  border-color: #91aec9 !important;
 }
 
 main [class*="rounded-"][class*="border"][class*="bg-white"] {
-  border-color: #aac6df !important;
+  border-color: #84a7c6 !important;
   box-shadow: 0 5px 16px rgba(54, 86, 120, .055);
 }
 
 main [class*="rounded-"][class*="border"][class*="bg-[#f9fbfe]"],
 main [class*="rounded-"][class*="border"][class*="bg-[#f7faff]"] {
-  border-color: #bdd2e6 !important;
+  border-color: #9db8d1 !important;
 }
 
 .dark main [class*="rounded-"][class*="border"] {
-  border-color: rgba(157, 174, 194, .28) !important;
+  border-color: rgba(170, 188, 210, .38) !important;
 }
 
 .dark main [class*="rounded-"][class*="border"][class*="bg-white"] {
-  border-color: rgba(168, 184, 204, .31) !important;
+  border-color: rgba(181, 198, 219, .42) !important;
   box-shadow: 0 5px 16px rgba(0,0,0,.10);
+}
+
+/* Radius Lord state-transition standard.
+   Apply .ui-state-enter to content that changes between view/edit/detail states. */
+@keyframes radiusStateEnter {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(.994);
+    filter: blur(1.5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.ui-state-enter {
+  animation: radiusStateEnter .3s cubic-bezier(.22,.8,.25,1) both;
+  transform-origin: center top;
+}
+
+.ui-state-surface {
+  transition:
+    border-color .25s ease,
+    background-color .25s ease,
+    box-shadow .25s ease,
+    transform .25s cubic-bezier(.22,.8,.25,1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-state-enter {
+    animation: none !important;
+  }
 }
