@@ -5,6 +5,7 @@ import { db } from '../config/db';
 import { loginSchema } from '../schemas/auth.schema';
 import { AuthService } from '../services/auth.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
+import { writeMasterAdminAuditLog } from '../services/audit.service';
 
 const transliteration: Record<string, string> = {
   ا: 'a', أ: 'a', إ: 'i', آ: 'a', ب: 'b', ت: 't', ث: 'th', ج: 'j',
@@ -155,6 +156,17 @@ export const loginController = async (req: Request, res: Response) => {
       return res.status(result.status).json({
         success: false,
         message: result.message,
+      });
+    }
+
+    if (result.accountType === 'master_admin') {
+      const auditReq = req as AuthenticatedRequest;
+      auditReq.auth = { accountId: result.user.id, accountType: 'master_admin', username: result.user.username };
+      await writeMasterAdminAuditLog(auditReq, result.user.id, {
+        actionCode: 'LOGIN',
+        entityTypeCode: 'MASTER_ADMIN',
+        entityId: result.user.id,
+        description: 'تسجيل دخول مدير النظام',
       });
     }
 
