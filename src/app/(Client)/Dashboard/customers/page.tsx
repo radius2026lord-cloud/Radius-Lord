@@ -30,7 +30,6 @@ export default function CustomersPage() {
   const { view, setView, selected, setSelected, selectionMode: gridSelectionMode, setSelectionMode: setGridSelectionMode, toggle: toggleCustomer, setAll: setAllCustomers } = useCollectionState<number>("customers", "row");
   const [bulkAction, setBulkAction] = useState("");
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
-  const [gridSelectionMode, setGridSelectionMode] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
