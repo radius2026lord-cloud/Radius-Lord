@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../config/db';
 import { loginSchema } from '../schemas/auth.schema';
 import { AuthService } from '../services/auth.service';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 const transliteration: Record<string, string> = {
   ا: 'a', أ: 'a', إ: 'i', آ: 'a', ب: 'b', ت: 't', ث: 'th', ج: 'j',
@@ -176,5 +177,40 @@ export const loginController = async (req: Request, res: Response) => {
       success: false,
       message: 'خطأ في الخادم',
     });
+  }
+};
+
+
+export const meController = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.auth) {
+      return res.status(401).json({ success: false, message: 'غير مصرح.' });
+    }
+
+    const table = req.auth.accountType === 'master_admin' ? 'master_admins' : 'customers';
+    const result = await db.query(
+      `SELECT id, full_name, username, email, status FROM ${table} WHERE id = ? LIMIT 1`,
+      [req.auth.accountId],
+    );
+    const rows = result[0] as Array<{ id: number; full_name: string; username: string | null; email: string; status: string }>;
+    const account = rows[0];
+
+    if (!account || account.status !== 'active') {
+      return res.status(401).json({ success: false, message: 'الحساب غير متاح حاليًا.' });
+    }
+
+    return res.json({
+      success: true,
+      account: {
+        id: account.id,
+        fullName: account.full_name,
+        username: account.username,
+        email: account.email,
+        accountType: req.auth.accountType,
+      },
+    });
+  } catch (err) {
+    console.error('Auth me error:', err);
+    return res.status(500).json({ success: false, message: 'تعذر قراءة بيانات الجلسة.' });
   }
 };
