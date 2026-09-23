@@ -5,6 +5,7 @@ import "./dashboard-entry.css";
 
 import { ThemeProvider } from "next-themes";
 import DashboardShell from "@/components/ui/dashboard-shell";
+import { AuthProvider } from "@/components/auth/auth-provider";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -31,7 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body className={`${changa.className} dashboard-enter`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <DashboardShell>{children}</DashboardShell>
+          <AuthProvider>
+            <DashboardShell>{children}</DashboardShell>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
