@@ -71,16 +71,18 @@ export default function CustomersPage() {
             <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">عرض وإدارة حسابات عملاء Radius Lord</p>
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto xl:justify-center">
-            {([
-              ["all", "الكل", "bg-[#0758e9]"],
-              ["active", "نشط", "bg-emerald-500"],
-              ["suspended", "معلّق", "bg-amber-500"],
-              ["disabled", "معطّل", "bg-red-500"],
-            ] as const).map(([value, label, dot]) => {
-              const active = statusFilter === value;
-              return <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[13px] border px-3 text-xs font-semibold transition-all duration-250 ${active ? "border-[#9fc4ec] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-transparent text-slate-500 hover:border-[#d7e3ef] hover:bg-[#f5f8fc] dark:text-[#aaa4af] dark:hover:border-white/[.10] dark:hover:bg-white/[.04] dark:hover:text-[#ded9e1]"}`}><span className={`h-2 w-2 rounded-full ${dot}`} /><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-medium ${active ? "bg-white/80 text-[#0758e9] dark:bg-white/[.10] dark:text-[#e3dfe6]" : "bg-slate-100 text-slate-500 dark:bg-white/[.06] dark:text-[#99939f]"}`}>{statusCounts[value]}</span></button>;
-            })}
+          <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center">
+            <div className="inline-flex shrink-0 items-center rounded-[16px] border border-[#dbe6f2] bg-[#f7faff] p-1 shadow-[0_4px_14px_rgba(58,84,112,.06)] dark:border-white/[.08] dark:bg-white/[.035]">
+              {([
+                ["all", "الكل", "bg-[#0758e9]"],
+                ["active", "نشط", "bg-emerald-500"],
+                ["suspended", "معلّق", "bg-amber-500"],
+                ["disabled", "معطّل", "bg-red-500"],
+              ] as const).map(([value, label, dot]) => {
+                const active = statusFilter === value;
+                return <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[12px] border px-3 text-xs font-medium transition-all duration-250 ${active ? "border-[#9fc4ec] bg-white text-[#0758e9] shadow-[0_3px_10px_rgba(20,121,255,.10)] dark:border-white/[.14] dark:bg-white/[.08] dark:text-[#ddd7e1]" : "border-transparent text-slate-500 hover:bg-white/80 hover:text-[#17386d] dark:text-[#aaa4af] dark:hover:bg-white/[.05] dark:hover:text-[#d6d0da]"}`}><span className={`h-2 w-2 rounded-full ${dot}`} /><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-medium ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-[#d8d2dc]" : "bg-[#edf2f7] text-slate-500 dark:bg-white/[.05] dark:text-[#96909b]"}`}>{statusCounts[value]}</span></button>;
+              })}
+            </div>
           </div>
 
           <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[560px]" dir="ltr">
