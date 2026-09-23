@@ -307,6 +307,22 @@ main > div:first-child > div.mt-4 button svg {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* Radius Lord UI: dashboard text is non-selectable by default.
+   Opt specific future areas back in with .allow-text-selection. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+.allow-text-selection,
+.allow-text-selection * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 @media (max-width: 639px) {
   input,
   select,
