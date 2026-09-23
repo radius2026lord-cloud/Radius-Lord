@@ -65,25 +65,22 @@ export default function CustomersPage() {
   return (
     <div className="space-y-3 sm:space-y-4">
       <section className="rounded-[22px] border border-white/90 bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="min-w-0 flex-1">
-            <h2 className="flex items-center gap-2 text-base font-bold sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">عرض وإدارة حسابات عملاء Radius Lord</p>
-          </div>
-          <div className="flex w-full items-center gap-2 md:w-auto">
-            <div className="relative min-w-0 flex-1 md:w-[320px] md:flex-none">
+        <div className="grid gap-3 lg:grid-cols-[minmax(360px,1fr)_auto_minmax(220px,.75fr)] lg:items-center">
+          <div className="flex min-w-0 items-center gap-2 lg:justify-self-start">
+            <div className="relative min-w-0 flex-1 sm:w-[320px] sm:flex-none">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c]" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
             </div>
             {view === "grid" && (
               <div className="flex shrink-0 items-center gap-1.5">
-                {gridSelectionMode && <button type="button" onClick={toggleAllVisible} className={`h-11 rounded-[16px] border px-3 text-xs font-bold transition-all duration-300 sm:px-4 ${allVisibleSelected ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-white"}`}>{allVisibleSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}</button>}
-                <button type="button" onClick={() => setGridSelectionMode((active) => !active)} className={`h-11 rounded-[16px] border px-3 text-xs font-bold transition-all duration-300 sm:px-4 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] shadow-[0_6px_16px_rgba(20,121,255,.10)] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-white dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
+                {gridSelectionMode && <button type="button" onClick={toggleAllVisible} className={`h-11 rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 sm:px-4 ${allVisibleSelected ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9]"}`}>{allVisibleSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}</button>}
+                <button type="button" onClick={() => setGridSelectionMode((active) => !active)} className={`h-11 rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 sm:px-4 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9] dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
               </div>
             )}
             <CollectionViewToggle value={view} onChange={setView} />
           </div>
-          <div className="flex w-full items-center gap-1.5 overflow-x-auto md:w-auto">
+
+          <div className="flex min-w-0 items-center justify-start gap-1.5 overflow-x-auto lg:justify-center">
             {([
               ["all", "الكل", "bg-[#0758e9]"],
               ["active", "نشط", "bg-emerald-500"],
@@ -91,8 +88,13 @@ export default function CustomersPage() {
               ["disabled", "معطّل", "bg-red-500"],
             ] as const).map(([value, label, dot]) => {
               const active = statusFilter === value;
-              return <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[13px] border px-3 text-xs font-bold transition-all duration-250 ${active ? "border-[#9fc4ec] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-transparent text-slate-500 hover:border-[#d7e3ef] hover:bg-[#f5f8fc] dark:text-slate-400 dark:hover:border-white/[.10] dark:hover:bg-white/[.04]"}`}><span className={`h-2 w-2 rounded-full ${dot}`} /><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] ${active ? "bg-white/80 text-[#0758e9] dark:bg-white/[.10] dark:text-white" : "bg-slate-100 text-slate-500 dark:bg-white/[.06]"}`}>{statusCounts[value]}</span></button>;
+              return <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[13px] border px-3 text-xs font-semibold transition-all duration-250 ${active ? "border-[#9fc4ec] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-transparent text-slate-500 hover:border-[#d7e3ef] hover:bg-[#f5f8fc] dark:text-[#aaa4af] dark:hover:border-white/[.10] dark:hover:bg-white/[.04] dark:hover:text-[#ded9e1]"}`}><span className={`h-2 w-2 rounded-full ${dot}`} /><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-medium ${active ? "bg-white/80 text-[#0758e9] dark:bg-white/[.10] dark:text-[#e3dfe6]" : "bg-slate-100 text-slate-500 dark:bg-white/[.06] dark:text-[#99939f]"}`}>{statusCounts[value]}</span></button>;
             })}
+          </div>
+
+          <div className="min-w-0 lg:justify-self-end">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
+            <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">عرض وإدارة حسابات عملاء Radius Lord</p>
           </div>
         </div>
       </section>
