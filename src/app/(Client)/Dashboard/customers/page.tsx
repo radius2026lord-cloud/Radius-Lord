@@ -66,7 +66,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <section className="rounded-[22px] border border-white/90 bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
+      <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
           <div className="min-w-0 shrink-0 text-right xl:w-[270px]">
             <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
@@ -74,7 +74,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center">
-            <div className="inline-flex shrink-0 items-center rounded-[16px] border border-[#dbe6f2] bg-[#f7faff] p-1 shadow-[0_4px_14px_rgba(58,84,112,.06)] dark:border-white/[.08] dark:bg-white/[.035]">
+            <div className="inline-flex shrink-0 items-center rl-surface-soft rounded-[16px] bg-[#f7faff] p-1 shadow-[0_4px_14px_rgba(58,84,112,.06)] dark:border-white/[.08] dark:bg-white/[.035]">
               {([
                 ["all", "الكل", "bg-[#0758e9]"],
                 ["active", "نشط", "bg-emerald-500"],
@@ -104,7 +104,7 @@ export default function CustomersPage() {
       </section>
 
       {selected.size > 0 && (
-        <section className="flex flex-col gap-2 rounded-[18px] border border-[#9fc4ec] bg-[#f4f8fd] p-2.5 shadow-[0_8px_22px_rgba(58,84,112,.08)] animate-slideDown dark:border-white/[.12] dark:bg-white/[.045] sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex flex-col gap-2 rl-surface rounded-[18px] bg-[#f4f8fd] p-2.5 shadow-[0_8px_22px_rgba(58,84,112,.08)] animate-slideDown dark:border-white/[.12] dark:bg-white/[.045] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold text-[#17386d] dark:text-[#d8d2dc]">
             <span className="grid h-7 min-w-7 place-items-center rounded-full bg-[#0758e9] px-2 text-white">{selected.size}</span>
             <span>تم تحديد {selected.size} من العملاء</span>
@@ -129,16 +129,16 @@ export default function CustomersPage() {
       )}
 
       {loading ? (
-        <div className="rounded-[22px] border border-white/90 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">جارٍ تحميل العملاء...</div>
+        <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">جارٍ تحميل العملاء...</div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-[22px] border border-white/90 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">لا يوجد عملاء مطابقون.</div>
+        <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">لا يوجد عملاء مطابقون.</div>
       ) : view === "grid" ? (
         <section key="grid-view" className="animate-collectionView grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((customer) => <CustomerCard key={customer.id} customer={customer} selectionMode={gridSelectionMode} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}
         </section>
       ) : (
         <>
-          <section key="row-view" className="animate-collectionView hidden overflow-hidden rounded-[22px] border border-white/90 bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
+          <section key="row-view" className="animate-collectionView hidden overflow-hidden rl-surface rounded-[22px] bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-right text-xs">
                 <thead className="border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[11px] font-semibold text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><SelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
