@@ -376,3 +376,21 @@ textarea,
   font-weight: 500;
   letter-spacing: 0.01em;
 }
+
+/* Radius Lord card-border standard: keep nested surfaces visibly separated project-wide. */
+main [class*="rounded-"][class*="border"][class*="bg-white"] {
+  border-color: #cbdbea !important;
+}
+
+main [class*="rounded-"][class*="border"][class*="bg-[#f9fbfe]"],
+main [class*="rounded-"][class*="border"][class*="bg-[#f7faff]"] {
+  border-color: #d1dfed !important;
+}
+
+.dark main [class*="rounded-"][class*="border"] {
+  border-color: rgba(255,255,255,.13) !important;
+}
+
+.dark main [class*="rounded-"][class*="border"][class*="bg-white"] {
+  border-color: rgba(255,255,255,.15) !important;
+}
