@@ -38,6 +38,8 @@ export default function CustomersPage() {
       setBulkAction("");
       setBulkMenuOpen(false);
       setGridSelectionMode(false);
+    } else {
+      setGridSelectionMode(false);
     }
   }, [view]);
 
@@ -77,6 +79,9 @@ export default function CustomersPage() {
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c]" />
             </div>
+            {view === "grid" && (
+              <button type="button" onClick={() => { setGridSelectionMode((active) => { const next = !active; if (!next) { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); } return next; }); }} className={`h-11 shrink-0 rounded-[16px] border px-3 text-xs font-bold transition-all duration-300 sm:px-4 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] shadow-[0_6px_16px_rgba(20,121,255,.10)] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-white dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
+            )}
             <CollectionViewToggle value={view} onChange={setView} />
           </div>
         </div>
@@ -112,7 +117,7 @@ export default function CustomersPage() {
         <div className="rounded-[22px] border border-white/90 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">لا يوجد عملاء مطابقون.</div>
       ) : view === "grid" ? (
         <section key="grid-view" className="animate-collectionView grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filtered.map((customer) => <CustomerCard key={customer.id} customer={customer} selectionMode={gridSelectionMode} selected={selected.has(customer.id)} onEnterSelection={() => { setGridSelectionMode(true); toggleCustomer(customer.id); }} onToggle={() => toggleCustomer(customer.id)} />)}
+          {filtered.map((customer) => <CustomerCard key={customer.id} customer={customer} selectionMode={gridSelectionMode} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} />)}
         </section>
       ) : (
         <>
@@ -148,11 +153,9 @@ function Status({ status }: { status: Customer["status"] }) {
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current" />{statusLabel[status]}</span>;
 }
 
-function CustomerCard({ customer, selectionMode, selected, onEnterSelection, onToggle }: { customer: Customer; selectionMode: boolean; selected: boolean; onEnterSelection: () => void; onToggle: () => void }) {
+function CustomerCard({ customer, selectionMode, selected, onToggle }: { customer: Customer; selectionMode: boolean; selected: boolean; onToggle: () => void }) {
   return <article onClick={() => selectionMode && onToggle()} className={`group relative min-w-0 rounded-[22px] border bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-1 hover:scale-[1.018] hover:shadow-[0_16px_34px_rgba(58,84,112,.16)] dark:bg-[#0d243b] dark:hover:shadow-[0_18px_38px_rgba(0,0,0,.22)] ${selected ? "border-[#6aaeff] bg-[#f2f7fd] ring-2 ring-[#1479ff]/15 dark:border-[#4c8dff] dark:bg-white/[.055]" : "border-white/90 hover:border-[#78afe9] hover:bg-[#e9f2ff] dark:border-white/[.07] dark:hover:border-white/[.16]"} ${selectionMode ? "cursor-pointer" : ""}`}>
-    <button type="button" onClick={(e) => { e.stopPropagation(); selectionMode ? onToggle() : onEnterSelection(); }} aria-label={selectionMode ? `تحديد ${customer.fullName}` : `بدء تحديد ${customer.fullName}`} className={`absolute left-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full border bg-white/95 shadow-[0_6px_16px_rgba(44,65,92,.14)] transition-all duration-300 dark:bg-[#38363c] ${selectionMode ? "scale-100 opacity-100" : "scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 focus:scale-100 focus:opacity-100"} ${selected ? "border-[#0758e9] text-[#0758e9]" : "border-[#c8d8e8] text-slate-400"}`}>
-      {selected ? <Check className="h-4 w-4" strokeWidth={3} /> : <span className="h-3 w-3 rounded-full border-2 border-current" />}
-    </button>
+    {selectionMode && <span aria-hidden="true" className={`absolute left-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full border shadow-[0_6px_16px_rgba(44,65,92,.12)] transition-all duration-250 ${selected ? "border-[#0758e9] bg-[#0758e9] text-white scale-105" : "border-[#b8cadc] bg-white text-transparent dark:border-white/25 dark:bg-[#38363c]"}`}><Check className="h-4 w-4" strokeWidth={3} /></span>}
     <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{customer.fullName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{customer.username || "—"}</div></div><Status status={customer.status} /></div>
     <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400"><div className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="truncate" dir="ltr">{customer.email}</span></div><div className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0" /><span dir="ltr">{customer.phone}</span></div><div className="flex items-center justify-between gap-3"><span>{customer.country}</span><span>{formatDate(customer.createdAt)}</span></div></div>
   </article>;
