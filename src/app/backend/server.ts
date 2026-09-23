@@ -1,38 +1,11 @@
 import http from 'http';
 
 import cors from 'cors';
-import express from 'express';
 
 import { app } from './app';
 import { env } from './config/env';
-// 👇 هذا السطر هو الذي يشغّل الاتصال بقاعدة البيانات
 import './config/db';
-
-import apiRoutes from './routes'; // ← استدعاء ملف الروتات
-
-const server = http.createServer(app);
-
-const startServer = (port: number) => {
-  // 👇 تسجيل جميع مسارات API
-  app.use('/api', apiRoutes);
-
-  server.listen(port, () => {
-    console.log(`🚀 Server running on http://localhost:${port}`);
-  });
-
-  server.on('error', (err: any) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(
-        `❌ Port ${port} is already in use. Trying another port...`,
-      );
-      startServer(port + 1);
-    } else {
-      console.error('Server error:', err);
-    }
-  });
-};
-
-//Port FrontEnd
+import apiRoutes from './routes';
 
 app.use(
   cors({
@@ -41,10 +14,25 @@ app.use(
   }),
 );
 
-app.use((req, res, next) => {
-  next();
-});
+app.use('/api', apiRoutes);
+
+const startServer = (port: number) => {
+  const server = http.createServer(app);
+
+  server.once('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${port} is already in use. Trying port ${port + 1}...`);
+      startServer(port + 1);
+      return;
+    }
+
+    console.error('Server error:', err);
+    process.exitCode = 1;
+  });
+
+  server.listen(port, () => {
+    console.log(`🚀 Server running on http://localhost:${port}`);
+  });
+};
 
 startServer(env.PORT);
-
-//startServer(Number(env.PORT));
