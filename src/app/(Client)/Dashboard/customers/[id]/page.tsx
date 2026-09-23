@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, UserRound, X } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, Trash2, UserRound, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 type Customer = {
@@ -78,7 +78,7 @@ export default function CustomerDetailsPage() {
     <div className="space-y-3 sm:space-y-4" dir="rtl">
       <section className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <button type="button" onClick={() => router.push("/Dashboard/customers")} className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-[#d7e3ef] bg-[#f9fbfe] text-slate-500 transition hover:border-[#9fc4ec] hover:bg-[#edf4fb] hover:text-[#0758e9] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#b8b1bd]"><ArrowRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => router.push("/Dashboard/customers")} aria-label="الرجوع إلى العملاء" title="الرجوع إلى العملاء" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(7,88,233,.10)] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff] dark:hover:border-[#6aaeff]"><ArrowRight className="h-4 w-4" /></button>
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[17px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-6 w-6" /></div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -87,7 +87,10 @@ export default function CustomerDetailsPage() {
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-[#9f98a5]">@{customer.username || "—"} · رقم العميل #{customer.id}</p>
           </div>
-          {!editing && <button type="button" onClick={beginEdit} className="flex h-10 shrink-0 items-center gap-2 rounded-[13px] border border-[#bfd4ea] bg-[#f9fbfe] px-3 text-xs font-medium text-[#0758e9] transition hover:bg-[#e9f2ff] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#cfc8d2] dark:hover:bg-white/[.07]"><Pencil className="h-4 w-4" />تعديل العميل</button>}
+          {!editing && <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button type="button" onClick={beginEdit} className="flex h-11 items-center gap-2 rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] px-3.5 text-xs font-medium text-[#0758e9] shadow-[0_4px_12px_rgba(7,88,233,.08)] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff]"><Pencil className="h-4 w-4" />تعديل العميل</button>
+            <button type="button" disabled title="حذف العميل — سيتم تفعيله بعد إضافة تأكيد الحذف" className="flex h-11 cursor-not-allowed items-center gap-2 rounded-[14px] border-2 border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-500 opacity-70 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300"><Trash2 className="h-4 w-4" />حذف العميل</button>
+          </div>}
         </div>
         {(message || error) && <div className={`mt-3 rounded-[13px] border px-3 py-2 text-xs ${error ? "border-red-200 bg-red-50 text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"}`}>{error || message}</div>}
       </section>
