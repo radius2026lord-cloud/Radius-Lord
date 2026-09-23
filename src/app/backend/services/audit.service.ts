@@ -22,11 +22,6 @@ export async function writeAuditLog(req: AuthenticatedRequest, input: AuditInput
 }
 
 export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminId: number, input: AuditInput) {
-  await writeMasterAdminAuditLog(req, req.auth.accountId, input);
-
-}
-
-export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminId: number, input: AuditInput) {
   const lookup = await db.query(
     `SELECT
        (SELECT id FROM audit_actions WHERE code = ? AND is_active = 1 LIMIT 1) AS action_id,
