@@ -29,6 +29,7 @@ export default function CustomersPage() {
   const [view, setView] = useState<CollectionViewMode>("row");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkAction, setBulkAction] = useState("");
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
@@ -78,13 +79,19 @@ export default function CustomersPage() {
             <span>تم تحديد {selected.size} من العملاء</span>
           </div>
           <div className="relative w-full sm:w-[230px]">
-            <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} className="h-10 w-full cursor-pointer appearance-none rounded-[14px] border border-[#bfd4ea] bg-white pr-3 pl-9 text-xs font-semibold text-[#17386d] outline-none transition focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-white">
-              <option value="">تطبيق إجراء جماعي...</option>
-              <option value="activate">تفعيل المحدد</option>
-              <option value="suspend">تعليق المحدد</option>
-              <option value="disable">تعطيل المحدد</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <button type="button" onClick={() => setBulkMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={bulkMenuOpen} className={`flex h-10 w-full items-center justify-between rounded-[14px] border bg-white px-3 text-xs font-semibold text-[#17386d] transition-all duration-300 dark:bg-[#38363c] dark:text-white ${bulkMenuOpen ? "border-[#8bb9f0] shadow-[0_8px_22px_rgba(20,121,255,.12)] dark:border-white/20" : "border-[#bfd4ea] dark:border-white/[.10]"}`}>
+              <span>{bulkAction === "activate" ? "تفعيل المحدد" : bulkAction === "suspend" ? "تعليق المحدد" : bulkAction === "disable" ? "تعطيل المحدد" : "تطبيق إجراء جماعي..."}</span>
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${bulkMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+            <div role="menu" className={`absolute left-0 right-0 top-[calc(100%+6px)] z-40 origin-top rounded-[18px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-[0_18px_45px_rgba(44,65,92,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.12] dark:bg-[#302e33] ${bulkMenuOpen ? "visible translate-y-0 scale-100 opacity-100" : "invisible -translate-y-2 scale-[.97] opacity-0 pointer-events-none"}`}>
+              {[["activate","تفعيل المحدد"],["suspend","تعليق المحدد"],["disable","تعطيل المحدد"]].map(([value,label]) => (
+                <button key={value} type="button" role="menuitem" onClick={() => { setBulkAction(value); setBulkMenuOpen(false); }} className={`group flex min-h-10 w-full items-center gap-2 rounded-[13px] px-3 text-right text-xs font-semibold transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:hover:bg-[#38363c] dark:hover:text-white ${bulkAction === value ? "bg-[#edf4fb] text-[#0758e9] dark:bg-[#38363c] dark:text-white" : "text-slate-700 dark:text-[#ece8ee]"}`}>
+                  <span className={`h-2 w-2 rounded-full ${value === "activate" ? "bg-emerald-500" : value === "suspend" ? "bg-amber-500" : "bg-red-500"}`} />
+                  <span>{label}</span>
+                  {bulkAction === value && <Check className="mr-auto h-4 w-4" />}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
       )}
@@ -102,7 +109,7 @@ export default function CustomersPage() {
           <section className="hidden overflow-hidden rounded-[22px] border border-white/90 bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-right text-xs">
-                <thead className="bg-[#dce9f7] text-[11px] font-bold text-[#17386d] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><SelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
+                <thead className="border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[11px] font-bold text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><SelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/[.07]">
                   {filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} />)}
                 </tbody>
