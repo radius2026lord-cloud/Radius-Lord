@@ -30,12 +30,14 @@ export default function CustomersPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkAction, setBulkAction] = useState("");
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const [gridSelectionMode, setGridSelectionMode] = useState(false);
 
   useEffect(() => {
     if (view === "grid") {
       setSelected(new Set());
       setBulkAction("");
       setBulkMenuOpen(false);
+      setGridSelectionMode(false);
     }
   }, [view]);
 
@@ -80,7 +82,7 @@ export default function CustomersPage() {
         </div>
       </section>
 
-      {view === "row" && selected.size > 0 && (
+      {selected.size > 0 && (
         <section className="flex flex-col gap-2 rounded-[18px] border border-[#9fc4ec] bg-[#f4f8fd] p-2.5 shadow-[0_8px_22px_rgba(58,84,112,.08)] animate-slideDown dark:border-white/[.12] dark:bg-white/[.045] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-[#17386d] dark:text-white">
             <span className="grid h-7 min-w-7 place-items-center rounded-full bg-[#0758e9] px-2 text-white">{selected.size}</span>
@@ -109,12 +111,12 @@ export default function CustomersPage() {
       ) : filtered.length === 0 ? (
         <div className="rounded-[22px] border border-white/90 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">لا يوجد عملاء مطابقون.</div>
       ) : view === "grid" ? (
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filtered.map((customer) => <CustomerCard key={customer.id} customer={customer} />)}
+        <section key="grid-view" className="animate-collectionView grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {filtered.map((customer) => <CustomerCard key={customer.id} customer={customer} selectionMode={gridSelectionMode} selected={selected.has(customer.id)} onEnterSelection={() => { setGridSelectionMode(true); toggleCustomer(customer.id); }} onToggle={() => toggleCustomer(customer.id)} />)}
         </section>
       ) : (
         <>
-          <section className="hidden overflow-hidden rounded-[22px] border border-white/90 bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
+          <section key="row-view" className="animate-collectionView hidden overflow-hidden rounded-[22px] border border-white/90 bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-right text-xs">
                 <thead className="border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[11px] font-bold text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><SelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
@@ -129,6 +131,14 @@ export default function CustomersPage() {
           </section>
         </>
       )}
+          <style jsx global>{`
+        @keyframes collectionViewEnter {
+          from { opacity: 0; transform: translateY(8px) scale(.992); filter: blur(2px); }
+          to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+        .animate-collectionView { animation: collectionViewEnter .34s cubic-bezier(.22,.8,.25,1) both; }
+        @media (prefers-reduced-motion: reduce) { .animate-collectionView { animation: none !important; } }
+      `}</style>
     </div>
   );
 }
@@ -138,8 +148,11 @@ function Status({ status }: { status: Customer["status"] }) {
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current" />{statusLabel[status]}</span>;
 }
 
-function CustomerCard({ customer }: { customer: Customer }) {
-  return <article className="group min-w-0 rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-1 hover:scale-[1.018] hover:border-[#78afe9] hover:bg-[#e9f2ff] hover:shadow-[0_16px_34px_rgba(58,84,112,.16)] dark:border-white/[.07] dark:bg-[#0d243b] dark:hover:border-white/[.16] dark:hover:shadow-[0_18px_38px_rgba(0,0,0,.22)]">
+function CustomerCard({ customer, selectionMode, selected, onEnterSelection, onToggle }: { customer: Customer; selectionMode: boolean; selected: boolean; onEnterSelection: () => void; onToggle: () => void }) {
+  return <article onClick={() => selectionMode && onToggle()} className={`group relative min-w-0 rounded-[22px] border bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-1 hover:scale-[1.018] hover:shadow-[0_16px_34px_rgba(58,84,112,.16)] dark:bg-[#0d243b] dark:hover:shadow-[0_18px_38px_rgba(0,0,0,.22)] ${selected ? "border-[#6aaeff] bg-[#f2f7fd] ring-2 ring-[#1479ff]/15 dark:border-[#4c8dff] dark:bg-white/[.055]" : "border-white/90 hover:border-[#78afe9] hover:bg-[#e9f2ff] dark:border-white/[.07] dark:hover:border-white/[.16]"} ${selectionMode ? "cursor-pointer" : ""}`}>
+    <button type="button" onClick={(e) => { e.stopPropagation(); selectionMode ? onToggle() : onEnterSelection(); }} aria-label={selectionMode ? `تحديد ${customer.fullName}` : `بدء تحديد ${customer.fullName}`} className={`absolute left-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full border bg-white/95 shadow-[0_6px_16px_rgba(44,65,92,.14)] transition-all duration-300 dark:bg-[#38363c] ${selectionMode ? "scale-100 opacity-100" : "scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 focus:scale-100 focus:opacity-100"} ${selected ? "border-[#0758e9] text-[#0758e9]" : "border-[#c8d8e8] text-slate-400"}`}>
+      {selected ? <Check className="h-4 w-4" strokeWidth={3} /> : <span className="h-3 w-3 rounded-full border-2 border-current" />}
+    </button>
     <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{customer.fullName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{customer.username || "—"}</div></div><Status status={customer.status} /></div>
     <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400"><div className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="truncate" dir="ltr">{customer.email}</span></div><div className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0" /><span dir="ltr">{customer.phone}</span></div><div className="flex items-center justify-between gap-3"><span>{customer.country}</span><span>{formatDate(customer.createdAt)}</span></div></div>
   </article>;
