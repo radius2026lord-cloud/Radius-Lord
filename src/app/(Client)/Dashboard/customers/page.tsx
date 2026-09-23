@@ -27,6 +27,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<CollectionViewMode>("row");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
@@ -46,6 +47,10 @@ export default function CustomersPage() {
         .filter(Boolean).some((field) => String(field).toLowerCase().includes(value)),
     );
   }, [customers, query]);
+
+  const allVisibleSelected = filtered.length > 0 && filtered.every((customer) => selected.has(customer.id));
+  const toggleCustomer = (id: number) => setSelected((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const toggleAllVisible = () => setSelected((current) => { const next = new Set(current); if (allVisibleSelected) filtered.forEach((customer) => next.delete(customer.id)); else filtered.forEach((customer) => next.add(customer.id)); return next; });
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -78,9 +83,9 @@ export default function CustomersPage() {
           <section className="hidden overflow-hidden rounded-[22px] border border-white/90 bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-right text-xs">
-                <thead className="bg-[#f6f9fc] text-[11px] text-slate-500 dark:bg-white/[.035] dark:text-slate-400"><tr><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
+                <thead className="bg-[#dce9f7] text-[11px] font-bold text-[#17386d] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="تحديد كل العملاء الظاهرين" className="h-4 w-4 cursor-pointer accent-[#0758e9]" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/[.07]">
-                  {filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} />)}
+                  {filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} />)}
                 </tbody>
               </table>
             </div>
@@ -106,8 +111,8 @@ function CustomerCard({ customer }: { customer: Customer }) {
   </article>;
 }
 
-function CustomerRow({ customer }: { customer: Customer }) {
-  return <tr className="text-slate-600 transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]"><td className="p-3"><div className="font-bold text-[#17386d] dark:text-white">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
+function CustomerRow({ customer, selected, onToggle }: { customer: Customer; selected: boolean; onToggle: () => void }) {
+  return <tr className={`text-slate-600 ${selected ? "bg-[#e9f2ff] dark:bg-white/[.06]" : ""} transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]`}><td className="w-12 p-3 text-center"><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`تحديد ${customer.fullName}`} className="h-4 w-4 cursor-pointer accent-[#0758e9]" /></td><td className="p-3"><div className="font-bold text-[#17386d] dark:text-white">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
 }
 
 function CustomerMobileRow({ customer }: { customer: Customer }) {
