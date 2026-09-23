@@ -18,6 +18,10 @@ function requestIp(req: AuthenticatedRequest) {
 
 export async function writeAuditLog(req: AuthenticatedRequest, input: AuditInput) {
   if (req.auth?.accountType !== 'master_admin') return;
+  return writeMasterAdminAuditLog(req, req.auth.accountId, input);
+}
+
+export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminId: number, input: AuditInput) {
   await writeMasterAdminAuditLog(req, req.auth.accountId, input);
 
 }
