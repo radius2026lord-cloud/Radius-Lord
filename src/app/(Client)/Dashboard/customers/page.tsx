@@ -65,22 +65,13 @@ export default function CustomersPage() {
   return (
     <div className="space-y-3 sm:space-y-4">
       <section className="rounded-[22px] border border-white/90 bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
-          <div className="flex min-w-0 items-center gap-2 lg:order-3 lg:w-full lg:justify-self-start lg:justify-start" dir="ltr">
-            <div className="relative min-w-0 flex-1 sm:w-[320px] sm:flex-none" dir="rtl">
-              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
-            </div>
-            {view === "grid" && (
-              <div className="flex shrink-0 items-center gap-1.5">
-                {gridSelectionMode && <button type="button" onClick={toggleAllVisible} className={`h-11 rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 sm:px-4 ${allVisibleSelected ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9]"}`}>{allVisibleSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}</button>}
-                <button type="button" onClick={() => setGridSelectionMode((active) => !active)} className={`h-11 rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 sm:px-4 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9] dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
-              </div>
-            )}
-            <CollectionViewToggle value={view} onChange={setView} />
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
+          <div className="min-w-0 shrink-0 text-right xl:w-[270px]">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
+            <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">عرض وإدارة حسابات عملاء Radius Lord</p>
           </div>
 
-          <div className="flex min-w-0 items-center justify-start gap-1.5 overflow-x-auto lg:order-2 lg:justify-self-center" dir="rtl">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto xl:justify-center">
             {([
               ["all", "الكل", "bg-[#0758e9]"],
               ["active", "نشط", "bg-emerald-500"],
@@ -92,9 +83,18 @@ export default function CustomersPage() {
             })}
           </div>
 
-          <div className="min-w-0 text-right lg:order-1 lg:w-full lg:justify-self-end" dir="rtl">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
-            <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">عرض وإدارة حسابات عملاء Radius Lord</p>
+          <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[560px]" dir="ltr">
+            <CollectionViewToggle value={view} onChange={setView} />
+            <div className="relative min-w-0 flex-1" dir="rtl">
+              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
+            </div>
+            {view === "grid" && (
+              <div className="flex shrink-0 items-center gap-1.5" dir="rtl">
+                {gridSelectionMode && <button type="button" onClick={toggleAllVisible} className={`h-11 whitespace-nowrap rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 ${allVisibleSelected ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9]"}`}>{allVisibleSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}</button>}
+                <button type="button" onClick={() => setGridSelectionMode((active) => !active)} className={`h-11 whitespace-nowrap rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9] dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
+              </div>
+            )}
           </div>
         </div>
       </section>
