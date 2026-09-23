@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, Trash2, UserRound, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, Trash2, UserRound, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+
+type RecentActivity = { id:number; actionCode:string; actionName:string; description:string|null; adminName:string|null; adminUsername:string|null; createdAt:string; metadata:any };
+
+const activityTone:Record<string,string>={ CREATE:"bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300", UPDATE:"bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300", DELETE:"bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300", SUSPEND:"bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" };
 
 type Customer = {
   id: number;
@@ -23,6 +27,7 @@ export default function CustomerDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -48,6 +53,15 @@ export default function CustomerDetailsPage() {
       .finally(() => setLoading(false));
   }, [params.id]);
 
+  const loadRecentActivity = () => {
+    fetch(`/api/admin/audit-logs/customer/${params.id}`, { credentials: "include", cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => setRecentActivity(data?.logs ?? []))
+      .catch(() => setRecentActivity([]));
+  };
+
+  useEffect(() => { loadRecentActivity(); }, [params.id]);
+
   const beginEdit = () => {
     if (!customer) return;
     setForm({ fullName: customer.fullName, username: customer.username ?? "", email: customer.email, phone: customer.phone, country: customer.country });
@@ -65,6 +79,7 @@ export default function CustomerDetailsPage() {
       setCustomer(data.customer);
       setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email, phone: data.customer.phone, country: data.customer.country });
       setEditing(false); setMessage(data.message || "تم حفظ التعديلات بنجاح.");
+      loadRecentActivity();
     } catch (err) { setError(err instanceof Error ? err.message : "تعذر حفظ التعديلات."); }
     finally { setSaving(false); }
   };
@@ -130,6 +145,19 @@ export default function CustomerDetailsPage() {
             <Info icon={CalendarDays} label="آخر تحديث" value={formatDateTime(customer.updatedAt)} />
           </div>
         </div>
+      </section>
+
+      <section className="rl-surface rounded-[22px] bg-white p-4 dark:bg-[#0d243b]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div><h3 className="flex items-center gap-2 text-sm font-semibold text-[#17386d] dark:text-[#d8d2dc]"><Activity className="h-4 w-4 text-[#0758e9]" />آخر النشاطات</h3><p className="mt-1 text-[11px] text-slate-400">آخر العمليات الإدارية على هذا العميل</p></div>
+          <button type="button" onClick={() => router.push(`/Dashboard/logs/admin?entityType=CUSTOMER&entityId=${customer.id}`)} className="flex h-9 items-center gap-1.5 rounded-[12px] border border-[#9db8d1] bg-[#f7faff] px-3 text-[11px] font-medium text-[#0758e9] transition hover:bg-[#e9f2ff] dark:border-white/[.12] dark:bg-white/[.04] dark:text-[#8fc0ff]">عرض السجل الكامل<ArrowLeft className="h-3.5 w-3.5" /></button>
+        </div>
+        {recentActivity.length === 0 ? <div className="rl-surface-soft rounded-[16px] bg-[#f9fbfe] p-5 text-center text-xs text-slate-400 dark:bg-white/[.035]">لا توجد نشاطات مسجلة لهذا العميل حتى الآن.</div> :
+        <div className="space-y-2">{recentActivity.map((item) => <div key={item.id} className="rl-surface-soft ui-state-enter flex flex-col gap-2 rounded-[16px] bg-[#f9fbfe] p-3 dark:bg-white/[.035] sm:flex-row sm:items-center">
+          <span className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium ${activityTone[item.actionCode] ?? "bg-slate-100 text-slate-600 dark:bg-white/[.08] dark:text-slate-300"}`}>{item.actionName}</span>
+          <div className="min-w-0 flex-1"><div className="truncate text-xs font-medium text-slate-650 dark:text-slate-200">{item.description || "عملية إدارية"}</div><div className="mt-1 text-[10px] text-slate-400">بواسطة {item.adminName || item.adminUsername || "النظام"}</div></div>
+          <div className="shrink-0 text-[10px] text-slate-400">{formatDateTime(item.createdAt)}</div>
+        </div>)}</div>}
       </section>
 
       <section className="rounded-[22px] border border-dashed border-[#cbd9e7] bg-white/60 p-5 text-center dark:border-white/[.10] dark:bg-white/[.025]">
