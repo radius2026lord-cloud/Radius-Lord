@@ -11,6 +11,8 @@ import {
   Bell,
   CircleDollarSign,
   Clock3,
+  ChevronDown,
+  CreditCard,
   Crown,
   Database,
   FileClock,
@@ -27,26 +29,75 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  ScrollText,
   Sun,
+  UserCog,
   UserPlus,
   UserRound,
   Users,
   X,
 } from "lucide-react";
 
-const navGroups = [
-  { label: "الشبكة", items: [
+type NavItem = { label: string; href: string; icon: any };
+type NavGroup = { label: string; icon: any; items: NavItem[] };
+
+const masterAdminHome: NavItem = { label: "لوحة التحكم", href: "/Dashboard", icon: Home };
+
+const masterAdminGroups: NavGroup[] = [
+  { label: "العملاء", icon: Users, items: [
+    { label: "عرض العملاء", href: "/Dashboard/customers", icon: Users },
+    { label: "إضافة عميل", href: "/Dashboard/customers/add", icon: UserPlus },
+    { label: "الحسابات الموقوفة", href: "/Dashboard/customers/suspended", icon: UserCog },
+  ]},
+  { label: "خطط الأسعار", icon: CircleDollarSign, items: [
+    { label: "عرض الخطط", href: "/Dashboard/plans", icon: Layers3 },
+    { label: "إضافة خطة", href: "/Dashboard/plans/add", icon: PackagePlus },
+    { label: "إدارة الخطط", href: "/Dashboard/plans/manage", icon: Settings },
+  ]},
+  { label: "الاشتراكات", icon: CreditCard, items: [
+    { label: "عرض الاشتراكات", href: "/Dashboard/subscriptions", icon: CreditCard },
+    { label: "الاشتراكات النشطة", href: "/Dashboard/subscriptions/active", icon: ShieldCheck },
+    { label: "المنتهية والقريبة من الانتهاء", href: "/Dashboard/subscriptions/expiring", icon: Clock3 },
+  ]},
+  { label: "الشبكات", icon: Radio, items: [
+    { label: "عرض الشبكات", href: "/Dashboard/networks", icon: Radio },
+    { label: "إضافة شبكة", href: "/Dashboard/networks/add", icon: PackagePlus },
+    { label: "حالة الشبكات", href: "/Dashboard/networks/status", icon: Activity },
+  ]},
+  { label: "أجهزة NAS", icon: Server, items: [
+    { label: "عرض أجهزة NAS", href: "/Dashboard/nas", icon: Server },
+    { label: "إضافة NAS", href: "/Dashboard/nas/add", icon: PackagePlus },
+    { label: "حالة الأجهزة", href: "/Dashboard/nas/status", icon: Activity },
+  ]},
+  { label: "النظام", icon: Database, items: [
+    { label: "FreeRADIUS", href: "/Dashboard/system/freeradius", icon: Radio },
+    { label: "قواعد البيانات", href: "/Dashboard/system/databases", icon: Database },
+    { label: "حالة الخدمات", href: "/Dashboard/system/services", icon: Activity },
+  ]},
+  { label: "السجلات", icon: ScrollText, items: [
+    { label: "سجلات النظام", href: "/Dashboard/logs/system", icon: ScrollText },
+    { label: "سجلات RADIUS", href: "/Dashboard/logs/radius", icon: FileClock },
+    { label: "نشاط الإدارة", href: "/Dashboard/logs/admin", icon: ShieldCheck },
+  ]},
+  { label: "الإعدادات", icon: Settings, items: [
+    { label: "إعدادات المنصة", href: "/Dashboard/settings", icon: Settings },
+    { label: "الصلاحيات", href: "/Dashboard/settings/permissions", icon: ShieldCheck },
+  ]},
+];
+
+const customerNavGroups: NavGroup[] = [
+  { label: "الشبكة", icon: Radio, items: [
     { label: "لوحة التحكم", href: "/Dashboard", icon: Home },
     { label: "أجهزة NAS", href: "/Dashboard/nas", icon: Server },
     { label: "الجلسات الحية", href: "/Dashboard/sessions", icon: Activity },
     { label: "سجلات RADIUS", href: "/Dashboard/radius-logs", icon: FileClock },
   ]},
-  { label: "المشتركون", items: [
+  { label: "المشتركون", icon: Users, items: [
     { label: "المشتركون", href: "/Dashboard/subscribers", icon: Users },
     { label: "الباقات", href: "/Dashboard/packages", icon: Layers3 },
     { label: "الحسابات المنتهية", href: "/Dashboard/expired", icon: Clock3 },
   ]},
-  { label: "الإدارة", items: [
+  { label: "الإدارة", icon: Settings, items: [
     { label: "المحاسبة", href: "/Dashboard/billing", icon: CircleDollarSign },
     { label: "التقارير", href: "/Dashboard/reports", icon: Gauge },
     { label: "الإعدادات", href: "/Dashboard/settings", icon: Settings },
@@ -83,6 +134,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [openNavGroups, setOpenNavGroups] = useState<Record<string, boolean>>({});
   useEffect(() => setMounted(true), []);
 
   const logout = async () => {
@@ -102,9 +154,24 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
   const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
   const currentTitle = useMemo(() => {
-    for (const group of navGroups) { const match = group.items.find((item) => pathname === item.href); if (match) return match.label; }
+    if (pathname === masterAdminHome.href) return masterAdminHome.label;
+    const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
+    for (const group of groups) {
+      const match = group.items.find((item) => pathname === item.href);
+      if (match) return match.label;
+    }
     return "لوحة التحكم";
-  }, [pathname]);
+  }, [pathname, accountType]);
+
+  useEffect(() => {
+    const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
+    const activeGroup = groups.find((group) => group.items.some((item) => pathname === item.href));
+    if (activeGroup) setOpenNavGroups((current) => ({ ...current, [activeGroup.label]: true }));
+  }, [pathname, accountType]);
+
+  const toggleNavGroup = (label: string) => {
+    setOpenNavGroups((current) => ({ ...current, [label]: !current[label] }));
+  };
 
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => {
     const compact = !mobile && collapsed;
@@ -115,16 +182,34 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           {mobile && <button onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200/80 dark:border-white/10" aria-label="إغلاق القائمة"><X className="h-5 w-5" /></button>}
         </div>
         <nav className={`sidebar min-h-0 flex-1 overflow-y-auto pb-3 ${shellMotion} ${compact ? "px-3" : "px-2"}`}>
-          {navGroups.map((group) => <div key={group.label} className="mb-5">
-            <div className={`overflow-hidden px-3 text-[11px] font-semibold text-slate-400 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:text-slate-500 ${compact ? "mb-0 max-h-0 -translate-x-2 opacity-0" : "mb-2 max-h-6 translate-x-0 opacity-100"}`}>{group.label}</div>
-            <div className="space-y-1">{group.items.map((item) => {
-              const Icon = item.icon; const active = pathname === item.href;
-              return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? item.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-sm font-medium ${shellMotion} ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${active ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8] dark:group-hover:bg-[#454149] dark:group-hover:text-[#8ab5ff]"}`}><Icon className="h-5 w-5" /></span>
-                <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] translate-x-0 opacity-100"}`}>{item.label}</span>
-              </Link>;
-            })}</div>
-          </div>)}
+          {accountType === "master_admin" && (
+            <div className="mb-3">
+              <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-sm font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${pathname === masterAdminHome.href ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><Home className="h-5 w-5" /></span>
+                <span className={`overflow-hidden whitespace-nowrap ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] opacity-100"}`}>لوحة التحكم</span>
+              </Link>
+            </div>
+          )}
+          {(accountType === "master_admin" ? masterAdminGroups : customerNavGroups).map((group) => {
+            const GroupIcon = group.icon;
+            const groupActive = group.items.some((item) => pathname === item.href);
+            const open = Boolean(openNavGroups[group.label]);
+            return <div key={group.label} className="mb-2">
+              <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-sm font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${groupActive ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.20)]" : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><GroupIcon className="h-5 w-5" /></span>
+                <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"}`}>{group.label}</span>
+                {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />}
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] ${!compact && open ? "max-h-[260px] opacity-100" : "max-h-0 opacity-0"}`}>
+                <div className="space-y-1 py-1 pr-5">
+                  {group.items.map((item) => {
+                    const Icon = item.icon; const active = pathname === item.href;
+                    return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 text-[12px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
+                  })}
+                </div>
+              </div>
+            </div>;
+          })}
         </nav>
         <div className={`p-2 ${shellMotion}`}><button type="button" onClick={logout} disabled={loggingOut} className={`flex min-h-12 w-full items-center rounded-[18px] border border-red-500 text-sm font-semibold text-red-500 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400"><LogOut className="h-5 w-5" /></span>
