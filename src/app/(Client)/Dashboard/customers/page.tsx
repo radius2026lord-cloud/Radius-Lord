@@ -32,6 +32,14 @@ export default function CustomersPage() {
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
 
   useEffect(() => {
+    if (view === "grid") {
+      setSelected(new Set());
+      setBulkAction("");
+      setBulkMenuOpen(false);
+    }
+  }, [view]);
+
+  useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Failed");
@@ -72,7 +80,7 @@ export default function CustomersPage() {
         </div>
       </section>
 
-      {selected.size > 0 && (
+      {view === "row" && selected.size > 0 && (
         <section className="flex flex-col gap-2 rounded-[18px] border border-[#9fc4ec] bg-[#f4f8fd] p-2.5 shadow-[0_8px_22px_rgba(58,84,112,.08)] animate-slideDown dark:border-white/[.12] dark:bg-white/[.045] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-[#17386d] dark:text-white">
             <span className="grid h-7 min-w-7 place-items-center rounded-full bg-[#0758e9] px-2 text-white">{selected.size}</span>
