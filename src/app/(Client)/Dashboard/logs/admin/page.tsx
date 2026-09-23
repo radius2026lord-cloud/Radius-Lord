@@ -18,6 +18,14 @@ const actionTone:Record<string,string>={
   LOGIN:"bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-300 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30",
   LOGOUT:"bg-slate-200 text-slate-600 ring-1 ring-inset ring-slate-300 dark:bg-white/[.08] dark:text-slate-300 dark:ring-white/[.12]",
 };
+const filterTone:Record<string,string>={
+  ALL:"bg-white text-[#0758e9] ring-1 ring-inset ring-[#b8d3f0] shadow-sm dark:bg-white/[.08] dark:text-[#9fc2ff] dark:ring-white/[.12]",
+  CREATE:"bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30",
+  UPDATE:"bg-blue-100 text-blue-700 ring-1 ring-inset ring-blue-300 shadow-sm dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30",
+  DELETE:"bg-red-100 text-red-700 ring-1 ring-inset ring-red-300 shadow-sm dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/30",
+  LOGIN:"bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-300 shadow-sm dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30",
+  LOGOUT:"bg-slate-200 text-slate-600 ring-1 ring-inset ring-slate-300 shadow-sm dark:bg-white/[.08] dark:text-slate-300 dark:ring-white/[.12]",
+};
 const fieldLabel:Record<string,string>={full_name:"الاسم الكامل",username:"اسم المستخدم",email:"البريد الإلكتروني",phone:"رقم الهاتف",country:"الدولة"};
 
 export default function AdminActivityPage(){
@@ -37,7 +45,7 @@ export default function AdminActivityPage(){
     <section className="rl-surface rounded-[22px] bg-white p-3 dark:bg-[#0d243b] sm:p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
         <div className="min-w-0 xl:w-[260px]"><h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-[#ece8ee]"><ShieldCheck className="h-5 w-5 text-[#0758e9]"/>نشاط الإدارة</h2><p className="mt-1 text-xs text-slate-500">سجل العمليات الإدارية في Radius Lord</p></div>
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center"><div className="rl-surface-soft inline-flex shrink-0 rounded-[16px] bg-[#f7faff] p-1 dark:bg-white/[.035]">{["ALL","CREATE","UPDATE","DELETE","LOGIN","LOGOUT"].map(v=><button key={v} onClick={()=>setFilter(v)} className={`h-9 rounded-[12px] px-3 text-xs font-medium transition ${filter===v?"bg-white text-[#0758e9] shadow-sm dark:bg-white/[.08] dark:text-slate-200":"text-slate-500"}`}>{v==="ALL"?"الكل":v==="CREATE"?"إضافة":v==="UPDATE"?"تعديل":v==="DELETE"?"حذف":v==="LOGIN"?"دخول":"خروج"}</button>)}</div></div>
+        <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center"><div className="rl-surface-soft inline-flex shrink-0 rounded-[16px] bg-[#f7faff] p-1 dark:bg-white/[.035]">{["ALL","CREATE","UPDATE","DELETE","LOGIN","LOGOUT"].map(v=><button key={v} onClick={()=>setFilter(v)} className={`h-9 rounded-[12px] px-3 text-xs font-medium transition ${filter===v?filterTone[v]:"text-slate-500 hover:bg-white/70 dark:text-slate-400 dark:hover:bg-white/[.05]"}`}>{v==="ALL"?"الكل":v==="CREATE"?"إضافة":v==="UPDATE"?"تعديل":v==="DELETE"?"حذف":v==="LOGIN"?"دخول":"خروج"}</button>)}</div></div>
         <div className="flex min-w-0 items-center gap-2 xl:w-[390px]" dir="ltr"><CollectionViewToggle value={view} onChange={setView}/><div className="relative flex-1" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="بحث في السجل..." className="h-11 w-full rounded-[16px] border border-[#b5cbe0] bg-[#f9fbfe] pr-10 pl-3 text-sm outline-none focus:border-[#6aaeff] dark:border-white/[.12] dark:bg-[#38363c]"/></div></div>
       </div>
     </section>
