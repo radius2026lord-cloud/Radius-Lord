@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Mail, Phone, Search, UserRound, Users } from "lucide-react";
-import CollectionViewToggle, { CollectionViewMode } from "@/components/ui/collection-view-toggle";
+import CollectionViewToggle from "@/components/ui/collection-view-toggle";
+import { useCollectionState } from "@/components/ui/use-collection-state";
 
 type Customer = {
   id: number;
@@ -26,22 +27,10 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<CollectionViewMode>("row");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const { view, setView, selected, setSelected, selectionMode: gridSelectionMode, setSelectionMode: setGridSelectionMode, toggle: toggleCustomer, setAll: setAllCustomers } = useCollectionState<number>("customers", "row");
   const [bulkAction, setBulkAction] = useState("");
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
   const [gridSelectionMode, setGridSelectionMode] = useState(false);
-
-  useEffect(() => {
-    if (view === "grid") {
-      setSelected(new Set());
-      setBulkAction("");
-      setBulkMenuOpen(false);
-      setGridSelectionMode(false);
-    } else {
-      setGridSelectionMode(false);
-    }
-  }, [view]);
 
   useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
@@ -63,8 +52,7 @@ export default function CustomersPage() {
   }, [customers, query]);
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((customer) => selected.has(customer.id));
-  const toggleCustomer = (id: number) => setSelected((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const toggleAllVisible = () => setSelected((current) => { const next = new Set(current); if (allVisibleSelected) filtered.forEach((customer) => next.delete(customer.id)); else filtered.forEach((customer) => next.add(customer.id)); return next; });
+  const toggleAllVisible = () => setAllCustomers(filtered.map((customer) => customer.id), !allVisibleSelected);
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -82,7 +70,7 @@ export default function CustomersPage() {
             {view === "grid" && (
               <div className="flex shrink-0 items-center gap-1.5">
                 {gridSelectionMode && <button type="button" onClick={toggleAllVisible} className={`h-11 rounded-[16px] border px-3 text-xs font-bold transition-all duration-300 sm:px-4 ${allVisibleSelected ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-white"}`}>{allVisibleSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}</button>}
-                <button type="button" onClick={() => { setGridSelectionMode((active) => { const next = !active; if (!next) { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); } return next; }); }} className={`h-11 rounded-[16px] border px-3 text-xs font-bold transition-all duration-300 sm:px-4 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] shadow-[0_6px_16px_rgba(20,121,255,.10)] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-white dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
+                <button type="button" onClick={() => setGridSelectionMode((active) => !active)} className={`h-11 rounded-[16px] border px-3 text-xs font-bold transition-all duration-300 sm:px-4 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] shadow-[0_6px_16px_rgba(20,121,255,.10)] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-white dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
               </div>
             )}
             <CollectionViewToggle value={view} onChange={setView} />
