@@ -11,12 +11,12 @@ type AuditLog = {
   userAgent:string|null; metadata:any; createdAt:string;
 };
 const actionTone:Record<string,string>={
-  CREATE:"bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300",
-  UPDATE:"bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300",
-  DELETE:"bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300",
-  SUSPEND:"bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300",
-  LOGIN:"bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300",
-  LOGOUT:"bg-slate-100 text-slate-500 dark:bg-white/[.06] dark:text-slate-300",
+  CREATE:"bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30",
+  UPDATE:"bg-blue-100 text-blue-700 ring-1 ring-inset ring-blue-300 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30",
+  DELETE:"bg-red-100 text-red-700 ring-1 ring-inset ring-red-300 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/30",
+  SUSPEND:"bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30",
+  LOGIN:"bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-300 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30",
+  LOGOUT:"bg-slate-200 text-slate-600 ring-1 ring-inset ring-slate-300 dark:bg-white/[.08] dark:text-slate-300 dark:ring-white/[.12]",
 };
 const fieldLabel:Record<string,string>={full_name:"الاسم الكامل",username:"اسم المستخدم",email:"البريد الإلكتروني",phone:"رقم الهاتف",country:"الدولة"};
 
