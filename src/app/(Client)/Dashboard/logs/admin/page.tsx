@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Activity, ChevronDown, ChevronUp, Clock3, FileClock, Search, ShieldCheck, UserRound } from "lucide-react";
+import { Activity, ArrowRight, ChevronDown, ChevronUp, Clock3, FileClock, Search, ShieldCheck, UserRound } from "lucide-react";
 import CollectionViewToggle, { CollectionViewMode } from "@/components/ui/collection-view-toggle";
 
 type AuditLog = {
@@ -50,7 +50,10 @@ export default function AdminActivityPage(){
   return <div className="space-y-3 sm:space-y-4">
     <section className="rl-surface rounded-[22px] bg-white p-3 dark:bg-[#0d243b] sm:p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
-        <div className="min-w-0 xl:w-[260px]"><h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-[#ece8ee]"><ShieldCheck className="h-5 w-5 text-[#0758e9]"/>نشاط الإدارة</h2><p className="mt-1 text-xs text-slate-500">سجل العمليات الإدارية في Radius Lord</p></div>
+        <div className="flex min-w-0 items-center gap-2 xl:w-[300px]">
+          {scopedEntityType==="CUSTOMER"&&scopedEntityId&&<button type="button" onClick={()=>window.location.href=`/Dashboard/customers/${scopedEntityId}`} aria-label="الرجوع إلى صفحة العميل" title="الرجوع إلى صفحة العميل" className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff]"><ArrowRight className="h-4 w-4"/></button>}
+          <div className="min-w-0"><h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-[#ece8ee]"><ShieldCheck className="h-5 w-5 text-[#0758e9]"/>نشاط الإدارة</h2><p className="mt-1 text-xs text-slate-500">{scopedEntityType==="CUSTOMER"&&scopedEntityId?"السجل الكامل لهذا العميل":"سجل العمليات الإدارية في Radius Lord"}</p></div>
+        </div>
         <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center"><div className="rl-surface-soft inline-flex shrink-0 rounded-[16px] bg-[#f7faff] p-1 dark:bg-white/[.035]">{["ALL","CREATE","UPDATE","DELETE","LOGIN","LOGOUT"].map(v=><button key={v} onClick={()=>setFilter(v)} className={`h-9 rounded-[12px] px-3 text-xs font-medium transition ${filter===v?filterTone[v]:"text-slate-500 hover:bg-white/70 dark:text-slate-400 dark:hover:bg-white/[.05]"}`}>{v==="ALL"?"الكل":v==="CREATE"?"إضافة":v==="UPDATE"?"تعديل":v==="DELETE"?"حذف":v==="LOGIN"?"دخول":"خروج"}</button>)}</div></div>
         <div className="flex min-w-0 items-center gap-2 xl:w-[390px]" dir="ltr"><CollectionViewToggle value={view} onChange={setView}/><div className="relative flex-1" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="بحث في السجل..." className="h-11 w-full rounded-[16px] border border-[#b5cbe0] bg-[#f9fbfe] pr-10 pl-3 text-sm outline-none focus:border-[#6aaeff] dark:border-white/[.12] dark:bg-[#38363c]"/></div></div>
       </div>
