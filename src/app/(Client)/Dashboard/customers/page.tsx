@@ -83,26 +83,17 @@ export default function CustomersPage() {
             )}
             <CollectionViewToggle value={view} onChange={setView} />
           </div>
-        </div>
-      </section>
-
-      <section className="overflow-x-auto rounded-[18px] border border-white/90 bg-white p-1.5 shadow-[0_6px_18px_rgba(58,84,112,.06)] dark:border-white/[.07] dark:bg-[#0d243b]">
-        <div className="flex min-w-max items-center gap-1.5">
-          {([
-            ["all", "الكل", "bg-[#0758e9]"],
-            ["active", "نشط", "bg-emerald-500"],
-            ["suspended", "معلّق", "bg-amber-500"],
-            ["disabled", "معطّل", "bg-red-500"],
-          ] as const).map(([value, label, dot]) => {
-            const active = statusFilter === value;
-            return (
-              <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 items-center gap-2 rounded-[13px] border px-3 text-xs font-bold transition-all duration-250 ${active ? "border-[#9fc4ec] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(20,121,255,.08)] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-transparent text-slate-500 hover:border-[#d7e3ef] hover:bg-[#f5f8fc] hover:text-[#17386d] dark:text-slate-400 dark:hover:border-white/[.10] dark:hover:bg-white/[.04] dark:hover:text-white"}`}>
-                <span className={`h-2 w-2 rounded-full ${dot}`} />
-                <span>{label}</span>
-                <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] ${active ? "bg-white/80 text-[#0758e9] dark:bg-white/[.10] dark:text-white" : "bg-slate-100 text-slate-500 dark:bg-white/[.06] dark:text-slate-400"}`}>{statusCounts[value]}</span>
-              </button>
-            );
-          })}
+          <div className="flex w-full items-center gap-1.5 overflow-x-auto md:w-auto">
+            {([
+              ["all", "الكل", "bg-[#0758e9]"],
+              ["active", "نشط", "bg-emerald-500"],
+              ["suspended", "معلّق", "bg-amber-500"],
+              ["disabled", "معطّل", "bg-red-500"],
+            ] as const).map(([value, label, dot]) => {
+              const active = statusFilter === value;
+              return <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[13px] border px-3 text-xs font-bold transition-all duration-250 ${active ? "border-[#9fc4ec] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-white" : "border-transparent text-slate-500 hover:border-[#d7e3ef] hover:bg-[#f5f8fc] dark:text-slate-400 dark:hover:border-white/[.10] dark:hover:bg-white/[.04]"}`}><span className={`h-2 w-2 rounded-full ${dot}`} /><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] ${active ? "bg-white/80 text-[#0758e9] dark:bg-white/[.10] dark:text-white" : "bg-slate-100 text-slate-500 dark:bg-white/[.06]"}`}>{statusCounts[value]}</span></button>;
+            })}
+          </div>
         </div>
       </section>
 
@@ -111,6 +102,7 @@ export default function CustomersPage() {
           <div className="flex items-center gap-2 text-xs font-bold text-[#17386d] dark:text-white">
             <span className="grid h-7 min-w-7 place-items-center rounded-full bg-[#0758e9] px-2 text-white">{selected.size}</span>
             <span>تم تحديد {selected.size} من العملاء</span>
+            <button type="button" onClick={() => { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); }} className="mr-1 rounded-[10px] border border-[#bfd4ea] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#0758e9] transition hover:bg-[#e9f2ff] dark:border-white/[.12] dark:bg-[#38363c] dark:text-white dark:hover:bg-white/[.08]">إلغاء التحديد</button>
           </div>
           <div className="relative w-full sm:w-[230px]">
             <button type="button" onClick={() => setBulkMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={bulkMenuOpen} className={`flex h-10 w-full items-center justify-between rounded-[14px] border bg-white px-3 text-xs font-semibold text-[#17386d] transition-all duration-300 dark:bg-[#38363c] dark:text-white ${bulkMenuOpen ? "border-[#8bb9f0] shadow-[0_8px_22px_rgba(20,121,255,.12)] dark:border-white/20" : "border-[#bfd4ea] dark:border-white/[.10]"}`}>
