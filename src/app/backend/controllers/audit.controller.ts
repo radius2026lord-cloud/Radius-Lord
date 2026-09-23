@@ -46,3 +46,44 @@ export const listAuditLogsController = async (req: AuthenticatedRequest, res: Re
     return res.status(500).json({ success: false, message: 'تعذر تحميل سجل نشاط الإدارة حاليًا.' });
   }
 };
+
+
+export const customerAuditLogsController = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const customerId = Number(req.params.customerId);
+    if (!Number.isInteger(customerId) || customerId < 1) {
+      return res.status(400).json({ success: false, message: 'معرّف العميل غير صالح.' });
+    }
+
+    const result = await db.query(
+      `SELECT l.id, l.entity_id, l.description, l.metadata, l.created_at,
+              a.code AS action_code, a.name_ar AS action_name,
+              m.full_name AS admin_name, m.username AS admin_username
+       FROM central_audit_logs l
+       JOIN audit_actions a ON a.id = l.action_id
+       JOIN audit_entity_types e ON e.id = l.entity_type_id
+       LEFT JOIN master_admins m ON m.id = l.admin_id
+       WHERE e.code = 'CUSTOMER' AND l.entity_id = ?
+       ORDER BY l.id DESC
+       LIMIT 5`,
+      [customerId],
+    );
+    const rows = result[0] as any[];
+    return res.json({
+      success: true,
+      logs: rows.map((row) => ({
+        id: row.id,
+        actionCode: row.action_code,
+        actionName: row.action_name,
+        description: row.description,
+        adminName: row.admin_name,
+        adminUsername: row.admin_username,
+        metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('Customer audit logs error:', err);
+    return res.status(500).json({ success: false, message: 'تعذر تحميل آخر نشاطات العميل حاليًا.' });
+  }
+};
