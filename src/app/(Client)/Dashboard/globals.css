@@ -377,20 +377,26 @@ textarea,
   letter-spacing: 0.01em;
 }
 
-/* Radius Lord card-border standard: keep nested surfaces visibly separated project-wide. */
+/* Radius Lord card-border standard: clearly separate cards from their workspace. */
+main [class*="rounded-"][class*="border"] {
+  border-color: #b8cee3 !important;
+}
+
 main [class*="rounded-"][class*="border"][class*="bg-white"] {
-  border-color: #cbdbea !important;
+  border-color: #aac6df !important;
+  box-shadow: 0 5px 16px rgba(54, 86, 120, .055);
 }
 
 main [class*="rounded-"][class*="border"][class*="bg-[#f9fbfe]"],
 main [class*="rounded-"][class*="border"][class*="bg-[#f7faff]"] {
-  border-color: #d1dfed !important;
+  border-color: #bdd2e6 !important;
 }
 
 .dark main [class*="rounded-"][class*="border"] {
-  border-color: rgba(255,255,255,.13) !important;
+  border-color: rgba(157, 174, 194, .28) !important;
 }
 
 .dark main [class*="rounded-"][class*="border"][class*="bg-white"] {
-  border-color: rgba(255,255,255,.15) !important;
+  border-color: rgba(168, 184, 204, .31) !important;
+  box-shadow: 0 5px 16px rgba(0,0,0,.10);
 }
