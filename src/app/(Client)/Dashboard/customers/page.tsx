@@ -65,9 +65,9 @@ export default function CustomersPage() {
   return (
     <div className="space-y-3 sm:space-y-4">
       <section className="rounded-[22px] border border-white/90 bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(360px,1fr)_auto_minmax(220px,.75fr)] lg:items-center">
-          <div className="flex min-w-0 items-center gap-2 lg:order-3 lg:justify-self-start">
-            <div className="relative min-w-0 flex-1 sm:w-[320px] sm:flex-none">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+          <div className="flex min-w-0 items-center gap-2 lg:order-3 lg:w-full lg:justify-self-start lg:justify-start" dir="ltr">
+            <div className="relative min-w-0 flex-1 sm:w-[320px] sm:flex-none" dir="rtl">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
             </div>
@@ -80,7 +80,7 @@ export default function CustomersPage() {
             <CollectionViewToggle value={view} onChange={setView} />
           </div>
 
-          <div className="flex min-w-0 items-center justify-start gap-1.5 overflow-x-auto lg:order-2 lg:justify-self-center">
+          <div className="flex min-w-0 items-center justify-start gap-1.5 overflow-x-auto lg:order-2 lg:justify-self-center" dir="rtl">
             {([
               ["all", "الكل", "bg-[#0758e9]"],
               ["active", "نشط", "bg-emerald-500"],
@@ -92,7 +92,7 @@ export default function CustomersPage() {
             })}
           </div>
 
-          <div className="min-w-0 lg:order-1 lg:justify-self-end">
+          <div className="min-w-0 text-right lg:order-1 lg:w-full lg:justify-self-end" dir="rtl">
             <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
             <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">عرض وإدارة حسابات عملاء Radius Lord</p>
           </div>
