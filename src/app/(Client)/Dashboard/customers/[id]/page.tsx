@@ -99,7 +99,7 @@ export default function CustomerDetailsPage() {
         <div className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
           <h3 className="mb-4 text-sm font-semibold text-[#17386d] dark:text-[#d8d2dc]">بيانات الحساب</h3>
           {editing ? (
-            <>
+            <div key="edit" className="ui-state-enter">
               <div className="grid gap-2 sm:grid-cols-2">
                 <EditField label="الاسم الكامل" value={form.fullName} onChange={(value) => setForm((current) => ({ ...current, fullName: value }))} />
                 <EditField label="اسم المستخدم" value={form.username} onChange={(value) => setForm((current) => ({ ...current, username: value }))} ltr />
@@ -111,9 +111,9 @@ export default function CustomerDetailsPage() {
                 <button type="button" disabled={saving} onClick={saveEdit} className="flex h-10 items-center gap-2 rounded-[13px] bg-[#0758e9] px-4 text-xs font-medium text-white transition hover:bg-[#064dcc] disabled:opacity-60"><Check className="h-4 w-4" />{saving ? "جارٍ الحفظ..." : "حفظ التعديلات"}</button>
                 <button type="button" disabled={saving} onClick={cancelEdit} className="flex h-10 items-center gap-2 rounded-[13px] border border-[#d7e3ef] bg-white px-4 text-xs font-medium text-slate-500 transition hover:bg-[#f5f8fc] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#bdb6c1]"><X className="h-4 w-4" />إلغاء</button>
               </div>
-            </>
+            </div>
           ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div key="view" className="ui-state-enter grid gap-2 sm:grid-cols-2">
             <Info icon={Mail} label="البريد الإلكتروني" value={customer.email} ltr />
             <Info icon={Phone} label="رقم الهاتف" value={customer.phone} ltr />
             <Info icon={MapPin} label="الدولة" value={customer.country} />
