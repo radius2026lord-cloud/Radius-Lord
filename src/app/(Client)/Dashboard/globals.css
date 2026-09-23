@@ -97,8 +97,9 @@ a {
 }
 
 .sidebar::-webkit-scrollbar-track {
-  margin-block: 28px;
   background: transparent;
+  border-block: 26px solid transparent;
+  background-clip: padding-box;
 }
 
 .sidebar::-webkit-scrollbar-thumb {
@@ -161,8 +162,9 @@ main > div:first-child::-webkit-scrollbar {
 }
 
 main > div:first-child::-webkit-scrollbar-track {
-  margin-block: 28px;
   background: transparent;
+  border-block: 26px solid transparent;
+  background-clip: padding-box;
 }
 
 main > div:first-child::-webkit-scrollbar-thumb {
