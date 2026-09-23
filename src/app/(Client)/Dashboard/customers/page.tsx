@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Mail, Phone, Search, UserRound, Users } from "lucide-react";
+import { Check, ChevronDown, Mail, Phone, Search, UserRound, Users } from "lucide-react";
 import CollectionViewToggle, { CollectionViewMode } from "@/components/ui/collection-view-toggle";
 
 type Customer = {
@@ -28,6 +28,7 @@ export default function CustomersPage() {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<CollectionViewMode>("row");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
@@ -70,6 +71,24 @@ export default function CustomersPage() {
         </div>
       </section>
 
+      {selected.size > 0 && (
+        <section className="flex flex-col gap-2 rounded-[18px] border border-[#9fc4ec] bg-[#f4f8fd] p-2.5 shadow-[0_8px_22px_rgba(58,84,112,.08)] animate-slideDown dark:border-white/[.12] dark:bg-white/[.045] sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-[#17386d] dark:text-white">
+            <span className="grid h-7 min-w-7 place-items-center rounded-full bg-[#0758e9] px-2 text-white">{selected.size}</span>
+            <span>تم تحديد {selected.size} من العملاء</span>
+          </div>
+          <div className="relative w-full sm:w-[230px]">
+            <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} className="h-10 w-full cursor-pointer appearance-none rounded-[14px] border border-[#bfd4ea] bg-white pr-3 pl-9 text-xs font-semibold text-[#17386d] outline-none transition focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-white">
+              <option value="">تطبيق إجراء جماعي...</option>
+              <option value="activate">تفعيل المحدد</option>
+              <option value="suspend">تعليق المحدد</option>
+              <option value="disable">تعطيل المحدد</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          </div>
+        </section>
+      )}
+
       {loading ? (
         <div className="rounded-[22px] border border-white/90 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">جارٍ تحميل العملاء...</div>
       ) : filtered.length === 0 ? (
@@ -83,7 +102,7 @@ export default function CustomersPage() {
           <section className="hidden overflow-hidden rounded-[22px] border border-white/90 bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-right text-xs">
-                <thead className="bg-[#dce9f7] text-[11px] font-bold text-[#17386d] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="تحديد كل العملاء الظاهرين" className="h-4 w-4 cursor-pointer accent-[#0758e9]" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
+                <thead className="bg-[#dce9f7] text-[11px] font-bold text-[#17386d] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><SelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/[.07]">
                   {filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} />)}
                 </tbody>
@@ -112,11 +131,20 @@ function CustomerCard({ customer }: { customer: Customer }) {
 }
 
 function CustomerRow({ customer, selected, onToggle }: { customer: Customer; selected: boolean; onToggle: () => void }) {
-  return <tr className={`text-slate-600 ${selected ? "bg-[#e9f2ff] dark:bg-white/[.06]" : ""} transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]`}><td className="w-12 p-3 text-center"><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`تحديد ${customer.fullName}`} className="h-4 w-4 cursor-pointer accent-[#0758e9]" /></td><td className="p-3"><div className="font-bold text-[#17386d] dark:text-white">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
+  return <tr className={`text-slate-600 ${selected ? "bg-[#f2f7fd] dark:bg-white/[.055]" : ""} transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]`}><td className="w-12 p-3 text-center"><SelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-bold text-[#17386d] dark:text-white">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
 }
 
 function CustomerMobileRow({ customer }: { customer: Customer }) {
   return <article className="rounded-[18px] border border-white/90 bg-white p-3 shadow-[0_6px_18px_rgba(58,84,112,.07)] transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:scale-[1.01] hover:border-[#78afe9] hover:bg-[#e9f2ff] hover:shadow-[0_12px_26px_rgba(58,84,112,.13)] dark:border-white/[.07] dark:bg-[#0d243b] dark:hover:border-white/[.16]"><div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{customer.fullName}</div><div className="mt-1 truncate text-[10px] text-slate-500">@{customer.username || "—"} · {customer.phone}</div></div><Status status={customer.status} /></div></article>;
+}
+
+function SelectionBox({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return <label className="inline-grid cursor-pointer place-items-center">
+    <input type="checkbox" checked={checked} onChange={onChange} aria-label={label} className="peer sr-only" />
+    <span className="grid h-[19px] w-[19px] place-items-center rounded-[6px] border-2 border-[#9bb4cf] bg-white text-white shadow-sm transition-all duration-200 peer-checked:scale-105 peer-checked:border-[#0758e9] peer-checked:bg-[#0758e9] peer-checked:shadow-[0_4px_10px_rgba(7,88,233,.28)] dark:border-white/30 dark:bg-[#38363c] dark:peer-checked:border-[#4c8dff] dark:peer-checked:bg-[#4c8dff]">
+      <Check className={`h-3.5 w-3.5 transition-all duration-200 ${checked ? "scale-100 opacity-100" : "scale-50 opacity-0"}`} strokeWidth={3} />
+    </span>
+  </label>;
 }
 
 function formatDate(value: string) {
