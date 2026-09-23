@@ -76,7 +76,7 @@ export default function CustomerDetailsPage() {
 
   return (
     <div className="space-y-3 sm:space-y-4" dir="rtl">
-      <section className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b]">
+      <section className="rl-surface rounded-[22px] bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <button type="button" onClick={() => router.push("/Dashboard/customers")} aria-label="الرجوع إلى العملاء" title="الرجوع إلى العملاء" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(7,88,233,.10)] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff] dark:hover:border-[#6aaeff]"><ArrowRight className="h-4 w-4" /></button>
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[17px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-6 w-6" /></div>
@@ -96,7 +96,7 @@ export default function CustomerDetailsPage() {
       </section>
 
       <section className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
+        <div className="rl-surface rounded-[22px] bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
           <h3 className="mb-4 text-sm font-semibold text-[#17386d] dark:text-[#d8d2dc]">بيانات الحساب</h3>
           {editing ? (
             <div key="edit" className="ui-state-enter">
@@ -122,7 +122,7 @@ export default function CustomerDetailsPage() {
           )}
         </div>
 
-        <div className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
+        <div className="rl-surface rounded-[22px] bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
           <h3 className="mb-4 text-sm font-semibold text-[#17386d] dark:text-[#d8d2dc]">نشاط الحساب</h3>
           <div className="grid gap-2 sm:grid-cols-2">
             <Info icon={Clock3} label="آخر تسجيل دخول" value={formatDateTime(customer.lastLoginAt)} />
@@ -141,15 +141,15 @@ export default function CustomerDetailsPage() {
 }
 
 function EditField({ label, value, onChange, ltr = false, type = "text" }: { label: string; value: string; onChange: (value: string) => void; ltr?: boolean; type?: string }) {
-  return <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400 dark:text-[#918a96]">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} dir={ltr ? "ltr" : "rtl"} className="allow-text-selection h-11 w-full rounded-[14px] border border-[#d7e3ef] bg-[#f9fbfe] px-3 text-sm font-normal text-slate-700 outline-none transition focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d4ced7]" /></label>;
+  return <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400 dark:text-[#918a96]">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} dir={ltr ? "ltr" : "rtl"} className="allow-text-selection h-11 w-full rl-surface-soft rounded-[14px] bg-[#f9fbfe] px-3 text-sm font-normal text-slate-700 outline-none transition focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d4ced7]" /></label>;
 }
 
 function Info({ icon: Icon, label, value, ltr = false }: { icon: typeof Mail; label: string; value: string; ltr?: boolean }) {
-  return <div className="rounded-[16px] border border-[#e2ebf4] bg-[#f9fbfe] p-3 dark:border-white/[.07] dark:bg-white/[.035]"><div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-[#918a96]"><Icon className="h-4 w-4 text-[#5f91d8]" />{label}</div><div className="allow-text-selection mt-2 truncate text-sm font-medium text-slate-700 dark:text-[#d4ced7]" dir={ltr ? "ltr" : "rtl"}>{value}</div></div>;
+  return <div className="rl-surface-soft rounded-[16px] bg-[#f9fbfe] p-3 dark:border-white/[.07] dark:bg-white/[.035]"><div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-[#918a96]"><Icon className="h-4 w-4 text-[#5f91d8]" />{label}</div><div className="allow-text-selection mt-2 truncate text-sm font-medium text-slate-700 dark:text-[#d4ced7]" dir={ltr ? "ltr" : "rtl"}>{value}</div></div>;
 }
 
 function StateCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[22px] border border-white/90 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">{children}</div>;
+  return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">{children}</div>;
 }
 
 function formatDateTime(value: string | null) {
