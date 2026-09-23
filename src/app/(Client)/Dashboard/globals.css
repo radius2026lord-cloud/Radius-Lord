@@ -346,3 +346,33 @@ textarea,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Dark typography: avoid harsh pure-white bold text on small UI labels. */
+.dark {
+  --oneui-text-strong: #e3dee6;
+  --oneui-text-medium: #c8c1cc;
+}
+
+.dark .font-bold,
+.dark .font-semibold {
+  color: var(--oneui-text-strong);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.dark .text-white.font-bold,
+.dark .text-white.font-semibold,
+.dark .font-bold.text-white,
+.dark .font-semibold.text-white {
+  color: var(--oneui-text-strong) !important;
+}
+
+.dark .text-xs.font-bold,
+.dark .text-xs.font-semibold,
+.dark .text-\[10px\].font-bold,
+.dark .text-\[10px\].font-semibold,
+.dark .text-\[11px\].font-bold,
+.dark .text-\[11px\].font-semibold {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
