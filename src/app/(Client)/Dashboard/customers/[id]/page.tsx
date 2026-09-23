@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, Clock3, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, UserRound, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 type Customer = {
@@ -25,6 +25,11 @@ export default function CustomerDetailsPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({ fullName: "", username: "", email: "", phone: "", country: "" });
 
   useEffect(() => {
     fetch(`/api/admin/customers/${params.id}`, { credentials: "include", cache: "no-store" })
@@ -33,10 +38,36 @@ export default function CustomerDetailsPage() {
         if (!response.ok) throw new Error("Failed");
         return response.json();
       })
-      .then((data) => data?.customer && setCustomer(data.customer))
+      .then((data) => {
+        if (data?.customer) {
+          setCustomer(data.customer);
+          setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email, phone: data.customer.phone, country: data.customer.country });
+        }
+      })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  const beginEdit = () => {
+    if (!customer) return;
+    setForm({ fullName: customer.fullName, username: customer.username ?? "", email: customer.email, phone: customer.phone, country: customer.country });
+    setError(""); setMessage(""); setEditing(true);
+  };
+
+  const cancelEdit = () => { setEditing(false); setError(""); };
+
+  const saveEdit = async () => {
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(`/api/admin/customers/${params.id}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "تعذر حفظ التعديلات.");
+      setCustomer(data.customer);
+      setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email, phone: data.customer.phone, country: data.customer.country });
+      setEditing(false); setMessage(data.message || "تم حفظ التعديلات بنجاح.");
+    } catch (err) { setError(err instanceof Error ? err.message : "تعذر حفظ التعديلات."); }
+    finally { setSaving(false); }
+  };
 
   if (loading) return <StateCard>جارٍ تحميل بيانات العميل...</StateCard>;
   if (notFound || !customer) return <StateCard>تعذر العثور على العميل.</StateCard>;
@@ -56,18 +87,36 @@ export default function CustomerDetailsPage() {
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-[#9f98a5]">@{customer.username || "—"} · رقم العميل #{customer.id}</p>
           </div>
+          {!editing && <button type="button" onClick={beginEdit} className="flex h-10 shrink-0 items-center gap-2 rounded-[13px] border border-[#bfd4ea] bg-[#f9fbfe] px-3 text-xs font-medium text-[#0758e9] transition hover:bg-[#e9f2ff] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#cfc8d2] dark:hover:bg-white/[.07]"><Pencil className="h-4 w-4" />تعديل العميل</button>}
         </div>
+        {(message || error) && <div className={`mt-3 rounded-[13px] border px-3 py-2 text-xs ${error ? "border-red-200 bg-red-50 text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"}`}>{error || message}</div>}
       </section>
 
       <section className="grid gap-3 lg:grid-cols-2">
         <div className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
           <h3 className="mb-4 text-sm font-semibold text-[#17386d] dark:text-[#d8d2dc]">بيانات الحساب</h3>
+          {editing ? (
+            <>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EditField label="الاسم الكامل" value={form.fullName} onChange={(value) => setForm((current) => ({ ...current, fullName: value }))} />
+                <EditField label="اسم المستخدم" value={form.username} onChange={(value) => setForm((current) => ({ ...current, username: value }))} ltr />
+                <EditField label="البريد الإلكتروني" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} ltr type="email" />
+                <EditField label="رقم الهاتف" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} ltr />
+                <EditField label="الدولة" value={form.country} onChange={(value) => setForm((current) => ({ ...current, country: value }))} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" disabled={saving} onClick={saveEdit} className="flex h-10 items-center gap-2 rounded-[13px] bg-[#0758e9] px-4 text-xs font-medium text-white transition hover:bg-[#064dcc] disabled:opacity-60"><Check className="h-4 w-4" />{saving ? "جارٍ الحفظ..." : "حفظ التعديلات"}</button>
+                <button type="button" disabled={saving} onClick={cancelEdit} className="flex h-10 items-center gap-2 rounded-[13px] border border-[#d7e3ef] bg-white px-4 text-xs font-medium text-slate-500 transition hover:bg-[#f5f8fc] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#bdb6c1]"><X className="h-4 w-4" />إلغاء</button>
+              </div>
+            </>
+          ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             <Info icon={Mail} label="البريد الإلكتروني" value={customer.email} ltr />
             <Info icon={Phone} label="رقم الهاتف" value={customer.phone} ltr />
             <Info icon={MapPin} label="الدولة" value={customer.country} />
             <Info icon={UserRound} label="اسم المستخدم" value={customer.username ? `@${customer.username}` : "—"} />
           </div>
+          )}
         </div>
 
         <div className="rounded-[22px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
@@ -86,6 +135,10 @@ export default function CustomerDetailsPage() {
       </section>
     </div>
   );
+}
+
+function EditField({ label, value, onChange, ltr = false, type = "text" }: { label: string; value: string; onChange: (value: string) => void; ltr?: boolean; type?: string }) {
+  return <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400 dark:text-[#918a96]">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} dir={ltr ? "ltr" : "rtl"} className="allow-text-selection h-11 w-full rounded-[14px] border border-[#d7e3ef] bg-[#f9fbfe] px-3 text-sm font-normal text-slate-700 outline-none transition focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d4ced7]" /></label>;
 }
 
 function Info({ icon: Icon, label, value, ltr = false }: { icon: typeof Mail; label: string; value: string; ltr?: boolean }) {
