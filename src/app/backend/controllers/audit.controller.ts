@@ -87,3 +87,32 @@ export const customerAuditLogsController = async (req: AuthenticatedRequest, res
     return res.status(500).json({ success: false, message: 'تعذر تحميل آخر نشاطات العميل حاليًا.' });
   }
 };
+
+
+export const paymentPlanAuditLogsController = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const planId = Number(req.params.planId);
+    if (!Number.isInteger(planId) || planId < 1) return res.status(400).json({ success: false, message: 'معرّف الخطة غير صالح.' });
+    const [rows] = await db.query(
+      `SELECT l.id, l.entity_id, l.description, l.metadata, l.created_at,
+              a.code AS action_code, a.name_ar AS action_name,
+              m.full_name AS admin_name, m.username AS admin_username
+       FROM central_audit_logs l
+       JOIN audit_actions a ON a.id = l.action_id
+       JOIN audit_entity_types e ON e.id = l.entity_type_id
+       LEFT JOIN master_admins m ON m.id = l.admin_id
+       WHERE e.code = 'PAYMENT_PLAN' AND l.entity_id = ?
+       ORDER BY l.id DESC LIMIT 5`,
+      [planId],
+    );
+    return res.json({ success: true, logs: (rows as any[]).map((row) => ({
+      id: row.id, actionCode: row.action_code, actionName: row.action_name,
+      description: row.description, adminName: row.admin_name, adminUsername: row.admin_username,
+      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
+      createdAt: row.created_at,
+    })) });
+  } catch (err) {
+    console.error('Payment plan audit logs error:', err);
+    return res.status(500).json({ success: false, message: 'تعذر تحميل آخر نشاطات الخطة حاليًا.' });
+  }
+};
