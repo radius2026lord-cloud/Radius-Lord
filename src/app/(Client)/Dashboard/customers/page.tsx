@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Mail, Phone, UserRound, Users } from "lucide-react";
+import { ChevronDown, Mail, Phone, UserRound, Users } from "lucide-react";
 import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
@@ -81,19 +81,11 @@ export default function CustomersPage() {
         </CollectionGrid>
       ) : (
         <>
-          <section key="row-view" className="animate-collectionView hidden overflow-hidden rl-surface rounded-[22px] bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
-            <div className="customers-table-scroll overflow-x-auto">
-              <table className="w-full min-w-[850px] text-right text-xs">
-                <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
-                <tbody className="divide-y divide-[#c4d3e2] dark:divide-white/[.13]">
-                  {filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <CollectionMobileList>
-            {filtered.map((customer) => <CustomerMobileRow key={customer.id} customer={customer} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}
-          </section>
+          <CollectionTable>
+            <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></CollectionTableHead>
+            <CollectionTableBody>{filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}</CollectionTableBody>
+          </CollectionTable>
+          <CollectionMobileList>{filtered.map((customer) => <CustomerMobileRow key={customer.id} customer={customer} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}</CollectionMobileList>
         </>
       )}
           <style jsx global>{`
@@ -116,11 +108,10 @@ function Status({ status }: { status: Customer["status"] }) {
 }
 
 function CustomerCard({ customer, selectionMode, selected, onToggle, onOpen }: { customer: Customer; selectionMode: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }) {
-  return <article onClick={() => selectionMode ? onToggle() : onOpen()} className={`${collectionCardClass(selected)} ${selected ? "bg-[#f2f7fd] dark:bg-white/[.055]" : "bg-white hover:bg-[#e9f2ff] dark:bg-[#0d243b]"}`}>
-    {selectionMode && <div className="-mx-1 -mt-1 mb-3 flex items-center justify-end border-b border-slate-100 pb-2 dark:border-white/[.07]"><CollectionGridSelectionMark checked={selected} /></div>}
+  return <CollectionCard selectionMode={selectionMode} selected={selected} onToggle={onToggle} onOpen={onOpen}>
     <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{customer.fullName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{customer.username || "—"}</div></div><Status status={customer.status} /></div>
     <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400"><div className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="truncate" dir="ltr">{customer.email}</span></div><div className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0" /><span dir="ltr">{customer.phone}</span></div><div className="flex items-center justify-between gap-3"><span>{customer.country}</span><span>{formatDate(customer.createdAt)}</span></div></div>
-  </article>;
+  </CollectionCard>;
 }
 
 function CustomerRow({ customer, selected, onToggle, onOpen }: { customer: Customer; selected: boolean; onToggle: () => void; onOpen: () => void }) {
@@ -128,7 +119,7 @@ function CustomerRow({ customer, selected, onToggle, onOpen }: { customer: Custo
 }
 
 function CustomerMobileRow({ customer, onOpen }: { customer: Customer; onOpen: () => void }) {
-  return <CollectionMobileCard onOpen={onOpen}><div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{customer.fullName}</div><div className="mt-1 truncate text-[10px] text-slate-500">@{customer.username || "—"} · {customer.phone}</div></div><Status status={customer.status} /></div></article>;
+  return <CollectionMobileCard onOpen={onOpen}><div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{customer.fullName}</div><div className="mt-1 truncate text-[10px] text-slate-500">@{customer.username || "—"} · {customer.phone}</div></div><Status status={customer.status} /></div></CollectionMobileCard>;
 }
 
 function formatDate(value: string) {
