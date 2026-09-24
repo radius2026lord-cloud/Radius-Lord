@@ -10,6 +10,11 @@ export async function listPaymentPlansController(req:AuthenticatedRequest,res:Re
  catch(e){console.error('List payment plans error:',e);return res.status(500).json({success:false,message:'تعذر تحميل خطط الاشتراك حاليًا.'});}
 }
 
+export async function getPaymentPlanController(req:AuthenticatedRequest,res:Response){
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({success:false,message:'معرّف الخطة غير صالح.'});const [rows]=await db.query('SELECT * FROM payment_plans WHERE id=? LIMIT 1',[id]);const row=(rows as any[])[0];if(!row)return res.status(404).json({success:false,message:'الخطة غير موجودة.'});return res.json({success:true,plan:mapPlan(row)});}
+ catch(e){console.error('Get payment plan error:',e);return res.status(500).json({success:false,message:'تعذر تحميل الخطة حاليًا.'});}
+}
+
 export async function createPaymentPlanController(req:AuthenticatedRequest,res:Response){
  try{
   await ensurePaymentPlanAuditEntity();
