@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Activity, ArrowRight, CalendarClock, ChevronDown, ChevronUp, FileClock, Globe2, Search, ShieldCheck, UserRound } from "lucide-react";
-import CollectionViewToggle, { CollectionViewMode } from "@/components/ui/collection-view-toggle";
+import { CollectionGrid, CollectionState, CollectionToolbar, CollectionStatusFilters, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type AuditLog = {
   id:number; adminId:number|null; adminName:string|null; adminUsername:string|null;
@@ -35,7 +35,7 @@ export default function AdminActivityPage(){
   const scopedEntityId=searchParams.get("entityId");
   const [logs,setLogs]=useState<AuditLog[]>([]); const [loading,setLoading]=useState(true);
   const [query,setQuery]=useState(""); const [filter,setFilter]=useState("ALL");
-  const [view,setView]=useState<CollectionViewMode>("row"); const [open,setOpen]=useState<number|null>(null);
+  const {view,setView,selectionMode,setSelectionMode}=useCollectionDisplay<number>("admin-audit-logs","row"); const [open,setOpen]=useState<number|null>(null);
   useEffect(()=>{fetch("/api/admin/audit-logs",{credentials:"include",cache:"no-store"}).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>setLogs(d.logs??[])).finally(()=>setLoading(false))},[]);
   const filtered=useMemo(()=>logs.filter(log=>{
     if(scopedEntityType && log.entityTypeCode!==scopedEntityType)return false;
@@ -48,19 +48,13 @@ export default function AdminActivityPage(){
   const todayLogs=logs.filter(l=>new Date(l.createdAt).toDateString()===today);
   const summary=[["أحداث اليوم",todayLogs.length],["تعديلات اليوم",todayLogs.filter(l=>l.actionCode==="UPDATE").length],["عمليات الإضافة",logs.filter(l=>l.actionCode==="CREATE").length],["إجمالي السجل",logs.length]];
   return <div className="space-y-3 sm:space-y-4">
-    <section className="rl-surface rounded-[22px] bg-white p-3 dark:bg-[#0d243b] sm:p-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
-        <div className="flex min-w-0 items-center gap-2 xl:w-[300px]">
-          {scopedEntityType==="CUSTOMER"&&scopedEntityId&&<button type="button" onClick={()=>window.location.href=`/Dashboard/customers/${scopedEntityId}`} aria-label="الرجوع إلى صفحة العميل" title="الرجوع إلى صفحة العميل" className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff]"><ArrowRight className="h-4 w-4"/></button>}
-          <div className="min-w-0"><h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-[#ece8ee]"><ShieldCheck className="h-5 w-5 text-[#0758e9]"/>نشاط الإدارة</h2><p className="mt-1 text-xs text-slate-500">{scopedEntityType==="CUSTOMER"&&scopedEntityId?"السجل الكامل لهذا العميل":"سجل العمليات الإدارية في Radius Lord"}</p></div>
-        </div>
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center"><div className="rl-surface-soft inline-flex shrink-0 rounded-[16px] bg-[#f7faff] p-1 dark:bg-white/[.035]">{["ALL","CREATE","UPDATE","DELETE","LOGIN","LOGOUT"].map(v=><button key={v} onClick={()=>setFilter(v)} className={`h-9 rounded-[12px] px-3 text-xs font-medium transition ${filter===v?filterTone[v]:"text-slate-500 hover:bg-white/70 dark:text-slate-400 dark:hover:bg-white/[.05]"}`}>{v==="ALL"?"الكل":v==="CREATE"?"إضافة":v==="UPDATE"?"تعديل":v==="DELETE"?"حذف":v==="LOGIN"?"دخول":"خروج"}</button>)}</div></div>
-        <div className="flex min-w-0 items-center gap-2 xl:w-[390px]" dir="ltr"><CollectionViewToggle value={view} onChange={setView}/><div className="relative flex-1" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="بحث في السجل..." className="h-11 w-full rounded-[16px] border border-[#b5cbe0] bg-[#f9fbfe] pr-10 pl-3 text-sm outline-none focus:border-[#6aaeff] dark:border-white/[.12] dark:bg-[#38363c]"/></div></div>
-      </div>
-    </section>
+    <div className="flex items-center gap-2">
+      {scopedEntityType==="CUSTOMER"&&scopedEntityId&&<button type="button" onClick={()=>window.location.href=`/Dashboard/customers/${scopedEntityId}`} aria-label="الرجوع إلى صفحة العميل" title="الرجوع إلى صفحة العميل" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff]"><ArrowRight className="h-4 w-4"/></button>}
+      <div className="min-w-0 flex-1"><CollectionToolbar icon={ShieldCheck} title="نشاط الإدارة" description={scopedEntityType==="CUSTOMER"&&scopedEntityId?"السجل الكامل لهذا العميل":"سجل العمليات الإدارية في Radius Lord"} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={setSelectionMode} query={query} onQueryChange={setQuery} searchPlaceholder="بحث في السجل..." filters={<CollectionStatusFilters value={filter} onChange={setFilter} items={[{value:"ALL",label:"الكل",count:logs.length,dot:"bg-[#0758e9]"},{value:"CREATE",label:"إضافة",count:logs.filter(l=>l.actionCode==="CREATE").length,dot:"bg-emerald-500"},{value:"UPDATE",label:"تعديل",count:logs.filter(l=>l.actionCode==="UPDATE").length,dot:"bg-blue-500"},{value:"DELETE",label:"حذف",count:logs.filter(l=>l.actionCode==="DELETE").length,dot:"bg-red-500"},{value:"LOGIN",label:"دخول",count:logs.filter(l=>l.actionCode==="LOGIN").length,dot:"bg-violet-500"},{value:"LOGOUT",label:"خروج",count:logs.filter(l=>l.actionCode==="LOGOUT").length,dot:"bg-slate-400"}]} />}/></div>
+    </div>
     <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">{summary.map(([label,value])=><div key={String(label)} className="rl-surface-soft rounded-[18px] bg-white p-3 dark:bg-[#0d243b]"><div className="text-[11px] text-slate-400">{label}</div><div className="mt-1 text-xl font-semibold text-[#17386d] dark:text-slate-200">{value}</div></div>)}</section>
-    {loading?<State>جارٍ تحميل سجل النشاط...</State>:filtered.length===0?<State>لا توجد سجلات مطابقة.</State>:view==="grid"?
-      <section className="ui-state-enter grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filtered.map(log=><LogCard key={log.id} log={log} open={open===log.id} onToggle={()=>setOpen(open===log.id?null:log.id)}/>)}</section>:
+    {loading?<CollectionState>جارٍ تحميل سجل النشاط...</CollectionState>:filtered.length===0?<CollectionState>لا توجد سجلات مطابقة.</CollectionState>:view==="grid"?
+      <CollectionGrid className="xl:grid-cols-3">{filtered.map(log=><LogCard key={log.id} log={log} open={open===log.id} onToggle={()=>setOpen(open===log.id?null:log.id)}/>)}</CollectionGrid>:
       <section className="ui-state-enter space-y-2">{filtered.map(log=><LogCard key={log.id} log={log} open={open===log.id} onToggle={()=>setOpen(open===log.id?null:log.id)} row/>)}</section>}
   </div>
 }
@@ -84,5 +78,4 @@ function LogCard({log,open,onToggle,row=false}:{log:AuditLog;open:boolean;onTogg
 }
 function DetailInfo({icon:Icon,label,value,ltr=false,last=false}:{icon:typeof UserRound;label:string;value:string;ltr?:boolean;last?:boolean}){return <div className={`flex min-w-0 items-center gap-3 p-3.5 sm:p-4 ${last?"":"border-b border-[#d5e0eb] dark:border-white/[.08] sm:[&:nth-child(odd)]:border-l xl:border-b-0 xl:border-l"}`}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#e9f2ff] text-[#397bd5] dark:bg-[#173554] dark:text-[#8fc0ff]"><Icon className="h-4 w-4"/></span><div className="min-w-0 flex-1"><div className="text-[10px] text-slate-400">{label}</div><div className="allow-text-selection mt-1 truncate text-xs font-medium text-slate-700 dark:text-slate-200" dir={ltr?"ltr":"rtl"} title={value}>{value}</div></div></div>}
 function Info({label,value,ltr=false}:{label:string;value:string;ltr?:boolean}){return <div><div className="text-[10px] text-slate-400">{label}</div><div className="allow-text-selection mt-1 truncate text-xs font-medium text-slate-600 dark:text-slate-300" dir={ltr?"ltr":"rtl"}>{value}</div></div>}
-function State({children}:{children:React.ReactNode}){return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:bg-[#0d243b]">{children}</div>}
 function formatDate(value:string){return new Intl.DateTimeFormat("ar",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(value))}
