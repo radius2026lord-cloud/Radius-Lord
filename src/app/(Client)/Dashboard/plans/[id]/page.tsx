@@ -2,6 +2,7 @@
 import { useEffect,useState } from "react";
 import { Activity,ArrowLeft,ArrowRight,Check,CreditCard,Layers3,Pencil,Server,Star,Users,Wifi,X } from "lucide-react";
 import { useParams,useRouter,useSearchParams } from "next/navigation";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import { CURRENCY_OPTIONS } from "@/lib/currencies";
 
@@ -22,7 +23,7 @@ export default function PlanDetailsPage(){
  if(loading)return <State>جارٍ تحميل بيانات الخطة...</State>;if(!plan)return <State>{error||"تعذر العثور على الخطة."}</State>;
  return <div className="space-y-3 sm:space-y-4" dir="rtl">
   <section className="rl-surface rounded-[22px] bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:bg-[#0d243b]">
-   <div className="flex flex-col gap-4 sm:flex-row sm:items-center"><button onClick={()=>router.push("/Dashboard/plans")} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9]"><ArrowRight className="h-4 w-4"/></button><div className="grid h-12 w-12 shrink-0 place-items-center rounded-[17px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><CreditCard className="h-6 w-6"/></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold text-[#17386d] dark:text-[#e3dee6] sm:text-xl">{plan.name}</h2>{plan.isFeatured&&<Star className="h-4 w-4 fill-amber-400 text-amber-400"/>}<Status value={plan.status}/></div><p className="mt-1 text-xs text-slate-500">رقم الخطة #{plan.id}</p></div>{!editing&&<button onClick={begin} className="flex h-11 items-center gap-2 rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] px-3.5 text-xs font-medium text-[#0758e9]"><Pencil className="h-4 w-4"/>تعديل الخطة</button>}</div>
+   <div className="flex flex-col gap-4 sm:flex-row sm:items-center"><ProjectTooltip label="رجوع إلى الخطط"><button onClick={()=>router.push("/Dashboard/plans")} aria-label="الرجوع إلى الخطط" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9]"><ArrowRight className="h-4 w-4"/></button></ProjectTooltip><div className="grid h-12 w-12 shrink-0 place-items-center rounded-[17px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><CreditCard className="h-6 w-6"/></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold text-[#17386d] dark:text-[#e3dee6] sm:text-xl">{plan.name}</h2>{plan.isFeatured&&<Star className="h-4 w-4 fill-amber-400 text-amber-400"/>}<Status value={plan.status}/></div><p className="mt-1 text-xs text-slate-500">رقم الخطة #{plan.id}</p></div>{!editing&&<button onClick={begin} className="flex h-11 items-center gap-2 rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] px-3.5 text-xs font-medium text-[#0758e9]"><Pencil className="h-4 w-4"/>تعديل الخطة</button>}</div>
    {(message||error)&&<div className={`mt-3 rounded-[13px] border px-3 py-2 text-xs ${error?"border-red-200 bg-red-50 text-red-600":"border-emerald-200 bg-emerald-50 text-emerald-600"}`}>{error||message}</div>}
   </section>
   <section className="grid gap-3 lg:grid-cols-2">
