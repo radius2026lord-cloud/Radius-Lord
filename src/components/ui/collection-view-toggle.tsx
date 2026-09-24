@@ -2,6 +2,7 @@
 
 import { Grid2X2, List } from "lucide-react";
 import { useEffect, useState } from "react";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 
 export type CollectionViewMode = "grid" | "row";
 
@@ -39,26 +40,28 @@ export default function CollectionViewToggle({
       role="group"
       aria-label="طريقة العرض"
     >
+      <ProjectTooltip label="عرض شبكي">
       <button
         type="button"
         onClick={() => select("grid")}
         aria-pressed={mode === "grid"}
-        title="عرض شبكي"
         className={`grid h-9 w-9 place-items-center rounded-[12px] transition sm:h-10 sm:w-10 ${mode === "grid" ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-[#8ab5ff]" : "text-slate-400 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:hover:bg-white/[.05]"}`}
       >
         <Grid2X2 className="h-[18px] w-[18px]" />
         <span className="sr-only">Grid</span>
       </button>
+      </ProjectTooltip>
+      <ProjectTooltip label="عرض صفوف">
       <button
         type="button"
         onClick={() => select("row")}
         aria-pressed={mode === "row"}
-        title="عرض صفوف"
         className={`grid h-9 w-9 place-items-center rounded-[12px] transition sm:h-10 sm:w-10 ${mode === "row" ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-[#8ab5ff]" : "text-slate-400 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:hover:bg-white/[.05]"}`}
       >
         <List className="h-5 w-5" />
         <span className="sr-only">Row</span>
       </button>
+      </ProjectTooltip>
     </div>
   );
 }
