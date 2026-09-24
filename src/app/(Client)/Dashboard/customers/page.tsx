@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Mail, Phone, Search, UserRound, Users } from "lucide-react";
-import CollectionViewToggle from "@/components/ui/collection-view-toggle";
-import { useCollectionState } from "@/components/ui/use-collection-state";
+import { CollectionDisplayControls, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
   id: number;
@@ -30,7 +29,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Customer["status"]>("all");
-  const { view, setView, selected, setSelected, selectionMode: gridSelectionMode, setSelectionMode: setGridSelectionMode, toggle: toggleCustomer, setAll: setAllCustomers } = useCollectionState<number>("customers", "row");
+  const { view, setView, selected, setSelected, selectionMode: gridSelectionMode, setSelectionMode: setGridSelectionMode, toggle: toggleCustomer, setAll: setAllCustomers } = useCollectionDisplay<number>("customers", "row");
   const [bulkAction, setBulkAction] = useState("");
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
 
@@ -88,7 +87,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[clamp(340px,29vw,490px)]" dir="ltr">
-            <CollectionViewToggle value={view} onChange={setView} />
+            <CollectionDisplayControls view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={setGridSelectionMode} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} />
             <div className="relative min-w-[150px] flex-1" dir="rtl">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
@@ -103,30 +102,9 @@ export default function CustomersPage() {
         </div>
       </section>
 
-      {selected.size > 0 && (
-        <section className="flex flex-col gap-2 rl-surface rounded-[18px] bg-[#f4f8fd] p-2.5 shadow-[0_8px_22px_rgba(58,84,112,.08)] animate-slideDown dark:border-white/[.12] dark:bg-white/[.045] sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#17386d] dark:text-[#d8d2dc]">
-            <span className="grid h-7 min-w-7 place-items-center rounded-full bg-[#0758e9] px-2 text-white">{selected.size}</span>
-            <span>تم تحديد {selected.size} من العملاء</span>
-            <button type="button" onClick={() => { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); }} className="mr-1 rounded-[10px] border border-[#bfd4ea] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#0758e9] transition hover:bg-[#e9f2ff] dark:border-white/[.12] dark:bg-[#38363c] dark:text-[#d8d2dc] dark:hover:bg-white/[.08]">إلغاء التحديد</button>
-          </div>
-          <div className="relative w-full sm:w-[230px]">
-            <button type="button" onClick={() => setBulkMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={bulkMenuOpen} className={`flex h-10 w-full items-center justify-between rounded-[14px] border bg-white px-3 text-xs font-semibold text-[#17386d] transition-all duration-300 dark:bg-[#38363c] dark:text-[#d8d2dc] ${bulkMenuOpen ? "border-[#8bb9f0] shadow-[0_8px_22px_rgba(20,121,255,.12)] dark:border-white/20" : "border-[#bfd4ea] dark:border-white/[.10]"}`}>
-              <span>{bulkAction === "activate" ? "تفعيل المحدد" : bulkAction === "suspend" ? "تعليق المحدد" : bulkAction === "disable" ? "تعطيل المحدد" : "تطبيق إجراء جماعي..."}</span>
-              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${bulkMenuOpen ? "rotate-180" : ""}`} />
-            </button>
-            <div role="menu" className={`absolute left-0 right-0 top-[calc(100%+6px)] z-40 origin-top rounded-[18px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-[0_18px_45px_rgba(44,65,92,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.12] dark:bg-[#302e33] ${bulkMenuOpen ? "visible translate-y-0 scale-100 opacity-100" : "invisible -translate-y-2 scale-[.97] opacity-0 pointer-events-none"}`}>
-              {[["activate","تفعيل المحدد"],["suspend","تعليق المحدد"],["disable","تعطيل المحدد"]].map(([value,label]) => (
-                <button key={value} type="button" role="menuitem" onClick={() => { setBulkAction(value); setBulkMenuOpen(false); }} className={`group flex min-h-10 w-full items-center gap-2 rounded-[13px] px-3 text-right text-xs font-semibold transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:hover:bg-[#38363c] dark:hover:text-white ${bulkAction === value ? "bg-[#edf4fb] text-[#0758e9] dark:bg-[#38363c] dark:text-[#d8d2dc]" : "text-slate-700 dark:text-[#ece8ee]"}`}>
-                  <span className={`h-2 w-2 rounded-full ${value === "activate" ? "bg-emerald-500" : value === "suspend" ? "bg-amber-500" : "bg-red-500"}`} />
-                  <span>{label}</span>
-                  {bulkAction === value && <Check className="mr-auto h-4 w-4" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); }}>
+        <div className="relative w-full sm:w-[230px]"><button type="button" onClick={() => setBulkMenuOpen((open) => !open)} className="flex h-10 w-full items-center justify-between rounded-[14px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d8d2dc]"><span>{bulkAction === "activate" ? "تفعيل المحدد" : bulkAction === "suspend" ? "تعليق المحدد" : bulkAction === "disable" ? "تعطيل المحدد" : "تطبيق إجراء جماعي..."}</span><ChevronDown className={`h-4 w-4 transition-transform ${bulkMenuOpen ? "rotate-180" : ""}`}/></button>{bulkMenuOpen&&<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 rounded-[18px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-xl dark:border-white/[.12] dark:bg-[#302e33]">{[["activate","تفعيل المحدد"],["suspend","تعليق المحدد"],["disable","تعطيل المحدد"]].map(([value,label])=><button key={value} type="button" onClick={()=>{setBulkAction(value);setBulkMenuOpen(false)}} className="flex min-h-10 w-full items-center gap-2 rounded-[13px] px-3 text-right text-xs font-semibold hover:bg-[#edf4fb] dark:hover:bg-[#38363c]"><span className={`h-2 w-2 rounded-full ${value==="activate"?"bg-emerald-500":value==="suspend"?"bg-amber-500":"bg-red-500"}`}/>{label}</button>)}</div>}</div>
+      </CollectionSelectionBar>
 
       {loading ? (
         <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">جارٍ تحميل العملاء...</div>
@@ -141,7 +119,7 @@ export default function CustomersPage() {
           <section key="row-view" className="animate-collectionView hidden overflow-hidden rl-surface rounded-[22px] bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
             <div className="customers-table-scroll overflow-x-auto">
               <table className="w-full min-w-[850px] text-right text-xs">
-                <thead className="border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[11px] font-semibold text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><SelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
+                <thead className="border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[11px] font-semibold text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e] dark:text-slate-200"><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></thead>
                 <tbody className="divide-y divide-[#c4d3e2] dark:divide-white/[.13]">
                   {filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}
                 </tbody>
@@ -181,20 +159,11 @@ function CustomerCard({ customer, selectionMode, selected, onToggle, onOpen }: {
 }
 
 function CustomerRow({ customer, selected, onToggle, onOpen }: { customer: Customer; selected: boolean; onToggle: () => void; onOpen: () => void }) {
-  return <tr onClick={onOpen} className={`text-slate-600 ${selected ? "bg-[#f2f7fd] dark:bg-white/[.055]" : ""} transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]`}><td className="w-12 p-3 text-center" onClick={(event) => event.stopPropagation()}><SelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-semibold text-[#17386d] dark:text-[#d8d2dc]">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
+  return <tr onClick={onOpen} className={`text-slate-600 ${selected ? "bg-[#f2f7fd] dark:bg-white/[.055]" : ""} transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]`}><td className="w-12 p-3 text-center" onClick={(event) => event.stopPropagation()}><CollectionSelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-semibold text-[#17386d] dark:text-[#d8d2dc]">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
 }
 
 function CustomerMobileRow({ customer, onOpen }: { customer: Customer; onOpen: () => void }) {
   return <article onClick={onOpen} className="rounded-[18px] border border-white/90 bg-white p-3 shadow-[0_6px_18px_rgba(58,84,112,.07)] transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:scale-[1.01] hover:border-[#78afe9] hover:bg-[#e9f2ff] hover:shadow-[0_12px_26px_rgba(58,84,112,.13)] dark:border-white/[.07] dark:bg-[#0d243b] dark:hover:border-white/[.16]"><div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{customer.fullName}</div><div className="mt-1 truncate text-[10px] text-slate-500">@{customer.username || "—"} · {customer.phone}</div></div><Status status={customer.status} /></div></article>;
-}
-
-function SelectionBox({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
-  return <label className="inline-grid cursor-pointer place-items-center">
-    <input type="checkbox" checked={checked} onChange={onChange} aria-label={label} className="peer sr-only" />
-    <span className="grid h-[19px] w-[19px] place-items-center rounded-[6px] border-2 border-[#9bb4cf] bg-white text-white shadow-sm transition-all duration-200 peer-checked:scale-105 peer-checked:border-[#0758e9] peer-checked:bg-[#0758e9] peer-checked:shadow-[0_4px_10px_rgba(7,88,233,.28)] dark:border-white/30 dark:bg-[#38363c] dark:peer-checked:border-[#4c8dff] dark:peer-checked:bg-[#4c8dff]">
-      <Check className={`h-3.5 w-3.5 transition-all duration-200 ${checked ? "scale-100 opacity-100" : "scale-50 opacity-0"}`} strokeWidth={3} />
-    </span>
-  </label>;
 }
 
 function formatDate(value: string) {
