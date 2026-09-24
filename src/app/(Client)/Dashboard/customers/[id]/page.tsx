@@ -25,7 +25,8 @@ const labels = { active: "نشط", suspended: "معلّق", disabled: "معطّ�
 
 export default function CustomerDetailsPage() {
   const params = useParams();
-  const router = useRouter();\n  const searchParams = useSearchParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,9 @@ export default function CustomerDetailsPage() {
       .catch(() => setRecentActivity([]));
   };
 
-  useEffect(() => { loadRecentActivity(); }, [params.id]);\n\n  useEffect(() => { if (customer && searchParams.get("edit") === "1") beginEdit(); }, [customer?.id, searchParams]);
+  useEffect(() => { loadRecentActivity(); }, [params.id]);
+
+  useEffect(() => { if (customer && searchParams.get("edit") === "1") beginEdit(); }, [customer?.id, searchParams]);
 
   const beginEdit = () => {
     if (!customer) return;
