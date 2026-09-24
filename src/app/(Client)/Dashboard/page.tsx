@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
+import { useAuth } from "@/components/auth/auth-provider";
 import {
   Activity,
   ArrowDownLeft,
   ArrowUpRight,
   CircleDollarSign,
+  CreditCard,
+  ArrowLeft,
   Server,
   UserRound,
   Wifi,
@@ -72,7 +76,30 @@ function TrafficChart() {
   );
 }
 
+function CustomerWelcome() {
+  const { account } = useAuth();
+  const firstName = account?.fullName?.trim().split(/\\s+/)[0] || "عميلنا";
+  return <div className="ui-state-enter flex min-h-[58vh] items-center justify-center" dir="rtl">
+    <section className="rl-surface relative w-full max-w-[920px] overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(58,84,112,.12)] dark:border-white/[.08] dark:bg-[#0d243b] sm:p-9">
+      <div className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full bg-[#1479ff]/10 blur-3xl" />
+      <div className="relative mx-auto max-w-[680px] text-center">
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_12px_28px_rgba(20,121,255,.25)]"><CreditCard className="h-7 w-7" /></div>
+        <p className="mt-5 text-xs font-semibold text-[#0758e9]">مرحباً بك في LORD RADIUS</p>
+        <h2 className="mt-2 text-2xl font-bold text-[#102a63] dark:text-white sm:text-3xl">أهلاً {firstName}</h2>
+        <p className="mx-auto mt-3 max-w-[560px] text-sm leading-7 text-slate-500 dark:text-slate-300">ابدأ باختيار الخطة المناسبة لك. بعد اختيار الخطة سنكمل معك خطوات تجهيز حسابك وشبكتك داخل Radius Lord.</p>
+        <div className="mx-auto mt-6 max-w-[520px] rounded-[20px] border border-[#d7e3ef] bg-[#f7faff] p-4 text-right dark:border-white/[.09] dark:bg-white/[.035]">
+          <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.07]"><CreditCard className="h-4 w-4" /></span><div><div className="text-sm font-semibold text-[#17386d] dark:text-slate-100">اختر خطة الاشتراك</div><p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">استعرض الخطط المتاحة وقارن الحدود والمزايا قبل اختيار الخطة المناسبة.</p></div></div>
+        </div>
+        <Link href="/Dashboard/customer-plans" className="mx-auto mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-[16px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(7,88,233,.20)] transition hover:-translate-y-0.5 hover:bg-[#064dcc] hover:shadow-[0_14px_28px_rgba(7,88,233,.25)]">عرض الخطط واختيار خطة<ArrowLeft className="h-4 w-4" /></Link>
+      </div>
+    </section>
+  </div>;
+}
+
 export default function HomePage() {
+  const { accountType, loading } = useAuth();
+  if (loading) return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:bg-[#0d243b]">جارٍ تحميل حسابك...</div>;
+  if (accountType === "customer") return <CustomerWelcome />;
   return (
     <div className="space-y-3 sm:space-y-4">
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
