@@ -13,7 +13,8 @@ export default function PlansPage(){
  useEffect(()=>{load()},[]);
  const statusCounts=useMemo(()=>({all:plans.length,active:plans.filter(p=>p.status==="active").length,inactive:plans.filter(p=>p.status==="inactive").length,disabled:plans.filter(p=>p.status==="disabled").length}),[plans]);
  const filtered=useMemo(()=>plans.filter(p=>(statusFilter==="all"||p.status===statusFilter)&&[p.name,p.currency,p.description].some(v=>String(v??"").toLowerCase().includes(query.toLowerCase()))),[plans,query,statusFilter]);
- const open=(p:Plan)=>router.push(`/Dashboard/plans/${p.id}`);\n const edit=(p:Plan)=>router.push(`/Dashboard/plans/${p.id}?edit=1`);
+ const open=(p:Plan)=>router.push(`/Dashboard/plans/${p.id}`);
+ const edit=(p:Plan)=>router.push(`/Dashboard/plans/${p.id}?edit=1`);
  const allSelected=filtered.length>0&&filtered.every(p=>selected.has(p.id));
  return <div className="space-y-4" dir="rtl">
   <CollectionToolbar icon={CreditCard} title="خطط الاشتراكات" description="إدارة خطط Radius Lord وحدود الموارد لكل Customer" view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={setSelectionMode} allSelected={allSelected} onToggleAll={()=>setAll(filtered.map(p=>p.id),!allSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث عن خطة..." filters={<CollectionStatusFilters value={statusFilter} onChange={setStatusFilter} items={[{value:"all",label:"الكل",count:statusCounts.all,dot:"bg-[#0758e9]"},{value:"active",label:"نشطة",count:statusCounts.active,dot:"bg-emerald-500"},{value:"inactive",label:"غير نشطة",count:statusCounts.inactive,dot:"bg-amber-500"},{value:"disabled",label:"معطلة",count:statusCounts.disabled,dot:"bg-red-500"}]} />} primaryAction={<button onClick={()=>router.push("/Dashboard/plans/add")} className="flex h-11 items-center gap-2 rounded-[15px] bg-[#0758e9] px-4 text-xs font-semibold text-white"><Plus className="h-4 w-4"/>إضافة خطة</button>} />
