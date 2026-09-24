@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Mail, Phone, UserRound, Users } from "lucide-react";
-import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { ChevronDown, Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
+import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
   id: number;
@@ -82,7 +82,7 @@ export default function CustomersPage() {
       ) : (
         <>
           <CollectionTable>
-            <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th></tr></CollectionTableHead>
+            <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل العملاء الظاهرين" /></th><th className="p-3">العميل</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدولة</th><th>الحالة</th><th>تاريخ الإنشاء</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
             <CollectionTableBody>{filtered.map((customer) => <CustomerRow key={customer.id} customer={customer} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}</CollectionTableBody>
           </CollectionTable>
           <CollectionMobileList>{filtered.map((customer) => <CustomerMobileRow key={customer.id} customer={customer} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}</CollectionMobileList>
@@ -115,7 +115,7 @@ function CustomerCard({ customer, selectionMode, selected, onToggle, onOpen }: {
 }
 
 function CustomerRow({ customer, selected, onToggle, onOpen }: { customer: Customer; selected: boolean; onToggle: () => void; onOpen: () => void }) {
-  return <tr onClick={onOpen} className={collectionRowClass(selected)}><td className="w-12 p-3 text-center" onClick={(event) => event.stopPropagation()}><CollectionSelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-semibold text-[#17386d] dark:text-[#d8d2dc]">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
+  return <tr onClick={onOpen} className={collectionRowClass(selected)}><td className="w-12 p-3 text-center" onClick={(event) => event.stopPropagation()}><CollectionSelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-semibold text-[#17386d] dark:text-[#d8d2dc]">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td><td className="w-14 text-center"><CollectionItemActions items={[{label:"عرض التفاصيل",icon:Eye,onClick:onOpen},{label:"تعديل",icon:Pencil,onClick:onOpen},{label:"حذف",icon:Trash2,danger:true,separatorBefore:true,disabled:true,onClick:()=>{}}]} /></td></tr>;
 }
 
 function CustomerMobileRow({ customer, onOpen }: { customer: Customer; onOpen: () => void }) {
