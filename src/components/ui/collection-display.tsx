@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Search } from "lucide-react";
+import { Check, MoreVertical, Search, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import CollectionViewToggle,{type CollectionViewMode} from "@/components/ui/collection-view-toggle";
 import { useCollectionState } from "@/components/ui/use-collection-state";
 
@@ -70,3 +71,17 @@ export function CollectionTableBody({children}:{children:React.ReactNode}){retur
 export function CollectionMobileList({children}:{children:React.ReactNode}){return <section className="ui-state-enter space-y-2 md:hidden">{children}</section>}
 
 export function CollectionMobileCard({onOpen,children}:{onOpen:()=>void;children:React.ReactNode}){return <article onClick={onOpen} className="cursor-pointer rounded-[18px] border border-[#8da9c4] bg-white p-3 shadow-[0_6px_18px_rgba(58,84,112,.07)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:scale-[1.01] hover:border-[#78afe9] hover:bg-[#e9f2ff] hover:shadow-[0_12px_26px_rgba(58,84,112,.13)] dark:border-white/[.12] dark:bg-[#0d243b] dark:hover:border-white/[.20]">{children}</article>}
+
+
+export type CollectionItemAction={label:string;icon?:LucideIcon;onClick:()=>void;danger?:boolean;disabled?:boolean;separatorBefore?:boolean};
+
+export function CollectionItemActions({label="إجراءات العنصر",items}:{label?:string;items:CollectionItemAction[]}){
+ const [open,setOpen]=useState(false);const root=useRef<HTMLDivElement>(null);
+ useEffect(()=>{if(!open)return;const close=(e:MouseEvent)=>{if(root.current&&!root.current.contains(e.target as Node))setOpen(false)};document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close)},[open]);
+ return <div ref={root} className="relative inline-flex" onClick={e=>e.stopPropagation()}>
+  <button type="button" aria-label={label} aria-expanded={open} onClick={()=>setOpen(v=>!v)} className={`grid h-8 w-8 place-items-center rounded-[10px] border transition-all duration-200 ${open?"border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.08] dark:text-[#d8d2dc]":"border-[#c8d7e6] bg-white/80 text-slate-500 hover:border-[#8bb9f0] hover:bg-[#edf4fb] hover:text-[#0758e9] dark:border-white/[.12] dark:bg-white/[.04] dark:text-slate-300 dark:hover:bg-white/[.08]"}`}><MoreVertical className="h-4 w-4"/></button>
+  {open&&<div className="ui-state-enter absolute left-0 top-[calc(100%+6px)] z-50 min-w-[190px] overflow-hidden rounded-[16px] border border-[#c8d7e6] bg-white p-1.5 text-right shadow-[0_14px_34px_rgba(37,64,92,.18)] dark:border-white/[.13] dark:bg-[#26394c]" dir="rtl">
+   {items.map((item,i)=>{const Icon=item.icon;return <div key={`${item.label}-${i}`}>{item.separatorBefore&&<div className="my-1 border-t border-slate-100 dark:border-white/[.08]"/>}<button type="button" disabled={item.disabled} onClick={()=>{if(item.disabled)return;setOpen(false);item.onClick()}} className={`flex min-h-9 w-full items-center gap-2.5 rounded-[11px] px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${item.danger?"text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10":"text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-200 dark:hover:bg-white/[.07]"}`}>{Icon&&<Icon className="h-4 w-4 shrink-0"/>}<span>{item.label}</span></button></div>})}
+  </div>}
+ </div>
+}
