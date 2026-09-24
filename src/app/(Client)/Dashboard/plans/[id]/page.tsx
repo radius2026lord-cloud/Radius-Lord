@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useState } from "react";
 import { Activity,ArrowLeft,ArrowRight,Check,CreditCard,Layers3,Pencil,Server,Star,Users,Wifi,X } from "lucide-react";
-import { useParams,useRouter } from "next/navigation";
+import { useParams,useRouter,useSearchParams } from "next/navigation";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import { CURRENCY_OPTIONS } from "@/lib/currencies";
 
@@ -11,10 +11,10 @@ type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubs
 const STATUS=[{value:"active",label:"نشطة"},{value:"inactive",label:"غير نشطة"},{value:"disabled",label:"معطلة"}];
 
 export default function PlanDetailsPage(){
- const params=useParams(),router=useRouter();const [plan,setPlan]=useState<Plan|null>(null),[recentActivity,setRecentActivity]=useState<RecentActivity[]>([]),[loading,setLoading]=useState(true),[editing,setEditing]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[form,setForm]=useState<any>({});
+ const params=useParams(),router=useRouter(),searchParams=useSearchParams();const [plan,setPlan]=useState<Plan|null>(null),[recentActivity,setRecentActivity]=useState<RecentActivity[]>([]),[loading,setLoading]=useState(true),[editing,setEditing]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[form,setForm]=useState<any>({});
  useEffect(()=>{fetch(`/api/admin/payment-plans/${params.id}`,{credentials:"include",cache:"no-store"}).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>{setPlan(d.plan);setForm({...d.plan,description:d.plan.description??""})}).catch(()=>setError("تعذر العثور على الخطة.")).finally(()=>setLoading(false))},[params.id]);
  const loadRecentActivity=()=>fetch(`/api/admin/audit-logs/payment-plan/${params.id}`,{credentials:"include",cache:"no-store"}).then(async r=>r.ok?r.json():null).then(d=>setRecentActivity(d?.logs??[])).catch(()=>setRecentActivity([]));
- useEffect(()=>{loadRecentActivity()},[params.id]);
+ useEffect(()=>{loadRecentActivity()},[params.id]);\n useEffect(()=>{if(plan&&searchParams.get("edit")==="1")begin()},[plan?.id,searchParams]);
  const begin=()=>{if(plan){setForm({...plan,description:plan.description??""});setError("");setMessage("");setEditing(true)}};
  const cancel=()=>{setEditing(false);setError("")};const set=(k:string,v:any)=>setForm((x:any)=>({...x,[k]:v}));
  async function save(){setSaving(true);setError("");setMessage("");try{const r=await fetch(`/api/admin/payment-plans/${params.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(form)});const d=await r.json();if(!r.ok)throw new Error(d.message??"تعذر حفظ التعديلات.");setPlan(d.plan);setForm({...d.plan,description:d.plan.description??""});setEditing(false);setMessage(d.message??"تم حفظ التعديلات بنجاح.");loadRecentActivity()}catch(e){setError(e instanceof Error?e.message:"تعذر حفظ التعديلات.")}finally{setSaving(false)}}
