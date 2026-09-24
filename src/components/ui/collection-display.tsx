@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Search } from "lucide-react";
 import CollectionViewToggle,{type CollectionViewMode} from "@/components/ui/collection-view-toggle";
 import { useCollectionState } from "@/components/ui/use-collection-state";
 
@@ -27,4 +27,19 @@ export function CollectionGrid({children,className=""}:{children:React.ReactNode
 
 export function collectionCardClass(selected=false){
  return `group relative min-w-0 cursor-pointer rounded-[22px] border p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-1 hover:scale-[1.018] hover:shadow-[0_16px_34px_rgba(58,84,112,.16)] dark:hover:shadow-[0_18px_38px_rgba(0,0,0,.22)] ${selected?"border-[#6aaeff] ring-2 ring-[#1479ff]/15 dark:border-[#4c8dff]":"border-[#8da9c4] hover:border-[#78afe9] dark:border-white/[.12] dark:hover:border-white/[.20]"}`;
+}
+
+
+export function CollectionToolbar({icon:Icon,title,description,view,onViewChange,selectionMode,onSelectionModeChange,allSelected,onToggleAll,query,onQueryChange,searchPlaceholder="بحث...",filters,primaryAction}:{icon:any;title:string;description:string;view:CollectionViewMode;onViewChange:(v:CollectionViewMode)=>void;selectionMode:boolean;onSelectionModeChange:(v:boolean)=>void;allSelected?:boolean;onToggleAll?:()=>void;query:string;onQueryChange:(v:string)=>void;searchPlaceholder?:string;filters?:React.ReactNode;primaryAction?:React.ReactNode}){
+ return <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
+  <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
+   <div className="min-w-0 shrink-0 text-right xl:w-[270px]"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Icon className="h-5 w-5 text-[#0758e9]"/>{title}</h2><p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">{description}</p></div>
+   <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center">{filters}</div>
+   <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[clamp(340px,29vw,490px)]" dir="ltr">
+    <CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/>
+    <div className="relative min-w-[150px] flex-1" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]"/></div>
+    {primaryAction&&<div className="shrink-0">{primaryAction}</div>}
+   </div>
+  </div>
+ </section>
 }
