@@ -74,3 +74,12 @@
       @apply bg-background text-foreground;
     }
   }
+
+  /* Radius Lord typography: Arabic UI uses the LBC family project-wide. */
+  :root {
+    --font-arabic-ui: "LBC", "LBC Arabic", Tahoma, Arial, sans-serif;
+  }
+
+  :where([dir="rtl"], [lang="ar"], .rl-tooltip) {
+    font-family: var(--font-arabic-ui);
+  }
