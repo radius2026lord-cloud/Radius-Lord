@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Mail, Phone, UserRound, Users } from "lucide-react";
-import { CollectionGrid, CollectionToolbar, CollectionStatusFilters, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, collectionCardClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { CollectionGrid, CollectionToolbar, CollectionStatusFilters, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, collectionCardClass, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
   id: number;
@@ -124,7 +124,7 @@ function CustomerCard({ customer, selectionMode, selected, onToggle, onOpen }: {
 }
 
 function CustomerRow({ customer, selected, onToggle, onOpen }: { customer: Customer; selected: boolean; onToggle: () => void; onOpen: () => void }) {
-  return <tr onClick={onOpen} className={`text-slate-600 ${selected ? "bg-[#f2f7fd] dark:bg-white/[.055]" : ""} transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045]`}><td className="w-12 p-3 text-center" onClick={(event) => event.stopPropagation()}><CollectionSelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-semibold text-[#17386d] dark:text-[#d8d2dc]">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
+  return <tr onClick={onOpen} className={collectionRowClass(selected)}><td className="w-12 p-3 text-center" onClick={(event) => event.stopPropagation()}><CollectionSelectionBox checked={selected} onChange={onToggle} label={`تحديد ${customer.fullName}`} /></td><td className="p-3"><div className="font-semibold text-[#17386d] dark:text-[#d8d2dc]">{customer.fullName}</div><div className="mt-1 text-[10px] text-slate-400">{customer.email}</div></td><td>@{customer.username || "—"}</td><td dir="ltr">{customer.phone}</td><td>{customer.country}</td><td><Status status={customer.status} /></td><td>{formatDate(customer.createdAt)}</td></tr>;
 }
 
 function CustomerMobileRow({ customer, onOpen }: { customer: Customer; onOpen: () => void }) {
