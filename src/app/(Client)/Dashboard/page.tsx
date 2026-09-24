@@ -78,21 +78,35 @@ function TrafficChart() {
 
 function CustomerWelcome() {
   const { account } = useAuth();
-  const firstName = account?.fullName?.trim().split(/\\s+/)[0] || "عميلنا";
-  return <div className="ui-state-enter flex min-h-[58vh] items-center justify-center" dir="rtl">
-    <section className="rl-surface relative w-full max-w-[920px] overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(58,84,112,.12)] dark:border-white/[.08] dark:bg-[#0d243b] sm:p-9">
-      <div className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full bg-[#1479ff]/10 blur-3xl" />
-      <div className="relative mx-auto max-w-[680px] text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_12px_28px_rgba(20,121,255,.25)]"><CreditCard className="h-7 w-7" /></div>
-        <p className="mt-5 text-xs font-semibold text-[#0758e9]">مرحباً بك في LORD RADIUS</p>
-        <h2 className="mt-2 text-2xl font-bold text-[#102a63] dark:text-white sm:text-3xl">أهلاً {firstName}</h2>
-        <p className="mx-auto mt-3 max-w-[560px] text-sm leading-7 text-slate-500 dark:text-slate-300">ابدأ باختيار الخطة المناسبة لك. بعد اختيار الخطة سنكمل معك خطوات تجهيز حسابك وشبكتك داخل Radius Lord.</p>
-        <div className="mx-auto mt-6 max-w-[520px] rounded-[20px] border border-[#d7e3ef] bg-[#f7faff] p-4 text-right dark:border-white/[.09] dark:bg-white/[.035]">
-          <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.07]"><CreditCard className="h-4 w-4" /></span><div><div className="text-sm font-semibold text-[#17386d] dark:text-slate-100">اختر خطة الاشتراك</div><p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">استعرض الخطط المتاحة وقارن الحدود والمزايا قبل اختيار الخطة المناسبة.</p></div></div>
+  const firstName = account?.fullName?.trim().split(/\s+/)[0] || "عميلنا";
+  return <div className="customer-welcome relative -m-3 min-h-[calc(100dvh-110px)] overflow-hidden rounded-[22px] sm:-m-4" dir="rtl">
+    <div className="customer-grid absolute inset-0" aria-hidden="true" />
+    <div className="customer-glow absolute inset-0" aria-hidden="true" />
+    <div className="customer-dots absolute inset-0" aria-hidden="true">{Array.from({length:18}).map((_,i)=><i key={i} style={{"--i":i} as React.CSSProperties}/>)}</div>
+    <div className="relative z-10 flex min-h-[calc(100dvh-110px)] items-center justify-center px-5 py-10 sm:px-8">
+      <section className="w-full max-w-[900px] text-center">
+        <div className="welcome-reveal welcome-delay-1 mx-auto inline-flex items-center gap-2 rounded-full border border-[#9fc4ec]/70 bg-white/70 px-4 py-2 text-xs font-semibold text-[#0758e9] shadow-sm backdrop-blur-xl dark:border-white/[.12] dark:bg-white/[.06] dark:text-[#8ab5ff]"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>مرحباً بك في LORD RADIUS</div>
+        <h2 className="welcome-reveal welcome-delay-2 mt-5 text-3xl font-bold tracking-tight text-[#102a63] dark:text-white sm:text-5xl">أهلاً بك، <span className="text-[#0758e9]">{firstName}</span></h2>
+        <p className="welcome-reveal welcome-delay-3 mx-auto mt-4 max-w-[650px] text-sm leading-8 text-slate-500 dark:text-slate-300 sm:text-base">نبدأ معك بخطوات بسيطة لتجهيز حسابك. اختر الخطة المناسبة، ثم تابع إعداد شبكتك والاستفادة من أدوات Radius Lord لإدارة خدمتك من مكان واحد.</p>
+        <div className="welcome-reveal welcome-delay-4 mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Link href="/Dashboard/customer-plans" className="inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-[16px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(7,88,233,.24)] transition hover:-translate-y-0.5 hover:bg-[#064dcc] hover:shadow-[0_16px_34px_rgba(7,88,233,.30)]">عرض الخطط المتاحة<CreditCard className="h-4 w-4"/></Link>
+          <button type="button" onClick={()=>document.getElementById("radius-intro")?.scrollIntoView({behavior:"smooth",block:"center"})} className="inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-[16px] border border-[#a9c8e8] bg-white/70 px-6 text-sm font-semibold text-[#17386d] shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white dark:border-white/[.13] dark:bg-white/[.05] dark:text-slate-100 dark:hover:bg-white/[.09]">نبذة عن Radius Lord<ArrowLeft className="h-4 w-4"/></button>
         </div>
-        <Link href="/Dashboard/customer-plans" className="mx-auto mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-[16px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(7,88,233,.20)] transition hover:-translate-y-0.5 hover:bg-[#064dcc] hover:shadow-[0_14px_28px_rgba(7,88,233,.25)]">عرض الخطط واختيار خطة<ArrowLeft className="h-4 w-4" /></Link>
-      </div>
-    </section>
+        <div id="radius-intro" className="welcome-reveal welcome-delay-5 mx-auto mt-10 grid max-w-[760px] gap-3 sm:grid-cols-3">
+          {[["إدارة مركزية","إدارة شبكاتك وخدماتك من واجهة موحدة.",Server],["RADIUS متكامل","ربط NAS والمشتركين والسياسات بسهولة.",Wifi],["مرونة وتوسع","خطط مرنة تناسب نمو شبكتك واحتياجاتها.",Activity]].map(([title,text,Icon]:any)=><article key={title} className="rounded-[20px] border border-[#b9cfe4]/75 bg-white/65 p-4 text-right shadow-[0_10px_28px_rgba(58,84,112,.08)] backdrop-blur-xl transition hover:-translate-y-1 dark:border-white/[.09] dark:bg-white/[.045]"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.07] dark:text-[#8ab5ff]"><Icon className="h-5 w-5"/></span><h3 className="mt-3 text-sm font-semibold text-[#17386d] dark:text-white">{title}</h3><p className="mt-1.5 text-xs leading-6 text-slate-500 dark:text-slate-400">{text}</p></article>)}
+        </div>
+      </section>
+    </div>
+    <style jsx>{`
+      .customer-welcome{background:linear-gradient(135deg,#f7fbff 0%,#edf5ff 45%,#f9fbfe 100%)}
+      :global(.dark) .customer-welcome{background:linear-gradient(135deg,#17131b 0%,#211a25 50%,#17263a 100%)}
+      .customer-grid{opacity:.42;background-image:linear-gradient(rgba(64,132,211,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(64,132,211,.12) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(58deg) scale(1.35);transform-origin:center bottom;mask-image:linear-gradient(to bottom,transparent 3%,#000 35%,#000 80%,transparent)}
+      .customer-glow{background:radial-gradient(circle at 50% 38%,rgba(20,121,255,.15),transparent 36%),radial-gradient(circle at 15% 80%,rgba(0,194,255,.08),transparent 22%)}
+      .customer-dots i{position:absolute;width:5px;height:5px;border-radius:999px;background:#1479ff;opacity:.22;left:calc((var(--i) * 37)% 94% + 3%);top:calc((var(--i) * 53)% 82% + 8%);animation:floatDot calc(5s + (var(--i) % 5)*1s) ease-in-out infinite alternate}
+      .welcome-reveal{opacity:0;transform:translateY(16px);animation:welcomeIn .72s cubic-bezier(.22,.8,.25,1) forwards}.welcome-delay-1{animation-delay:.08s}.welcome-delay-2{animation-delay:.18s}.welcome-delay-3{animation-delay:.30s}.welcome-delay-4{animation-delay:.42s}.welcome-delay-5{animation-delay:.56s}
+      @keyframes welcomeIn{to{opacity:1;transform:translateY(0)}}@keyframes floatDot{to{transform:translate3d(12px,-18px,0);opacity:.5}}
+      @media(prefers-reduced-motion:reduce){.welcome-reveal,.customer-dots i{animation:none;opacity:1;transform:none}}
+    `}</style>
   </div>;
 }
 
