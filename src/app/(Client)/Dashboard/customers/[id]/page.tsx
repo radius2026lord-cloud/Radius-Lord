@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, Trash2, UserRound, X } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 type RecentActivity = { id:number; actionCode:string; actionName:string; description:string|null; adminName:string|null; adminUsername:string|null; createdAt:string; metadata:any };
 
@@ -25,7 +25,7 @@ const labels = { active: "نشط", suspended: "معلّق", disabled: "معطّ�
 
 export default function CustomerDetailsPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter();\n  const searchParams = useSearchParams();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ export default function CustomerDetailsPage() {
       .catch(() => setRecentActivity([]));
   };
 
-  useEffect(() => { loadRecentActivity(); }, [params.id]);
+  useEffect(() => { loadRecentActivity(); }, [params.id]);\n\n  useEffect(() => { if (customer && searchParams.get("edit") === "1") beginEdit(); }, [customer?.id, searchParams]);
 
   const beginEdit = () => {
     if (!customer) return;
