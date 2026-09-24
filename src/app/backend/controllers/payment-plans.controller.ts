@@ -12,6 +12,7 @@ export async function listPaymentPlansController(req:AuthenticatedRequest,res:Re
 
 export async function createPaymentPlanController(req:AuthenticatedRequest,res:Response){
  try{
+  await ensurePaymentPlanAuditEntity();
   const name=String(req.body.name??'').trim(), currency=String(req.body.currency??'USD').trim().toUpperCase(), description=String(req.body.description??'').trim()||null;
   const durationMonths=Number(req.body.durationMonths), maxTenants=Number(req.body.maxTenants), maxSubscribers=Number(req.body.maxSubscribers), maxNas=Number(req.body.maxNas), price=Number(req.body.price);
   const isFeatured=Boolean(req.body.isFeatured), status=String(req.body.status??'active');
@@ -26,6 +27,7 @@ export async function createPaymentPlanController(req:AuthenticatedRequest,res:R
 
 export async function updatePaymentPlanController(req:AuthenticatedRequest,res:Response){
  try{
+  await ensurePaymentPlanAuditEntity();
   const id=Number(req.params.id); if(!Number.isInteger(id)||id<1)return res.status(400).json({success:false,message:'معرّف الخطة غير صالح.'});
   const [beforeRows]=await db.query('SELECT * FROM payment_plans WHERE id=? LIMIT 1',[id]); const before=(beforeRows as any[])[0]; if(!before)return res.status(404).json({success:false,message:'الخطة غير موجودة.'});
   const name=String(req.body.name??'').trim(), currency=String(req.body.currency??'USD').trim().toUpperCase(), description=String(req.body.description??'').trim()||null;
@@ -35,4 +37,10 @@ export async function updatePaymentPlanController(req:AuthenticatedRequest,res:R
   await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'PAYMENT_PLAN',entityId:id,description:`تعديل خطة الاشتراك #${id}`,metadata:{before:mapPlan(before),after:{name,durationMonths,maxTenants,maxSubscribers,maxNas,price,currency,description,isFeatured,status}}});
   const [rows]=await db.query('SELECT * FROM payment_plans WHERE id=? LIMIT 1',[id]); return res.json({success:true,message:'تم تحديث الخطة بنجاح.',plan:mapPlan((rows as any[])[0])});
  }catch(e){console.error('Update payment plan error:',e);return res.status(500).json({success:false,message:'تعذر تحديث الخطة حاليًا.'});}
+}
+
+async function ensurePaymentPlanAuditEntity(){
+ await db.query(`INSERT INTO audit_entity_types (code,name_ar,name_en,description,is_active)
+ VALUES ('PAYMENT_PLAN','خطة اشتراك','Payment Plan','خطط اشتراكات Radius Lord',1)
+ ON DUPLICATE KEY UPDATE name_ar=VALUES(name_ar),name_en=VALUES(name_en),description=VALUES(description),is_active=1`);
 }
