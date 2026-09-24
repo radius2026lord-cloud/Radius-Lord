@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Mail, Phone, Search, UserRound, Users } from "lucide-react";
-import { CollectionDisplayControls, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, useCollectionDisplay } from "@/components/ui/collection-display";
+import { CollectionDisplayControls, CollectionGrid, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, collectionCardClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
   id: number;
@@ -111,9 +111,9 @@ export default function CustomersPage() {
       ) : filtered.length === 0 ? (
         <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">لا يوجد عملاء مطابقون.</div>
       ) : view === "grid" ? (
-        <section key="grid-view" className="animate-collectionView grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <CollectionGrid>
           {filtered.map((customer) => <CustomerCard key={customer.id} customer={customer} selectionMode={gridSelectionMode} selected={selected.has(customer.id)} onToggle={() => toggleCustomer(customer.id)} onOpen={() => router.push(`/Dashboard/customers/${customer.id}`)} />)}
-        </section>
+        </CollectionGrid>
       ) : (
         <>
           <section key="row-view" className="animate-collectionView hidden overflow-hidden rl-surface rounded-[22px] bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block">
@@ -151,7 +151,7 @@ function Status({ status }: { status: Customer["status"] }) {
 }
 
 function CustomerCard({ customer, selectionMode, selected, onToggle, onOpen }: { customer: Customer; selectionMode: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }) {
-  return <article onClick={() => selectionMode ? onToggle() : onOpen()} className={`group relative min-w-0 rounded-[22px] border bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-1 hover:scale-[1.018] hover:shadow-[0_16px_34px_rgba(58,84,112,.16)] dark:bg-[#0d243b] dark:hover:shadow-[0_18px_38px_rgba(0,0,0,.22)] ${selected ? "border-[#6aaeff] bg-[#f2f7fd] ring-2 ring-[#1479ff]/15 dark:border-[#4c8dff] dark:bg-white/[.055]" : "border-white/90 hover:border-[#78afe9] hover:bg-[#e9f2ff] dark:border-white/[.07] dark:hover:border-white/[.16]"} ${selectionMode ? "cursor-pointer" : "cursor-pointer"}`}>
+  return <article onClick={() => selectionMode ? onToggle() : onOpen()} className={`${collectionCardClass(selected)} ${selected ? "bg-[#f2f7fd] dark:bg-white/[.055]" : "bg-white hover:bg-[#e9f2ff] dark:bg-[#0d243b]"}`}>
     {selectionMode && <div className="-mx-1 -mt-1 mb-3 flex items-center justify-end border-b border-slate-100 pb-2 dark:border-white/[.07]"><CollectionGridSelectionMark checked={selected} /></div>}
     <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{customer.fullName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{customer.username || "—"}</div></div><Status status={customer.status} /></div>
     <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400"><div className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="truncate" dir="ltr">{customer.email}</span></div><div className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0" /><span dir="ltr">{customer.phone}</span></div><div className="flex items-center justify-between gap-3"><span>{customer.country}</span><span>{formatDate(customer.createdAt)}</span></div></div>
