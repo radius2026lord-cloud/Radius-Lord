@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Mail, Phone, Search, UserRound, Users } from "lucide-react";
-import { CollectionDisplayControls, CollectionGrid, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, collectionCardClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { Check, ChevronDown, Mail, Phone, UserRound, Users } from "lucide-react";
+import { CollectionGrid, CollectionToolbar, CollectionGridSelectionMark, CollectionSelectionBar, CollectionSelectionBox, collectionCardClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
   id: number;
@@ -65,42 +65,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
-          <div className="min-w-0 shrink-0 text-right xl:w-[270px]">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Users className="h-5 w-5 text-[#0758e9]" />العملاء</h2>
-            <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">عرض وإدارة حسابات عملاء Radius Lord</p>
-          </div>
-
-          <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center">
-            <div className="inline-flex shrink-0 items-center rl-surface-soft rounded-[16px] bg-[#f7faff] p-1 shadow-[0_4px_14px_rgba(58,84,112,.06)] dark:border-white/[.08] dark:bg-white/[.035]">
-              {([
-                ["all", "الكل", "bg-[#0758e9]"],
-                ["active", "نشط", "bg-emerald-500"],
-                ["suspended", "معلّق", "bg-amber-500"],
-                ["disabled", "معطّل", "bg-red-500"],
-              ] as const).map(([value, label, dot]) => {
-                const active = statusFilter === value;
-                return <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[12px] border px-3 text-xs font-medium transition-all duration-250 ${active ? "border-[#9fc4ec] bg-white text-[#0758e9] shadow-[0_3px_10px_rgba(20,121,255,.10)] dark:border-white/[.14] dark:bg-white/[.08] dark:text-[#ddd7e1]" : "border-transparent text-slate-500 hover:bg-white/80 hover:text-[#17386d] dark:text-[#aaa4af] dark:hover:bg-white/[.05] dark:hover:text-[#d6d0da]"}`}><span className={`h-2 w-2 rounded-full ${dot}`} /><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-medium ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-[#d8d2dc]" : "bg-[#edf2f7] text-slate-500 dark:bg-white/[.05] dark:text-[#96909b]"}`}>{statusCounts[value]}</span></button>;
-              })}
-            </div>
-          </div>
-
-          <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[clamp(340px,29vw,490px)]" dir="ltr">
-            <CollectionDisplayControls view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={setGridSelectionMode} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} />
-            <div className="relative min-w-[150px] flex-1" dir="rtl">
-              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم، المستخدم، الهاتف..." className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]" />
-            </div>
-            {view === "grid" && (
-              <div className="flex shrink-0 items-center gap-1.5" dir="rtl">
-                {gridSelectionMode && <button type="button" onClick={toggleAllVisible} className={`h-11 whitespace-nowrap rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 ${allVisibleSelected ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9]"}`}>{allVisibleSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}</button>}
-                <button type="button" onClick={() => setGridSelectionMode((active) => !active)} className={`h-11 whitespace-nowrap rounded-[16px] border px-3 text-xs font-semibold transition-all duration-300 ${gridSelectionMode ? "border-[#8bb9f0] bg-[#e9f2ff] text-[#0758e9] dark:border-white/20 dark:bg-white/[.07] dark:text-[#e3dfe6]" : "border-[#d7e3ef] bg-white text-[#17386d] hover:border-[#9fc4ec] hover:bg-[#edf4fb] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d6d1d9] dark:hover:bg-white/[.07]"}`}>{gridSelectionMode ? "إلغاء التحديد" : "تحديد"}</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+      <CollectionToolbar icon={Users} title="العملاء" description="عرض وإدارة حسابات عملاء Radius Lord" view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={setGridSelectionMode} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالاسم، المستخدم، الهاتف..." filters={<div className="inline-flex shrink-0 items-center rl-surface-soft rounded-[16px] bg-[#f7faff] p-1 shadow-[0_4px_14px_rgba(58,84,112,.06)] dark:border-white/[.08] dark:bg-white/[.035]">{([["all","الكل","bg-[#0758e9]"],["active","نشط","bg-emerald-500"],["suspended","معلّق","bg-amber-500"],["disabled","معطّل","bg-red-500"]] as const).map(([value,label,dot])=>{const active=statusFilter===value;return <button key={value} type="button" onClick={()=>setStatusFilter(value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[12px] border px-3 text-xs font-medium transition-all duration-250 ${active?"border-[#9fc4ec] bg-white text-[#0758e9] shadow-[0_3px_10px_rgba(20,121,255,.10)] dark:border-white/[.14] dark:bg-white/[.08] dark:text-[#ddd7e1]":"border-transparent text-slate-500 hover:bg-white/80 hover:text-[#17386d] dark:text-[#aaa4af] dark:hover:bg-white/[.05] dark:hover:text-[#d6d0da]"}`}><span className={`h-2 w-2 rounded-full ${dot}`}/><span>{label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-medium ${active?"bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-[#d8d2dc]":"bg-[#edf2f7] text-slate-500 dark:bg-white/[.05] dark:text-[#96909b]"}`}>{statusCounts[value]}</span></button>})}</div>} />
 
       <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); }}>
         <div className="relative w-full sm:w-[230px]"><button type="button" onClick={() => setBulkMenuOpen((open) => !open)} className="flex h-10 w-full items-center justify-between rounded-[14px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d8d2dc]"><span>{bulkAction === "activate" ? "تفعيل المحدد" : bulkAction === "suspend" ? "تعليق المحدد" : bulkAction === "disable" ? "تعطيل المحدد" : "تطبيق إجراء جماعي..."}</span><ChevronDown className={`h-4 w-4 transition-transform ${bulkMenuOpen ? "rotate-180" : ""}`}/></button>{bulkMenuOpen&&<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 rounded-[18px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-xl dark:border-white/[.12] dark:bg-[#302e33]">{[["activate","تفعيل المحدد"],["suspend","تعليق المحدد"],["disable","تعطيل المحدد"]].map(([value,label])=><button key={value} type="button" onClick={()=>{setBulkAction(value);setBulkMenuOpen(false)}} className="flex min-h-10 w-full items-center gap-2 rounded-[13px] px-3 text-right text-xs font-semibold hover:bg-[#edf4fb] dark:hover:bg-[#38363c]"><span className={`h-2 w-2 rounded-full ${value==="activate"?"bg-emerald-500":value==="suspend"?"bg-amber-500":"bg-red-500"}`}/>{label}</button>)}</div>}</div>
