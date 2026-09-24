@@ -53,3 +53,20 @@ export function CollectionStatusFilters<T extends string>({value,onChange,items}
 export function collectionRowClass(selected=false){
  return `cursor-pointer text-slate-600 transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:relative hover:z-10 hover:scale-[1.006] hover:bg-[#e9f2ff] hover:shadow-[0_8px_20px_rgba(58,84,112,.11)] dark:text-slate-300 dark:hover:bg-white/[.045] ${selected?"bg-[#f2f7fd] dark:bg-white/[.055]":""}`;
 }
+
+
+export function CollectionState({children}:{children:React.ReactNode}){return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">{children}</div>}
+
+export function CollectionCard({selected=false,selectionMode=false,onToggle,onOpen,children}:{selected?:boolean;selectionMode?:boolean;onToggle?:()=>void;onOpen:()=>void;children:React.ReactNode}){
+ return <article onClick={()=>selectionMode&&onToggle?onToggle():onOpen()} className={`${collectionCardClass(selected)} ${selected?"bg-[#f2f7fd] dark:bg-white/[.055]":"bg-white hover:bg-[#e9f2ff] dark:bg-[#0d243b]"}`}>{selectionMode&&<div className="-mx-1 -mt-1 mb-3 flex items-center justify-end border-b border-slate-100 pb-2 dark:border-white/[.07]"><CollectionGridSelectionMark checked={selected}/></div>}{children}</article>
+}
+
+export function CollectionTable({children,minWidth="850px"}:{children:React.ReactNode;minWidth?:string}){return <section className="ui-state-enter hidden overflow-hidden rl-surface rounded-[22px] bg-white shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] md:block"><div className="collection-table-scroll overflow-x-auto"><table className="w-full text-right text-xs" style={{minWidth}}>{children}</table></div></section>}
+
+export function CollectionTableHead({children}:{children:React.ReactNode}){return <thead className="border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[11px] font-semibold text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e] dark:text-slate-200">{children}</thead>}
+
+export function CollectionTableBody({children}:{children:React.ReactNode}){return <tbody className="divide-y divide-[#c4d3e2] dark:divide-white/[.13]">{children}</tbody>}
+
+export function CollectionMobileList({children}:{children:React.ReactNode}){return <section className="ui-state-enter space-y-2 md:hidden">{children}</section>}
+
+export function CollectionMobileCard({onOpen,children}:{onOpen:()=>void;children:React.ReactNode}){return <article onClick={onOpen} className="cursor-pointer rounded-[18px] border border-[#8da9c4] bg-white p-3 shadow-[0_6px_18px_rgba(58,84,112,.07)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:scale-[1.01] hover:border-[#78afe9] hover:bg-[#e9f2ff] hover:shadow-[0_12px_26px_rgba(58,84,112,.13)] dark:border-white/[.12] dark:bg-[#0d243b] dark:hover:border-white/[.20]">{children}</article>}
