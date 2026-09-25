@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   CircleDollarSign,
   CreditCard,
+  Crown,
   ArrowLeft,
   Server,
   UserRound,
@@ -79,21 +80,21 @@ function TrafficChart() {
 function CustomerWelcome() {
   const { account } = useAuth();
   const fullName = account?.fullName?.trim() || "عميلنا";
-  return <div className="customer-welcome relative -m-3 min-h-[calc(100dvh-110px)] overflow-hidden rounded-[22px] sm:-m-4" dir="rtl">
+  return <div className="customer-welcome relative -m-3 h-[calc(100dvh-110px)] overflow-hidden rounded-[22px] sm:-m-4" dir="rtl">
     <div className="customer-grid absolute inset-0" aria-hidden="true" />
     <div className="customer-glow absolute inset-0" aria-hidden="true" />
     <div className="customer-dots absolute inset-0" aria-hidden="true">{Array.from({length:18}).map((_,i)=><i key={i} style={{"--i":i} as React.CSSProperties}/>)}</div>
-    <div className="relative z-10 flex min-h-[calc(100dvh-110px)] items-center justify-center px-5 py-10 sm:px-8">
+    <div className="relative z-10 flex h-[calc(100dvh-110px)] items-center justify-center px-5 py-4 sm:px-8">
       <section className="w-full max-w-[900px] text-center">
-        <div className="welcome-reveal welcome-delay-1 mx-auto flex w-fit flex-col items-center gap-2"><div className="relative grid h-[74px] w-[74px] place-items-center rounded-[24px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_16px_36px_rgba(7,88,233,.28)]"><span className="absolute -inset-2 rounded-[28px] border border-[#1479ff]/15"/><span className="text-[25px] font-black tracking-[-2px]">LR</span><Wifi className="absolute bottom-2 h-3.5 w-3.5 text-[#ffb31a]"/></div><div className="text-[11px] font-bold tracking-[.16em] text-[#0758e9]">LORD RADIUS</div></div>
+        <div className="welcome-reveal welcome-delay-1 mx-auto flex w-fit flex-col items-center text-center" dir="ltr"><div className="relative grid h-[68px] w-[68px] place-items-center rounded-[19px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] shadow-[0_12px_30px_rgba(20,121,255,.24)]"><Crown className="h-9 w-9 text-[#ffad16]" strokeWidth={2.2}/><Wifi className="absolute bottom-1.5 h-[17px] w-[17px] text-white" strokeWidth={2.5}/></div><div className="mt-3 text-[30px] font-black leading-none tracking-tight text-[#102a63] dark:text-white">LORD</div><div className="mt-1 text-[12px] font-extrabold tracking-[.08em] text-[#e99100] dark:text-[#ffad16]">RADIUS LORD</div></div>
         <div className="welcome-reveal welcome-delay-2 mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-[#9fc4ec]/70 bg-white/70 px-4 py-2 text-xs font-semibold text-[#0758e9] shadow-sm backdrop-blur-xl dark:border-white/[.12] dark:bg-white/[.06] dark:text-[#8ab5ff]"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>مرحباً بك في LORD RADIUS</div>
         <h2 className="welcome-reveal welcome-delay-2 mt-4 text-3xl font-bold tracking-tight text-[#102a63] dark:text-white sm:text-5xl">أهلاً بك، <span className="text-[#0758e9]">{fullName}</span></h2>
-        <p className="welcome-reveal welcome-delay-3 mx-auto mt-4 max-w-[650px] text-sm leading-8 text-slate-500 dark:text-slate-300 sm:text-base">نبدأ معك بخطوات بسيطة لتجهيز حسابك. اختر الخطة المناسبة، ثم تابع إعداد شبكتك والاستفادة من أدوات Radius Lord لإدارة خدمتك من مكان واحد.</p>
-        <div className="welcome-reveal welcome-delay-4 mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <p className="welcome-reveal welcome-delay-3 mx-auto mt-2 max-w-[650px] text-sm leading-8 text-slate-500 dark:text-slate-300 sm:text-base">نبدأ معك بخطوات بسيطة لتجهيز حسابك. اختر الخطة المناسبة، ثم تابع إعداد شبكتك والاستفادة من أدوات Radius Lord لإدارة خدمتك من مكان واحد.</p>
+        <div className="welcome-reveal welcome-delay-4 mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/Dashboard/customer-plans" className="inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-[16px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(7,88,233,.24)] transition hover:-translate-y-0.5 hover:bg-[#064dcc] hover:shadow-[0_16px_34px_rgba(7,88,233,.30)]">عرض الخطط المتاحة<CreditCard className="h-4 w-4"/></Link>
           <button type="button" onClick={()=>document.getElementById("radius-intro")?.scrollIntoView({behavior:"smooth",block:"center"})} className="inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-[16px] border border-[#a9c8e8] bg-white/70 px-6 text-sm font-semibold text-[#17386d] shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white dark:border-white/[.13] dark:bg-white/[.05] dark:text-slate-100 dark:hover:bg-white/[.09]">نبذة عن Radius Lord<ArrowLeft className="h-4 w-4"/></button>
         </div>
-        <div id="radius-intro" className="welcome-reveal welcome-delay-5 mx-auto mt-10 grid max-w-[760px] gap-3 sm:grid-cols-3">
+        <div id="radius-intro" className="welcome-reveal welcome-delay-5 mx-auto mt-6 grid max-w-[760px] gap-3 sm:grid-cols-3">
           {[["إدارة مركزية","إدارة شبكاتك وخدماتك من واجهة موحدة.",Server],["RADIUS متكامل","ربط NAS والمشتركين والسياسات بسهولة.",Wifi],["مرونة وتوسع","خطط مرنة تناسب نمو شبكتك واحتياجاتها.",Activity]].map(([title,text,Icon]:any)=><article key={title} className="rounded-[20px] border border-[#b9cfe4]/75 bg-white/65 p-4 text-right shadow-[0_10px_28px_rgba(58,84,112,.08)] backdrop-blur-xl transition hover:-translate-y-1 dark:border-white/[.09] dark:bg-white/[.045]"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.07] dark:text-[#8ab5ff]"><Icon className="h-5 w-5"/></span><h3 className="mt-3 text-sm font-semibold text-[#17386d] dark:text-white">{title}</h3><p className="mt-1.5 text-xs leading-6 text-slate-500 dark:text-slate-400">{text}</p></article>)}
         </div>
       </section>
