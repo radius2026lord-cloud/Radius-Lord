@@ -5,6 +5,11 @@ import { writeAuditLog } from '../services/audit.service';
 
 const mapPlan=(r:any)=>({id:r.id,name:r.name,durationMonths:r.duration_months,maxTenants:r.max_tenants,maxSubscribers:r.max_subscribers,maxNas:r.max_nas,price:Number(r.price),currency:r.currency,description:r.description,isFeatured:Boolean(r.is_featured),status:r.status,createdAt:r.created_at,updatedAt:r.updated_at});
 
+export async function listActivePaymentPlansController(req:AuthenticatedRequest,res:Response){
+ try{const [rows]=await db.query("SELECT * FROM payment_plans WHERE status='active' ORDER BY is_featured DESC, id DESC");return res.json({success:true,plans:(rows as any[]).map(mapPlan)});}
+ catch(e){console.error("List active payment plans error:",e);return res.status(500).json({success:false,message:"تعذر تحميل الخطط المتاحة حاليًا."});}
+}
+
 export async function listPaymentPlansController(req:AuthenticatedRequest,res:Response){
  try{const [rows]=await db.query('SELECT * FROM payment_plans ORDER BY is_featured DESC, id DESC');return res.json({success:true,plans:(rows as any[]).map(mapPlan)});}
  catch(e){console.error('List payment plans error:',e);return res.status(500).json({success:false,message:'تعذر تحميل خطط الاشتراك حاليًا.'});}
