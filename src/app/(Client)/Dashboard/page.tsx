@@ -78,15 +78,16 @@ function TrafficChart() {
 
 function CustomerWelcome() {
   const { account } = useAuth();
-  const firstName = account?.fullName?.trim().split(/\s+/)[0] || "عميلنا";
+  const fullName = account?.fullName?.trim() || "عميلنا";
   return <div className="customer-welcome relative -m-3 min-h-[calc(100dvh-110px)] overflow-hidden rounded-[22px] sm:-m-4" dir="rtl">
     <div className="customer-grid absolute inset-0" aria-hidden="true" />
     <div className="customer-glow absolute inset-0" aria-hidden="true" />
     <div className="customer-dots absolute inset-0" aria-hidden="true">{Array.from({length:18}).map((_,i)=><i key={i} style={{"--i":i} as React.CSSProperties}/>)}</div>
     <div className="relative z-10 flex min-h-[calc(100dvh-110px)] items-center justify-center px-5 py-10 sm:px-8">
       <section className="w-full max-w-[900px] text-center">
-        <div className="welcome-reveal welcome-delay-1 mx-auto inline-flex items-center gap-2 rounded-full border border-[#9fc4ec]/70 bg-white/70 px-4 py-2 text-xs font-semibold text-[#0758e9] shadow-sm backdrop-blur-xl dark:border-white/[.12] dark:bg-white/[.06] dark:text-[#8ab5ff]"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>مرحباً بك في LORD RADIUS</div>
-        <h2 className="welcome-reveal welcome-delay-2 mt-5 text-3xl font-bold tracking-tight text-[#102a63] dark:text-white sm:text-5xl">أهلاً بك، <span className="text-[#0758e9]">{firstName}</span></h2>
+        <div className="welcome-reveal welcome-delay-1 mx-auto flex w-fit flex-col items-center gap-2"><div className="relative grid h-[74px] w-[74px] place-items-center rounded-[24px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_16px_36px_rgba(7,88,233,.28)]"><span className="absolute -inset-2 rounded-[28px] border border-[#1479ff]/15"/><span className="text-[25px] font-black tracking-[-2px]">LR</span><Wifi className="absolute bottom-2 h-3.5 w-3.5 text-[#ffb31a]"/></div><div className="text-[11px] font-bold tracking-[.16em] text-[#0758e9]">LORD RADIUS</div></div>
+        <div className="welcome-reveal welcome-delay-2 mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-[#9fc4ec]/70 bg-white/70 px-4 py-2 text-xs font-semibold text-[#0758e9] shadow-sm backdrop-blur-xl dark:border-white/[.12] dark:bg-white/[.06] dark:text-[#8ab5ff]"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>مرحباً بك في LORD RADIUS</div>
+        <h2 className="welcome-reveal welcome-delay-2 mt-4 text-3xl font-bold tracking-tight text-[#102a63] dark:text-white sm:text-5xl">أهلاً بك، <span className="text-[#0758e9]">{fullName}</span></h2>
         <p className="welcome-reveal welcome-delay-3 mx-auto mt-4 max-w-[650px] text-sm leading-8 text-slate-500 dark:text-slate-300 sm:text-base">نبدأ معك بخطوات بسيطة لتجهيز حسابك. اختر الخطة المناسبة، ثم تابع إعداد شبكتك والاستفادة من أدوات Radius Lord لإدارة خدمتك من مكان واحد.</p>
         <div className="welcome-reveal welcome-delay-4 mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/Dashboard/customer-plans" className="inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-[16px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(7,88,233,.24)] transition hover:-translate-y-0.5 hover:bg-[#064dcc] hover:shadow-[0_16px_34px_rgba(7,88,233,.30)]">عرض الخطط المتاحة<CreditCard className="h-4 w-4"/></Link>
@@ -100,9 +101,9 @@ function CustomerWelcome() {
     <style jsx>{`
       .customer-welcome{background:linear-gradient(135deg,#f7fbff 0%,#edf5ff 45%,#f9fbfe 100%)}
       :global(.dark) .customer-welcome{background:linear-gradient(135deg,#17131b 0%,#211a25 50%,#17263a 100%)}
-      .customer-grid{opacity:.42;background-image:linear-gradient(rgba(64,132,211,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(64,132,211,.12) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(58deg) scale(1.35);transform-origin:center bottom;mask-image:linear-gradient(to bottom,transparent 3%,#000 35%,#000 80%,transparent)}
+      .customer-grid{opacity:.62;background-image:linear-gradient(rgba(64,132,211,.17) 1px,transparent 1px),linear-gradient(90deg,rgba(64,132,211,.17) 1px,transparent 1px);background-size:38px 38px;transform:perspective(500px) rotateX(58deg) scale(1.35);transform-origin:center bottom;mask-image:linear-gradient(to bottom,transparent 3%,#000 35%,#000 80%,transparent)}
       .customer-glow{background:radial-gradient(circle at 50% 38%,rgba(20,121,255,.15),transparent 36%),radial-gradient(circle at 15% 80%,rgba(0,194,255,.08),transparent 22%)}
-      .customer-dots i{position:absolute;width:5px;height:5px;border-radius:999px;background:#1479ff;opacity:.22;left:calc((var(--i) * 37)% 94% + 3%);top:calc((var(--i) * 53)% 82% + 8%);animation:floatDot calc(5s + (var(--i) % 5)*1s) ease-in-out infinite alternate}
+      .customer-dots i{position:absolute;width:6px;height:6px;border-radius:999px;background:#1479ff;opacity:.22;left:calc((var(--i) * 37)% 94% + 3%);top:calc((var(--i) * 53)% 82% + 8%);animation:floatDot calc(5s + (var(--i) % 5)*1s) ease-in-out infinite alternate}
       .welcome-reveal{opacity:0;transform:translateY(16px);animation:welcomeIn .72s cubic-bezier(.22,.8,.25,1) forwards}.welcome-delay-1{animation-delay:.08s}.welcome-delay-2{animation-delay:.18s}.welcome-delay-3{animation-delay:.30s}.welcome-delay-4{animation-delay:.42s}.welcome-delay-5{animation-delay:.56s}
       @keyframes welcomeIn{to{opacity:1;transform:translateY(0)}}@keyframes floatDot{to{transform:translate3d(12px,-18px,0);opacity:.5}}
       @media(prefers-reduced-motion:reduce){.welcome-reveal,.customer-dots i{animation:none;opacity:1;transform:none}}
