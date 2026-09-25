@@ -8,7 +8,7 @@ type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubs
 
 export default function CustomerPlansPage(){
  const router=useRouter(),[plans,setPlans]=useState<Plan[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
- useEffect(()=>{fetch("/api/admin/payment-plans",{credentials:"include",cache:"no-store"}).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>setPlans((d.plans??[]).filter((p:Plan)=>p.status==="active"))).catch(()=>setError("تعذر تحميل الخطط المتاحة حالياً.")).finally(()=>setLoading(false))},[]);
+ useEffect(()=>{fetch("/api/admin/payment-plans/available",{credentials:"include",cache:"no-store"}).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>setPlans((d.plans??[]).filter((p:Plan)=>p.status==="active"))).catch(()=>setError("تعذر تحميل الخطط المتاحة حالياً.")).finally(()=>setLoading(false))},[]);
  return <div className="plans-stage relative -m-3 min-h-[calc(100dvh-110px)] overflow-hidden rounded-[22px] p-5 sm:-m-4 sm:p-8" dir="rtl">
   <div className="plans-grid absolute inset-0"/><div className="plans-glow absolute inset-0"/><div className="relative z-10 mx-auto max-w-[1180px]">
    <button onClick={()=>router.push("/Dashboard")} className="inline-flex h-10 items-center gap-2 rounded-[13px] border border-[#aac6e2] bg-white/75 px-3 text-xs font-semibold text-[#17386d] backdrop-blur-xl transition hover:bg-white dark:border-white/[.12] dark:bg-white/[.06] dark:text-white"><ArrowRight className="h-4 w-4"/>العودة</button>
