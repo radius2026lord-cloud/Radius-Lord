@@ -26,7 +26,6 @@ import {
   MoreHorizontal,
   PackagePlus,
   Radio,
-  Search,
   Server,
   Settings,
   ShieldCheck,
@@ -235,7 +234,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className={`dashboard-main-shell dashboard-logout-surface ${mainGap} h-screen min-w-0 overflow-hidden ${shellMotion}`}>
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5"><div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
           <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة"><Menu className="h-5 w-5" /></button>
-          <div className="relative min-w-0 flex-1 sm:max-w-[430px]"><Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" /><input className="h-10 w-full rounded-[22px] border border-[#d7e3ef] bg-white/90 pr-12 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#211a25] dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894]" placeholder="ابحث عن NAS، مشترك، جلسة ..." /></div>
+          <div className="min-w-0 flex-1 px-1">
+            <div className="truncate text-sm font-bold text-[#102a63] dark:text-white sm:text-base">{currentTitle}</div>
+            <div className="mt-0.5 hidden items-center gap-1.5 text-[10px] text-slate-400 sm:flex"><span>Lord Radius</span><span>/</span><span className="truncate">{currentTitle}</span></div>
+          </div>
           <div className="mr-auto flex items-center gap-2 sm:gap-3">
             <div className="hidden min-h-10 items-center gap-3 rounded-[22px] border border-[#d7e3ef] bg-white px-4 dark:border-white/[.10] dark:bg-[#38363c] md:flex"><Radio className="h-5 w-5 text-[#0758e9]" /><div className="leading-tight"><div className="text-xs font-bold">RADIUS</div><div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]"><span className="h-2 w-2 rounded-full bg-emerald-500" />Online</div></div></div>
             <button className="relative grid h-10 w-10 place-items-center rounded-full border border-[#d7e3ef] bg-white dark:border-white/[.10] dark:bg-[#38363c]" aria-label="التنبيهات"><Bell className="h-5 w-5" /><span className="absolute -left-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff9f0a] px-1 text-[10px] font-bold text-white">3</span></button>
