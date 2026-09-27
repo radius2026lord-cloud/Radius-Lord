@@ -8,7 +8,7 @@ import ProjectDropdown from "@/components/ui/project-dropdown";
 
 type RecentActivity={id:number;actionCode:string;actionName:string;description:string|null;adminName:string|null;adminUsername:string|null;createdAt:string;metadata:any};
 const activityTone:Record<string,string>={CREATE:"bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",UPDATE:"bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",DELETE:"bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"};
-type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;nameEn:string;description:string|null;price:number;setupFee:number;isDefault:boolean;status:"active"|"inactive"};
+type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;nameEn:string;description:string|null;price:number;isDefault:boolean;status:"active"|"inactive"};
 type Currency={id:number;code:string;nameAr:string;symbol:string};
 type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currencyId:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";createdAt:string;updatedAt:string;deploymentOptions:DeploymentOption[]};
 const STATUS=[{value:"active",label:"نشطة"},{value:"inactive",label:"غير نشطة"},{value:"disabled",label:"معطلة"}];
