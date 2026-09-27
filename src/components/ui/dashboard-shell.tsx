@@ -226,11 +226,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }
 
   return (
-    <>\n    <style jsx global>{`
-      @keyframes rlPageTitle { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-      @keyframes rlCrumbIn { from { opacity: 0; transform: translateX(-8px) scale(.97); } to { opacity: 1; transform: translateX(0) scale(1); } }
-      @keyframes rlCrumbArrow { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
-    `}</style>
+    <>\n    
     <div dir="rtl" className={`dashboard-shell-root relative h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
       <aside onMouseLeave={(event) => { if (collapsed) return; const rect = event.currentTarget.getBoundingClientRect(); const exitedThroughLeft = event.clientX <= rect.left && event.clientY >= rect.top && event.clientY <= rect.bottom; if (exitedThroughLeft) setCollapsed(true); }} className={`dashboard-logout-surface fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
         {collapsed && <div aria-hidden="true" onMouseEnter={() => setCollapsed(false)} className="absolute inset-y-0 left-0 z-50 w-3" />}<SidebarContent />
@@ -247,10 +243,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               const current = group?.items.find((item) => item.href === pathname);
               const parent = group?.items[0];
               return <div className="min-w-0">
-                <div key={group?.label ?? currentTitle} className="truncate text-sm font-bold text-[#102a63] motion-safe:animate-[rlPageTitle_.32s_ease-out] dark:text-white">{group?.label ?? currentTitle}</div>
+                <div key={group?.label ?? currentTitle} className="truncate text-sm font-bold text-[#102a63] transition-all duration-300 dark:text-white">{group?.label ?? currentTitle}</div>
                 <nav aria-label="دليل التنقل" className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden text-[10px] font-medium">
-                  {parent && pathname !== parent.href && <><Link href={parent.href} className="group/crumb relative shrink-0 overflow-hidden rounded-lg px-2 py-1 text-slate-400 transition-all duration-300 hover:bg-[#edf5ff] hover:text-[#0758e9] dark:text-[#a9a2ad] dark:hover:bg-white/[.05]"><span className="relative z-10">{parent.label}</span><span className="absolute inset-x-2 bottom-0 h-px origin-right scale-x-0 bg-[#0758e9] transition-transform duration-300 group-hover/crumb:scale-x-100" /></Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 transition-transform duration-300 motion-safe:animate-[rlCrumbArrow_.38s_ease-out] dark:text-[#77717b]" /></>}
-                  <Link key={pathname} href={pathname} className="group/current relative flex min-w-0 items-center gap-1 overflow-hidden rounded-lg bg-[#eaf4ff] px-2.5 py-1 font-bold text-[#0758e9] transition-all duration-300 hover:-translate-y-px hover:bg-[#deeeff] hover:shadow-[0_4px_12px_rgba(7,88,233,.12)] motion-safe:animate-[rlCrumbIn_.34s_cubic-bezier(.22,.8,.25,1)] dark:bg-white/[.06] dark:text-white dark:hover:bg-white/[.1]"><span className="truncate">{current?.label ?? currentTitle}</span><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#0758e9] opacity-70 transition-all duration-300 group-hover/current:scale-125 group-hover/current:opacity-100 dark:bg-[#6aa8ff]" /></Link>
+                  {parent && pathname !== parent.href && <><Link href={parent.href} className="group/crumb relative shrink-0 overflow-hidden rounded-lg px-2 py-1 text-slate-400 transition-all duration-300 hover:bg-[#edf5ff] hover:text-[#0758e9] dark:text-[#a9a2ad] dark:hover:bg-white/[.05]"><span className="relative z-10">{parent.label}</span><span className="absolute inset-x-2 bottom-0 h-px origin-right scale-x-0 bg-[#0758e9] transition-transform duration-300 group-hover/crumb:scale-x-100" /></Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 transition-transform duration-300 group-hover/crumb:-translate-x-0.5 dark:text-[#77717b]" /></>}
+                  <Link key={pathname} href={pathname} className="group/current relative flex min-w-0 items-center gap-1 overflow-hidden rounded-lg bg-[#eaf4ff] px-2.5 py-1 font-bold text-[#0758e9] transition-all duration-300 hover:-translate-y-px hover:bg-[#deeeff] hover:shadow-[0_4px_12px_rgba(7,88,233,.12)] dark:bg-white/[.06] dark:text-white dark:hover:bg-white/[.1]"><span className="truncate">{current?.label ?? currentTitle}</span><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#0758e9] opacity-70 transition-all duration-300 group-hover/current:scale-125 group-hover/current:opacity-100 dark:bg-[#6aa8ff]" /></Link>
                 </nav>
               </div>;
             })()}
