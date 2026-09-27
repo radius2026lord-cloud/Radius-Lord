@@ -226,7 +226,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }
 
   return (
-    <style jsx global>{`
+    <>\n    <style jsx global>{`
       @keyframes rlPageTitle { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes rlCrumbIn { from { opacity: 0; transform: translateX(-8px) scale(.97); } to { opacity: 1; transform: translateX(0) scale(1); } }
       @keyframes rlCrumbArrow { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
@@ -288,6 +288,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         .dashboard-logout-active .dashboard-logout-surface { pointer-events: none; animation: dashboardLogoutFade .34s cubic-bezier(.22,.8,.25,1) both; }
         @media (prefers-reduced-motion: reduce) { .dashboard-logout-active .dashboard-logout-surface { animation: none !important; } }
       `}</style>
-    </div>
+    </div>\n    </>
   );
 }
