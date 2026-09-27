@@ -236,18 +236,19 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5"><div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
           <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة"><Menu className="h-5 w-5" /></button>
           <div className="min-w-0 flex-1 px-1">
-            <nav aria-label="مسار الصفحة" className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-              {(() => {
-                const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
-                const group = groups.find((item) => item.items.some((child) => child.href === pathname));
-                const current = group?.items.find((item) => item.href === pathname);
-                const parentHref = group?.items[0]?.href;
-                return <>
-                  {group && parentHref && <Link href={parentHref} className="hidden shrink-0 items-center gap-1 rounded-[12px] border border-[#d7e3ef] bg-white/80 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition hover:border-[#9fc4ee] hover:text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-[#c7c1ca] sm:flex"><span>{group.label}</span><ChevronLeft className="h-3.5 w-3.5" /></Link>}
-                  <Link href={pathname} className="flex min-w-0 items-center gap-1 rounded-[12px] border border-[#9fc4ee] bg-[#eef6ff] px-3 py-1.5 text-xs font-bold text-[#0758e9] transition hover:bg-[#e4f1ff] dark:border-white/15 dark:bg-white/[.06] dark:text-white"><span className="truncate">{current?.label ?? currentTitle}</span><ChevronLeft className="h-3.5 w-3.5 shrink-0" /></Link>
-                </>;
-              })()}
-            </nav>
+            {(() => {
+              const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
+              const group = groups.find((item) => item.items.some((child) => child.href === pathname));
+              const current = group?.items.find((item) => item.href === pathname);
+              const parent = group?.items[0];
+              return <div className="min-w-0">
+                <div className="truncate text-sm font-bold text-[#102a63] dark:text-white">{group?.label ?? currentTitle}</div>
+                <nav aria-label="دليل التنقل" className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden text-[10px] font-medium">
+                  {parent && pathname !== parent.href && <><Link href={parent.href} className="shrink-0 text-slate-400 transition hover:text-[#0758e9] dark:text-[#a9a2ad]">{parent.label}</Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 dark:text-[#77717b]" /></>}
+                  <Link href={pathname} className="truncate rounded-md bg-[#eaf4ff] px-2 py-0.5 font-semibold text-[#0758e9] transition hover:bg-[#deeeff] dark:bg-white/[.06] dark:text-white">{current?.label ?? currentTitle}</Link>
+                </nav>
+              </div>;
+            })()}
           </div>
           <div className="mr-auto flex items-center gap-2 sm:gap-3">
             <div className="hidden min-h-10 items-center gap-3 rounded-[22px] border border-[#d7e3ef] bg-white px-4 dark:border-white/[.10] dark:bg-[#38363c] md:flex"><Radio className="h-5 w-5 text-[#0758e9]" /><div className="leading-tight"><div className="text-xs font-bold">RADIUS</div><div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]"><span className="h-2 w-2 rounded-full bg-emerald-500" />Online</div></div></div>
