@@ -42,18 +42,17 @@ export function collectionCardClass(selected=false){
 
 export function CollectionToolbar({icon:Icon,title,description,view,onViewChange,selectionMode,onSelectionModeChange,allSelected,onToggleAll,query,onQueryChange,searchPlaceholder="بحث...",filters,primaryAction}:{icon:any;title:string;description:string;view:CollectionViewMode;onViewChange:(v:CollectionViewMode)=>void;selectionMode:boolean;onSelectionModeChange:(v:boolean)=>void;allSelected?:boolean;onToggleAll?:()=>void;query:string;onQueryChange:(v:string)=>void;searchPlaceholder?:string;filters?:React.ReactNode;primaryAction?:React.ReactNode}){
  return <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
-  <div className="flex flex-col gap-3 xl:flex-row xl:items-center" dir="rtl">
-   <div className="min-w-0 shrink-0 text-right xl:w-[270px]"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Icon className="h-5 w-5 text-[#0758e9]"/>{title}</h2><p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#9f98a5]">{description}</p></div>
-   <div className="flex min-w-0 flex-1 items-center overflow-x-auto xl:justify-center">{filters}</div>
-   <div className="flex min-w-0 shrink-0 items-center gap-2 xl:w-[clamp(340px,29vw,490px)]" dir="ltr">
+  <div className="grid min-w-0 gap-3 2xl:grid-cols-[minmax(220px,270px)_minmax(0,1fr)] 2xl:items-center" dir="rtl">
+   <div className="min-w-0 text-right"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Icon className="h-5 w-5 shrink-0 text-[#0758e9]"/><span className="truncate">{title}</span></h2><p className="mt-1 truncate text-xs font-normal text-slate-500 dark:text-[#9f98a5]">{description}</p></div>
+   <div className="flex min-w-0 flex-wrap items-center gap-2 2xl:justify-end">
+    <div className="min-w-0 max-w-full overflow-x-auto">{filters}</div>
+    <div className="relative min-w-[170px] flex-1 basis-[190px] 2xl:max-w-[260px]" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]"/></div>
+    <div className="shrink-0"><CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/></div>
     {primaryAction&&<div className="shrink-0">{primaryAction}</div>}
-    <CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/>
-    <div className="relative min-w-[150px] flex-1" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]"/></div>
    </div>
   </div>
  </section>
 }
-
 
 export function CollectionStatusFilters<T extends string>({value,onChange,items}:{value:T;onChange:(value:T)=>void;items:Array<{value:T;label:string;count:number;dot:string}>}){
  return <div className="inline-flex shrink-0 items-center rl-surface-soft rounded-[16px] bg-[#f7faff] p-1 shadow-[0_4px_14px_rgba(58,84,112,.06)] dark:border-white/[.08] dark:bg-white/[.035]">{items.map(item=>{const active=value===item.value;return <button key={item.value} type="button" onClick={()=>onChange(item.value)} aria-pressed={active} className={`flex h-9 shrink-0 items-center gap-2 rounded-[12px] border px-3 text-xs font-medium transition-all duration-250 ${active?"border-[#9fc4ec] bg-white text-[#0758e9] shadow-[0_3px_10px_rgba(20,121,255,.10)] dark:border-white/[.14] dark:bg-white/[.08] dark:text-[#ddd7e1]":"border-transparent text-slate-500 hover:bg-white/80 hover:text-[#17386d] dark:text-[#aaa4af] dark:hover:bg-white/[.05] dark:hover:text-[#d6d0da]"}`}><span className={`h-2 w-2 rounded-full ${item.dot}`}/><span>{item.label}</span><span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-medium ${active?"bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-[#d8d2dc]":"bg-[#edf2f7] text-slate-500 dark:bg-white/[.05] dark:text-[#96909b]"}`}>{item.count}</span></button>})}</div>
