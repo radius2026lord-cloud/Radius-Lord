@@ -3,7 +3,7 @@ import { useEffect,useState,FormEvent } from "react";
 import { ArrowRight,Check,Cloud,PackagePlus,Server } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ProjectDropdown from "@/components/ui/project-dropdown";
-const STATUS=[{value:"active",label:"●  نشطة"},{value:"inactive",label:"●  غير نشطة"},{value:"disabled",label:"●  معطلة"}];
+const STATUS=[{value:"active",label:"نشطة",dotClassName:"bg-emerald-500"},{value:"inactive",label:"غير نشطة",dotClassName:"bg-amber-400"},{value:"disabled",label:"معطلة",dotClassName:"bg-red-500"}];
 const normalizeDigits=(value:string)=>value.replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d).toString()).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString());
 const toNumber=(value:string)=>Number(normalizeDigits(value).replace(",",".").trim());
 const integerOnly=(value:string)=>normalizeDigits(value).replace(/\\D/g,"");
