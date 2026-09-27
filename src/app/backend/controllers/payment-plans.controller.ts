@@ -12,7 +12,7 @@ const basePlanSql=`SELECT p.*,c.code currency_code,c.name_ar currency_name_ar,c.
 async function loadOptions(planIds:number[]){
  if(!planIds.length)return new Map<number,any[]>();
  const marks=planIds.map(()=>'?').join(',');
- const [rows]=await db.query(`SELECT o.plan_id,o.id option_id,o.deployment_type_id,o.price option_price,o.setup_fee,o.is_default,o.status option_status,
+ const [rows]=await db.query(`SELECT o.plan_id,o.id option_id,o.deployment_type_id,o.price option_price,o.is_default,o.status option_status,
  dt.code deployment_code,dt.name_ar deployment_name_ar,dt.name_en deployment_name_en,dt.description deployment_description
  FROM plan_deployment_options o JOIN deployment_types dt ON dt.id=o.deployment_type_id
  WHERE o.plan_id IN (${marks}) ORDER BY o.is_default DESC,dt.sort_order,o.id`,planIds);
@@ -48,7 +48,7 @@ function normalizeBody(body:any){
  return {name,description,status,durationMonths,maxTenants,maxSubscribers,maxNas,currencyId,deploymentOptions,isFeatured:Boolean(body.isFeatured)};
 }
 function validPlan(x:any){return x.name&&x.name.length<=150&&Number.isInteger(x.durationMonths)&&x.durationMonths>=1&&[x.maxTenants,x.maxSubscribers,x.maxNas].every((v:number)=>Number.isInteger(v)&&v>=0)&&Number.isInteger(x.currencyId)&&x.currencyId>0&&['active','inactive','disabled'].includes(x.status)&&x.deploymentOptions.length>0&&x.deploymentOptions.every((o:any)=>Number.isInteger(o.deploymentTypeId)&&o.deploymentTypeId>0&&Number.isFinite(o.price)&&o.price>=0&&['active','inactive'].includes(o.status));}
-async function saveOptions(planId:number,options:any[]){await db.query('DELETE FROM plan_deployment_options WHERE plan_id=?',[planId]);for(let i=0;i<options.length;i++){const o=options[i];await db.query('INSERT INTO plan_deployment_options (plan_id,deployment_type_id,price,setup_fee,is_default,status) VALUES (?,?,?,?,?,?)',[planId,o.deploymentTypeId,o.price,0,o.isDefault||(!options.some((x:any)=>x.isDefault)&&i===0)?1:0,o.status]);}}
+async function saveOptions(planId:number,options:any[]){await db.query('DELETE FROM plan_deployment_options WHERE plan_id=?',[planId]);for(let i=0;i<options.length;i++){const o=options[i];await db.query('INSERT INTO plan_deployment_options (plan_id,deployment_type_id,price,is_default,status) VALUES (?,?,?,?,?)',[planId,o.deploymentTypeId,o.price,0,o.isDefault||(!options.some((x:any)=>x.isDefault)&&i===0)?1:0,o.status]);}}
 export async function createPaymentPlanController(req:AuthenticatedRequest,res:Response){
  try{await ensurePaymentPlanAuditEntity();const x=normalizeBody(req.body);if(!validPlan(x))return res.status(400).json({success:false,message:'بيانات الخطة أو خيارات الاستضافة غير صالحة.'});
  const [cur]=await db.query('SELECT code FROM currencies WHERE id=? AND status=\'active\' LIMIT 1',[x.currencyId]);const currency=(cur as any[])[0];if(!currency)return res.status(400).json({success:false,message:'العملة غير صالحة.'});
