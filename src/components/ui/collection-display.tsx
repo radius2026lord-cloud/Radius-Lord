@@ -41,14 +41,14 @@ export function collectionCardClass(selected=false){
 
 
 export function CollectionToolbar({icon:Icon,title,description,view,onViewChange,selectionMode,onSelectionModeChange,allSelected,onToggleAll,query,onQueryChange,searchPlaceholder="بحث...",filters,primaryAction}:{icon:any;title:string;description:string;view:CollectionViewMode;onViewChange:(v:CollectionViewMode)=>void;selectionMode:boolean;onSelectionModeChange:(v:boolean)=>void;allSelected?:boolean;onToggleAll?:()=>void;query:string;onQueryChange:(v:string)=>void;searchPlaceholder?:string;filters?:React.ReactNode;primaryAction?:React.ReactNode}){
- return <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b] sm:p-4">
-  <div className="flex min-w-0 flex-col gap-3 2xl:flex-row 2xl:items-center" dir="rtl">
-   <div className="min-w-0 shrink-0 text-right 2xl:w-[250px]"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee] sm:text-lg"><Icon className="h-5 w-5 shrink-0 text-[#0758e9]"/><span className="truncate">{title}</span></h2><p className="mt-1 truncate text-xs font-normal text-slate-500 dark:text-[#9f98a5]">{description}</p></div>
-   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 2xl:flex-nowrap">
-    {filters&&<div className="min-w-0 flex-1 basis-full overflow-x-auto pb-0.5 2xl:basis-auto">{filters}</div>}
-    <div className="relative min-w-[180px] flex-1 basis-[220px] 2xl:max-w-[270px]" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className="h-11 w-full rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] pr-10 pl-3 text-sm font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]"/></div>
-    <div className="shrink-0"><CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/></div>
-    {primaryAction&&<div className="shrink-0">{primaryAction}</div>}
+ return <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b]">
+  <div className="flex min-w-0 items-center gap-3" dir="rtl">
+   <div className="min-w-[190px] max-w-[235px] shrink-0 text-right"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee]"><Icon className="h-5 w-5 shrink-0 text-[#0758e9]"/><span className="truncate">{title}</span></h2><p className="mt-0.5 truncate text-[11px] font-normal text-slate-500 dark:text-[#9f98a5]">{description}</p></div>
+   <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+    {filters&&<div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{filters}</div>}
+    <div className="relative w-[clamp(155px,19vw,225px)] shrink-0" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className="h-10 w-full rounded-[14px] border border-[#d7e3ef] bg-[#f9fbfe] pr-9 pl-2.5 text-xs font-normal text-slate-700 outline-none focus:border-[#6aaeff] focus:ring-4 focus:ring-[#1480ff]/10 dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]"/></div>
+    <div className="shrink-0 scale-[.92] origin-left"><CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/></div>
+    {primaryAction&&<div className="shrink-0 scale-[.94] origin-left">{primaryAction}</div>}
    </div>
   </div>
  </section>
