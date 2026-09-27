@@ -24,10 +24,10 @@ export default function AddPlanPage(){
  return <div className="mx-auto max-w-6xl space-y-3" dir="rtl">
  <div className="flex justify-end"><button type="button" onClick={()=>router.push("/Dashboard/plans")} className="flex items-center gap-2 rounded-[14px] border border-[#bfd4ea] bg-white/75 px-3 py-2 text-xs font-medium text-[#0758e9] transition hover:bg-white dark:border-white/10 dark:bg-white/[.04]"><ArrowRight className="h-4 w-4"/>عرض الخطط</button></div>
  <form onSubmit={submit} className="relative space-y-3">
-  <div className={`pointer-events-none fixed left-5 top-1/2 z-[35] -translate-y-1/2 transition-all duration-300 md:left-6 ${showHostingJump?"opacity-100":"-translate-x-3 opacity-0"}`}>
+  <div className={`pointer-events-none fixed left-3 top-[72%] z-[35] -translate-y-1/2 transition-all duration-300 md:left-4 lg:left-5 ${showHostingJump?"opacity-100":"-translate-x-3 opacity-0"}`}>
    <div className="group relative pointer-events-auto">
-    <button type="button" onClick={jumpToHosting} aria-label="اختيار الاستضافة" aria-disabled={!topComplete} title={!topComplete?"أكمل بيانات الخطة أولًا":undefined} className={`grid h-12 w-12 place-items-center rounded-full bg-[#0758e9] text-white shadow-[0_9px_25px_rgba(7,88,233,.30)] transition-all duration-300 hover:scale-105 hover:bg-[#064ed0] hover:shadow-[0_12px_30px_rgba(7,88,233,.38)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2382ef]/25 ${topComplete?"motion-safe:animate-[bounce_1s_ease-in-out_10s_infinite]":"opacity-75"}`}>
-      <ArrowDown className="h-5 w-5 text-white"/>
+    <button type="button" onClick={jumpToHosting} aria-label="اختيار الاستضافة" aria-disabled={!topComplete} className={`grid h-12 w-12 place-items-center rounded-full border transition-all duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2382ef]/20 ${topComplete?"border-[#0758e9] bg-[#0758e9] text-white shadow-[0_7px_18px_rgba(7,88,233,.24)] hover:scale-105 hover:bg-[#064ed0] motion-safe:animate-[bounce_1s_ease-in-out_10s_infinite]":"border-[#cfddea] bg-[#e5edf5] text-[#315985] shadow-[0_5px_14px_rgba(46,75,107,.10)] dark:border-white/10 dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}>
+      <ArrowDown className="h-5 w-5"/>
     </button>
     <span role="tooltip" className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[9px] bg-[#102a63] px-2.5 py-1.5 text-[10px] font-semibold text-white opacity-0 shadow-lg transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white dark:text-[#211a25]">{topComplete?"اختيار الاستضافة":"أكمل بيانات الخطة أولًا"}</span>
    </div>
