@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createPaymentPlanController, getPaymentPlanController, listActivePaymentPlansController, listCurrenciesController, listDeploymentTypesController, listPaymentPlansController, updatePaymentPlanController } from '../../controllers/payment-plans.controller';
+import { createPaymentPlanController, deletePaymentPlanController, getPaymentPlanController, listActivePaymentPlansController, listCurrenciesController, listDeploymentTypesController, listPaymentPlansController, updatePaymentPlanController } from '../../controllers/payment-plans.controller';
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.get('/available',authenticate,requireAccountType('customer'),listActivePaymentPlansController);
@@ -10,4 +10,5 @@ router.get('/',listPaymentPlansController);
 router.post('/',createPaymentPlanController);
 router.get('/:id',getPaymentPlanController);
 router.patch('/:id',updatePaymentPlanController);
+router.delete('/:id',deletePaymentPlanController);
 export default router;
