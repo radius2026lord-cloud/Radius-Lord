@@ -226,7 +226,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }
 
   return (
-    <>\n    
+    <>
+    
     <div dir="rtl" className={`dashboard-shell-root relative h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
       <aside onMouseLeave={(event) => { if (collapsed) return; const rect = event.currentTarget.getBoundingClientRect(); const exitedThroughLeft = event.clientX <= rect.left && event.clientY >= rect.top && event.clientY <= rect.bottom; if (exitedThroughLeft) setCollapsed(true); }} className={`dashboard-logout-surface fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
         {collapsed && <div aria-hidden="true" onMouseEnter={() => setCollapsed(false)} className="absolute inset-y-0 left-0 z-50 w-3" />}<SidebarContent />
@@ -246,7 +247,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <div key={group?.label ?? currentTitle} className="truncate text-sm font-bold text-[#102a63] transition-all duration-300 dark:text-[#f4f1f5]">{group?.label ?? currentTitle}</div>
                 <nav aria-label="دليل التنقل" className="mt-1.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] font-medium">
                   {parent && pathname !== parent.href && <><Link href={parent.href} className="group/crumb relative shrink-0 rounded-[9px] px-2 py-1 text-slate-500 transition-all duration-200 hover:bg-[#edf5ff] hover:text-[#0758e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/35 dark:text-[#b9b3bd] dark:hover:bg-white/[.07] dark:hover:text-white"><span>{parent.label}</span><span className="absolute inset-x-2 -bottom-px h-px origin-right scale-x-0 bg-[#0758e9] transition-transform duration-200 group-hover/crumb:scale-x-100" /></Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 transition-transform duration-200 dark:text-[#77717b]" /></>}
-                  <span aria-current="page" className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/20 bg-emerald-50/80 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.06)] dark:border-emerald-400/20 dark:bg-emerald-400/[.08] dark:text-[#f4f1f5]"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-30 transition-transform duration-300 group-hover:scale-150" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/10 dark:bg-emerald-400" /></span><span className="truncate">{current?.label ?? currentTitle}</span></span>
+                  <span aria-current="page" className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/30 bg-emerald-50 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.08)] dark:border-emerald-400/45 dark:bg-emerald-400/[.16] dark:text-emerald-100"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-45 transition-transform duration-300 group-hover:scale-150" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/15 dark:bg-emerald-300 dark:ring-emerald-300/25" /></span><span className="truncate">{current?.label ?? currentTitle}</span></span>
                 </nav>
               </div>;
             })()}
@@ -284,6 +285,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         .dashboard-logout-active .dashboard-logout-surface { pointer-events: none; animation: dashboardLogoutFade .34s cubic-bezier(.22,.8,.25,1) both; }
         @media (prefers-reduced-motion: reduce) { .dashboard-logout-active .dashboard-logout-surface { animation: none !important; } }
       `}</style>
-    </div>\n    </>
+    </div>
+    </>
   );
 }
