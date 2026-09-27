@@ -4,7 +4,8 @@ import { CreditCard, Eye, Pencil, Plus, Server, Star, Trash2, Users, Wifi } from
 import { useRouter } from "next/navigation";
 import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
-type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;price:number;setupFee:number;isDefault:boolean;status:"active"|"inactive"};\ntype Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[]};
+type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;price:number;setupFee:number;isDefault:boolean;status:"active"|"inactive"};
+type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[]};
 export default function PlansPage(){
  const router=useRouter();
  const [plans,setPlans]=useState<Plan[]>([]),[loading,setLoading]=useState(true),[query,setQuery]=useState(""),[statusFilter,setStatusFilter]=useState<"all"|Plan["status"]>("all");
