@@ -1,19 +1,19 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { CreditCard, Eye, Pencil, Plus, Server, Star, Trash2, Users, Wifi } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmDeleteDialog from "@/components/ui/confirm-delete-dialog";
 import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;price:number;isDefault:boolean;status:"active"|"inactive"};
 type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[]};
 export default function PlansPage(){
- const router=useRouter();
+ const router=useRouter();const searchParams=useSearchParams();
  const [plans,setPlans]=useState<Plan[]>([]),[loading,setLoading]=useState(true),[query,setQuery]=useState(""),[statusFilter,setStatusFilter]=useState<"all"|Plan["status"]>("all");
  const [deleteIds,setDeleteIds]=useState<number[]>([]),[deleting,setDeleting]=useState(false),[notice,setNotice]=useState("");
  const {view,setView,selected,setSelected,selectionMode,setSelectionMode,toggle,setAll}=useCollectionDisplay<number>("payment-plans","grid");
  const load=()=>fetch("/api/admin/payment-plans",{credentials:"include",cache:"no-store"}).then(r=>r.json()).then(d=>setPlans(d.plans??[])).finally(()=>setLoading(false));
- useEffect(()=>{load()},[]);
+ useEffect(()=>{load();if(searchParams.get("created")==="1"){setNotice("تم إنشاء الخطة بنجاح.");router.replace("/Dashboard/plans")}},[]);
  const statusCounts=useMemo(()=>({all:plans.length,active:plans.filter(p=>p.status==="active").length,inactive:plans.filter(p=>p.status==="inactive").length,disabled:plans.filter(p=>p.status==="disabled").length}),[plans]);
  const filtered=useMemo(()=>plans.filter(p=>(statusFilter==="all"||p.status===statusFilter)&&[p.name,p.currency,p.description].some(v=>String(v??"").toLowerCase().includes(query.toLowerCase()))),[plans,query,statusFilter]);
  const open=(p:Plan)=>router.push(`/Dashboard/plans/${p.id}`);
