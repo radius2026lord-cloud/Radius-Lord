@@ -22,10 +22,13 @@ export default function AddPlanPage(){
  return <div className="mx-auto max-w-6xl space-y-3" dir="rtl">
  <div className="flex justify-end"><button type="button" onClick={()=>router.push("/Dashboard/plans")} className="flex items-center gap-2 rounded-[14px] border border-[#bfd4ea] bg-white/75 px-3 py-2 text-xs font-medium text-[#0758e9] transition hover:bg-white dark:border-white/10 dark:bg-white/[.04]"><ArrowRight className="h-4 w-4"/>عرض الخطط</button></div>
  <form onSubmit={submit} className="relative space-y-3">
-  <div className={`sticky top-3 z-20 flex h-0 justify-start transition-all duration-300 ${showHostingJump?"pointer-events-auto opacity-100":"pointer-events-none -translate-y-2 opacity-0"}`}>
-   <div className="group relative -translate-y-1">
-    <button type="button" onClick={()=>hostingRef.current?.scrollIntoView({behavior:"smooth",block:"start"})} aria-label="اختيار الاستضافة" className="grid h-11 w-11 place-items-center rounded-full border border-[#b9d3ee] bg-white/95 text-[#0758e9] shadow-[0_8px_24px_rgba(34,92,150,.18)] backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-[#75ade8] hover:shadow-[0_12px_28px_rgba(34,92,150,.24)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2382ef]/20 dark:border-white/15 dark:bg-[#26384a]/95 dark:text-[#7db8ff]"><ArrowDown className="h-5 w-5 transition-transform duration-300 group-hover:translate-y-0.5"/></button>
-    <span role="tooltip" className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] -translate-x-1/2 whitespace-nowrap rounded-[9px] bg-[#102a63] px-2.5 py-1.5 text-[10px] font-semibold text-white opacity-0 shadow-lg transition-all duration-200 group-hover:translate-y-0.5 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white dark:text-[#211a25]">اختيار الاستضافة</span>
+  <div className={`pointer-events-none sticky top-1/2 z-20 flex h-0 -translate-y-1/2 justify-start transition-all duration-300 ${showHostingJump?"opacity-100":"-translate-x-3 opacity-0"}`}>
+   <div className="group relative -mr-1 pointer-events-auto">
+    <button type="button" onClick={()=>hostingRef.current?.scrollIntoView({behavior:"smooth",block:"start"})} aria-label="اختيار الاستضافة" className="relative grid h-12 w-12 place-items-center rounded-full border border-[#9fc8f0] bg-white/95 text-[#0758e9] shadow-[0_8px_24px_rgba(34,92,150,.18)] backdrop-blur transition-all duration-300 hover:scale-105 hover:border-[#75ade8] hover:shadow-[0_12px_28px_rgba(34,92,150,.25)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2382ef]/20 dark:border-white/20 dark:bg-[#26384a]/95 dark:text-[#7db8ff]">
+      <span className="absolute inset-0 rounded-full border border-[#2382ef]/25 motion-safe:animate-ping [animation-duration:2.4s] group-hover:animate-none dark:border-[#7db8ff]/25" />
+      <ArrowDown className="relative h-5 w-5 motion-safe:animate-bounce group-hover:animate-none"/>
+    </button>
+    <span role="tooltip" className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[9px] bg-[#102a63] px-2.5 py-1.5 text-[10px] font-semibold text-white opacity-0 shadow-lg transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white dark:text-[#211a25]">اختيار الاستضافة</span>
    </div>
   </div>
   <div className="rl-surface overflow-hidden rounded-[22px] bg-white shadow-[0_8px_24px_rgba(58,84,112,.07)] dark:bg-[#0d243b]">
