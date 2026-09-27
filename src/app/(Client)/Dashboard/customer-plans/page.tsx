@@ -4,7 +4,8 @@ import { useEffect,useState } from "react";
 import { ArrowRight,Check,Crown,Server,Star,Users,Wifi } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;description:string|null;price:number;setupFee:number;isDefault:boolean;status:"active"|"inactive"};\ntype Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[]};
+type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;description:string|null;price:number;setupFee:number;isDefault:boolean;status:"active"|"inactive"};
+type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[]};
 
 export default function CustomerPlansPage(){
  const router=useRouter(),[plans,setPlans]=useState<Plan[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[selected,setSelected]=useState<Record<number,number>>({});
