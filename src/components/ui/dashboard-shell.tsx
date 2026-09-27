@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import TransitionOverlay from "@/components/ui/transition-overlay";
 import { useAuth } from "@/components/auth/auth-provider";
+import CustomerOnboardingShell from "./customer-onboarding-shell";
 import {
   Activity,
   Bell,
@@ -153,7 +154,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
   const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
-  const customerOnboarding = accountType === "customer" && pathname === "/Dashboard";
+  const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0);
   const currentTitle = useMemo(() => {
     if (pathname === masterAdminHome.href) return masterAdminHome.label;
     const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
@@ -219,6 +220,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       </div>
     );
   };
+
+  if (customerOnboarding) {
+    return <CustomerOnboardingShell>{children}</CustomerOnboardingShell>;
+  }
 
   return (
     <div dir="rtl" className={`dashboard-shell-root relative h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
