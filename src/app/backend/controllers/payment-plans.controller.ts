@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { writeAuditLog } from '../services/audit.service';
 
 const mapOption=(r:any)=>({id:r.option_id,deploymentTypeId:r.deployment_type_id,code:r.deployment_code,nameAr:r.deployment_name_ar,nameEn:r.deployment_name_en,description:r.deployment_description,price:Number(r.option_price),setupFee:Number(r.setup_fee),isDefault:Boolean(r.is_default),status:r.option_status});
-const mapPlan=(r:any,options:any[]=[])=>({id:r.id,name:r.name,durationMonths:r.duration_months,maxTenants:r.max_tenants,maxSubscribers:r.max_subscribers,maxNas:r.max_nas,currencyId:r.currency_id,currency:r.currency_code??r.currency,currencyNameAr:r.currency_name_ar??null,currencySymbol:r.currency_symbol??null,description:r.description,isFeatured:Boolean(r.is_featured),status:r.status,createdAt:r.created_at,updatedAt:r.updated_at,deploymentOptions:options});
+const mapPlan=(r:any,options:any[]=[])=>({id:r.id,name:r.name,durationMonths:r.duration_months,maxTenants:r.max_tenants,maxSubscribers:r.max_subscribers,maxNas:r.max_nas,price:Number(options.find((o:any)=>o.isDefault)?.price??options[0]?.price??r.price??0),currencyId:r.currency_id,currency:r.currency_code??r.currency,currencyNameAr:r.currency_name_ar??null,currencySymbol:r.currency_symbol??null,description:r.description,isFeatured:Boolean(r.is_featured),status:r.status,createdAt:r.created_at,updatedAt:r.updated_at,deploymentOptions:options});
 
 const basePlanSql=`SELECT p.*,c.code currency_code,c.name_ar currency_name_ar,c.symbol currency_symbol
  FROM payment_plans p LEFT JOIN currencies c ON c.id=p.currency_id`;
