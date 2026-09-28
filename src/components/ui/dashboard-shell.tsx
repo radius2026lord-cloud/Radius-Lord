@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TransitionOverlay from "@/components/ui/transition-overlay";
 import { useAuth } from "@/components/auth/auth-provider";
 import CustomerOnboardingShell from "./customer-onboarding-shell";
@@ -136,6 +136,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [accountOpen, setAccountOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState<Record<string, boolean>>({});
+  const desktopNavRef = useRef<HTMLElement>(null);
+  const navGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
   useEffect(() => setMounted(true), []);
 
   const logout = async () => {
@@ -171,8 +173,22 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     if (activeGroup) setOpenNavGroups((current) => ({ ...current, [activeGroup.label]: true }));
   }, [pathname, accountType]);
 
-  const toggleNavGroup = (label: string) => {
+  const revealNavGroup = (label: string) => {
+    window.setTimeout(() => {
+      const nav = desktopNavRef.current, group = navGroupRefs.current[label];
+      if (!nav || !group) return;
+      const navRect = nav.getBoundingClientRect(), groupRect = group.getBoundingClientRect();
+      const bottomSafe = navRect.bottom - 14, topSafe = navRect.top + 14;
+      let delta = 0;
+      if (groupRect.bottom > bottomSafe) delta = groupRect.bottom - bottomSafe;
+      else if (groupRect.top < topSafe) delta = groupRect.top - topSafe;
+      if (Math.abs(delta) > 2) nav.scrollTo({ top: nav.scrollTop + delta, behavior: "smooth" });
+    }, 330);
+  };
+
+  const toggleNavGroup = (label: string, willOpen: boolean, mobile = false) => {
     setOpenNavGroups((current) => ({ ...current, [label]: !current[label] }));
+    if (willOpen && !mobile) revealNavGroup(label);
   };
 
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => {
@@ -183,7 +199,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           <Brand compact={compact} />
           {mobile && <button onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200/80 dark:border-white/10" aria-label="إغلاق القائمة"><X className="h-5 w-5" /></button>}
         </div>
-        <nav className={`sidebar min-h-0 flex-1 overflow-y-auto pb-3 ${shellMotion} ${compact ? "px-3" : "px-2"}`}>
+        <nav ref={mobile ? undefined : desktopNavRef} className={`sidebar min-h-0 flex-1 overflow-y-auto pb-3 scroll-smooth ${shellMotion} ${compact ? "px-3" : "px-2"}`}>
           {accountType === "master_admin" && (
             <div className="mb-3">
               <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-sm font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
@@ -196,8 +212,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             const GroupIcon = group.icon;
             const groupActive = group.items.some((item) => pathname === item.href);
             const open = Boolean(openNavGroups[group.label]);
-            return <div key={group.label} className="mb-2">
-              <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-sm font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+            return <div key={group.label} ref={mobile ? undefined : (el) => { navGroupRefs.current[group.label] = el; }} className="mb-2">
+              <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-sm font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${groupActive ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.20)]" : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><GroupIcon className="h-5 w-5" /></span>
                 <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"}`}>{group.label}</span>
                 {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />}
