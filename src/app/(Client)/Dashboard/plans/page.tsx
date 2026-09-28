@@ -7,7 +7,8 @@ import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionState,
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 
 type DeploymentOption={id:number;deploymentTypeId:number;code:string;nameAr:string;price:number;isDefault:boolean;status:"active"|"inactive"};
-type PlanAddon={id:number;deploymentTypeId:number;code:string;nameAr:string;description:string|null;price:number;status:"active"|"inactive"};\ntype Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[];addons:PlanAddon[]};
+type PlanAddon={id:number;deploymentTypeId:number;code:string;nameAr:string;description:string|null;price:number;status:"active"|"inactive"};
+type Plan={id:number;name:string;durationMonths:number;maxTenants:number;maxSubscribers:number;maxNas:number;price:number;currency:string;description:string|null;isFeatured:boolean;status:"active"|"inactive"|"disabled";deploymentOptions:DeploymentOption[];addons:PlanAddon[]};
 export default function PlansPage(){
  const router=useRouter();const searchParams=useSearchParams();
  const [plans,setPlans]=useState<Plan[]>([]),[loading,setLoading]=useState(true),[query,setQuery]=useState(""),[statusFilter,setStatusFilter]=useState<"all"|Plan["status"]>("all");
