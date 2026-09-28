@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, CirclePause, CirclePlay, Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
 import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
-import BulkActionsDropdown from "@/components/ui/bulk-actions-dropdown";
+import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 
 type Customer = {
   id: number;
@@ -66,9 +66,7 @@ export default function CustomersPage() {
     <div className="space-y-3 sm:space-y-4">
       <CollectionToolbar icon={Users} title="العملاء" description="عرض وإدارة حسابات عملاء Radius Lord" view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={(enabled) => { setGridSelectionMode(enabled); if (!enabled) setSelected(new Set()); }} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالاسم، المستخدم، الهاتف..." filters={<CollectionStatusFilters value={statusFilter} onChange={setStatusFilter} items={[{value:"all",label:"الكل",count:statusCounts.all,dot:"bg-[#0758e9]"},{value:"active",label:"نشط",count:statusCounts.active,dot:"bg-emerald-500"},{value:"suspended",label:"معلّق",count:statusCounts.suspended,dot:"bg-amber-500"},{value:"disabled",label:"معطّل",count:statusCounts.disabled,dot:"bg-red-500"}]} />} />
 
-      <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => setSelected(new Set())}>
-        <BulkActionsDropdown allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} show={{activate:true,suspend:true,disable:true}} handlers={{activate:()=>{},suspend:()=>{},disable:()=>{}}}/>
-      </CollectionSelectionBar>
+      <BulkSelectionBar count={selected.size} noun="العملاء" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} show={{activate:true,suspend:true,disable:true}} handlers={{activate:()=>{},suspend:()=>{},disable:()=>{}}}/>
 
       {loading ? (
         <CollectionState>جارٍ تحميل العملاء...</CollectionState>
