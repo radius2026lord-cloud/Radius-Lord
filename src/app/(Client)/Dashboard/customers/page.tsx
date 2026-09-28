@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
-import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
+import { CollectionBulkActions, CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
   id: number;
@@ -30,8 +30,6 @@ export default function CustomersPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Customer["status"]>("all");
   const { view, setView, selected, setSelected, selectionMode: gridSelectionMode, setSelectionMode: setGridSelectionMode, toggle: toggleCustomer, setAll: setAllCustomers } = useCollectionDisplay<number>("customers", "row");
-  const [bulkAction, setBulkAction] = useState("");
-  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/customers", { credentials: "include", cache: "no-store" })
@@ -65,10 +63,16 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <CollectionToolbar icon={Users} title="العملاء" description="عرض وإدارة حسابات عملاء Radius Lord" view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={setGridSelectionMode} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالاسم، المستخدم، الهاتف..." filters={<CollectionStatusFilters value={statusFilter} onChange={setStatusFilter} items={[{value:"all",label:"الكل",count:statusCounts.all,dot:"bg-[#0758e9]"},{value:"active",label:"نشط",count:statusCounts.active,dot:"bg-emerald-500"},{value:"suspended",label:"معلّق",count:statusCounts.suspended,dot:"bg-amber-500"},{value:"disabled",label:"معطّل",count:statusCounts.disabled,dot:"bg-red-500"}]} />} />
+      <CollectionToolbar icon={Users} title="العملاء" description="عرض وإدارة حسابات عملاء Radius Lord" view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={(enabled) => { setGridSelectionMode(enabled); if (!enabled) setSelected(new Set()); }} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالاسم، المستخدم، الهاتف..." filters={<CollectionStatusFilters value={statusFilter} onChange={setStatusFilter} items={[{value:"all",label:"الكل",count:statusCounts.all,dot:"bg-[#0758e9]"},{value:"active",label:"نشط",count:statusCounts.active,dot:"bg-emerald-500"},{value:"suspended",label:"معلّق",count:statusCounts.suspended,dot:"bg-amber-500"},{value:"disabled",label:"معطّل",count:statusCounts.disabled,dot:"bg-red-500"}]} />} />
 
-      <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => { setSelected(new Set()); setBulkAction(""); setBulkMenuOpen(false); }}>
-        <div className="relative w-full sm:w-[230px]"><button type="button" onClick={() => setBulkMenuOpen((open) => !open)} className="flex h-10 w-full items-center justify-between rounded-[14px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#d8d2dc]"><span>{bulkAction === "activate" ? "تفعيل المحدد" : bulkAction === "suspend" ? "تعليق المحدد" : bulkAction === "disable" ? "تعطيل المحدد" : "تطبيق إجراء جماعي..."}</span><ChevronDown className={`h-4 w-4 transition-transform ${bulkMenuOpen ? "rotate-180" : ""}`}/></button>{bulkMenuOpen&&<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 rounded-[18px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-xl dark:border-white/[.12] dark:bg-[#302e33]">{[["activate","تفعيل المحدد"],["suspend","تعليق المحدد"],["disable","تعطيل المحدد"]].map(([value,label])=><button key={value} type="button" onClick={()=>{setBulkAction(value);setBulkMenuOpen(false)}} className="flex min-h-10 w-full items-center gap-2 rounded-[13px] px-3 text-right text-xs font-semibold hover:bg-[#edf4fb] dark:hover:bg-[#38363c]"><span className={`h-2 w-2 rounded-full ${value==="activate"?"bg-emerald-500":value==="suspend"?"bg-amber-500":"bg-red-500"}`}/>{label}</button>)}</div>}</div>
+      <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => setSelected(new Set())}>
+        <CollectionBulkActions label="تطبيق إجراء" items={[
+          {label:allVisibleSelected?"إلغاء تحديد الكل":"تحديد الكل",onClick:toggleAllVisible},
+          {label:"إلغاء التحديد",onClick:()=>setSelected(new Set())},
+          {label:"تفعيل المحدد",onClick:()=>{}},
+          {label:"تعليق المحدد",onClick:()=>{}},
+          {label:"تعطيل المحدد",onClick:()=>{}},
+        ]}/>
       </CollectionSelectionBar>
 
       {loading ? (
