@@ -67,9 +67,9 @@ export default function CustomersPage() {
 
       <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => setSelected(new Set())}>
         <CollectionBulkActions label="تطبيق إجراء" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} items={[
-          {label:"تفعيل المحدد",icon:CirclePlay,onClick:()=>{}},
-          {label:"تعليق المحدد",icon:CirclePause,onClick:()=>{}},
-          {label:"تعطيل المحدد",icon:Ban,onClick:()=>{}},
+          {label:"تفعيل المحدد",icon:CirclePlay,tone:"success",onClick:()=>{}},
+          {label:"تعليق المحدد",icon:CirclePause,tone:"warning",onClick:()=>{}},
+          {label:"تعطيل المحدد",icon:Ban,tone:"danger",onClick:()=>{}},
         ]}/>
       </CollectionSelectionBar>
 
