@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
+import { Ban, CirclePause, CirclePlay, Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
 import { CollectionBulkActions, CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Customer = {
@@ -67,9 +67,9 @@ export default function CustomersPage() {
 
       <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => setSelected(new Set())}>
         <CollectionBulkActions label="تطبيق إجراء" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} items={[
-          {label:"تفعيل المحدد",onClick:()=>{}},
-          {label:"تعليق المحدد",onClick:()=>{}},
-          {label:"تعطيل المحدد",onClick:()=>{}},
+          {label:"تفعيل المحدد",icon:CirclePlay,onClick:()=>{}},
+          {label:"تعليق المحدد",icon:CirclePause,onClick:()=>{}},
+          {label:"تعطيل المحدد",icon:Ban,onClick:()=>{}},
         ]}/>
       </CollectionSelectionBar>
 
