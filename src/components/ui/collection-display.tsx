@@ -27,17 +27,23 @@ const actionMenuTone=(danger=false)=>danger?"text-red-600 hover:border-red-200 h
 function CollectionActionMenuRow({label,icon:Icon,onClick,danger=false,disabled=false}:{label:string;icon?:LucideIcon;onClick:()=>void;danger?:boolean;disabled?:boolean}){return <button type="button" disabled={disabled} onClick={onClick} className={`${actionMenuItemClass} ${actionMenuTone(danger)}`}><span className="grid h-5 w-5 place-items-center">{Icon&&<Icon className="h-4 w-4 shrink-0"/>}</span><span>{label}</span></button>}
 
 export type CollectionBulkAction={label:string;icon?:LucideIcon;onClick:()=>void;danger?:boolean;disabled?:boolean;separatorBefore?:boolean};
-export function CollectionBulkActions({label="إجراء جماعي",items,allSelected,onToggleAll,onClearSelection}:{label?:string;items:CollectionBulkAction[];allSelected?:boolean;onToggleAll?:()=>void;onClearSelection?:()=>void}){
- const [open,setOpen]=useState(false);const root=useRef<HTMLDivElement>(null);
- useEffect(()=>{if(!open)return;const close=(e:MouseEvent)=>{if(!root.current?.contains(e.target as Node))setOpen(false)};document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close)},[open]);
+export function CollectionBulkActions({label="تطبيق إجراء",items,allSelected,onToggleAll,onClearSelection}:{label?:string;items:CollectionBulkAction[];allSelected?:boolean;onToggleAll?:()=>void;onClearSelection?:()=>void}){
+ const [open,setOpen]=useState(false),[position,setPosition]=useState({top:0,left:0,openUp:false});const root=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);
+ const menuH=Math.max(120,(items.length+(onToggleAll?1:0)+(onClearSelection?1:0))*40+24),menuW=230;
+ const place=()=>{const el=trigger.current;if(!el)return;const r=el.getBoundingClientRect(),gap=8,openUp=window.innerHeight-r.bottom<menuH+18&&r.top>menuH;setPosition({top:openUp?Math.max(8,r.top-menuH-gap):Math.min(window.innerHeight-menuH-8,r.bottom+gap),left:Math.max(8,Math.min(window.innerWidth-menuW-8,r.right-menuW)),openUp})};
+ useEffect(()=>{if(!open)return;place();const close=(e:MouseEvent)=>{const n=e.target as Node;if(!root.current?.contains(n)&&!menu.current?.contains(n))setOpen(false)},esc=(e:KeyboardEvent)=>{if(e.key==="Escape")setOpen(false)},reposition=()=>place();document.addEventListener("mousedown",close);document.addEventListener("keydown",esc);window.addEventListener("resize",reposition);window.addEventListener("scroll",reposition,true);return()=>{document.removeEventListener("mousedown",close);document.removeEventListener("keydown",esc);window.removeEventListener("resize",reposition);window.removeEventListener("scroll",reposition,true)}},[open,items.length,allSelected]);
  const run=(fn?:()=>void)=>{if(!fn)return;setOpen(false);fn()};
- return <div ref={root} className="relative" dir="rtl"><button type="button" onClick={()=>setOpen(v=>!v)} className="flex h-9 items-center gap-2 rounded-[12px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] shadow-sm transition hover:bg-[#edf4fb] dark:border-white/[.12] dark:bg-[#30353d] dark:text-white dark:hover:bg-[#383e48]"><span>{label}</span><ChevronDown className={`h-4 w-4 transition-transform ${open?"rotate-180":""}`}/></button>{open&&<div className={`ui-state-enter absolute left-0 top-[calc(100%+7px)] z-[100] w-[230px] ${actionMenuPanelClass}`}>
-  {(onToggleAll||onClearSelection)&&<div className={`mb-1 border-b pb-1 ${actionMenuDividerClass}`}>
-   {onToggleAll&&<CollectionActionMenuRow label={allSelected?"إلغاء تحديد الكل":"تحديد الكل"} icon={allSelected?X:CheckCheck} onClick={()=>run(onToggleAll)}/>}
-   {onClearSelection&&<CollectionActionMenuRow label="إلغاء التحديد" icon={X} onClick={()=>run(onClearSelection)}/>}
-  </div>}
-  <div>{items.map((item,i)=><div key={i} className={item.separatorBefore?`mt-1 border-t pt-1 ${actionMenuDividerClass}`:""}><CollectionActionMenuRow label={item.label} icon={item.icon} danger={item.danger} disabled={item.disabled} onClick={()=>{if(item.disabled)return;run(item.onClick)}}/></div>)}</div>
- </div>}</div>
+ const dropdown=open&&typeof document!=="undefined"?createPortal(<div ref={menu} className={`ui-state-enter fixed z-[9999] w-[230px] ${actionMenuPanelClass}`} style={{top:position.top,left:position.left}} dir="rtl">
+  <span aria-hidden="true" className={`absolute h-3 w-3 rotate-45 border-[#9fb8d2] bg-white dark:border-white/[.18] dark:bg-[#26394c] ${position.openUp?"-bottom-[7px] border-b-2 border-r-2":"-top-[7px] border-l-2 border-t-2"}`} style={{left:"calc(100% - 30px)"}}/>
+  <div className="relative z-10">
+   {(onToggleAll||onClearSelection)&&<div className={`mb-1 border-b pb-1 ${actionMenuDividerClass}`}>
+    {onToggleAll&&<CollectionActionMenuRow label={allSelected?"إلغاء تحديد الكل":"تحديد الكل"} icon={allSelected?X:CheckCheck} onClick={()=>run(onToggleAll)}/>}
+    {onClearSelection&&<CollectionActionMenuRow label="إلغاء التحديد" icon={X} onClick={()=>run(onClearSelection)}/>}
+   </div>}
+   <div>{items.map((item,i)=><div key={i} className={item.separatorBefore?`mt-1 border-t pt-1 ${actionMenuDividerClass}`:""}><CollectionActionMenuRow label={item.label} icon={item.icon} danger={item.danger} disabled={item.disabled} onClick={()=>{if(item.disabled)return;run(item.onClick)}}/></div>)}</div>
+  </div>
+ </div>,document.body):null;
+ return <div ref={root} className="relative inline-flex" dir="rtl"><button ref={trigger} type="button" aria-label={label} aria-expanded={open} onClick={()=>{if(!open)place();setOpen(v=>!v)}} className="flex h-9 items-center gap-2 rounded-[12px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] shadow-sm transition hover:bg-[#edf4fb] dark:border-white/[.12] dark:bg-[#30353d] dark:text-white dark:hover:bg-[#383e48]"><span>{label}</span><ChevronDown className={`h-4 w-4 transition-transform ${open?"rotate-180":""}`}/></button>{dropdown}</div>
 }
 
 export function CollectionGrid({children,className=""}:{children:React.ReactNode;className?:string}){return <section className={`ui-state-enter grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 ${className}`}>{children}</section>}
