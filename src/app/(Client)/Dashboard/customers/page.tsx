@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, CirclePause, CirclePlay, Eye, Mail, Pencil, Phone, Trash2, UserRound, Users } from "lucide-react";
-import { CollectionBulkActions, CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { CollectionCard, CollectionGrid, CollectionItemActions, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionStatusFilters, CollectionSelectionBar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import BulkActionsDropdown from "@/components/ui/bulk-actions-dropdown";
 
 type Customer = {
   id: number;
@@ -66,11 +67,7 @@ export default function CustomersPage() {
       <CollectionToolbar icon={Users} title="العملاء" description="عرض وإدارة حسابات عملاء Radius Lord" view={view} onViewChange={setView} selectionMode={gridSelectionMode} onSelectionModeChange={(enabled) => { setGridSelectionMode(enabled); if (!enabled) setSelected(new Set()); }} allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالاسم، المستخدم، الهاتف..." filters={<CollectionStatusFilters value={statusFilter} onChange={setStatusFilter} items={[{value:"all",label:"الكل",count:statusCounts.all,dot:"bg-[#0758e9]"},{value:"active",label:"نشط",count:statusCounts.active,dot:"bg-emerald-500"},{value:"suspended",label:"معلّق",count:statusCounts.suspended,dot:"bg-amber-500"},{value:"disabled",label:"معطّل",count:statusCounts.disabled,dot:"bg-red-500"}]} />} />
 
       <CollectionSelectionBar count={selected.size} noun="العملاء" onClear={() => setSelected(new Set())}>
-        <CollectionBulkActions label="تطبيق إجراء" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} items={[
-          {label:"تفعيل المحدد",icon:CirclePlay,tone:"success",onClick:()=>{}},
-          {label:"تعليق المحدد",icon:CirclePause,tone:"warning",onClick:()=>{}},
-          {label:"تعطيل المحدد",icon:Ban,tone:"danger",onClick:()=>{}},
-        ]}/>
+        <BulkActionsDropdown allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} show={{activate:true,suspend:true,disable:true}} handlers={{activate:()=>{},suspend:()=>{},disable:()=>{}}}/>
       </CollectionSelectionBar>
 
       {loading ? (
