@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   Activity,
@@ -79,8 +81,11 @@ function TrafficChart() {
 
 function CustomerWelcome() {
   const { account } = useAuth();
+  const router = useRouter();
+  const [leaving,setLeaving] = useState(false);
+  const openPlans=()=>{if(leaving)return;setLeaving(true);window.setTimeout(()=>router.push("/Dashboard/customer-plans"),420)};
   const fullName = account?.fullName?.trim() || "عميلنا";
-  return <div className="radius-art relative h-full min-h-full w-full overflow-hidden" dir="rtl">
+  return <div className={`radius-art relative h-full min-h-full w-full overflow-hidden ${leaving?"customer-stage-leave":""}`} dir="rtl">
     <div className="art-grid absolute inset-0" aria-hidden="true"/><div className="art-mesh-glow absolute inset-0" aria-hidden="true"/><div className="art-polygons absolute inset-0" aria-hidden="true"/><div className="art-stars absolute inset-0" aria-hidden="true">{Array.from({length:14}).map((_,i)=><i key={i} style={{"--i":i} as React.CSSProperties}/>)}</div><div className="art-glow absolute inset-0" aria-hidden="true"/>
     <svg className="polygon-lines absolute inset-0 h-full w-full" viewBox="0 0 1400 700" preserveAspectRatio="none" aria-hidden="true">
       <g fill="none" stroke="currentColor" strokeWidth="1">
@@ -97,7 +102,7 @@ function CustomerWelcome() {
         <div className="welcome-reveal d2 mt-3 inline-flex items-center gap-2 rounded-full border border-[#9fc4ec]/70 bg-white/90 px-4 py-2 text-xs font-semibold text-[#0758e9] shadow-sm dark:border-[#426181] dark:bg-[#13273d] dark:text-[#8ab5ff]"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>مرحباً بك في LORD RADIUS</div>
         <h2 className="welcome-reveal d2 mt-3 text-3xl font-bold text-[#102a63] dark:text-white sm:text-[42px]">أهلاً بك، <span className="text-[#0758e9]">{fullName}</span></h2>
         <p className="welcome-reveal d3 mx-auto mt-2 max-w-[680px] text-sm leading-6 text-slate-500 dark:text-slate-300 sm:text-base">منصة متكاملة لإدارة RADIUS والشبكات والمشتركين. اختر خطتك وابدأ بناء شبكتك داخل منظومة LORD RADIUS.</p>
-        <div className="welcome-reveal d4 mt-4 flex flex-col gap-3 sm:flex-row"><Link href="/Dashboard/customer-plans" className="inline-flex h-11 min-w-[220px] items-center justify-center gap-2 rounded-[15px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(7,88,233,.28)] transition hover:-translate-y-0.5 hover:bg-[#064dcc]">عرض الخطط المتاحة<CreditCard className="h-4 w-4"/></Link><button type="button" onClick={()=>document.getElementById("radius-intro")?.focus()} className="inline-flex h-11 min-w-[220px] items-center justify-center gap-2 rounded-[15px] border border-[#a9c8e8] bg-white/90 px-6 text-sm font-semibold text-[#17386d] shadow-sm transition hover:-translate-y-0.5 dark:border-[#426181] dark:bg-[#13273d] dark:text-white">نبذة عن Radius Lord<ArrowLeft className="h-4 w-4"/></button></div>
+        <div className="welcome-reveal d4 mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" onClick={openPlans} disabled={leaving} className="inline-flex h-11 min-w-[220px] items-center justify-center gap-2 rounded-[15px] bg-[#0758e9] px-6 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(7,88,233,.28)] transition hover:-translate-y-0.5 hover:bg-[#064dcc] disabled:pointer-events-none">عرض الخطط المتاحة<CreditCard className="h-4 w-4"/></button><button type="button" onClick={()=>document.getElementById("radius-intro")?.focus()} className="inline-flex h-11 min-w-[220px] items-center justify-center gap-2 rounded-[15px] border border-[#a9c8e8] bg-white/90 px-6 text-sm font-semibold text-[#17386d] shadow-sm transition hover:-translate-y-0.5 dark:border-[#426181] dark:bg-[#13273d] dark:text-white">نبذة عن Radius Lord<ArrowLeft className="h-4 w-4"/></button></div>
         <div id="radius-intro" tabIndex={-1} className="welcome-reveal d5 grid w-full max-w-[1080px] shrink-0 gap-3 outline-none sm:grid-cols-3">{[["إدارة مركزية","تحكم بشبكاتك وخدماتك من مركز واحد.",Server],["RADIUS متكامل","NAS ومشتركون وسياسات واتصال مركزي.",Wifi],["جاهز للتوسع","بنية مرنة تنمو مع شبكتك واحتياجاتك.",Activity]].map(([title,text,Icon]:any)=><article key={title} className="feature-card rounded-[19px] border border-[#bfd3e7] bg-[#f7fbff] p-3 text-right shadow-[0_12px_28px_rgba(32,72,112,.09)] transition hover:-translate-y-1 dark:border-[#314b66] dark:bg-[#14283d]"><span className="grid h-9 w-9 place-items-center rounded-[12px] bg-[#e7f1ff] text-[#0758e9] dark:bg-[#183b60] dark:text-[#7eb4ff]"><Icon className="h-[18px] w-[18px]"/></span><h3 className="mt-2 text-sm font-semibold text-[#17386d] dark:text-white">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{text}</p></article>)}</div>
       </section>
     </div>
@@ -107,7 +112,7 @@ function CustomerWelcome() {
       .rack{fill:rgba(20,121,255,.025);stroke:rgba(20,121,255,.19);stroke-width:1.3}.rack>rect:not(:first-child){fill:rgba(20,121,255,.035);stroke:rgba(20,121,255,.16)}:global(.dark) .rack{fill:rgba(18,54,89,.24);stroke:rgba(78,151,240,.22)}:global(.dark) .rack>rect:not(:first-child){fill:rgba(17,48,79,.34);stroke:rgba(78,151,240,.18)}.rack-led{fill:#1681ff}.rack-led circle{animation:led 2.6s ease-in-out infinite}.rack-led circle:nth-child(2){animation-delay:.6s}.rack-led circle:nth-child(3){animation-delay:1.1s}
       .router-art{fill:rgba(20,121,255,.035);stroke:rgba(20,121,255,.22);stroke-width:1.3}.router-art circle,.data-points{fill:#1681ff}.signal{fill:#1681ff;stroke:#1681ff;stroke-width:2;fill-opacity:.7}.signal path{fill:none;opacity:.18}.art-wires path{stroke-dasharray:8 10;animation:wireMove 16s linear infinite}.data-points circle{filter:drop-shadow(0 0 5px #1681ff);animation:dataPulse 2.8s ease-in-out infinite}
       .logo-core:before{content:"";position:absolute;inset:-12px;border:1px solid rgba(20,121,255,.18);border-radius:27px;animation:corePulse 3.4s ease-out infinite}.welcome-reveal{opacity:0;transform:translateY(12px);animation:welcomeIn .7s cubic-bezier(.22,.8,.25,1) forwards}.d2{animation-delay:.14s}.d3{animation-delay:.25s}.d4{animation-delay:.36s}.d5{animation-delay:.48s}
-      @keyframes polygonFlow{to{stroke-dashoffset:-210}}@keyframes starFloat{to{transform:translate3d(5px,-8px,0);opacity:.65}}@keyframes welcomeIn{to{opacity:1;transform:none}}@keyframes wireMove{to{stroke-dashoffset:-180}}@keyframes led{50%{opacity:.2}}@keyframes dataPulse{50%{opacity:.3;transform:scale(.7)}}@keyframes corePulse{0%{transform:scale(.86);opacity:.8}75%,100%{transform:scale(1.22);opacity:0}}
+      @keyframes customerStageLeave{to{opacity:0;transform:translateX(24px) scale(.992)}}.customer-stage-leave{animation:customerStageLeave .42s cubic-bezier(.4,0,.2,1) forwards}@keyframes polygonFlow{to{stroke-dashoffset:-210}}@keyframes starFloat{to{transform:translate3d(5px,-8px,0);opacity:.65}}@keyframes welcomeIn{to{opacity:1;transform:none}}@keyframes wireMove{to{stroke-dashoffset:-180}}@keyframes led{50%{opacity:.2}}@keyframes dataPulse{50%{opacity:.3;transform:scale(.7)}}@keyframes corePulse{0%{transform:scale(.86);opacity:.8}75%,100%{transform:scale(1.22);opacity:0}}
       @media(max-width:1100px){.rack{opacity:.45}.network-art{opacity:.6}}@media(max-height:760px){.rack,.router-art{opacity:.35}#radius-intro{margin-top:.65rem}.radius-art p{line-height:1.2rem}}@media(prefers-reduced-motion:reduce){.welcome-reveal,.art-stars i,.polygon-accent,.logo-core:before{animation:none;opacity:1;transform:none}}
     `}</style>
   </div>;
