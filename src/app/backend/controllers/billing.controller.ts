@@ -46,7 +46,7 @@ export async function listPaymentOrdersController(req:AuthenticatedRequest,res:R
  catch(e){console.error(e);return res.status(500).json({success:false,message:'تعذر تحميل عمليات الدفع.'});}
 }
 export async function confirmPaymentOrderController(req:AuthenticatedRequest,res:Response){
- const conn=await db.getConnection();
+ const conn=await db.pool.getConnection();
  try{await conn.beginTransaction();const code=String(req.params.code??'').trim();const [rows]:any=await conn.query("SELECT id,status FROM payment_orders WHERE payment_code=? FOR UPDATE",[code]);const r=rows[0];if(!r){await conn.rollback();return res.status(404).json({success:false,message:'طلب الدفع غير موجود.'});}if(!['pending','awaiting_confirmation'].includes(r.status)){await conn.rollback();return res.status(409).json({success:false,message:'تمت معالجة طلب الدفع مسبقًا أو أن حالته لا تسمح بالتأكيد.'});}await conn.query("UPDATE payment_orders SET status='paid',paid_at=CURRENT_TIMESTAMP,confirmed_by_master_admin_id=? WHERE id=?",[req.auth!.accountId,r.id]);await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status,master_admin_id) VALUES (?,'confirmed_paid',?,'paid',?)",[r.id,r.status,req.auth!.accountId]);await conn.commit();return res.json({success:true,status:'paid',message:'تم تأكيد استلام الدفعة.'});}
  catch(e){await conn.rollback();console.error(e);return res.status(500).json({success:false,message:'تعذر تأكيد عملية الدفع.'});}finally{conn.release();}
 }
