@@ -6,6 +6,8 @@ import authLogoutRoutes from './auth/logout.route'; //Logout
 import adminCustomersRoutes from './admin/customers.routes';
 import adminAuditRoutes from './admin/audit.routes';
 import adminPaymentPlansRoutes from './admin/payment-plans.routes';
+import adminPlatformSettingsRoutes from './admin/platform-settings.routes';
+import customerPaymentSettingsRoutes from './customer/payment-settings.routes';
 
 const router = Router();
 
@@ -16,5 +18,7 @@ router.use('/auth', authLogoutRoutes);
 router.use('/admin/customers', adminCustomersRoutes);
 router.use('/admin/audit-logs', adminAuditRoutes);
 router.use('/admin/payment-plans', adminPaymentPlansRoutes);
+router.use('/admin/platform-settings', adminPlatformSettingsRoutes);
+router.use('/customer/payment-settings', customerPaymentSettingsRoutes);
 //Logout
 export default router;
