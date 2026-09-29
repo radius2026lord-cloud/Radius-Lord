@@ -57,6 +57,7 @@ const masterAdminGroups: NavGroup[] = [
   ]},
   { label: "الاشتراكات", icon: CreditCard, items: [
     { label: "عرض الاشتراكات", href: "/Dashboard/subscriptions", icon: CreditCard },
+    { label: "عمليات الدفع", href: "/Dashboard/payments", icon: CircleDollarSign },
     { label: "الاشتراكات النشطة", href: "/Dashboard/subscriptions/active", icon: ShieldCheck },
     { label: "المنتهية والقريبة من الانتهاء", href: "/Dashboard/subscriptions/expiring", icon: Clock3 },
   ]},
