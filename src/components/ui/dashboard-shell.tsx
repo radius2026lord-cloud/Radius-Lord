@@ -156,7 +156,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
   const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
-  const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0);
+  const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
   const currentTitle = useMemo(() => {
     if (pathname === masterAdminHome.href) return masterAdminHome.label;
     const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
