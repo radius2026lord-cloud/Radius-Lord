@@ -52,12 +52,12 @@ export function collectionCardClass(selected=false){
 }
 
 
-export function CollectionToolbar({icon:Icon,title,description,view,onViewChange,selectionMode,onSelectionModeChange,allSelected,onToggleAll,query,onQueryChange,searchPlaceholder="بحث...",filters,primaryAction}:{icon:any;title:string;description:string;view:CollectionViewMode;onViewChange:(v:CollectionViewMode)=>void;selectionMode:boolean;onSelectionModeChange:(v:boolean)=>void;allSelected?:boolean;onToggleAll?:()=>void;query:string;onQueryChange:(v:string)=>void;searchPlaceholder?:string;filters?:React.ReactNode;primaryAction?:React.ReactNode}){
+export function CollectionToolbar({icon:Icon,title,description,view,onViewChange,selectionMode,onSelectionModeChange,allSelected,onToggleAll,query,onQueryChange,searchPlaceholder="بحث...",filters,primaryAction}:{icon:any;title:string;description:string;view?:CollectionViewMode;onViewChange?:(v:CollectionViewMode)=>void;selectionMode?:boolean;onSelectionModeChange?:(v:boolean)=>void;allSelected?:boolean;onToggleAll?:()=>void;query:string;onQueryChange:(v:string)=>void;searchPlaceholder?:string;filters?:React.ReactNode;primaryAction?:React.ReactNode}){
  return <section className="rl-surface rounded-[22px] bg-white p-3 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b]"><div className="flex min-w-0 items-center gap-2" dir="rtl">
   <div className="w-[clamp(175px,15vw,220px)] shrink-0 text-right"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee]"><Icon className="h-5 w-5 shrink-0 text-[#0758e9]"/><span className="truncate">{title}</span></h2><p className="mt-0.5 truncate text-[10px] text-slate-500 dark:text-[#9f98a5]">{description}</p></div>
   <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{filters}</div>
   <div className="relative w-[clamp(140px,16vw,205px)] shrink-0" dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className="h-10 w-full rounded-[14px] border border-[#d7e3ef] bg-[#f9fbfe] pr-9 pl-2 text-xs text-slate-700 outline-none focus:border-[#6aaeff] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]"/></div>
-  <div className="shrink-0"><CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/></div>
+  {view&&onViewChange&&onSelectionModeChange&&<div className="shrink-0"><CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode??false} onSelectionModeChange={onSelectionModeChange} allSelected={allSelected} onToggleAll={onToggleAll}/></div>}
   {primaryAction&&<div className="shrink-0">{primaryAction}</div>}
  </div></section>
 }
@@ -90,6 +90,12 @@ export function CollectionMobileCard({onOpen,children}:{onOpen:()=>void;children
 
 
 export type CollectionItemAction={label:string;icon?:LucideIcon;onClick:()=>void;tone?:"view"|"edit"|"danger"|"default";danger?:boolean;disabled?:boolean;separatorBefore?:boolean};
+
+const actionMenuPanelClass="rounded-[16px] border-2 border-[#9fb8d2] bg-white p-1.5 text-right shadow-[0_14px_34px_rgba(37,64,92,.18)] dark:border-white/[.18] dark:bg-[#26394c]";
+
+function CollectionActionMenuRow({label,icon,disabled,danger,onClick}:{label:string;icon?:LucideIcon;disabled?:boolean;danger?:boolean;onClick:()=>void}){
+ return <BulkActionRow action={{label,icon,disabled,danger,onClick}} close={()=>{}}/>;
+}
 
 export function CollectionItemActions({label="إجراءات العنصر",items}:{label?:string;items:CollectionItemAction[]}){
  const [open,setOpen]=useState(false),[position,setPosition]=useState({top:0,left:0,openUp:false});const root=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);

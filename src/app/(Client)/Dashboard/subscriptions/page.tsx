@@ -7,7 +7,7 @@ import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileL
 
 type Status = "awaiting_confirmation" | "paid" | "completed" | "cancelled" | "expired";
 type Order = {
-  id:number; paymentCode:string; purpose:string; planName:string; deploymentName:string|null;
+  id:number; customerId:number; paymentCode:string; planName:string; deploymentName:string|null;
   totalAmount:number; currency:string; status:Status|"pending"; requestedAt:string; paidAt:string|null;
   customerName:string; customerEmail:string;
 };
@@ -32,8 +32,8 @@ export default function SubscriptionsPage(){
 
   const load=()=>{
     setLoading(true); setMessage("");
-    fetch("/api/billing/admin/orders",{credentials:"include",cache:"no-store"})
-      .then(async r=>{const j=await r.json(); if(!r.ok)throw new Error(j.message||"تعذر تحميل الاشتراكات."); setOrders((j.paymentOrders??[]).filter((x:Order)=>x.purpose==="initial_subscription"&&x.status!=="pending"));})
+    fetch("/api/billing/admin/subscriptions",{credentials:"include",cache:"no-store"})
+      .then(async r=>{const j=await r.json(); if(!r.ok)throw new Error(j.message||"تعذر تحميل الاشتراكات."); setOrders(j.subscriptions??[]);})
       .catch(e=>setMessage(e.message||"تعذر تحميل الاشتراكات."))
       .finally(()=>setLoading(false));
   };
@@ -67,6 +67,7 @@ export default function SubscriptionsPage(){
     finally{setBusy(null);}
   };
 
+  const openCustomer=(o:Order)=>router.push(`/Dashboard/customers/${o.customerId}?from=subscriptions`);
   const openPayment=(o:Order)=>router.push("/Dashboard/payments?code="+encodeURIComponent(o.paymentCode));
 
   return <div className="space-y-3 sm:space-y-4">
@@ -92,10 +93,10 @@ export default function SubscriptionsPage(){
 
     {message&&<div className="rounded-[16px] border border-[#c8d7e6] bg-white px-4 py-3 text-xs dark:border-white/[.10] dark:bg-[#0d243b]">{message}</div>}
 
-    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} onOpen={()=>openPayment(o)}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.customerEmail}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07]"><div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div><div className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div><div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div></div><div className="mt-3 flex justify-end gap-2" onClick={e=>e.stopPropagation()}>{o.status==="awaiting_confirmation"&&<button disabled={busy===o.paymentCode} onClick={()=>confirm(o)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-[10px] font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4"/>{busy===o.paymentCode?"جارٍ التأكيد...":"تأكيد الدفع"}</button>}<button onClick={()=>openPayment(o)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#bfd4ea] bg-white text-[#0758e9] dark:border-white/[.12] dark:bg-white/[.04]" aria-label="عرض عملية الدفع"><ExternalLink className="h-4 w-4"/></button></div></CollectionCard>)}</CollectionGrid>:<>
+    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} onOpen={()=>openCustomer(o)}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.customerEmail}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07]"><div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div><div className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div><div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div></div><div className="mt-3 flex justify-end gap-2" onClick={e=>e.stopPropagation()}>{o.status==="awaiting_confirmation"&&<button disabled={busy===o.paymentCode} onClick={()=>confirm(o)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-[10px] font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4"/>{busy===o.paymentCode?"جارٍ التأكيد...":"تأكيد الدفع"}</button>}<button onClick={()=>openPayment(o)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#bfd4ea] bg-white text-[#0758e9] dark:border-white/[.12] dark:bg-white/[.04]" aria-label="عرض عملية الدفع"><ExternalLink className="h-4 w-4"/></button></div></CollectionCard>)}</CollectionGrid>:<>
       <CollectionTable minWidth="980px">
         <CollectionTableHead><tr><th className="p-3">العميل</th><th>الخطة</th><th>الاستضافة</th><th>كود الدفع</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="p-3 text-center">إجراء</th></tr></CollectionTableHead>
-        <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openPayment(o)} className={collectionRowClass(false)}>
+        <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openCustomer(o)} className={collectionRowClass(false)}>
           <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400">{o.customerEmail}</span></td>
           <td><b>{o.planName}</b></td>
           <td>{o.deploymentName||"—"}</td>
@@ -109,7 +110,7 @@ export default function SubscriptionsPage(){
           </div></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
-      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openPayment(o)}><div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-white/[.07]"><span>{o.totalAmount} {o.currency}</span><span>{formatDate(o.requestedAt)}</span></div></CollectionMobileCard>)}</CollectionMobileList>
+      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openCustomer(o)}><div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-white/[.07]"><span>{o.totalAmount} {o.currency}</span><span>{formatDate(o.requestedAt)}</span></div></CollectionMobileCard>)}</CollectionMobileList>
     </>}
   </div>;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, Trash2, UserRound, X } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import CustomerSubscriptions from "@/components/customer-subscriptions";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 
 type RecentActivity = { id:number; actionCode:string; actionName:string; description:string|null; adminName:string|null; adminUsername:string|null; createdAt:string; metadata:any };
@@ -28,6 +29,8 @@ export default function CustomerDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const fromSubscriptions = searchParams.get("from") === "subscriptions";
+  const backLabel = fromSubscriptions ? "الرجوع إلى الاشتراكات" : "الرجوع إلى العملاء";
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +100,7 @@ export default function CustomerDetailsPage() {
     <div className="space-y-3 sm:space-y-4" dir="rtl">
       <section className="rl-surface rounded-[22px] bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#0d243b]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <ProjectTooltip label="رجوع إلى العملاء"><button type="button" onClick={() => router.push("/Dashboard/customers")} aria-label="الرجوع إلى العملاء" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(7,88,233,.10)] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff] dark:hover:border-[#6aaeff]"><ArrowRight className="h-4 w-4" /></button></ProjectTooltip>
+          <ProjectTooltip label={backLabel}><button type="button" onClick={() => router.push(fromSubscriptions ? "/Dashboard/subscriptions" : "/Dashboard/customers")} aria-label={backLabel} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(7,88,233,.10)] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff] dark:hover:border-[#6aaeff]"><ArrowRight className="h-4 w-4" /></button></ProjectTooltip>
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[17px] bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-6 w-6" /></div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -164,10 +167,7 @@ export default function CustomerDetailsPage() {
         </div>)}</div>}
       </section>
 
-      <section className="rounded-[22px] border border-dashed border-[#cbd9e7] bg-white/60 p-5 text-center dark:border-white/[.10] dark:bg-white/[.025]">
-        <div className="text-sm font-medium text-slate-600 dark:text-[#c4bdc8]">الشبكات والاشتراكات</div>
-        <p className="mt-1 text-xs text-slate-400 dark:text-[#8f8894]">سيتم ربط شبكات العميل واشتراكاته هنا في المرحلة التالية.</p>
-      </section>
+      <CustomerSubscriptions customerId={customer.id} />
     </div>
   );
 }
