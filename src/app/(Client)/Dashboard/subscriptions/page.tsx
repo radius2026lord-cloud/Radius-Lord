@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, CreditCard, ExternalLink, RefreshCw } from "lucide-react";
-import { CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 type Status = "awaiting_confirmation" | "paid" | "completed" | "cancelled" | "expired";
 type Order = {
@@ -92,7 +92,7 @@ export default function SubscriptionsPage(){
 
     {message&&<div className="rounded-[16px] border border-[#c8d7e6] bg-white px-4 py-3 text-xs dark:border-white/[.10] dark:bg-[#0d243b]">{message}</div>}
 
-    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:<>
+    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} onOpen={()=>openPayment(o)}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.customerEmail}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07]"><div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div><div className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div><div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div></div><div className="mt-3 flex justify-end gap-2" onClick={e=>e.stopPropagation()}>{o.status==="awaiting_confirmation"&&<button disabled={busy===o.paymentCode} onClick={()=>confirm(o)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-[10px] font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4"/>{busy===o.paymentCode?"جارٍ التأكيد...":"تأكيد الدفع"}</button>}<button onClick={()=>openPayment(o)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#bfd4ea] bg-white text-[#0758e9] dark:border-white/[.12] dark:bg-white/[.04]" aria-label="عرض عملية الدفع"><ExternalLink className="h-4 w-4"/></button></div></CollectionCard>)}</CollectionGrid>:<>
       <CollectionTable minWidth="980px">
         <CollectionTableHead><tr><th className="p-3">العميل</th><th>الخطة</th><th>الاستضافة</th><th>كود الدفع</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="p-3 text-center">إجراء</th></tr></CollectionTableHead>
         <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openPayment(o)} className={collectionRowClass(false)}>
