@@ -32,7 +32,7 @@ export const env = {
   DB_PORT: Number(process.env.DB_PORT) || 3306,
   DB_USER: process.env.DB_USER || 'lord',
   DB_PASS: process.env.DB_PASS || 'lord1224',
-  DB_NAME: process.env.DB_NAME || 'radius_lord',
+  DB_NAME: process.env.DB_NAME || 'lord_radius_core',
 
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'MY_SECRET_KEY',
