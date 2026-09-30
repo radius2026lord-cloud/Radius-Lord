@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { authenticate,requireAccountType } from '../../middleware/auth.middleware';
-import { createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController } from '../../controllers/billing.controller';
+import { createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController,getMasterActivityController } from '../../controllers/billing.controller';
 const router=Router();
 router.get('/settings/public',authenticate,requireAccountType('customer'),getPublicPaymentSettingsController);
 router.post('/orders',authenticate,requireAccountType('customer'),createPaymentOrderController);
 router.get('/orders/:code',authenticate,requireAccountType('customer'),getMyPaymentOrderController);
 router.post('/orders/:code/whatsapp',authenticate,requireAccountType('customer'),markPaymentOrderWhatsappController);
+router.get('/admin/activity',authenticate,requireAccountType('master_admin'),getMasterActivityController);
 router.get('/admin/orders',authenticate,requireAccountType('master_admin'),listPaymentOrdersController);
 router.post('/admin/orders/:code/confirm',authenticate,requireAccountType('master_admin'),confirmPaymentOrderController);
 router.get('/settings',authenticate,requireAccountType('master_admin'),getPaymentSettingsController);
