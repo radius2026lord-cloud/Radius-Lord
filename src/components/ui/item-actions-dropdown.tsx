@@ -1,18 +1,20 @@
 "use client";
 
-import { ChevronDown, Eye, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { CheckCircle2, CreditCard, ChevronDown, Eye, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
-export type ItemActionKey="view"|"edit"|"delete";
-export type ItemActionTone="view"|"edit"|"danger"|"default";
+export type ItemActionKey="view"|"edit"|"delete"|"payment"|"confirmPayment";
+export type ItemActionTone="view"|"edit"|"danger"|"default"|"success";
 export type ItemActionHandlers=Partial<Record<ItemActionKey,()=>void>>;
 export type ItemActionVisibility=Partial<Record<ItemActionKey,boolean>>;
 
 const actions:Record<ItemActionKey,{label:string;icon:LucideIcon;tone:ItemActionTone}>={
+ payment:{label:"عرض عملية الدفع",icon:CreditCard,tone:"view"},confirmPayment:{label:"تأكيد الدفع",icon:CheckCircle2,tone:"success"},
  view:{label:"عرض التفاصيل",icon:Eye,tone:"view"},edit:{label:"تعديل",icon:Pencil,tone:"edit"},delete:{label:"حذف",icon:Trash2,tone:"danger"},
 };
 const tone:Record<ItemActionTone,string>={
+ success:"text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10",
  view:"text-[#0758e9] hover:bg-[#edf4fb] dark:text-[#8ab5ff] dark:hover:bg-blue-500/10",
  edit:"text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
  danger:"text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10",

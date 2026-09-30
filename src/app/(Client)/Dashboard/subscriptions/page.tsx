@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, CreditCard, ExternalLink, RefreshCw } from "lucide-react";
-import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { CreditCard, RefreshCw, UserRound } from "lucide-react";
+import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+
+import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
+import ItemActionsDropdown from "@/components/ui/item-actions-dropdown";
 
 type Status = "awaiting_confirmation" | "paid" | "completed" | "cancelled" | "expired";
 type Order = {
   id:number; customerId:number; paymentCode:string; planName:string; deploymentName:string|null;
   totalAmount:number; currency:string; status:Status|"pending"; requestedAt:string; paidAt:string|null;
-  customerName:string; customerEmail:string;
+  customerName:string; customerUsername:string|null; customerEmail:string;
 };
 
 const meta:Record<Status,{label:string;tone:string}> = {
@@ -28,7 +31,7 @@ export default function SubscriptionsPage(){
   const [filter,setFilter]=useState<"all"|Status>("all");
   const [busy,setBusy]=useState<string|null>(null);
   const [message,setMessage]=useState("");
-  const {view,setView,selectionMode,setSelectionMode}=useCollectionDisplay<number>("subscriptions","row");
+  const {view,setView,selected,setSelected,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("subscriptions","row");
 
   const load=()=>{
     setLoading(true); setMessage("");
@@ -51,9 +54,12 @@ export default function SubscriptionsPage(){
     return orders.filter(x=>{
       if(filter!=="all"&&x.status!==filter)return false;
       if(!q)return true;
-      return [x.customerName,x.customerEmail,x.paymentCode,x.planName,x.deploymentName].filter(Boolean).some(v=>String(v).toLowerCase().includes(q));
+      return [x.customerName,x.customerUsername,x.customerEmail,x.paymentCode,x.planName,x.deploymentName].filter(Boolean).some(v=>String(v).toLowerCase().includes(q));
     });
   },[orders,query,filter]);
+
+  const allVisibleSelected=filtered.length>0&&filtered.every(o=>selected.has(o.id));
+  const toggleAllVisible=()=>setAll(filtered.map(o=>o.id),!allVisibleSelected);
 
   const confirm=async(o:Order)=>{
     if(busy)return;
@@ -78,7 +84,9 @@ export default function SubscriptionsPage(){
       view={view}
       onViewChange={setView}
       selectionMode={selectionMode}
-      onSelectionModeChange={setSelectionMode}
+      onSelectionModeChange={enabled=>{setSelectionMode(enabled);if(!enabled)setSelected(new Set());}}
+      allSelected={allVisibleSelected}
+      onToggleAll={toggleAllVisible}
       query={query}
       onQueryChange={setQuery}
       searchPlaceholder="بحث بالعميل، الخطة أو كود الدفع..."
@@ -93,26 +101,41 @@ export default function SubscriptionsPage(){
 
     {message&&<div className="rounded-[16px] border border-[#c8d7e6] bg-white px-4 py-3 text-xs dark:border-white/[.10] dark:bg-[#0d243b]">{message}</div>}
 
-    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} onOpen={()=>openCustomer(o)}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.customerEmail}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07]"><div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div><div className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div><div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div></div><div className="mt-3 flex justify-end gap-2" onClick={e=>e.stopPropagation()}>{o.status==="awaiting_confirmation"&&<button disabled={busy===o.paymentCode} onClick={()=>confirm(o)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-[10px] font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4"/>{busy===o.paymentCode?"جارٍ التأكيد...":"تأكيد الدفع"}</button>}<button onClick={()=>openPayment(o)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#bfd4ea] bg-white text-[#0758e9] dark:border-white/[.12] dark:bg-white/[.04]" aria-label="عرض عملية الدفع"><ExternalLink className="h-4 w-4"/></button></div></CollectionCard>)}</CollectionGrid>:<>
-      <CollectionTable minWidth="980px">
-        <CollectionTableHead><tr><th className="p-3">العميل</th><th>الخطة</th><th>الاستضافة</th><th>كود الدفع</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="p-3 text-center">إجراء</th></tr></CollectionTableHead>
-        <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openCustomer(o)} className={collectionRowClass(false)}>
+    <BulkSelectionBar count={selected.size} noun="الاشتراكات" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())}/>
+
+    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} selectionMode={selectionMode} selected={selected.has(o.id)} onToggle={()=>toggle(o.id)} onOpen={()=>openCustomer(o)}>
+      <div className="flex items-start gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5"/></div>
+        <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{o.customerUsername||"—"}</div></div>
+        <div className="flex shrink-0 items-center gap-2"><StatusBadge status={o.status as Status}/>{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openCustomer(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
+      </div>
+      <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400">
+        <div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div>
+        <div className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div>
+        <div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div>
+      </div>
+    </CollectionCard>)}</CollectionGrid>:<>
+      <CollectionTable>
+        <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الاستضافة</th><th>كود الدفع</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
+        <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openCustomer(o)} className={collectionRowClass(selected.has(o.id))}>
+          <td className="w-12 p-3 text-center" onClick={e=>e.stopPropagation()}><CollectionSelectionBox checked={selected.has(o.id)} onChange={()=>toggle(o.id)} label={`تحديد اشتراك ${o.customerName}`}/></td>
           <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400">{o.customerEmail}</span></td>
-          <td><b>{o.planName}</b></td>
-          <td>{o.deploymentName||"—"}</td>
+          <td><b>{o.planName}</b></td><td>{o.deploymentName||"—"}</td>
           <td className="font-mono text-[11px] font-bold text-[#0758e9]" dir="ltr">{o.paymentCode}</td>
-          <td className="font-bold">{o.totalAmount} {o.currency}</td>
-          <td><StatusBadge status={o.status as Status}/></td>
-          <td>{formatDate(o.requestedAt)}</td>
-          <td className="p-3 text-center" onClick={e=>e.stopPropagation()}><div className="inline-flex gap-2">
-            {o.status==="awaiting_confirmation"&&<button disabled={busy===o.paymentCode} onClick={()=>confirm(o)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-[10px] font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4"/>{busy===o.paymentCode?"جارٍ التأكيد...":"تأكيد الدفع"}</button>}
-            <button onClick={()=>openPayment(o)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#bfd4ea] bg-white text-[#0758e9] dark:border-white/[.12] dark:bg-white/[.04]" aria-label="عرض عملية الدفع"><ExternalLink className="h-4 w-4"/></button>
-          </div></td>
+          <td className="font-bold">{o.totalAmount} {o.currency}</td><td><StatusBadge status={o.status as Status}/></td><td>{formatDate(o.requestedAt)}</td>
+          <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openCustomer(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
-      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openCustomer(o)}><div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/></div><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-white/[.07]"><span>{o.totalAmount} {o.currency}</span><span>{formatDate(o.requestedAt)}</span></div></CollectionMobileCard>)}</CollectionMobileList>
+      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openCustomer(o)}>
+        <div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openCustomer(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
+      </CollectionMobileCard>)}</CollectionMobileList>
     </>}
+
   </div>;
+}
+
+function SubscriptionActions({order,busy,onOpen,onPayment,onConfirm}:{order:Order;busy:boolean;onOpen:()=>void;onPayment:()=>void;onConfirm:()=>void}){
+  return <ItemActionsDropdown show={{view:true,payment:true,confirmPayment:order.status==="awaiting_confirmation"&&!busy}} handlers={{view:onOpen,payment:onPayment,confirmPayment:onConfirm}}/>;
 }
 
 function StatusBadge({status}:{status:Status}){const m=meta[status]||meta.awaiting_confirmation;return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${m.tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current"/>{m.label}</span>}
