@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CircleDollarSign, RefreshCw } from "lucide-react";
+import { ArrowRight, CircleDollarSign, RefreshCw } from "lucide-react";
+import ProjectDatePicker from "@/components/ui/project-date-picker";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import ProjectInput from "@/components/ui/project-input";
 import PaymentPurposeBadge from "@/components/payments/payment-purpose-badge";
@@ -13,13 +15,14 @@ import { CollectionState, CollectionTable, CollectionTableBody, CollectionTableH
 type Amount = { amount: string; count: number };
 type ReceivedPayment = { id:number; customerId:number; customerName:string; customerUsername:string|null; customerEmail:string; paymentCode:string; purpose:string; planName:string; deploymentName:string|null; purchasedItems:string[]; amount:string; currency:string; paidAt:string; confirmedBy:string|null };
 type Report = { payments:ReceivedPayment[]; currencies:string[]; pagination:{page:number;pageSize:number;total:number}; date: string; group: "day" | "month" | "year"; summary: { currency: string; day: Amount; month: Amount; year: Amount }[]; series: { period: string; currency: string; count: number; amount: string }[] };
-const labels = { day: "يومي", month: "شهري", year: "سنوي" };
+const viewOptions=[{value:"details",label:"تفاصيل الدفعات المستلمة"},{value:"day",label:"ملخص التحصيل اليومي"},{value:"month",label:"ملخص التحصيل الشهري"},{value:"year",label:"ملخص التحصيل السنوي"}];
 
 export default function CollectionReportsPage() {
   const { accountType, loading: authLoading } = useAuth();
   const [report, setReport] = useState<Report | null>(null);
   const [date, setDate] = useState("");
   const [group, setGroup] = useState<Report["group"]>("day");
+  const [displayMode,setDisplayMode]=useState("details");
   const [currency, setCurrency] = useState("all");
   const [purpose,setPurpose]=useState("all");
   const [search,setSearch]=useState("");
@@ -30,7 +33,7 @@ export default function CollectionReportsPage() {
   useEffect(() => {
     if (authLoading || accountType !== "master_admin") return;
     const controller = new AbortController();
-    setLoading(true); setError(""); setReport(null);
+    setLoading(true); setError("");
     const params = new URLSearchParams({ group,currency,purpose,search,page:String(page) });
     if (date) params.set("date", date);
     fetch(`/api/billing/admin/collection-report?${params}`, { credentials: "include", cache: "no-store", signal: controller.signal }).then(async response => {
@@ -58,10 +61,11 @@ export default function CollectionReportsPage() {
   if (authLoading) return <CollectionState>جارٍ تحميل حسابك...</CollectionState>;
   if (accountType !== "master_admin") return <CollectionState>تقارير التحصيل متاحة للمسؤول الرئيسي فقط.</CollectionState>;
   return <div dir="rtl" className="space-y-4">
-    <header className="rl-surface flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]"><div><h1 className="flex items-center gap-2 text-lg font-semibold text-[#17386d] dark:text-white"><CircleDollarSign className="h-5 w-5 text-[#0758e9]" />تقارير التحصيل</h1><p className="mt-1 text-xs leading-6 text-slate-500">المبالغ المؤكدة حسب تاريخ التحصيل، مع إجماليات مستقلة لكل عملة.</p></div><div className="flex gap-2"><Link href="/Dashboard/payments" className="inline-flex h-10 items-center rounded-[14px] border border-[#bfd4ea] px-3 text-xs text-[#0758e9] dark:border-white/10 dark:text-[#8fc0ff]">عمليات الدفع</Link><button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-[#bfd4ea] px-3 text-xs text-[#17386d] disabled:opacity-50 dark:border-white/10 dark:text-slate-200"><RefreshCw className="h-4 w-4" />تحديث</button></div></header>
+    <header className="rl-surface flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]"><div className="flex items-center gap-3"><ProjectTooltip label="الرجوع إلى عرض الاشتراكات"><Link href="/Dashboard/subscriptions" aria-label="الرجوع إلى عرض الاشتراكات" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border-2 border-[#78afe9] bg-[#e9f2ff] text-[#0758e9] shadow-[0_4px_12px_rgba(7,88,233,.10)] transition hover:border-[#0758e9] hover:bg-[#dcecff] dark:border-[#4d83c8] dark:bg-[#173554] dark:text-[#8fc0ff]"><ArrowRight className="h-4 w-4"/></Link></ProjectTooltip><div><h1 className="flex items-center gap-2 text-lg font-semibold text-[#17386d] dark:text-white"><CircleDollarSign className="h-5 w-5 text-[#0758e9]" />تقارير التحصيل</h1><p className="mt-1 text-xs leading-6 text-slate-500">المبالغ المؤكدة حسب تاريخ التحصيل، مع إجماليات مستقلة لكل عملة.</p></div></div><div className="flex gap-2"><Link href="/Dashboard/payments" className="inline-flex h-10 items-center rounded-[14px] border border-[#bfd4ea] px-3 text-xs text-[#0758e9] dark:border-white/10 dark:text-[#8fc0ff]">عمليات الدفع</Link><button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-[#bfd4ea] px-3 text-xs text-[#17386d] disabled:opacity-50 dark:border-white/10 dark:text-slate-200"><RefreshCw className="h-4 w-4" />تحديث</button></div></header>
     <section className="rl-surface flex flex-wrap items-end gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]">
-      <label className="text-xs text-slate-500"><span className="mb-2 flex items-center gap-1"><CalendarDays className="h-4 w-4" />تاريخ الجرد</span><input type="date" min="2000-01-01" max="9998-12-31" value={date || report?.date || ""} onChange={event => {setDate(event.target.value);setPage(1);}} className="allow-text-selection h-10 rounded-[14px] border border-[#d7e3ef] bg-[#f9fbfe] px-3 text-sm dark:border-white/10 dark:bg-white/5" /></label>
-      <div className="min-w-[150px] text-xs text-slate-500"><span className="mb-2 block">تفصيل التقرير</span><ProjectDropdown value={group} onChange={value=>{setGroup(value as Report["group"]);setPage(1);}} options={Object.entries(labels).map(([value,label])=>({value,label}))}/></div>
+      <div className="min-w-[210px] text-xs text-slate-500"><span className="mb-2 block">تاريخ الجرد</span><ProjectDatePicker value={date||report?.date||""} onChange={value=>{setDate(value);setPage(1);}} label="اختيار تاريخ الجرد"/></div>
+      <div className="min-w-[220px] text-xs text-slate-500"><span className="mb-2 block">طريقة العرض</span><ProjectDropdown value={displayMode} onChange={value=>{setDisplayMode(value);if(value!=="details")setGroup(value as Report["group"]);setPage(1);}} options={viewOptions}/></div>
+      {displayMode==="details"&&<div className="min-w-[170px] text-xs text-slate-500"><span className="mb-2 block">فترة الدفعات</span><ProjectDropdown value={group} onChange={value=>{setGroup(value as Report["group"]);setPage(1);}} options={[{value:"day",label:"الشهر المحدد"},{value:"month",label:"السنة المحددة"},{value:"year",label:"جميع السنوات"}]}/></div>}
       <div className="min-w-[220px] text-xs text-slate-500"><span className="mb-2 block">العملة</span><ProjectDropdown value={currency} onChange={value=>{setCurrency(value);setPage(1);}} options={[{value:"all",label:"جميع العملات بصورة منفصلة"},...currencies.map(value=>({value,label:value}))]}/></div>
       <div className="min-w-[170px] text-xs text-slate-500"><span className="mb-2 block">نوع العملية</span><ProjectDropdown value={purpose} onChange={value=>{setPurpose(value);setPage(1);}} options={[{value:"all",label:"جميع العمليات"},...paymentPurposeOptions]}/></div>
       <label className="min-w-[200px] flex-1 text-xs text-slate-500"><span className="mb-2 block">حساب العميل</span><ProjectInput maxLength={120} value={search} onChange={event=>{setSearch(event.target.value);setPage(1);}} placeholder="الاسم أو المستخدم أو البريد الإلكتروني"/></label>
@@ -69,11 +73,14 @@ export default function CollectionReportsPage() {
     {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
     {loading ? <CollectionState>جارٍ تحميل التحصيل...</CollectionState> : report && <>
       <div className="grid gap-3 lg:grid-cols-3">{(["day", "month", "year"] as const).map(period => <section key={period} className="rl-surface rounded-[22px] bg-white p-4 dark:bg-[#0d243b]"><h2 className="text-sm font-semibold text-[#17386d] dark:text-white">{period === "day" ? "تحصيل اليوم المحدد" : period === "month" ? "تحصيل الشهر المحدد" : "تحصيل السنة المحددة"}</h2><p className="mt-1 text-[11px] text-slate-400" dir="ltr">{report.date.slice(0, period === "day" ? 10 : period === "month" ? 7 : 4)}</p><div className="mt-4 space-y-3">{summaries.length ? summaries.map(item => <div key={item.currency} className="flex flex-wrap items-center justify-between gap-2"><b className="text-xl text-[#17386d] dark:text-white" dir="ltr">{formatAmount(item[period].amount)} <span className="text-xs font-normal">{item.currency}</span></b><span className="text-xs text-slate-500">{item[period].count} دفعة</span></div>) : <p className="text-xs text-slate-400">لا توجد دفعات مؤكدة في هذه السنة.</p>}</div></section>)}</div>
+      {displayMode!=="details"&&<>
       <section className="space-y-3"><div><h2 className="text-sm font-semibold text-[#17386d] dark:text-white">{group === "day" ? `التحصيل اليومي لشهر ${report.date.slice(0, 7)}` : group === "month" ? `التحصيل الشهري لسنة ${report.date.slice(0, 4)}` : "التحصيل السنوي لجميع السنوات"}</h2><p className="mt-1 text-xs text-slate-500">تشمل الدفعات المؤكدة والطلبات المكتملة، وتُستبعد الطلبات غير المدفوعة والملغاة والمنتهية. التواريخ حسب توقيت الخادم.</p></div>
         {rows.length === 0 ? <CollectionState>لا توجد دفعات مؤكدة لهذه الفترة.</CollectionState> : <CollectionTable><CollectionTableHead><tr><th className="p-3">الفترة</th><th>العملة</th><th>عدد الدفعات</th><th>المبلغ المحصّل</th></tr></CollectionTableHead><CollectionTableBody>{rows.map(row => <tr key={`${row.period}-${row.currency}`} className="border-t border-slate-100 dark:border-white/10"><td className="p-3" dir="ltr">{row.period}</td><td>{row.currency}</td><td>{row.count}</td><td dir="ltr" className="font-semibold">{formatAmount(row.amount)}</td></tr>)}</CollectionTableBody></CollectionTable>}
       </section>
+      </>}
+      {displayMode==="details"&&<>
       <section className="space-y-3">
-        <div><h2 className="text-sm font-semibold text-[#17386d] dark:text-white">تفاصيل الدفعات المستلمة</h2><p className="mt-1 text-xs text-slate-500">الحساب الذي دفع، ونوع العملية، والخطة والإضافات المشتراة خلال الفترة المعروضة. الإجماليات أعلاه تتبع الفلاتر نفسها.</p></div>
+        <div><h2 className="text-sm font-semibold text-[#17386d] dark:text-white">تفاصيل الدفعات المستلمة</h2><p className="mt-1 text-xs text-slate-500">{group==="day"?`دفعات شهر ${report.date.slice(0,7)}`:group==="month"?`دفعات سنة ${report.date.slice(0,4)}`:"جميع الدفعات المستلمة"} · الإجماليات تتبع الفلاتر نفسها.</p></div>
         {report.payments.length===0?<CollectionState>لا توجد دفعات مستلمة مطابقة.</CollectionState>:<>
           <CollectionTable minWidth="1150px"><CollectionTableHead><tr><th className="p-3">العميل</th><th>نوع العملية</th><th>الخطة والإضافات</th><th>كود الدفع</th><th>المبلغ</th><th>تاريخ التحصيل</th><th>أكد الدفع</th></tr></CollectionTableHead><CollectionTableBody>{report.payments.map(payment=><tr key={payment.id} className="border-t border-slate-100 dark:border-white/10">
             <td className="p-3"><Link href={`/Dashboard/customers/${payment.customerId}`} className="block font-semibold text-[#0758e9] dark:text-[#8fc0ff]">{payment.customerName}</Link><span className="mt-1 block text-[10px] text-slate-400">@{payment.customerUsername||"—"} · #{payment.customerId}</span><span className="block text-[10px] text-slate-400" dir="ltr">{payment.customerEmail}</span></td>
@@ -85,7 +92,7 @@ export default function CollectionReportsPage() {
           </tr>)}</CollectionTableBody></CollectionTable>
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500"><span>{report.pagination.total} دفعة · الصفحة {page} من {Math.max(1,Math.ceil(report.pagination.total/report.pagination.pageSize))}</span><div className="flex gap-2"><button type="button" disabled={page<=1} onClick={()=>setPage(value=>value-1)} className="h-9 rounded-xl border border-[#bfd4ea] px-3 disabled:opacity-40 dark:border-white/10">السابق</button><button type="button" disabled={page*report.pagination.pageSize>=report.pagination.total} onClick={()=>setPage(value=>value+1)} className="h-9 rounded-xl border border-[#bfd4ea] px-3 disabled:opacity-40 dark:border-white/10">التالي</button></div></div>
         </>}
-      </section>
+      </section>      </>}
     </>}
   </div>;
 }
