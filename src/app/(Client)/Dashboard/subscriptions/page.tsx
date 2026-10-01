@@ -67,7 +67,7 @@ export default function SubscriptionsPage(){
     try{
       const r=await fetch("/api/billing/admin/orders/"+encodeURIComponent(o.paymentCode)+"/confirm",{method:"POST",credentials:"include"});
       const j=await r.json(); if(!r.ok)throw new Error(j.message||"تعذر تأكيد الدفع.");
-      setOrders(xs=>xs.map(x=>x.id===o.id?{...x,status:"paid",paidAt:new Date().toISOString()}:x));
+      setOrders(xs=>xs.map(x=>x.id===o.id?{...x,status:"paid",paidAt:j.paidAt}:x));
       setMessage("تم تأكيد استلام الدفعة "+o.paymentCode+".");
     }catch(e:any){setMessage(e.message||"تعذر تأكيد الدفع.");}
     finally{setBusy(null);}

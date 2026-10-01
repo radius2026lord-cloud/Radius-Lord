@@ -1,3 +1,4 @@
+import type { PoolConnection } from 'mysql2/promise';
 import { db } from '../config/db';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
@@ -16,13 +17,14 @@ function requestIp(req: AuthenticatedRequest) {
   return (value?.trim() || req.ip || req.socket.remoteAddress || null)?.slice(0, 45) ?? null;
 }
 
-export async function writeAuditLog(req: AuthenticatedRequest, input: AuditInput) {
+export async function writeAuditLog(req: AuthenticatedRequest, input: AuditInput, connection?: PoolConnection) {
   if (req.auth?.accountType !== 'master_admin') return;
-  return writeMasterAdminAuditLog(req, req.auth.accountId, input);
+  return writeMasterAdminAuditLog(req, req.auth.accountId, input, connection);
 }
 
-export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminId: number, input: AuditInput) {
-  const lookup = await db.query(
+export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminId: number, input: AuditInput, connection?: PoolConnection) {
+  const query = connection ? (sql: string, params: any[]) => connection.query(sql, params) : db.query;
+  const lookup = await query(
     `SELECT
        (SELECT id FROM audit_actions WHERE code = ? AND is_active = 1 LIMIT 1) AS action_id,
        (SELECT id FROM audit_entity_types WHERE code = ? AND is_active = 1 LIMIT 1) AS entity_type_id`,
@@ -33,7 +35,7 @@ export async function writeMasterAdminAuditLog(req: AuthenticatedRequest, adminI
     throw new Error(`Audit dictionary value missing: ${input.actionCode}/${input.entityTypeCode}`);
   }
 
-  await db.query(
+  await query(
     `INSERT INTO central_audit_logs
       (admin_id, tenant_id, action_id, entity_type_id, entity_id, description, ip_address, user_agent, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,

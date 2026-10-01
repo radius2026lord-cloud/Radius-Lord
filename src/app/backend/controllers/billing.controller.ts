@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { Response } from 'express';
 import { db } from '../config/db';
+import { writeAuditLog } from '../services/audit.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 const publicKeys=['contact_name','whatsapp_number','whatsapp_enabled','whatsapp_button_text','whatsapp_message_template','payment_instructions','support_email','support_phone_primary','support_phone_secondary'];
@@ -25,8 +26,9 @@ export async function getMasterActivityController(req:AuthenticatedRequest,res:R
   const [orders]=await db.query("SELECT o.id,o.customer_id,o.payment_code,o.plan_name_snapshot,o.deployment_name_snapshot,o.total_amount,o.currency_code,o.status,o.created_at,c.full_name,c.username FROM payment_orders o JOIN customers c ON c.id=o.customer_id ORDER BY o.created_at DESC LIMIT 30");
   const [events]=await db.query("SELECT e.id,e.payment_order_id,e.event_type,e.to_status,e.created_at,o.payment_code,o.customer_id,o.plan_name_snapshot,c.full_name,c.username FROM payment_order_events e JOIN payment_orders o ON o.id=e.payment_order_id JOIN customers c ON c.id=o.customer_id WHERE e.event_type<>'created' ORDER BY e.created_at DESC LIMIT 30");
   const activity=[...(customers as any[]).map(r=>({id:'customer-'+r.id,type:'account_created',customerId:r.id,customerName:r.full_name,username:r.username,title:'إنشاء حساب جديد',description:'أنشأ حسابًا جديدًا في Radius Lord',createdAt:r.created_at})),...(orders as any[]).map(r=>({id:'order-'+r.id,type:'payment_order_created',customerId:r.customer_id,customerName:r.full_name,username:r.username,title:'اختيار خطة وتوليد كود دفع',description:`اختار خطة ${r.plan_name_snapshot}${r.deployment_name_snapshot?` — ${r.deployment_name_snapshot}`:''}`,paymentCode:r.payment_code,totalAmount:Number(r.total_amount),currency:r.currency_code,status:r.status,createdAt:r.created_at})),...(events as any[]).map(r=>({id:'event-'+r.id,type:r.event_type,customerId:r.customer_id,customerName:r.full_name,username:r.username,title:r.event_type==='sent_to_whatsapp'?'انتقل العميل إلى WhatsApp':r.event_type==='confirmed_paid'?'تم تأكيد الدفع':'تحديث طلب الدفع',description:`طلب الدفع ${r.payment_code}`,paymentCode:r.payment_code,status:r.to_status,createdAt:r.created_at}))].sort((a:any,b:any)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,40);
-  const today=new Date();today.setHours(0,0,0,0);const isToday=(v:any)=>new Date(v).getTime()>=today.getTime();
-  return res.json({success:true,summary:{newAccountsToday:(customers as any[]).filter(r=>isToday(r.created_at)).length,paymentOrdersToday:(orders as any[]).filter(r=>isToday(r.created_at)).length,awaitingConfirmation:(orders as any[]).filter(r=>r.status==='awaiting_confirmation').length,paidToday:(orders as any[]).filter(r=>r.status==='paid'&&isToday(r.created_at)).length},activity});
+  const [summaryRows]=await db.query(`SELECT (SELECT COUNT(*) FROM customers WHERE created_at>=CURRENT_DATE AND created_at<CURRENT_DATE+INTERVAL 1 DAY) new_accounts_today,(SELECT COUNT(*) FROM payment_orders WHERE created_at>=CURRENT_DATE AND created_at<CURRENT_DATE+INTERVAL 1 DAY) payment_orders_today,(SELECT COUNT(*) FROM payment_orders WHERE status='awaiting_confirmation') awaiting_confirmation,(SELECT COUNT(*) FROM payment_orders WHERE paid_at>=CURRENT_DATE AND paid_at<CURRENT_DATE+INTERVAL 1 DAY AND status IN ('paid','completed')) paid_today`);
+  const summary=(summaryRows as any[])[0];
+  return res.json({success:true,summary:{newAccountsToday:Number(summary.new_accounts_today),paymentOrdersToday:Number(summary.payment_orders_today),awaitingConfirmation:Number(summary.awaiting_confirmation),paidToday:Number(summary.paid_today)},activity});
  }catch(e){console.error('Master activity error:',e);return res.status(500).json({success:false,message:'تعذر تحميل النشاط المباشر حاليًا.'});}
 }
 
@@ -67,7 +69,24 @@ export async function listSubscriptionRequestsController(req:AuthenticatedReques
 }
 
 export async function confirmPaymentOrderController(req:AuthenticatedRequest,res:Response){
- const conn=await db.pool.getConnection();
- try{await conn.beginTransaction();const code=String(req.params.code??'').trim();const [rows]:any=await conn.query("SELECT id,status FROM payment_orders WHERE payment_code=? FOR UPDATE",[code]);const r=rows[0];if(!r){await conn.rollback();return res.status(404).json({success:false,message:'طلب الدفع غير موجود.'});}if(!['pending','awaiting_confirmation'].includes(r.status)){await conn.rollback();return res.status(409).json({success:false,message:'تمت معالجة طلب الدفع مسبقًا أو أن حالته لا تسمح بالتأكيد.'});}await conn.query("UPDATE payment_orders SET status='paid',paid_at=CURRENT_TIMESTAMP,confirmed_by_master_admin_id=? WHERE id=?",[req.auth!.accountId,r.id]);await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status,master_admin_id) VALUES (?,'confirmed_paid',?,'paid',?)",[r.id,r.status,req.auth!.accountId]);await conn.commit();return res.json({success:true,status:'paid',message:'تم تأكيد استلام الدفعة.'});}
- catch(e){await conn.rollback();console.error(e);return res.status(500).json({success:false,message:'تعذر تأكيد عملية الدفع.'});}finally{conn.release();}
+ let conn;
+ try {
+  conn=await db.pool.getConnection();
+  await conn.beginTransaction();
+  const code=String(req.params.code??'').trim();
+  const [rows]:any=await conn.query("SELECT id,customer_id,total_amount,currency_code,status FROM payment_orders WHERE payment_code=? FOR UPDATE",[code]);
+  const order=rows[0];
+  if(!order){await conn.rollback();return res.status(404).json({success:false,message:'طلب الدفع غير موجود.'});}
+  if(!['pending','awaiting_confirmation'].includes(order.status)){await conn.rollback();return res.status(409).json({success:false,message:'تمت معالجة طلب الدفع مسبقًا أو أن حالته لا تسمح بالتأكيد.'});}
+  await conn.query("UPDATE payment_orders SET status='paid',paid_at=CURRENT_TIMESTAMP,confirmed_by_master_admin_id=? WHERE id=?",[req.auth!.accountId,order.id]);
+  await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status,master_admin_id,metadata) VALUES (?,'confirmed_paid',?,'paid',?,?)",[order.id,order.status,req.auth!.accountId,JSON.stringify({customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code})]);
+  await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'CUSTOMER',entityId:order.customer_id,description:`تأكيد استلام دفعة ${code} بقيمة ${order.total_amount} ${order.currency_code}`,metadata:{eventType:'payment_confirmed',paymentOrderId:order.id,paymentCode:code,customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code,fromStatus:order.status,toStatus:'paid'}},conn);
+  const [confirmed]:any=await conn.query('SELECT paid_at FROM payment_orders WHERE id=?',[order.id]);
+  await conn.commit();
+  return res.json({success:true,status:'paid',paidAt:confirmed[0].paid_at,message:'تم تأكيد استلام الدفعة وتسجيلها في سجل النشاط.'});
+ } catch(error) {
+  if(conn)await conn.rollback();
+  console.error('Confirm payment:',error);
+  return res.status(500).json({success:false,message:'تعذر تأكيد عملية الدفع وتسجيل نشاطها.'});
+ } finally {conn?.release();}
 }
