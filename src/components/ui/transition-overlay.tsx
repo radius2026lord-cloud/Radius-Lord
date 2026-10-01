@@ -13,7 +13,7 @@ export default function TransitionOverlay({ variant }: TransitionOverlayProps) {
   const login = variant === "login";
   const Icon = login ? LogIn : LogOut;
   const title = login ? "تم تسجيل الدخول بنجاح" : "تسجيل الخروج";
-  const subtitle = login ? "جارٍ فتح لوحة التحكم بأمان..." : "جارٍ إنهاء الجلسة بأمان...";
+  const subtitle = login ? "جارٍ فتح الصفحة الرئيسية بأمان..." : "جارٍ إنهاء الجلسة بأمان...";
 
   return createPortal(
     <div className="transition-overlay fixed inset-0 z-[9999] flex h-[100dvh] w-[100vw] items-center justify-center bg-[#dce5ef]/30 backdrop-blur-[3px] dark:bg-[#1d1721]/35" aria-live="polite" aria-label={title}>

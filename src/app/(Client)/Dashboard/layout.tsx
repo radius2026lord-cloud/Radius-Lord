@@ -15,8 +15,8 @@ const changa = Changa({
 });
 
 export const metadata: Metadata = {
-  title: "Dashboard",
-  description: "Dashboard Layout",
+  title: "الصفحة الرئيسية | Radius Lord",
+  description: "منصة Radius Lord",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

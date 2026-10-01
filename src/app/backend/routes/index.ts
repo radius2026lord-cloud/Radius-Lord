@@ -10,7 +10,10 @@ import billingRoutes from './admin/billing.routes';
 import adminPlatformSettingsRoutes from './admin/platform-settings.routes';
 import customerPaymentSettingsRoutes from './customer/payment-settings.routes';
 
+import homepageRoutes from './homepage.routes';
+
 const router = Router();
+router.use('/homepage', homepageRoutes);
 
 // تجميع الروتات
 //Auth

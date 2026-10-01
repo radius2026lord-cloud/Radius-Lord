@@ -42,7 +42,7 @@ import {
 type NavItem = { label: string; href: string; icon: any };
 type NavGroup = { label: string; icon: any; items: NavItem[] };
 
-const masterAdminHome: NavItem = { label: "لوحة التحكم", href: "/Dashboard", icon: Home };
+const masterAdminHome: NavItem = { label: "الصفحة الرئيسية", href: "/Dashboard", icon: Home };
 
 const masterAdminGroups: NavGroup[] = [
   { label: "العملاء", icon: Users, items: [
@@ -82,6 +82,7 @@ const masterAdminGroups: NavGroup[] = [
     { label: "نشاط الإدارة", href: "/Dashboard/logs/admin", icon: ShieldCheck },
   ]},
   { label: "الإعدادات", icon: Settings, items: [
+    { label: "تخصيص الصفحة الرئيسية", href: "/Dashboard/settings/homepage", icon: Home },
     { label: "إعدادات المنصة", href: "/Dashboard/settings", icon: Settings },
     { label: "الصلاحيات", href: "/Dashboard/settings/permissions", icon: ShieldCheck },
   ]},
@@ -89,7 +90,7 @@ const masterAdminGroups: NavGroup[] = [
 
 const customerNavGroups: NavGroup[] = [
   { label: "الشبكة", icon: Radio, items: [
-    { label: "لوحة التحكم", href: "/Dashboard", icon: Home },
+    { label: "الصفحة الرئيسية", href: "/Dashboard", icon: Home },
     { label: "أجهزة NAS", href: "/Dashboard/nas", icon: Server },
     { label: "الجلسات الحية", href: "/Dashboard/sessions", icon: Activity },
     { label: "سجلات RADIUS", href: "/Dashboard/radius-logs", icon: FileClock },
@@ -157,7 +158,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
   const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
-  const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
+  const customerOnboarding = accountType === "customer" && (pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
   const currentTitle = useMemo(() => {
     if (pathname === masterAdminHome.href) return masterAdminHome.label;
     const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
@@ -165,7 +166,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       const match = group.items.find((item) => pathname === item.href);
       if (match) return match.label;
     }
-    return "لوحة التحكم";
+    return "الصفحة الرئيسية";
   }, [pathname, accountType]);
 
   useEffect(() => {
@@ -205,7 +206,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <div className="mb-3">
               <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-sm font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${pathname === masterAdminHome.href ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><Home className="h-5 w-5" /></span>
-                <span className={`overflow-hidden whitespace-nowrap ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] opacity-100"}`}>لوحة التحكم</span>
+                <span className={`overflow-hidden whitespace-nowrap ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] opacity-100"}`}>الصفحة الرئيسية</span>
               </Link>
             </div>
           )}

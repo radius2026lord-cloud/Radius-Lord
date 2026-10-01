@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect,useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/components/auth/auth-provider";
 import { Headphones,Mail,MessageCircle,Phone,Save,Settings2,ShieldCheck } from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
 import { InputGroup,InputGroupTextarea } from "@/components/ui/input-group";
@@ -10,6 +12,7 @@ type Tab="payment"|"support";
 const empty:Form={contact_name:"",whatsapp_number:"",whatsapp_enabled:true,whatsapp_button_text:"التواصل عبر واتساب لإتمام الدفع",whatsapp_message_template:"مرحبًا، أرغب بإتمام اشتراكي في Radius Lord. كود الدفع: {{payment_code}}",payment_instructions:"",support_email:"",support_phone_primary:"",support_phone_secondary:""};
 
 export default function PlatformSettingsPage(){
+ const {isMasterAdmin}=useAuth();
  const [form,setForm]=useState<Form>(empty),[activeTab,setActiveTab]=useState<Tab>("payment"),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[message,setMessage]=useState("");
  useEffect(()=>{(async()=>{try{const r=await fetch("/api/billing/settings",{credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);const m=Object.fromEntries((j.settings??[]).map((x:any)=>[x.setting_key,x.value_type==="boolean"?x.setting_value==="1":x.setting_value??""]));setForm({...empty,...m});}catch(e:any){setMessage(e.message||"تعذر تحميل الإعدادات.");}finally{setLoading(false)}})()},[]);
  const set=(k:keyof Form,v:string|boolean)=>setForm(x=>({...x,[k]:v}));
@@ -18,6 +21,7 @@ export default function PlatformSettingsPage(){
  const save=async()=>{setSaving(true);setMessage("");try{const number=form.whatsapp_number.replace(/[^0-9]/g,"");if(form.whatsapp_enabled&&!/^[1-9][0-9]{6,14}$/.test(number))throw new Error("رقم WhatsApp يجب أن يكون من 7 إلى 15 رقمًا بصيغة دولية، من دون + أو مسافات.");if(form.support_email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.support_email))throw new Error("أدخل بريد دعم إلكتروني صالحًا.");if([form.support_phone_primary,form.support_phone_secondary].some(v=>v&&!/^[1-9][0-9]{6,14}$/.test(v)))throw new Error("أرقام التواصل يجب أن تكون من 7 إلى 15 رقمًا بصيغة دولية.");const r=await fetch("/api/billing/settings",{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,whatsapp_number:number})}),j=await r.json();if(!r.ok)throw new Error(j.message);setForm(x=>({...x,whatsapp_number:number}));setMessage("تم حفظ إعدادات التواصل والدفع بنجاح.");}catch(e:any){setMessage(e.message||"تعذر حفظ الإعدادات.");}finally{setSaving(false)}};
  return <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5">
   <div><h1 className="text-2xl font-bold text-slate-900 dark:text-white">إعدادات المنصة</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">الإعدادات العامة التي تظهر للعملاء أثناء الدفع والتفعيل.</p></div>
+  {isMasterAdmin&&<Link href="/Dashboard/settings/homepage" className="rl-surface flex items-center gap-3 rounded-[22px] bg-white p-4 text-sm font-semibold text-[#0758e9] dark:bg-[#0d243b] dark:text-[#8fc0ff]"><Settings2 className="h-5 w-5"/>تخصيص الصفحة الرئيسية للمسؤول والعملاء</Link>}
   <section className="rl-surface overflow-hidden rounded-[26px] border border-slate-200/80 bg-white dark:border-white/10 dark:bg-white/[.035]">
    <div className="border-b border-slate-200/70 px-4 pt-4 dark:border-white/10"><div className="flex gap-2 overflow-x-auto"><button type="button" onClick={()=>{setActiveTab("payment");setMessage("")}} className={`flex shrink-0 items-center gap-2 rounded-t-[14px] border-b-2 px-4 py-3 text-sm font-semibold transition ${activeTab==="payment"?"border-[#0758e9] text-[#0758e9]":"border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"}`}><MessageCircle className="h-4 w-4"/>اتصال WhatsApp للدفع</button><button type="button" onClick={()=>{setActiveTab("support");setMessage("")}} className={`flex shrink-0 items-center gap-2 rounded-t-[14px] border-b-2 px-4 py-3 text-sm font-semibold transition ${activeTab==="support"?"border-[#0758e9] text-[#0758e9]":"border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"}`}><Headphones className="h-4 w-4"/>معلومات التواصل والدعم</button></div></div>
    {loading?<div className="p-8 text-sm text-slate-500">جارٍ تحميل الإعدادات...</div>:activeTab==="payment"?<div className="grid gap-5 p-6 md:grid-cols-2">
