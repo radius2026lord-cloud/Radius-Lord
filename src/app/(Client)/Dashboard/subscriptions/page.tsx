@@ -73,7 +73,7 @@ export default function SubscriptionsPage(){
     finally{setBusy(null);}
   };
 
-  const openCustomer=(o:Order)=>router.push(`/Dashboard/customers/${o.customerId}?from=subscriptions`);
+  const openSubscription=(o:Order)=>router.push(`/Dashboard/subscriptions/${o.id}`);
   const openPayment=(o:Order)=>router.push("/Dashboard/payments?code="+encodeURIComponent(o.paymentCode));
 
   return <div className="space-y-3 sm:space-y-4">
@@ -103,11 +103,11 @@ export default function SubscriptionsPage(){
 
     <BulkSelectionBar count={selected.size} noun="الاشتراكات" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())}/>
 
-    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} selectionMode={selectionMode} selected={selected.has(o.id)} onToggle={()=>toggle(o.id)} onOpen={()=>openCustomer(o)}>
+    {loading?<CollectionState>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} selectionMode={selectionMode} selected={selected.has(o.id)} onToggle={()=>toggle(o.id)} onOpen={()=>openSubscription(o)}>
       <div className="flex items-start gap-3">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5"/></div>
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{o.customerUsername||"—"}</div></div>
-        <div className="flex shrink-0 items-center gap-2"><StatusBadge status={o.status as Status}/>{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openCustomer(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
+        <div className="flex shrink-0 items-center gap-2"><StatusBadge status={o.status as Status}/>{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
       </div>
       <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400">
         <div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div>
@@ -117,17 +117,17 @@ export default function SubscriptionsPage(){
     </CollectionCard>)}</CollectionGrid>:<>
       <CollectionTable>
         <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الاستضافة</th><th>كود الدفع</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
-        <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openCustomer(o)} className={collectionRowClass(selected.has(o.id))}>
+        <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openSubscription(o)} className={collectionRowClass(selected.has(o.id))}>
           <td className="w-12 p-3 text-center" onClick={e=>e.stopPropagation()}><CollectionSelectionBox checked={selected.has(o.id)} onChange={()=>toggle(o.id)} label={`تحديد اشتراك ${o.customerName}`}/></td>
           <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400">{o.customerEmail}</span></td>
           <td><b>{o.planName}</b></td><td>{o.deploymentName||"—"}</td>
           <td className="font-mono text-[11px] font-bold text-[#0758e9]" dir="ltr">{o.paymentCode}</td>
           <td className="font-bold">{o.totalAmount} {o.currency}</td><td><StatusBadge status={o.status as Status}/></td><td>{formatDate(o.requestedAt)}</td>
-          <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openCustomer(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
+          <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
-      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openCustomer(o)}>
-        <div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openCustomer(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
+      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openSubscription(o)}>
+        <div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
       </CollectionMobileCard>)}</CollectionMobileList>
     </>}
 

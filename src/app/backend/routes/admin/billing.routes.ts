@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate,requireAccountType } from '../../middleware/auth.middleware';
-import { createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,listSubscriptionRequestsController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController,getMasterActivityController } from '../../controllers/billing.controller';
+import { createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,listSubscriptionRequestsController,getSubscriptionRequestController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController,getMasterActivityController } from '../../controllers/billing.controller';
 import { getCollectionReportController } from '../../controllers/payment-reports.controller';
 const router=Router();
 router.get('/admin/collection-report',authenticate,requireAccountType('master_admin'),getCollectionReportController);
@@ -10,6 +10,7 @@ router.get('/orders/:code',authenticate,requireAccountType('customer'),getMyPaym
 router.post('/orders/:code/whatsapp',authenticate,requireAccountType('customer'),markPaymentOrderWhatsappController);
 router.get('/admin/activity',authenticate,requireAccountType('master_admin'),getMasterActivityController);
 router.get('/admin/orders',authenticate,requireAccountType('master_admin'),listPaymentOrdersController);
+router.get('/admin/subscriptions/:id',authenticate,requireAccountType('master_admin'),getSubscriptionRequestController);
 router.get('/admin/subscriptions',authenticate,requireAccountType('master_admin'),listSubscriptionRequestsController);
 router.get('/admin/customers/:customerId/subscriptions',authenticate,requireAccountType('master_admin'),listSubscriptionRequestsController);
 router.post('/admin/orders/:code/confirm',authenticate,requireAccountType('master_admin'),confirmPaymentOrderController);

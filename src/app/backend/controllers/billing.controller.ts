@@ -90,3 +90,16 @@ export async function confirmPaymentOrderController(req:AuthenticatedRequest,res
   return res.status(500).json({success:false,message:'تعذر تأكيد عملية الدفع وتسجيل نشاطها.'});
  } finally {conn?.release();}
 }
+
+export async function getSubscriptionRequestController(req:AuthenticatedRequest,res:Response){
+ const id=String(req.params.id??'');
+ if(!/^[1-9][0-9]*$/.test(id)||!Number.isSafeInteger(Number(id)))return res.status(400).json({success:false,message:'رقم الاشتراك غير صالح.'});
+ try{
+  const [rows]=await db.query(`SELECT po.*,c.full_name customer_name,c.username customer_username,c.email customer_email,m.full_name confirmed_by_name,m.username confirmed_by_username FROM payment_orders po JOIN customers c ON c.id=po.customer_id LEFT JOIN master_admins m ON m.id=po.confirmed_by_master_admin_id WHERE po.id=? AND po.payment_purpose='initial_subscription' AND EXISTS (SELECT 1 FROM payment_order_events e WHERE e.payment_order_id=po.id AND e.event_type='sent_to_whatsapp') LIMIT 1`,[Number(id)]);
+  const r=(rows as any[])[0];
+  if(!r)return res.status(404).json({success:false,message:'طلب الاشتراك غير موجود.'});
+  let addons:any[]=[];
+  try{const value=typeof r.addons_snapshot==='string'?JSON.parse(r.addons_snapshot):r.addons_snapshot;if(Array.isArray(value))addons=value.filter(a=>a&&typeof a==='object').map(a=>({name:String(a.nameAr||a.name_ar||a.name||a.code||'إضافة'),price:a.price==null?null:String(a.price)}));}catch{}
+  return res.json({success:true,subscription:{id:r.id,customerId:r.customer_id,customerName:r.customer_name,customerUsername:r.customer_username,customerEmail:r.customer_email,paymentCode:r.payment_code,planName:r.plan_name_snapshot,durationMonths:r.duration_months_snapshot,deploymentName:r.deployment_name_snapshot,basePrice:String(r.base_price),addonsTotal:String(r.addons_total),totalAmount:String(r.total_amount),currency:r.currency_code,addons,status:r.status,requestedAt:r.requested_at,paidAt:r.paid_at,confirmedBy:r.confirmed_by_name||r.confirmed_by_username||null}});
+ }catch(error){console.error('Subscription details:',error);return res.status(500).json({success:false,message:'تعذر تحميل تفاصيل الاشتراك.'});}
+}

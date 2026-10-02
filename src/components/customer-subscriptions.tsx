@@ -51,7 +51,7 @@ export default function CustomerSubscriptions({ customerId }: { customerId: numb
           <div className="flex justify-between gap-3"><dt>الإجمالي</dt><dd dir="ltr">{item.totalAmount} {item.currency}</dd></div>
           <div className="flex justify-between gap-3"><dt>تاريخ الطلب</dt><dd>{formatDate(item.requestedAt)}</dd></div>
         </dl>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-white/10"><span dir="ltr" className="break-all font-mono text-[10px] text-[#0758e9] dark:text-[#8fc0ff]">{item.paymentCode}</span><Link href={`/Dashboard/payments?code=${encodeURIComponent(item.paymentCode)}`} className="text-xs font-semibold text-[#0758e9] dark:text-[#8fc0ff]">عرض عملية الدفع</Link></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-white/10"><span dir="ltr" className="break-all font-mono text-[10px] text-[#0758e9] dark:text-[#8fc0ff]">{item.paymentCode}</span><Link href={`/Dashboard/subscriptions/${item.id}`} className="text-xs font-semibold text-[#0758e9] dark:text-[#8fc0ff]">عرض تفاصيل الاشتراك</Link></div>
       </article>)}</div>}
   </section>;
 }
