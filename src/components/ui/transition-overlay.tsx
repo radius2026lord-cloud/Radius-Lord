@@ -16,8 +16,8 @@ export default function TransitionOverlay({ variant }: TransitionOverlayProps) {
   const subtitle = login ? "جارٍ فتح الصفحة الرئيسية بأمان..." : "جارٍ إنهاء الجلسة بأمان...";
 
   return createPortal(
-    <div className="transition-overlay fixed inset-0 z-[9999] flex h-[100dvh] w-[100vw] items-center justify-center bg-[#dce5ef]/30 backdrop-blur-[3px] dark:bg-[#1d1721]/35" aria-live="polite" aria-label={title}>
-      <div className="transition-card relative z-10 flex min-w-[210px] flex-col items-center rounded-[24px] border border-white/70 bg-white/88 px-8 py-7 shadow-[0_24px_70px_rgba(31,54,83,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/88 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
+    <div dir="rtl" style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif" }} className="transition-overlay fixed inset-0 z-[9999] flex h-[100dvh] w-[100vw] items-center justify-center p-4 text-center bg-[#dce5ef]/30 backdrop-blur-[3px] dark:bg-[#1d1721]/35" aria-live="polite" aria-label={title}>
+      <div className="transition-card relative z-10 flex w-full max-w-[360px] min-w-0 flex-col items-center rounded-[24px] border border-white/70 bg-white/88 px-8 py-7 shadow-[0_24px_70px_rgba(31,54,83,.20)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/88 dark:shadow-[0_26px_80px_rgba(0,0,0,.34)]">
         <div className={`relative grid h-16 w-16 place-items-center rounded-full ${login ? "bg-emerald-500/10 text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400" : "bg-red-500/10 text-red-500 dark:bg-red-400/10 dark:text-red-400"}`}>
           <span className={`transition-ring absolute inset-0 rounded-full border-2 ${login ? "border-emerald-500/20 border-t-emerald-500 dark:border-emerald-400/20 dark:border-t-emerald-400" : "border-red-500/20 border-t-red-500 dark:border-red-400/20 dark:border-t-red-400"}`} />
           <Icon className="transition-arrow h-7 w-7" />

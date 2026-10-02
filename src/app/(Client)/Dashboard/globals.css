@@ -458,3 +458,21 @@ textarea,
     animation: none !important;
   }
 }
+
+/* Shared semantic colors for action icons, including portal menus. */
+:where(button, a, [role="menuitem"]) :is(.lucide-eye, .lucide-user-round, .lucide-user, .lucide-users, .lucide-contact-round) { color: #0758e9; }
+.dark :where(button, a, [role="menuitem"]) :is(.lucide-eye, .lucide-user-round, .lucide-user, .lucide-users, .lucide-contact-round) { color: #8ab5ff; }
+:where(button, a, [role="menuitem"]) :is(.lucide-credit-card, .lucide-circle-dollar-sign, .lucide-banknote, .lucide-wallet) { color: #7c3aed; }
+.dark :where(button, a, [role="menuitem"]) :is(.lucide-credit-card, .lucide-circle-dollar-sign, .lucide-banknote, .lucide-wallet) { color: #c4b5fd; }
+:where(button, a, [role="menuitem"]) :is(.lucide-check, .lucide-check-check, .lucide-check-circle, .lucide-check-circle-2, .lucide-circle-check, .lucide-circle-check-big, .lucide-circle-play, .lucide-save) { color: #047857; }
+.dark :where(button, a, [role="menuitem"]) :is(.lucide-check, .lucide-check-check, .lucide-check-circle, .lucide-check-circle-2, .lucide-circle-check, .lucide-circle-check-big, .lucide-circle-play, .lucide-save) { color: #6ee7b7; }
+:where(button, a, [role="menuitem"]) :is(.lucide-pencil, .lucide-square-pen, .lucide-file-pen, .lucide-circle-pause) { color: #b45309; }
+.dark :where(button, a, [role="menuitem"]) :is(.lucide-pencil, .lucide-square-pen, .lucide-file-pen, .lucide-circle-pause) { color: #fcd34d; }
+:where(button, a, [role="menuitem"]) :is(.lucide-trash, .lucide-trash-2, .lucide-ban, .lucide-log-out) { color: #dc2626; }
+.dark :where(button, a, [role="menuitem"]) :is(.lucide-trash, .lucide-trash-2, .lucide-ban, .lucide-log-out) { color: #fca5a5; }
+
+:where(button, a)[class~="text-white"] .lucide,
+:where(button, a)[class~="text-primary-foreground"] .lucide,
+:where(button, a)[class~="text-destructive-foreground"] .lucide {
+  color: inherit;
+}
