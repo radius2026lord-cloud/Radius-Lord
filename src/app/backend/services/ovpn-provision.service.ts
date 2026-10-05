@@ -54,7 +54,11 @@ export async function provisionRouter(api:RouterApi,inv:RouterInventory,o:Provis
   if(!row)throw new Error('تعذر قراءة قالب الشهادة.');
   if(!row.fingerprint && row['common-name'] && row['common-name']!==(ca?o.ovpn_host:name))throw new Error('يوجد قالب شهادة مختلف بالاسم المطلوب؛ اختر اسمًا جديدًا.');
   if(row.fingerprint && (!yes(row['private-key']) || !row['key-usage']?.includes(ca?'tls-server':'key-cert-sign')))throw new Error('يوجد عنصر شهادة غير متوافق بالاسم المطلوب.');
-  if(!row.fingerprint)await api.command('/certificate/sign',{numbers:row['.id'],name,...(ca?{ca}:{})},[],45000);
+  if(!row.fingerprint){
+   if(!row['.id'])throw new Error('تعذر قراءة معرّف قالب الشهادة؛ أعد فحص الخادم.');
+   // API selects the certificate template by its internal ID, not CLI numbers.
+   await api.command('/certificate/sign',{'.id':row['.id'],name,...(ca?{ca}:{})},[],45000);
+  }
   for(let i=0;i<15;i++){const ready=named(await api.command('/certificate/print',{'.proplist':'.id,name,fingerprint,private-key,key-usage'}),name);if(ready?.fingerprint){if(!yes(ready['private-key']))throw new Error('الشهادة لا تملك مفتاحًا خاصًا.');return;}await new Promise(r=>setTimeout(r,500));}
   throw new Error('توقيع الشهادة لم يكتمل؛ أعد الفحص ثم استكمل التجهيز.');
  };
