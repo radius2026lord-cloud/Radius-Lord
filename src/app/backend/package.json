@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon --exec ts-node ./server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "setup:gateway-key": "node scripts/setup-gateway-key.cjs"
   },
   "dependencies": {
     "cors": "^2.8.6",

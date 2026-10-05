@@ -29,3 +29,6 @@
 - https://help.mikrotik.com/docs/spaces/ROS/pages/47579160/API
 - https://help.mikrotik.com/docs/spaces/ROS/pages/2031655/OpenVPN
 - https://manual.mikrotik.com/docs/authentication-authorization-accounting/certificates/
+
+## إنشاء المفتاح دون نسخه يدويًا
+من جذر المشروع: `npm --prefix src/app/backend run setup:gateway-key`. يولد المفتاح ويحفظه في ملف الباك إند `.env` دون طباعته، ويحافظ على المفتاح الموجود. أعد تشغيل الباك إند بعده. هذا للإعداد الأول؛ إذا فقدت مفتاحًا سبق استخدامه لتشفير بيانات، استعد المفتاح الأصلي بدل توليد بديل. ملف `.env` مستثنى من Git.

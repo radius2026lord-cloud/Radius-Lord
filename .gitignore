@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Backend secrets are local to each deployment
+.env
+.env.gateway-key.lock
