@@ -1,3 +1,4 @@
+import { getOvpnSettings, updateOvpnSettings } from '../../controllers/ovpn-settings.controller';
 import { Router } from 'express';
 import { getContactPaymentSettingsController, updateContactPaymentSettingsController } from '../../controllers/platform-settings.controller';
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
@@ -5,4 +6,7 @@ const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
 router.get('/contact-payment',getContactPaymentSettingsController);
 router.put('/contact-payment',updateContactPaymentSettingsController);
+router.get('/ovpn-gateways',getOvpnSettings);
+router.post('/ovpn-gateways',updateOvpnSettings);
+router.put('/ovpn-gateways/:id',updateOvpnSettings);
 export default router;

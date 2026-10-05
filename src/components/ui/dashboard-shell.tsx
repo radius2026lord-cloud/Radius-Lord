@@ -67,6 +67,9 @@ const masterAdminGroups: NavGroup[] = [
     { label: "إضافة شبكة", href: "/Dashboard/networks/add", icon: PackagePlus },
     { label: "حالة الشبكات", href: "/Dashboard/networks/status", icon: Activity },
   ]},
+  { label: "خوادم الاتصال", icon: Server, items: [
+    { label: "خوادم OpenVPN", href: "/Dashboard/connection-servers", icon: Server },
+  ]},
   { label: "أجهزة NAS", icon: Server, items: [
     { label: "عرض أجهزة NAS", href: "/Dashboard/nas", icon: Server },
     { label: "إضافة NAS", href: "/Dashboard/nas/add", icon: PackagePlus },
