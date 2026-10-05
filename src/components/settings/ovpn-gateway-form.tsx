@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Check, Server, ShieldCheck } from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectDropdown from "@/components/ui/project-dropdown";
-import { Button } from "@/components/ui/button";
+import Button from "@/components/ui/project-button";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 import { useAuth } from "@/components/auth/auth-provider";
 import { CollectionState } from "@/components/ui/collection-display";
 
@@ -43,10 +44,10 @@ export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:n
  };
  if(authLoading||loading)return <CollectionState>جارٍ التحميل...</CollectionState>;
  if(!isMasterAdmin)return <CollectionState>هذه الصفحة خاصة بالمدير الرئيسي للمنصة.</CollectionState>;
- return <div dir="rtl" className="mx-auto max-w-5xl space-y-5 text-slate-800 dark:text-slate-200">
- <div className="flex flex-wrap items-center gap-3"><Button variant="outline" onClick={()=>router.push('/Dashboard/connection-servers')}><ArrowRight/>رجوع</Button><h1 className="text-xl font-bold">{viewOnly?"تفاصيل خادم الاتصال":form.id?"إعداد خادم الاتصال":"إضافة خادم اتصال"}</h1></div>
- {!viewOnly&&<div className="flex flex-wrap gap-3 text-sm"><span className={step===1?"font-bold text-blue-600":"text-slate-500"}>1 · بيانات الاتصال</span><span className={step===2?"font-bold text-blue-600":"text-slate-500"}>2 · إعداد OpenVPN</span></div>}
- <section className="rl-surface rounded-[22px] bg-white p-4 sm:p-5 dark:bg-[#0d243b]">
+ return <div dir="rtl" className="space-y-3 text-slate-800 dark:text-slate-200">
+ <div className="flex justify-end"><ProjectTooltip label="عرض خوادم الاتصال"><Button variant="back" onClick={()=>router.push('/Dashboard/connection-servers')}><ArrowRight/>عرض الخوادم</Button></ProjectTooltip></div>
+ {!viewOnly&&<div className="rl-surface flex flex-wrap items-center gap-3 rounded-[18px] bg-white px-4 py-3 text-xs dark:bg-[#0d243b]"><span className={step===1?"font-bold text-blue-600":"text-slate-500"}>1 · بيانات الاتصال</span><span className={step===2?"font-bold text-blue-600":"text-slate-500"}>2 · إعداد OpenVPN</span></div>}
+ <section className="rl-surface overflow-hidden rounded-[22px] bg-white p-4 sm:p-5 dark:bg-[#0d243b]">
  {(step===1||viewOnly)?<><h2 className="mb-4 flex items-center gap-2 font-semibold"><Server className="h-5 w-5 text-blue-500"/>بيانات الاتصال الأساسية</h2><div className="grid gap-4 sm:grid-cols-2">{field("name","اسم الخادم")}{field("api_host","عنوان IP أو الدومين")}{field("api_username","اسم المستخدم")}<label className="space-y-2 text-xs font-medium"><span>كلمة المرور {form.has_api_password?"— اترك فارغة للإبقاء عليها":""}</span>{viewOnly?<p>محفوظة ومشفّرة</p>:<ProjectInput disabled={busy} type="password" autoComplete="new-password" maxLength={512} value={password} onChange={e=>{setPassword(e.target.value);setVerified("");setInventory(null);}}/>}</label></div>
  {!viewOnly&&<><Button className="mt-4" variant="ghost" disabled={busy} onClick={()=>setAdvanced(x=>!x)}>خيارات الاتصال المتقدمة</Button>{advanced&&<div className="mt-3 grid gap-4 sm:grid-cols-2">{field("api_port","منفذ API","8728",true)}<div className="space-y-2"><span className="text-xs">طريقة الاتصال</span>{!busy&&<ProjectDropdown value={String(form.api_tls)} onChange={v=>{change("api_tls",v==="true");change("api_port",v==="true"?8729:8728);}} options={[{value:"false",label:"API — شبكة موثوقة"},{value:"true",label:"API مع TLS"}]}/>}</div></div>}<p className="mt-4 text-xs text-slate-500">يلزم تفعيل API على MikroTik. مع TLS نتحقق من شهادة اتصال الإدارة؛ لا علاقة لها بشهادة OpenVPN.</p></>}
  {viewOnly&&<div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-2">{field("ovpn_host","عنوان OpenVPN")}{field("ovpn_port","المنفذ","",true)}{field("ppp_profile","PPP Profile")}{field("pool_name","IP Pool")}{field("certificate_name","الشهادة")}{field("server_tunnel_address","عنوان الخادم داخل النفق")}</div>}
@@ -59,6 +60,6 @@ export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:n
  </section>
  {error&&<p role="alert" className="rounded-[14px] bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10">{error}</p>}
  {completed&&<p role="status" className="rounded-[14px] bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">تم تطبيق إعدادات OpenVPN وقراءتها من الخادم وحفظها بنجاح.</p>}
- {!viewOnly&&<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" disabled={busy} onClick={()=>router.push('/Dashboard/connection-servers')}>إغلاق</Button>{step===2&&<Button variant="outline" disabled={busy} onClick={()=>{setStep(1);setReview(false);}}>بيانات الاتصال</Button>}{step===1?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"فحص الاتصال والمتابعة"}</Button>:!verified?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"إعادة فحص الاتصال"}</Button>:review?<Button disabled={busy} onClick={apply}><Check/>{busy?"جارٍ التطبيق...":"تطبيق الإعدادات على الخادم"}</Button>:<Button disabled={busy} onClick={()=>setReview(true)}>مراجعة الإعدادات</Button>}</div>}
+ {!viewOnly&&<div className="flex flex-wrap justify-end gap-2"><Button variant="secondary" disabled={busy} onClick={()=>router.push('/Dashboard/connection-servers')}>إغلاق</Button>{step===2&&<Button variant="secondary" disabled={busy} onClick={()=>{setStep(1);setReview(false);}}>بيانات الاتصال</Button>}{step===1?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"فحص الاتصال والمتابعة"}</Button>:!verified?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"إعادة فحص الاتصال"}</Button>:review?<Button disabled={busy} onClick={apply}><Check/>{busy?"جارٍ التطبيق...":"تطبيق الإعدادات على الخادم"}</Button>:<Button disabled={busy} onClick={()=>setReview(true)}>مراجعة الإعدادات</Button>}</div>}
  </div>;
 }

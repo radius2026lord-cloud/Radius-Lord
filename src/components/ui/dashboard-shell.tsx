@@ -69,6 +69,7 @@ const masterAdminGroups: NavGroup[] = [
   ]},
   { label: "خوادم الاتصال", icon: Server, items: [
     { label: "خوادم OpenVPN", href: "/Dashboard/connection-servers", icon: Server },
+    { label: "إضافة خادم", href: "/Dashboard/connection-servers/add", icon: PackagePlus },
   ]},
   { label: "أجهزة NAS", icon: Server, items: [
     { label: "عرض أجهزة NAS", href: "/Dashboard/nas", icon: Server },
@@ -164,10 +165,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
   const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
   const currentTitle = useMemo(() => {
+    if (accountType === "master_admin" && /^\/Dashboard\/connection-servers\/[^/]+$/.test(pathname) && !pathname.endsWith("/add")) return "تفاصيل وإعداد خادم الاتصال";
     if (pathname === masterAdminHome.href) return masterAdminHome.label;
     const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
     for (const group of groups) {
-      const match = group.items.find((item) => pathname === item.href);
+      const match = group.items.find((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
       if (match) return match.label;
     }
     return "الصفحة الرئيسية";
@@ -175,7 +177,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   useEffect(() => {
     const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
-    const activeGroup = groups.find((group) => group.items.some((item) => pathname === item.href));
+    const activeGroup = groups.find((group) => group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")))));
     if (activeGroup) setOpenNavGroups((current) => ({ ...current, [activeGroup.label]: true }));
   }, [pathname, accountType]);
 
@@ -216,7 +218,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           )}
           {(accountType === "master_admin" ? masterAdminGroups : customerNavGroups).map((group) => {
             const GroupIcon = group.icon;
-            const groupActive = group.items.some((item) => pathname === item.href);
+            const groupActive = group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
             const open = Boolean(openNavGroups[group.label]);
             return <div key={group.label} ref={mobile ? undefined : (el) => { navGroupRefs.current[group.label] = el; }} className="mb-2">
               <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-sm font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
@@ -227,7 +229,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <div className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] ${!compact && open ? "max-h-[260px] opacity-100" : "max-h-0 opacity-0"}`}>
                 <div className="space-y-1 py-1 pr-5">
                   {group.items.map((item) => {
-                    const Icon = item.icon; const active = pathname === item.href;
+                    const Icon = item.icon; const active = (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")));
                     return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 text-[12px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
                   })}
                 </div>
@@ -262,7 +264,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           <div className="min-w-0 flex-1 px-1">
             {(() => {
               const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
-              const group = groups.find((item) => item.items.some((child) => child.href === pathname));
+              const group = groups.find((item) => item.items.some((child) => (child.href === pathname || (child.href === "/Dashboard/connection-servers" && pathname.startsWith(child.href+"/")))));
               const current = group?.items.find((item) => item.href === pathname);
               const parent = group?.items[0];
               return <div className="min-w-0">
