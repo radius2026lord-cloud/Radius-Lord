@@ -70,8 +70,9 @@ export async function applyOvpnGateway(req:AuthenticatedRequest,res:Response){
  const after=await provisionRouter(api,inventory,options,async next=>{step=next;modified=true;await persist(req,id,{...starting,last_step:next},c.connection.password,`تجهيز خادم OpenVPN: ${next}`);});
  const finished={...starting,enabled:true,provision_state:'ready',last_step:'complete',router_version:after.version,last_checked_at:new Date().toISOString(),connection_status:'reachable'};
  await persist(req,id,finished,c.connection.password,'اكتمال إعداد خادم OpenVPN عبر API');return res.json({settings:{id,...finished,has_api_password:true}});
- }catch(e){const message=errorMessage(e,'تعذر تجهيز الخادم أو حفظ نتيجته.');
+ }catch(e){const stepLabels:Record<string,string>={validation:'التحقق من الإعدادات',certificate:'إنشاء وتوقيع الشهادات',pool:'إنشاء IP Pool',profile:'إنشاء PPP Profile',ovpn_server:'إعداد خدمة OpenVPN'};
+ const message=`${stepLabels[step]??step}: ${errorMessage(e,'تعذر تجهيز الخادم أو حفظ نتيجته.')}`;
  if(id&&modified){try{const [rows]=await db.query('SELECT settings_json FROM ovpn_gateways WHERE id=?',[id]);const old=JSON.parse((rows as any[])[0].settings_json);await db.query('UPDATE ovpn_gateways SET settings_json=? WHERE id=?',[JSON.stringify({...old,enabled:false,provision_state:'failed',last_step:step,last_error:message}),id]);await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:id,description:'تعذر إكمال إعداد خادم OpenVPN',metadata:{step,result:'failed'}});}catch{/* No secrets or raw router errors are logged. */}}
- return res.status(400).json({message:modified?`${message} قد تكون بعض العناصر أُنشئت؛ أعد الفحص ثم استكمل بنفس الأسماء.`:message});
+ return res.status(400).json({message:modified?`${message} لم يكتمل التجهيز. أعد الفحص للتحقق مما أُنشئ ثم استكمل بنفس الأسماء.`:message});
  }finally{api?.close();if(lock){try{await lock.query('SELECT RELEASE_ALL_LOCKS()');}finally{lock.release();}}}
 }

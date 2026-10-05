@@ -8,7 +8,7 @@ export class RouterApi {
  private socket!: net.Socket;
  private buffer=Buffer.alloc(0);
  private words:string[]=[];
- private pending?: { resolve:(rows:RouterRow[])=>void; reject:(e:Error)=>void; rows:RouterRow[]; timer:ReturnType<typeof setTimeout>; failure?:Error };
+ private pending?: { resolve:(rows:RouterRow[])=>void; reject:(e:Error)=>void; rows:RouterRow[]; timer:ReturnType<typeof setTimeout>; failure?:Error; path:string };
  private closed=false;
  static async connect(config:ApiConnection) {
   const api=new RouterApi();
@@ -40,8 +40,21 @@ export class RouterApi {
   const p=this.pending;if(!p)return;
   const row:RouterRow={};for(const word of words.slice(1)){if(word.startsWith('=')){const at=word.indexOf('=',1);if(at>0)row[word.slice(1,at)]=word.slice(at+1);}}
   if(words[0]==='!re'){p.rows.push(row);if(p.rows.length>10000){this.fail(new Error('عدد نتائج API كبير جدًا.'));this.close();}}
-  // Never expose router error text: it may contain secrets or client-controlled content.
-  if(words[0]==='!trap'||words[0]==='!fatal')p.failure=new Error('رفض MikroTik الأمر. تحقق من الصلاحيات والإعدادات المحددة.');
+  // Classify router feedback without exposing supplied values or credentials.
+  if(words[0]==='!trap'||words[0]==='!fatal'){
+   const raw=(row.message??'').toLowerCase();
+   let reason='رفض الخادم الأمر دون سبب معروف؛ راجع سجل MikroTik.';
+   if(/not enough permissions|not permitted|permission denied/.test(raw))reason='حساب API لا يملك الصلاحيات اللازمة لهذا الإجراء.';
+   else if(/no such command|unknown command/.test(raw))reason='الأمر غير متاح في إصدار RouterOS المستخدم.';
+   else if(/already|exists|duplicate/.test(raw))reason='يوجد عنصر بالاسم أو الإعداد نفسه.';
+   else if(/input does not match|invalid value|expected|unknown parameter|no such item|syntax/.test(raw)){
+    const parameter=raw.match(/(?:value of|argument|parameter)\s+["']?([a-z][a-z0-9-]*)/);
+    const allowed=['number','numbers','name','ca','certificate','key-size','key-usage','port','cipher','auth','default-profile','local-address','remote-address','ranges','protocol','enabled','disabled'];
+    reason='إحدى قيم الأمر أو معرّفاته غير مقبولة'+(parameter&&allowed.includes(parameter[1])?` (${parameter[1]})`:'')+'.';
+   }else if(/certificate|signing|sign certificate|private key/.test(raw))reason='تعذر إنشاء الشهادة أو توقيعها على الخادم.';
+   else if(/timeout|timed out/.test(raw))reason='انتهت مهلة العملية على MikroTik.';
+   p.failure=new Error(`فشل الأمر ${p.path}: ${reason}`);
+  }
   if(words[0]==='!done'){clearTimeout(p.timer);this.pending=undefined;if(p.failure)p.reject(p.failure);else p.resolve(p.rows);}
   if(words[0]==='!fatal'){this.fail(p.failure!);this.close();}
  }
@@ -50,7 +63,7 @@ export class RouterApi {
   if(this.pending)return Promise.reject(new Error('أمر API آخر قيد التنفيذ.'));
   const words=[path,...Object.entries(attrs).map(([k,v])=>`=${k}=${v}`),...queries];
   const encode=(s:string)=>{const b=Buffer.from(s),n=b.length;let h:Buffer;if(n<0x80)h=Buffer.from([n]);else if(n<0x4000)h=Buffer.from([(n>>8)|0x80,n&255]);else if(n<0x200000)h=Buffer.from([(n>>16)|0xc0,(n>>8)&255,n&255]);else throw new Error('أمر API كبير جدًا.');return Buffer.concat([h,b]);};
-  return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.fail(new Error('انتهت مهلة أمر API؛ أعد الفحص قبل إعادة المحاولة.'));this.close();},timeout);this.pending={resolve,reject,timer,rows:[]};try{this.socket.write(Buffer.concat([...words.map(encode),Buffer.from([0])]));}catch{this.fail(new Error('تعذر إرسال أمر API.'));this.close();}});
+  return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.fail(new Error('انتهت مهلة أمر API؛ أعد الفحص قبل إعادة المحاولة.'));this.close();},timeout);this.pending={resolve,reject,timer,rows:[],path};try{this.socket.write(Buffer.concat([...words.map(encode),Buffer.from([0])]));}catch{this.fail(new Error('تعذر إرسال أمر API.'));this.close();}});
  }
  close(){this.closed=true;this.socket?.destroy();}
 }
