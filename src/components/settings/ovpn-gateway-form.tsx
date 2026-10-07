@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Check, Server, ShieldCheck } from "lucide-react";
+import FloatingContentGuide from "@/components/ui/floating-content-guide";
 import OvpnHealthCard from "@/components/settings/ovpn-health-card";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectDropdown from "@/components/ui/project-dropdown";
@@ -17,6 +18,7 @@ const initial:Gateway={name:"",description:"",api_host:"",api_port:8728,api_user
 const base="/api/admin/platform-settings/ovpn-gateways";
 export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:number;viewOnly?:boolean}){
  const router=useRouter(),{isMasterAdmin,loading:authLoading}=useAuth();
+ const contentRef=useRef<HTMLDivElement>(null);
  const panelRef=useRef<HTMLElement>(null),errorRef=useRef<HTMLParagraphElement>(null);
  const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({}),[warningVersion,setWarningVersion]=useState(0);
  const [setupMode,setSetupMode]=useState("automatic"),[setupStep,setSetupStep]=useState(0);
@@ -66,11 +68,11 @@ export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:n
  };
  if(authLoading||loading)return <CollectionState>جارٍ التحميل...</CollectionState>;
  if(!isMasterAdmin)return <CollectionState>هذه الصفحة خاصة بالمدير الرئيسي للمنصة.</CollectionState>;
- return <div dir="rtl" className="space-y-3 text-slate-800 dark:text-slate-200">
+ return <div ref={contentRef} dir="rtl" className="space-y-3 text-slate-800 dark:text-slate-200">
  <div className="flex justify-end"><ProjectTooltip label="عرض خوادم الاتصال"><Button variant="back" onClick={()=>router.push('/Dashboard/connection-servers')}><ArrowRight/>عرض الخوادم</Button></ProjectTooltip></div>
  {!viewOnly&&<div className="rl-surface flex flex-wrap items-center gap-3 rounded-[18px] bg-white px-4 py-3 text-xs dark:bg-[#0d243b]"><span className={step===1?"font-bold text-blue-600":"text-slate-500"}>1 · بيانات الاتصال</span><span className={step===2?"font-bold text-blue-600":"text-slate-500"}>2 · إعداد OpenVPN</span></div>}
  {form.id&&(connectionSaved||form.last_checked_at)&&<OvpnHealthCard gatewayId={form.id}/>}
- <section ref={panelRef} onKeyDown={enterField} key={`${step}-${setupStep}-${review}-${advanced}`} className="ui-state-enter rl-surface overflow-hidden rounded-[22px] bg-white p-4 sm:p-5 dark:bg-[#0d243b]">
+ <section data-scroll-section ref={panelRef} onKeyDown={enterField} key={`${step}-${setupStep}-${review}-${advanced}`} className="ui-state-enter rl-surface overflow-hidden rounded-[22px] bg-white p-4 sm:p-5 dark:bg-[#0d243b]">
  {(step===1||viewOnly)?<><h2 className="mb-4 flex items-center gap-2 font-semibold"><Server className="h-5 w-5 text-blue-500"/>بيانات الاتصال الأساسية</h2><div className="grid gap-4 sm:grid-cols-2">{field("name","اسم الخادم")}{field("api_host","عنوان IP أو الدومين")}{field("api_username","اسم المستخدم")}<label className="space-y-2 text-xs font-medium"><span>كلمة المرور {form.has_api_password?"— اترك فارغة للإبقاء عليها":""}</span>{viewOnly?<p>محفوظة ومشفّرة</p>:<ProjectInput name="api_password" required={!form.has_api_password} aria-invalid={Boolean(fieldErrors.api_password)} aria-describedby={fieldErrors.api_password?"ovpn-error-api_password":undefined} onBlur={e=>validateInput(e.currentTarget,false)} disabled={busy} type="password" autoComplete="new-password" maxLength={512} value={password} onChange={e=>{setFieldErrors(x=>({...x,api_password:""}));setPassword(e.target.value);setVerified("");setInventory(null);}}/>}{fieldErrors.api_password&&<p key={warningVersion} id="ovpn-error-api_password" role="alert" className="ui-field-warning text-xs text-red-600 dark:text-red-400">{fieldErrors.api_password}</p>}</label></div>
  {!viewOnly&&<><Button className="mt-4" variant="ghost" disabled={busy} onClick={()=>setAdvanced(x=>!x)}>خيارات الاتصال المتقدمة</Button>{advanced&&<div className="mt-3 grid gap-4 sm:grid-cols-2">{field("api_port","منفذ API","8728",true)}<div className="space-y-2"><span className="text-xs">طريقة الاتصال</span>{!busy&&<ProjectDropdown value={String(form.api_tls)} onChange={v=>{change("api_tls",v==="true");change("api_port",v==="true"?8729:8728);}} options={[{value:"false",label:"API — شبكة موثوقة"},{value:"true",label:"API مع TLS"}]}/>}</div></div>}<p className="mt-4 text-xs text-slate-500">يلزم تفعيل API على MikroTik. مع TLS نتحقق من شهادة اتصال الإدارة؛ لا علاقة لها بشهادة OpenVPN.</p></>}
  {viewOnly&&<div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-2">{field("ovpn_host","عنوان OpenVPN")}{field("ovpn_port","المنفذ","",true)}{field("ppp_profile","PPP Profile")}{field("pool_name","IP Pool")}{field("certificate_name","الشهادة")}{field("server_tunnel_address","عنوان الخادم داخل النفق")}</div>}
@@ -90,6 +92,7 @@ export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:n
  {connectionSaved&&step===1&&<p role="status" className="text-xs text-slate-500">بيانات الاتصال محفوظة في المنصة. إعداد MikroTik لم يكتمل بعد.</p>}
  {error&&<p ref={errorRef} key={error} role="alert" className="ui-field-warning rounded-[14px] bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10">{error}</p>}
  {completed&&<p role="status" className="rounded-[14px] bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">تم تطبيق إعدادات OpenVPN وقراءتها من الخادم وحفظها بنجاح.</p>}
- {!viewOnly&&<div className="flex flex-wrap justify-end gap-2"><Button variant="secondary" disabled={busy} onClick={()=>router.push('/Dashboard/connection-servers')}>إغلاق</Button>{step===2&&<Button variant="secondary" disabled={busy} onClick={()=>{if(review){setReview(false);}else if(setupStep>0){setSetupStep(x=>x-1);}else{setStep(1);}setError("");}}>السابق</Button>}{step===1?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"فحص الاتصال والمتابعة"}</Button>:!verified?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"إعادة فحص الاتصال"}</Button>:review?<Button disabled={busy} onClick={apply}><Check/>{busy?"جارٍ التطبيق...":"تطبيق الإعدادات على الخادم"}</Button>:<Button disabled={busy} onClick={nextSetup}>{(setupMode==="automatic"&&setupStep===1)||setupStep===4?"مراجعة الإعدادات":"التالي"}</Button>}</div>}
+ {!viewOnly&&<div data-scroll-section className="flex scroll-mt-4 flex-wrap justify-end gap-2"><Button variant="secondary" disabled={busy} onClick={()=>router.push('/Dashboard/connection-servers')}>إغلاق</Button>{step===2&&<Button variant="secondary" disabled={busy} onClick={()=>{if(review){setReview(false);}else if(setupStep>0){setSetupStep(x=>x-1);}else{setStep(1);}setError("");}}>السابق</Button>}{step===1?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"فحص الاتصال والمتابعة"}</Button>:!verified?<Button disabled={busy} onClick={inspect}>{busy?"جارٍ فحص الاتصال...":"إعادة فحص الاتصال"}</Button>:review?<Button disabled={busy} onClick={apply}><Check/>{busy?"جارٍ التطبيق...":"تطبيق الإعدادات على الخادم"}</Button>:<Button disabled={busy} onClick={nextSetup}>{(setupMode==="automatic"&&setupStep===1)||setupStep===4?"مراجعة الإعدادات":"التالي"}</Button>}</div>}
+ <FloatingContentGuide contentRef={contentRef}/>
  </div>;
 }
