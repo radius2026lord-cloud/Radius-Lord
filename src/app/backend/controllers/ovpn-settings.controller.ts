@@ -76,3 +76,30 @@ export async function applyOvpnGateway(req:AuthenticatedRequest,res:Response){
  return res.status(400).json({message:modified?`${message} لم يكتمل التجهيز. أعد الفحص للتحقق مما أُنشئ ثم استكمل بنفس الأسماء.`:message});
  }finally{api?.close();if(lock){try{await lock.query('SELECT RELEASE_ALL_LOCKS()');}finally{lock.release();}}}
 }
+
+// Coalesce simultaneous readers; polling never writes settings or activity logs.
+const healthReads=new Map<number,{expires:number;result:Promise<unknown>}>();
+export async function getOvpnGatewayHealth(req:AuthenticatedRequest,res:Response){
+ res.setHeader('Cache-Control','no-store');
+ const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({message:'معرّف الخادم غير صالح.'});
+ try{
+  let read=healthReads.get(id);
+  if(!read||read.expires<Date.now()){
+   const result=(async()=>{
+    const [rows]=await db.query('SELECT * FROM ovpn_gateways WHERE id=?',[id]);const saved=(rows as any[])[0];if(!saved)throw new Error('الخادم غير موجود.');
+    const s=JSON.parse(saved.settings_json);if(!saved.api_password_encrypted)throw new Error('بيانات اتصال الخادم غير مكتملة.');
+    const api=await RouterApi.connect({host:s.api_host,port:s.api_port,username:s.api_username,password:decrypt(saved.api_password_encrypted),secure:s.api_tls});
+    try{
+     const resources=await api.command('/system/resource/print',{'.proplist':'cpu-load,cpu,cpu-count,free-memory,total-memory,free-hdd-space,total-hdd-space,uptime,version,board-name'});
+     const resource=resources[0];if(!resource)throw new Error('لم يرسل الخادم بيانات الموارد.');
+     let temperatures:Array<{name:string;value:string}>=[];
+     try{const sensors=await api.command('/system/health/print');temperatures=sensors.flatMap(row=>row.name?.includes('temperature')?[{name:row.name,value:row.value}]:Object.entries(row).filter(([name])=>name.includes('temperature')).map(([name,value])=>({name,value})));}catch{/* Optional sensors may be unsupported or inaccessible. */}
+     return {resource,temperatures,checked_at:new Date().toISOString(),api_status:'reachable'};
+    }finally{api.close();}
+   })();
+   read={expires:Date.now()+25000,result};if(healthReads.size>=100){const oldest=healthReads.keys().next().value;if(oldest!==undefined)healthReads.delete(oldest);}healthReads.set(id,read);
+   result.catch(()=>{if(healthReads.get(id)?.result===result)healthReads.delete(id);});
+  }
+  return res.json(await read.result);
+ }catch(e){return res.status(503).json({api_status:'unreachable',message:errorMessage(e,'تعذر قراءة صحة الخادم.')});}
+}

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Check, Server, ShieldCheck } from "lucide-react";
+import OvpnHealthCard from "@/components/settings/ovpn-health-card";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import Button from "@/components/ui/project-button";
@@ -11,7 +12,7 @@ import { CollectionState } from "@/components/ui/collection-display";
 
 type Item=Record<string,string>;
 type Inventory={version:string;identity:string;multi:boolean;pools:Item[];profiles:Item[];certificates:Item[];servers:Item[]};
-type Gateway={id?:number;name:string;description:string;api_host:string;api_port:number;api_username:string;api_tls:boolean;ovpn_host:string;ovpn_port:number;server_name:string;certificate_name:string;certificate_mode:string;ppp_profile:string;profile_mode:string;pool_name:string;pool_mode:string;tunnel_cidr:string;server_tunnel_address:string;has_api_password?:boolean};
+type Gateway={id?:number;name:string;description:string;api_host:string;api_port:number;api_username:string;api_tls:boolean;ovpn_host:string;ovpn_port:number;server_name:string;certificate_name:string;certificate_mode:string;ppp_profile:string;profile_mode:string;pool_name:string;pool_mode:string;tunnel_cidr:string;server_tunnel_address:string;has_api_password?:boolean;last_checked_at?:string};
 const initial:Gateway={name:"",description:"",api_host:"",api_port:8728,api_username:"",api_tls:false,ovpn_host:"",ovpn_port:1194,server_name:"lord-ovpn",certificate_name:"lord-ovpn-server",certificate_mode:"create",ppp_profile:"lord-ovpn",profile_mode:"create",pool_name:"lord-ovpn-pool",pool_mode:"create",tunnel_cidr:"10.80.0.0/24",server_tunnel_address:"10.80.0.1"};
 const base="/api/admin/platform-settings/ovpn-gateways";
 export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:number;viewOnly?:boolean}){
@@ -68,6 +69,7 @@ export default function OvpnGatewayForm({gatewayId,viewOnly=false}:{gatewayId?:n
  return <div dir="rtl" className="space-y-3 text-slate-800 dark:text-slate-200">
  <div className="flex justify-end"><ProjectTooltip label="عرض خوادم الاتصال"><Button variant="back" onClick={()=>router.push('/Dashboard/connection-servers')}><ArrowRight/>عرض الخوادم</Button></ProjectTooltip></div>
  {!viewOnly&&<div className="rl-surface flex flex-wrap items-center gap-3 rounded-[18px] bg-white px-4 py-3 text-xs dark:bg-[#0d243b]"><span className={step===1?"font-bold text-blue-600":"text-slate-500"}>1 · بيانات الاتصال</span><span className={step===2?"font-bold text-blue-600":"text-slate-500"}>2 · إعداد OpenVPN</span></div>}
+ {form.id&&(connectionSaved||form.last_checked_at)&&<OvpnHealthCard gatewayId={form.id}/>}
  <section ref={panelRef} onKeyDown={enterField} key={`${step}-${setupStep}-${review}-${advanced}`} className="ui-state-enter rl-surface overflow-hidden rounded-[22px] bg-white p-4 sm:p-5 dark:bg-[#0d243b]">
  {(step===1||viewOnly)?<><h2 className="mb-4 flex items-center gap-2 font-semibold"><Server className="h-5 w-5 text-blue-500"/>بيانات الاتصال الأساسية</h2><div className="grid gap-4 sm:grid-cols-2">{field("name","اسم الخادم")}{field("api_host","عنوان IP أو الدومين")}{field("api_username","اسم المستخدم")}<label className="space-y-2 text-xs font-medium"><span>كلمة المرور {form.has_api_password?"— اترك فارغة للإبقاء عليها":""}</span>{viewOnly?<p>محفوظة ومشفّرة</p>:<ProjectInput name="api_password" required={!form.has_api_password} aria-invalid={Boolean(fieldErrors.api_password)} aria-describedby={fieldErrors.api_password?"ovpn-error-api_password":undefined} onBlur={e=>validateInput(e.currentTarget,false)} disabled={busy} type="password" autoComplete="new-password" maxLength={512} value={password} onChange={e=>{setFieldErrors(x=>({...x,api_password:""}));setPassword(e.target.value);setVerified("");setInventory(null);}}/>}{fieldErrors.api_password&&<p key={warningVersion} id="ovpn-error-api_password" role="alert" className="ui-field-warning text-xs text-red-600 dark:text-red-400">{fieldErrors.api_password}</p>}</label></div>
  {!viewOnly&&<><Button className="mt-4" variant="ghost" disabled={busy} onClick={()=>setAdvanced(x=>!x)}>خيارات الاتصال المتقدمة</Button>{advanced&&<div className="mt-3 grid gap-4 sm:grid-cols-2">{field("api_port","منفذ API","8728",true)}<div className="space-y-2"><span className="text-xs">طريقة الاتصال</span>{!busy&&<ProjectDropdown value={String(form.api_tls)} onChange={v=>{change("api_tls",v==="true");change("api_port",v==="true"?8729:8728);}} options={[{value:"false",label:"API — شبكة موثوقة"},{value:"true",label:"API مع TLS"}]}/>}</div></div>}<p className="mt-4 text-xs text-slate-500">يلزم تفعيل API على MikroTik. مع TLS نتحقق من شهادة اتصال الإدارة؛ لا علاقة لها بشهادة OpenVPN.</p></>}
