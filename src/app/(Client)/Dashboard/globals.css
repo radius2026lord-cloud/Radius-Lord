@@ -476,3 +476,13 @@ textarea,
 :where(button, a)[class~="text-destructive-foreground"] .lucide {
   color: inherit;
 }
+
+/* Shared field warning: same gentle attention movement as the login form. */
+@keyframes radiusFieldWarningShake {
+  0%, 100% { transform: translateX(0); }
+  24% { transform: translateX(2px); }
+  48% { transform: translateX(-2px); }
+  72% { transform: translateX(1px); }
+}
+.ui-field-warning { animation: radiusFieldWarningShake 420ms cubic-bezier(.22,.8,.25,1) both; }
+@media (prefers-reduced-motion: reduce) { .ui-field-warning { animation: none; } }
