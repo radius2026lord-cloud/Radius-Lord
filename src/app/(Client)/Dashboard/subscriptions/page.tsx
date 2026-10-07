@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, RefreshCw, UserRound } from "lucide-react";
 import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
+import ProjectButton from "@/components/ui/project-button";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ItemActionsDropdown from "@/components/ui/item-actions-dropdown";
 
@@ -78,9 +79,10 @@ export default function SubscriptionsPage(){
 
   return <div className="space-y-3 sm:space-y-4">
     <CollectionToolbar
+      responsive
       icon={CreditCard}
       title="عرض الاشتراكات"
-      description="طلبات الاشتراك التي انتقل أصحابها فعليًا إلى مرحلة إتمام الدفع"
+      description="متابعة طلبات الاشتراك والدفع"
       view={view}
       onViewChange={setView}
       selectionMode={selectionMode}
@@ -96,7 +98,7 @@ export default function SubscriptionsPage(){
         {value:"paid",label:"تم الدفع",count:counts.paid,dot:"bg-emerald-500"},
         {value:"completed",label:"مكتمل",count:counts.completed,dot:"bg-blue-500"},
       ]}/>}
-      primaryAction={<button type="button" onClick={load} className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] hover:bg-[#edf4fb] dark:border-white/[.12] dark:bg-[#30353d] dark:text-white"><RefreshCw className="h-4 w-4"/>تحديث</button>}
+      primaryAction={<ProjectButton variant="secondary" disabled={loading||busy!==null} onClick={load}><RefreshCw/>تحديث</ProjectButton>}
     />
 
     {message&&<div className="rounded-[16px] border border-[#c8d7e6] bg-white px-4 py-3 text-xs dark:border-white/[.10] dark:bg-[#0d243b]">{message}</div>}
@@ -107,27 +109,29 @@ export default function SubscriptionsPage(){
       <div className="flex items-start gap-3">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5"/></div>
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{o.customerUsername||"—"}</div></div>
-        <div className="flex shrink-0 items-center gap-2"><StatusBadge status={o.status as Status}/>{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
+        <div className="flex shrink-0 items-center gap-2">{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
       </div>
-      <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400">
-        <div className="flex items-center justify-between gap-3"><b className="text-slate-700 dark:text-slate-200">{o.planName}</b><span>{o.deploymentName||"—"}</span></div>
-        <div className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div>
+      <div className="mt-3"><StatusBadge status={o.status as Status}/></div>
+      <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400">
+        <div className="flex items-center justify-between gap-3"><b className="min-w-0 break-words text-slate-700 dark:text-slate-200">{o.planName}</b><span className="shrink-0">{o.deploymentName||"—"}</span></div>
+        <div className="flex items-center justify-between gap-3"><span className="break-all font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div>
         <div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div>
       </div>
     </CollectionCard>)}</CollectionGrid>:<>
-      <CollectionTable>
-        <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الاستضافة</th><th>كود الدفع</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
+      <CollectionTable minWidth="760px">
+        <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
         <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openSubscription(o)} className={collectionRowClass(selected.has(o.id))}>
           <td className="w-12 p-3 text-center" onClick={e=>e.stopPropagation()}><CollectionSelectionBox checked={selected.has(o.id)} onChange={()=>toggle(o.id)} label={`تحديد اشتراك ${o.customerName}`}/></td>
-          <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400">{o.customerEmail}</span></td>
-          <td><b>{o.planName}</b></td><td>{o.deploymentName||"—"}</td>
-          <td className="font-mono text-[11px] font-bold text-[#0758e9]" dir="ltr">{o.paymentCode}</td>
+          <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400"><bdi>{o.paymentCode}</bdi></span></td>
+          <td className="p-3"><b className="block">{o.planName}</b><span className="mt-1 block text-[11px] text-slate-400">{o.deploymentName||"—"}</span></td>
           <td className="font-bold">{o.totalAmount} {o.currency}</td><td><StatusBadge status={o.status as Status}/></td><td>{formatDate(o.requestedAt)}</td>
           <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
       <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openSubscription(o)}>
-        <div className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[10px] text-slate-500">{o.planName} · {o.paymentCode}</div></div><StatusBadge status={o.status as Status}/><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
+        <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="break-words text-sm font-semibold">{o.customerName}</div><div className="mt-1 text-[11px] text-slate-500">{o.planName}</div></div><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge status={o.status as Status}/><bdi className="text-xs font-semibold">{o.totalAmount} {o.currency}</bdi></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-400 dark:border-white/10"><bdi className="break-all font-mono">{o.paymentCode}</bdi><span>{formatDate(o.requestedAt)}</span></div>
       </CollectionMobileCard>)}</CollectionMobileList>
     </>}
 
