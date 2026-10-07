@@ -1,0 +1,30 @@
+erDiagram
+    network_settings ||--o{ network_contact_numbers : additional_contacts
+    permission_groups o|--o{ managers : assigned_group
+    permission_groups ||--o{ permission_group_permissions : grants
+    permissions ||--o{ permission_group_permissions : permission
+    managers ||--o{ customers : responsible_for
+    managers ||--o{ customer_categories : owns
+    customers ||--o| customer_identity_documents : optional_document
+    customers ||--o{ customer_category_memberships : classified
+    customer_categories ||--o{ customer_category_memberships : membership
+    managers ||--o{ customer_category_memberships : assigns
+    managers o|--o{ activity_log : actor
+    customers o|--o{ activity_log : customer_context
+    platform_subscription {
+        int id PK "single record"
+        bigint central_tenant_id "logical central reference"
+        bigint central_subscription_id "logical central reference"
+        string license_number UK
+        bigint sync_version
+    }
+    time_units {
+        int id PK
+        string code UK
+        string calculation_kind "fixed or calendar"
+        int seconds_per_unit "NULL for month"
+    }
+    address_keywords {
+        bigint id PK
+        string keyword UK
+    }
