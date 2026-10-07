@@ -23,17 +23,15 @@ export default function FloatingContentGuide({contentRef}:{contentRef:RefObject<
   };
   const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(update);};
   nextRef.current=()=>{
-   const view=viewport(),bottom=Math.min(view.bottom,window.innerHeight);
-   const next=Array.from(content.querySelectorAll<HTMLElement>('[data-scroll-section]')).find(el=>el.getBoundingClientRect().top>bottom-48);
    const behavior:ScrollBehavior=window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';
-   if(next)next.scrollIntoView({block:'start',behavior});
-   else if(scroller)scroller.scrollBy({top:scroller.clientHeight*.65,behavior});
-   else window.scrollBy({top:window.innerHeight*.65,behavior});
+   // One action reveals the end of this form, including its final controls.
+   if(scroller){const bounds=content.getBoundingClientRect(),view=scroller.getBoundingClientRect();scroller.scrollTo({top:scroller.scrollTop+bounds.bottom-view.bottom+12,behavior});}
+   else window.scrollTo({top:window.scrollY+content.getBoundingClientRect().bottom-window.innerHeight+12,behavior});
   };
   const resize=new ResizeObserver(schedule);resize.observe(content);if(scroller)resize.observe(scroller);
   document.addEventListener('scroll',schedule,true);document.addEventListener('focusin',schedule);document.addEventListener('focusout',schedule);window.addEventListener('resize',schedule);schedule();
   return()=>{resize.disconnect();cancelAnimationFrame(frame);document.removeEventListener('scroll',schedule,true);document.removeEventListener('focusin',schedule);document.removeEventListener('focusout',schedule);window.removeEventListener('resize',schedule);};
  },[contentRef]);
  if(!position)return null;
- return createPortal(<div dir="rtl" className="fixed z-40 -translate-x-1/2" style={position}><ProjectTooltip label="الانتقال إلى المعلومات التالية"><Button onClick={()=>nextRef.current()} className="max-w-[calc(100vw-32px)] rounded-full border border-white/30 shadow-[0_8px_24px_rgba(7,88,233,.28)]"><ArrowDown className="motion-safe:animate-bounce"/><span>المزيد بالأسفل</span></Button></ProjectTooltip></div>,document.body);
+ return createPortal(<div dir="rtl" className="fixed z-40 -translate-x-1/2" style={position}><ProjectTooltip label="عرض بقية المعلومات"><Button onClick={()=>nextRef.current()} className="max-w-[calc(100vw-32px)] rounded-full border border-white/30 !bg-[#0758e9]/65 backdrop-blur-[2px] shadow-[0_4px_14px_rgba(7,88,233,.16)] hover:!bg-[#0758e9]/85"><ArrowDown className="motion-safe:animate-bounce"/><span>المزيد بالأسفل</span></Button></ProjectTooltip></div>,document.body);
 }
