@@ -28,13 +28,15 @@ CREATE TABLE IF NOT EXISTS time_units (
   name_ar VARCHAR(50) NOT NULL,
   calculation_kind ENUM('fixed','calendar') NOT NULL,
   seconds_per_unit INT UNSIGNED NULL,
+  actual_usage_seconds INT UNSIGNED NOT NULL,
   is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  CONSTRAINT chk_actual_usage_conversion CHECK (actual_usage_seconds>0),
   CONSTRAINT chk_time_conversion CHECK ((calculation_kind='fixed' AND seconds_per_unit IS NOT NULL AND seconds_per_unit>0) OR (calculation_kind='calendar' AND seconds_per_unit IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO time_units (code,name_ar,calculation_kind,seconds_per_unit) VALUES
-('minute','دقيقة','fixed',60),('hour','ساعة','fixed',3600),
-('day','يوم','fixed',86400),('week','أسبوع','fixed',604800),('month','شهر','calendar',NULL)
+INSERT INTO time_units (code,name_ar,calculation_kind,seconds_per_unit,actual_usage_seconds) VALUES
+('minute','دقيقة','fixed',60,60),('hour','ساعة','fixed',3600,3600),
+('day','يوم','fixed',86400,86400),('week','أسبوع','fixed',604800,604800),('month','شهر','calendar',NULL,2592000)
 ON DUPLICATE KEY UPDATE code=VALUES(code);
 -- Calendar month is NOT a fixed 30-day interval.
 
@@ -42,6 +44,9 @@ CREATE TABLE IF NOT EXISTS network_settings (
   id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
   network_name VARCHAR(150) NOT NULL,
   description TEXT NULL,
+  radius_server_address VARCHAR(255) NULL,
+  radius_interim_update_seconds INT UNSIGNED NOT NULL DEFAULT 180,
+  timezone VARCHAR(64) NOT NULL COMMENT 'IANA timezone, explicitly selected for this network',
   primary_contact_phone VARCHAR(20) NOT NULL,
   identity_capture_enabled TINYINT(1) NOT NULL DEFAULT 0,
   grace_policy ENUM('package','global') NOT NULL DEFAULT 'package',
@@ -82,6 +87,9 @@ CREATE TABLE IF NOT EXISTS platform_subscription (
   expires_at DATETIME NULL,
   sync_version BIGINT UNSIGNED NOT NULL,
   synced_at DATETIME NOT NULL,
+  signed_payload JSON NOT NULL,
+  payload_signature TEXT NOT NULL,
+  signing_key_id VARCHAR(100) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_local_platform_license (license_number),
@@ -156,6 +164,8 @@ CREATE TABLE IF NOT EXISTS customers (
   manager_id BIGINT UNSIGNED NOT NULL,
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
+  phone VARCHAR(40) NULL,
+  notes TEXT NULL,
   address TEXT NULL,
   latitude DECIMAL(10,7) NULL,
   longitude DECIMAL(10,7) NULL,
