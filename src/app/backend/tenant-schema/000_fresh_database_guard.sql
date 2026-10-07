@@ -27,4 +27,3 @@ END$$
 DELIMITER ;
 CALL rl_complete_tenant_guard();
 DROP PROCEDURE rl_complete_tenant_guard;
-

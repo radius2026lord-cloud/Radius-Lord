@@ -28,7 +28,6 @@ DELIMITER ;
 CALL rl_complete_tenant_guard();
 DROP PROCEDURE rl_complete_tenant_guard;
 
-
 -- SECTION 1: Network, subscription, managers and customers.
 -- Radius Lord tenant database: foundation v1. Target MySQL 8.0.46.
 -- NEW, ISOLATED network database only; NEVER apply to lord_radius_core.
