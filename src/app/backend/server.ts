@@ -1,3 +1,4 @@
+import { startDatabaseProvisioningWorker } from './workers/database-provisioning.worker';
 import http from 'http';
 
 import cors from 'cors';
@@ -32,6 +33,7 @@ const startServer = (port: number) => {
 
   server.listen(port, () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
+    startDatabaseProvisioningWorker();
   });
 };
 

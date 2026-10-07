@@ -39,7 +39,7 @@ export async function requestEnvironmentController(req: AuthenticatedRequest, re
     await writeAuditLog(req,{actionCode:jobs[0]?'UPDATE':'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:jobs[0]?'إعادة طلب تجهيز البيئة بعد فشل المحاولة':'تسجيل طلب إنشاء البيئة بعد تأكيد الدفع',metadata:{eventType:jobs[0]?'environment_request_retried':'environment_requested',paymentOrderId:order.id,subscriptionId:central.subscriptionId,environmentId:central.environmentId,jobId}},conn);
     const environment=await readEnvironmentSummary((sql,params)=>conn!.query(sql,params),order);
     await conn.commit();
-    return res.status(202).json({success:true,environment,message:'تم تسجيل طلب إنشاء البيئة. التنفيذ الفعلي ينتظر تفعيل خدمة التجهيز؛ لم تبدأ مدة الاشتراك.'});
+    return res.status(202).json({success:true,environment,message:'تم تسجيل طلب إنشاء البيئة؛ ستتولى خدمة التجهيز تنفيذه تلقائيًا. لم تبدأ مدة الاشتراك.'});
   } catch(error) {
     if (conn) await conn.rollback();
     if (error instanceof EnvironmentRequestError) return res.status(error.status).json({success:false,message:error.message});
