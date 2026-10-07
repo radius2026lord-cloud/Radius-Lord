@@ -10,7 +10,7 @@ function createPool() {
     user: env.DB_USER,
     password: env.DB_PASS,
     database: env.DB_NAME,
-    port: 3306,
+    port: env.DB_PORT,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -69,5 +69,5 @@ async function safeQuery(sql: string, params?: any[]) {
 
 export const db = {
   query: safeQuery,
-  pool,
+  get pool(){return pool;},
 };

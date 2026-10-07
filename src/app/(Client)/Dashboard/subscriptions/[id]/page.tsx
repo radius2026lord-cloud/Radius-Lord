@@ -38,6 +38,7 @@ export default function SubscriptionDetailsPage(){
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[id,revision]);
+  useEffect(()=>{if(!item?.environment.job||!["queued","running"].includes(item.environment.job.status))return;const controller=new AbortController();let active=false;const timer=setInterval(async()=>{if(active)return;active=true;try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}`,{credentials:"include",cache:"no-store",signal:controller.signal});if(r.ok){const j=await r.json();if(!controller.signal.aborted)setItem(j.subscription);}}catch{/* Keep last state; manual refresh remains available. */}finally{active=false;}},5000);return()=>{clearInterval(timer);controller.abort();};},[id,item?.environment.job?.status]);
   async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
   async function requestEnvironment(){
     if(submitting || !item?.environment.canRequest)return;
@@ -115,14 +116,17 @@ function formatLimit(value:number){return value===0?"غير محدود":new Intl
 
 function environmentLabel(environment:Environment,paymentStatus:string){
   if(!["paid","completed"].includes(paymentStatus))return "التجهيز متاح بعد تأكيد الدفع";
-  if(environment.job?.status==="queued")return "طلب الإنشاء بانتظار التنفيذ";
+  if(environment.job?.status==="queued")return "تم الدفع — بانتظار تجهيز البيئة";
   if(environment.job?.status==="running")return "جارٍ تجهيز البيئة";
   if(environment.status==="ready")return "البيئة جاهزة";
-  if(environment.job?.status==="failed"||environment.status==="failed")return "تعذر تجهيز البيئة";
-  return environment.registered?"بانتظار إنشاء البيئة":"لم يُثبت سجل البيئة بعد";
+  if(environment.job?.errorCode==="ENVIRONMENT_BOOTSTRAP_PENDING")return "تم الدفع — قاعدة البيئة جاهزة وبانتظار استكمال التهيئة";
+  if(environment.job?.status==="failed"||environment.status==="failed")return "تم الدفع — التجهيز يحتاج معالجة";
+  return ["paid","completed"].includes(paymentStatus)?"تم الدفع — بانتظار تجهيز البيئة":environment.registered?"بانتظار إنشاء البيئة":"لم يُثبت سجل البيئة بعد";
 }
 
 function environmentDescription(environment:Environment,paymentStatus:string){
+  if(environment.job?.errorCode==="ENVIRONMENT_BOOTSTRAP_PENDING")return "أُنشئت قاعدة الشبكة وحسابا الاتصال وتم التحقق منهما. تبقى تهيئة حساب المدير وبيانات الاشتراك وخدمة RADIUS قبل التفعيل؛ مدة الاشتراك لم تبدأ.";
+  if(environment.job?.errorCode)return `توقفت مرحلة التجهيز: ${environment.job.currentStep||"التحقق"} · رمز المشكلة: ${environment.job.errorCode}. لم تبدأ مدة الاشتراك.`;
   if(environment.status==="ready")return "البيئة جاهزة. يُتحقق من اتصال NAS بعد تطبيق سكربت الربط.";
   if(environment.job?.status==="queued")return "طلب الإنشاء مسجل وبانتظار بدء التنفيذ. مدة الاشتراك لم تبدأ بعد.";
   if(environment.job?.status==="running")return "يجري تجهيز البيئة وفق بيانات الشراء. تبدأ مدة الاشتراك بعد تحقق الجاهزية.";

@@ -5,9 +5,11 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --exec ts-node ./server.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-tenant-template.cjs",
     "start": "node dist/server.js",
-    "setup:gateway-key": "node scripts/setup-gateway-key.cjs"
+    "setup:gateway-key": "node scripts/setup-gateway-key.cjs",
+    "provision:database": "ts-node workers/database-provisioning.worker.ts",
+    "provision:database:prod": "node dist/workers/database-provisioning.worker.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

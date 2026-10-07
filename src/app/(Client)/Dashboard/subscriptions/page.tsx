@@ -13,7 +13,7 @@ type Status = "awaiting_confirmation" | "paid" | "completed" | "cancelled" | "ex
 type Order = {
   id:number; customerId:number; paymentCode:string; planName:string; deploymentName:string|null;
   totalAmount:number; currency:string; status:Status|"pending"; requestedAt:string; paidAt:string|null;
-  customerName:string; customerUsername:string|null; customerEmail:string;
+  environmentStatus?:string|null;customerName:string; customerUsername:string|null; customerEmail:string;
 };
 
 const meta:Record<Status,{label:string;tone:string}> = {
@@ -111,7 +111,7 @@ export default function SubscriptionsPage(){
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{o.customerUsername||"—"}</div></div>
         <div className="flex shrink-0 items-center gap-2">{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
       </div>
-      <div className="mt-3"><StatusBadge status={o.status as Status}/></div>
+      <div className="mt-3"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus}/></div>
       <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400">
         <div className="flex items-center justify-between gap-3"><b className="min-w-0 break-words text-slate-700 dark:text-slate-200">{o.planName}</b><span className="shrink-0">{o.deploymentName||"—"}</span></div>
         <div className="flex items-center justify-between gap-3"><span className="break-all font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div>
@@ -124,13 +124,13 @@ export default function SubscriptionsPage(){
           <td className="w-12 p-3 text-center" onClick={e=>e.stopPropagation()}><CollectionSelectionBox checked={selected.has(o.id)} onChange={()=>toggle(o.id)} label={`تحديد اشتراك ${o.customerName}`}/></td>
           <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400"><bdi>{o.paymentCode}</bdi></span></td>
           <td className="p-3"><b className="block">{o.planName}</b><span className="mt-1 block text-[11px] text-slate-400">{o.deploymentName||"—"}</span></td>
-          <td className="font-bold">{o.totalAmount} {o.currency}</td><td><StatusBadge status={o.status as Status}/></td><td>{formatDate(o.requestedAt)}</td>
+          <td className="font-bold">{o.totalAmount} {o.currency}</td><td><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus}/></td><td>{formatDate(o.requestedAt)}</td>
           <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
       <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openSubscription(o)}>
         <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="break-words text-sm font-semibold">{o.customerName}</div><div className="mt-1 text-[11px] text-slate-500">{o.planName}</div></div><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge status={o.status as Status}/><bdi className="text-xs font-semibold">{o.totalAmount} {o.currency}</bdi></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus}/><bdi className="text-xs font-semibold">{o.totalAmount} {o.currency}</bdi></div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-400 dark:border-white/10"><bdi className="break-all font-mono">{o.paymentCode}</bdi><span>{formatDate(o.requestedAt)}</span></div>
       </CollectionMobileCard>)}</CollectionMobileList>
     </>}
@@ -142,5 +142,5 @@ function SubscriptionActions({order,busy,onOpen,onPayment,onConfirm}:{order:Orde
   return <ItemActionsDropdown show={{view:true,payment:true,confirmPayment:order.status==="awaiting_confirmation"&&!busy}} handlers={{view:onOpen,payment:onPayment,confirmPayment:onConfirm}}/>;
 }
 
-function StatusBadge({status}:{status:Status}){const m=meta[status]||meta.awaiting_confirmation;return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${m.tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current"/>{m.label}</span>}
+function StatusBadge({status,environmentStatus}:{status:Status;environmentStatus?:string|null}){const m=meta[status]||meta.awaiting_confirmation;return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${m.tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current"/>{["paid","completed"].includes(status)?environmentStatus==="ready"?"تم الدفع — البيئة جاهزة":environmentStatus==="failed"?"تم الدفع — التجهيز يحتاج معالجة":environmentStatus==="provisioning"?"تم الدفع — جارٍ تجهيز البيئة":"تم الدفع — بانتظار تجهيز البيئة":m.label}</span>}
 function formatDate(value:string){return new Intl.DateTimeFormat("ar",{year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value))}
