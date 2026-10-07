@@ -2,8 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle } from "lucide-react";
+import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers } from "lucide-react";
 import { CollectionState } from "@/components/ui/collection-display";
+import SubscriptionPaymentHistory from "@/components/subscription-payment-history";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 
@@ -21,7 +22,6 @@ type Subscription = {
   planLimits:{maxTenants:number;maxSubscribers:number;maxNas:number}|null;
   addons:{name:string;price:string|null}[]; status:string; requestedAt:string|null; paidAt:string|null; confirmedBy:string|null;
 };
-const labels:Record<string,string>={pending:"بانتظار الدفع",awaiting_confirmation:"بانتظار تأكيد الدفع",paid:"تم الدفع",completed:"مكتمل",cancelled:"ملغي",expired:"منتهي"};
 
 export default function SubscriptionDetailsPage(){
   const {id}=useParams<{id:string}>();
@@ -77,23 +77,26 @@ export default function SubscriptionDetailsPage(){
         {actionError&&<p role="alert" className="mt-3 rounded-[14px] bg-red-50 p-3 text-xs leading-6 text-red-600 dark:bg-red-500/10 dark:text-red-300">{actionError}</p>}
       </Panel>
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <Panel title="الخطة والاستضافة">
-          <dl className="grid gap-4 sm:grid-cols-3"><Field label="الخطة">{item.planName}</Field><Field label="الاستضافة">{item.deploymentName||"—"}</Field><Field label="المدة">{item.durationMonths} شهر</Field></dl>
-          <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10">
-            <h3 className="mb-3 text-xs font-semibold">حدود الخطة وقت الشراء</h3>
-            {item.planLimits?<dl className="grid gap-4 sm:grid-cols-3"><Field label="الشبكات">{formatLimit(item.planLimits.maxTenants)}</Field><Field label="حسابات PPPoE">{formatLimit(item.planLimits.maxSubscribers)}</Field><Field label="أجهزة NAS">{formatLimit(item.planLimits.maxNas)}</Field></dl>:<p className="text-xs leading-6 text-slate-500 dark:text-slate-400">لم تُحفظ حدود الخطة لهذا الطلب القديم.</p>}
+        <Panel title="الخطة المختارة">
+          <div className="flex flex-wrap items-start justify-between gap-4 rounded-[18px] bg-gradient-to-l from-blue-50 to-indigo-50/50 p-4 dark:from-blue-500/10 dark:to-indigo-500/5">
+            <div className="flex min-w-0 flex-1 items-start gap-3"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><Package className="h-6 w-6"/></span><div className="min-w-0"><h3 className="break-words text-base font-bold text-[#17386d] dark:text-slate-200">{item.planName}</h3><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">بيانات الخطة المحفوظة عند الشراء</p></div></div>
+            <div className="min-w-0"><p className="text-[10px] text-slate-500 dark:text-slate-400">قيمة الخطة</p><p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-300"><bdi>{item.basePrice} {item.currency}</bdi></p></div>
           </div>
-          <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10"><h3 className="mb-3 text-xs font-semibold">الإضافات</h3>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2"><PlanMetric label="الاستضافة" icon={<Cloud className="h-5 w-5 text-cyan-500"/>}>{item.deploymentName||"—"}</PlanMetric><PlanMetric label="مدة الاشتراك" icon={<CalendarClock className="h-5 w-5 text-amber-500"/>}>{item.durationMonths} شهر</PlanMetric></dl>
+          <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10"><h3 className="mb-3 text-xs font-semibold">السعة المشمولة</h3>
+            {item.planLimits?<dl className="grid gap-3 sm:grid-cols-3"><PlanMetric label="الشبكات" icon={<Network className="h-5 w-5 text-blue-500"/>}>{formatLimit(item.planLimits.maxTenants)}</PlanMetric><PlanMetric label="حسابات PPPoE" icon={<UsersRound className="h-5 w-5 text-emerald-500"/>}>{formatLimit(item.planLimits.maxSubscribers)}</PlanMetric><PlanMetric label="أجهزة NAS" icon={<Router className="h-5 w-5 text-violet-500"/>}>{formatLimit(item.planLimits.maxNas)}</PlanMetric></dl>:<p className="text-xs leading-6 text-slate-500 dark:text-slate-400">لم تُحفظ حدود الخطة لهذا الطلب القديم.</p>}
+          </div>
+          <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10"><h3 className="mb-3 flex items-center gap-2 text-xs font-semibold"><Layers className="h-4 w-4 text-violet-500"/>الإضافات المختارة</h3>
             {item.addons.length?<ul className="divide-y divide-slate-100 text-xs dark:divide-white/10">{item.addons.map((addon,index)=><li key={index} className="flex flex-wrap items-start justify-between gap-2 py-2"><span className="min-w-0 break-words">{addon.name}</span>{addon.price!==null&&<bdi className="shrink-0">{addon.price} {item.currency}</bdi>}</li>)}</ul>:<p className="text-xs text-slate-500 dark:text-slate-400">لا توجد إضافات.</p>}
           </div>
         </Panel>
-        <Panel title="العميل والدفع">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold text-[#17386d] dark:text-slate-200">{item.customerName}</p><p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{item.customerEmail}</p>{item.customerUsername&&<p className="mt-1 text-xs text-slate-400"><bdi>@{item.customerUsername}</bdi></p>}</div><ProjectTooltip label="عرض ملف العميل"><ProjectButton variant="ghost" size="icon" aria-label="عرض ملف العميل" onClick={()=>router.push(`/Dashboard/customers/${item.customerId}?from=subscriptions`)}><UserRound className="text-blue-500"/></ProjectButton></ProjectTooltip></div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-white/10"><div><p className="text-[11px] text-slate-500">إجمالي الدفعة</p><p className="mt-1 text-lg font-bold text-[#17386d] dark:text-slate-200"><bdi>{item.totalAmount} {item.currency}</bdi></p></div><span className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${["paid","completed"].includes(item.status)?"bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300":"bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"}`}>{labels[item.status]||item.status}</span></div>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="قيمة الخطة"><bdi>{item.basePrice} {item.currency}</bdi></Field><Field label="قيمة الإضافات"><bdi>{item.addonsTotal} {item.currency}</bdi></Field><Field label="كود الدفع"><bdi className="font-mono">{item.paymentCode}</bdi></Field><Field label="تاريخ الطلب">{formatDate(item.requestedAt)}</Field><Field label="تأكيد الدفع">{formatDate(item.paidAt)}</Field><Field label="مسؤول التأكيد">{item.confirmedBy||"—"}</Field></dl>
-          <ProjectButton variant="secondary" className="mt-4 w-full sm:w-auto" onClick={()=>router.push(`/Dashboard/payments?code=${encodeURIComponent(item.paymentCode)}`)}><CreditCard className="text-emerald-500"/>عرض عملية الدفع</ProjectButton>
+        <Panel title="بيانات العميل">
+          <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-blue-50 text-blue-500 dark:bg-blue-500/10"><UserRound className="h-5 w-5"/></span><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold text-[#17386d] dark:text-slate-200">{item.customerName}</p>{item.customerUsername&&<p className="mt-1 text-xs text-slate-400"><bdi>@{item.customerUsername}</bdi></p>}</div></div>
+          <dl className="mt-4 border-t border-slate-100 pt-4 dark:border-white/10"><Field label="البريد الإلكتروني">{item.customerEmail}</Field></dl>
+          <ProjectButton variant="secondary" className="mt-4 w-full sm:w-auto" onClick={()=>router.push(`/Dashboard/customers/${item.customerId}?from=subscriptions`)}><UserRound className="text-blue-500"/>عرض ملف العميل</ProjectButton>
         </Panel>
       </div>
+      <SubscriptionPaymentHistory orderId={item.id}/>
     </>}
   </div>;
 }
@@ -119,4 +122,8 @@ function environmentDescription(environment:Environment,paymentStatus:string){
   if(environment.blockedReason)return environment.blockedReason;
   if(!["paid","completed"].includes(paymentStatus))return "أكد استلام الدفعة أولًا للمتابعة.";
   return "الدفعة مؤكدة. يمكنك طلب إنشاء البيئة وفق الخطة المحفوظة عند الشراء.";
+}
+
+function PlanMetric({label,icon,children}:{label:string;icon:ReactNode;children:ReactNode}){
+  return <div className="flex min-w-0 items-start gap-3 rounded-[14px] border border-slate-100 bg-slate-50/60 p-3 dark:border-white/[.06] dark:bg-white/[.025]"><span className="mt-0.5 shrink-0">{icon}</span><div className="min-w-0"><dt className="text-[10px] text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-[#17386d] dark:text-slate-200">{children}</dd></div></div>;
 }

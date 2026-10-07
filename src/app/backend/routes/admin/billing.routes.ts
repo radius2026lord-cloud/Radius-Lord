@@ -3,7 +3,9 @@ import { authenticate,requireAccountType } from '../../middleware/auth.middlewar
 import { createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,listSubscriptionRequestsController,getSubscriptionRequestController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController,getMasterActivityController } from '../../controllers/billing.controller';
 import { getCollectionReportController } from '../../controllers/payment-reports.controller';
 import { requestEnvironmentController } from '../../controllers/environment.controller';
+import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
+router.get('/admin/subscriptions/:id/payments',authenticate,requireAccountType('master_admin'),listSubscriptionPaymentsController);
 router.post('/admin/subscriptions/:id/environment',authenticate,requireAccountType('master_admin'),requestEnvironmentController);
 router.get('/admin/collection-report',authenticate,requireAccountType('master_admin'),getCollectionReportController);
 router.get('/settings/public',authenticate,requireAccountType('customer'),getPublicPaymentSettingsController);
