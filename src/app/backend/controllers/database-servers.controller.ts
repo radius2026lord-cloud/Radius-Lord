@@ -1,0 +1,41 @@
+import {randomBytes,createHmac} from 'crypto';
+import {isIP} from 'net';
+import mysql from 'mysql2/promise';
+import jwt from 'jsonwebtoken';
+import type {Response} from 'express';
+import {db} from '../config/db';
+import type {AuthenticatedRequest} from '../middleware/auth.middleware';
+import {writeAuditLog} from '../services/audit.service';
+import {provisioningKey,encryptProvisioningSecret,decryptProvisioningSecret} from '../services/provisioning-secrets.service';
+const safe=(r:any)=>({id:r.id,name:r.name,host:r.host,port:r.port,username:r.provisioning_username,tlsRequired:Boolean(r.tls_required),status:r.status,acceptsNewEnvironments:Boolean(r.accepts_new_environments),hasPassword:Boolean(r.provisioning_password_encrypted)});
+async function config(req:AuthenticatedRequest){const b=req.body||{},id=req.params.id?Number(req.params.id):null;let saved:any;if(id!==null&&(!Number.isSafeInteger(id)||id<1))throw new Error('معرّف الخادم غير صالح.');if(id){const [rows]:any=await db.query('SELECT * FROM database_servers WHERE id=? AND archived_at IS NULL',[id]);saved=rows[0];if(!saved)throw new Error('الخادم غير موجود.');}
+ const name=String(b.name||'').trim(),host=String(b.host||'').trim(),username=String(b.username||'').trim(),port=Number(b.port),tlsRequired=b.tlsRequired;
+ if(!name||name.length>150||!username||username.length>150||(!isIP(host)&&!/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(host))||!Number.isInteger(port)||port<1||port>65535||typeof tlsRequired!=='boolean')throw new Error('أكمل بيانات الاتصال بشكل صحيح.');
+ if(b.password!==undefined&&(typeof b.password!=='string'||b.password.length>512))throw new Error('كلمة المرور غير صالحة.');
+ const same=saved&&saved.host===host&&saved.port===port&&saved.provisioning_username===username&&Boolean(saved.tls_required)===tlsRequired;
+ const password=b.password||(same?decryptProvisioningSecret(saved.provisioning_password_encrypted):'');if(!password)throw new Error('أدخل كلمة مرور الاتصال.');provisioningKey();return {id,name,host,port,username,password,tlsRequired};}
+const fingerprint=(c:any)=>createHmac('sha256',provisioningKey()).update(JSON.stringify(c)).digest('hex');
+const options=(c:any)=>({host:c.host,port:c.port,user:c.username,password:c.password,connectTimeout:10000,enableKeepAlive:false,...(c.tlsRequired?{ssl:{rejectUnauthorized:true}}:{})});
+export async function listDatabaseServers(req:AuthenticatedRequest,res:Response){res.setHeader('Cache-Control','no-store');try{const [rows]:any=await db.query('SELECT * FROM database_servers WHERE archived_at IS NULL ORDER BY id DESC');res.json({servers:rows.map(safe)});}catch{res.status(503).json({message:'تعذر تحميل خوادم قواعد البيانات؛ تحقق من ترحيل القاعدة المركزية.'});}}
+export async function inspectDatabaseServer(req:AuthenticatedRequest,res:Response){let admin:mysql.Connection|undefined,client:mysql.Connection|undefined,createdDatabase=false,createdUser=false,probe='',user='',account='';let cleanupFailed=false;
+ try{const c=await config(req);admin=await mysql.createConnection(options(c));const [info]:any=await admin.query({sql:'SELECT VERSION() version,USER() source',timeout:10000});if(!/^8\./.test(info[0].version)||/mariadb/i.test(info[0].version))throw new Error('قالب المشروع يتطلب MySQL 8.');
+ const source=String(info[0].source).split('@').slice(1).join('@');if(!source||source.length>255||/[\x00-\x1f%_]/.test(source))throw new Error('تعذر تحديد عنوان اتصال الباك إند للفحص.');
+ probe='rl_probe_'+randomBytes(10).toString('hex');user='rlp_'+randomBytes(8).toString('hex');const password=randomBytes(32).toString('base64url');account=mysql.escape(user)+'@'+mysql.escape(source);
+ await admin.query({sql:`CREATE DATABASE \`${probe}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,timeout:10000});createdDatabase=true;
+ await admin.query({sql:`CREATE USER ${account} IDENTIFIED BY ${mysql.escape(password)}`,timeout:10000});createdUser=true;
+ await admin.query({sql:`CREATE TABLE \`${probe}\`.verification (id INT PRIMARY KEY,value INT NOT NULL) ENGINE=InnoDB`,timeout:10000});
+ await admin.query({sql:`GRANT SELECT,INSERT,UPDATE,DELETE ON \`${probe}\`.* TO ${account}`,timeout:10000});
+ client=await mysql.createConnection({...options(c),user,password,database:probe});for(const sql of ['INSERT INTO verification VALUES (1,1)','UPDATE verification SET value=2 WHERE id=1','SELECT value FROM verification WHERE id=1','DELETE FROM verification WHERE id=1'])await client.query({sql,timeout:10000});
+ await client.end();client=undefined;await admin.query({sql:`DROP USER ${account}`,timeout:10000});createdUser=false;await admin.query({sql:`DROP DATABASE \`${probe}\``,timeout:10000});createdDatabase=false;
+ const verified=jwt.sign({kind:'database-inspect',admin:req.auth!.accountId,hash:fingerprint(c)},provisioningKey(),{algorithm:'HS256',expiresIn:'10m'});
+ await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'DATABASE_SERVER',entityId:c.id,description:'التحقق الفعلي من إنشاء قاعدة وحساب اتصال وصلاحيات القراءة والكتابة',metadata:{result:'success',version:info[0].version}});
+ res.json({verified,version:info[0].version,message:'نجح إنشاء قاعدة وحساب مؤقتين وفحص القراءة والكتابة وحذف موارد الفحص.'});
+ }catch(e){res.status(400).json({message:e instanceof Error&&!('code' in e)?e.message:'فشل فحص الاتصال أو صلاحيات الإنشاء؛ تحقق من بيانات الخادم والصلاحيات والاتصال الآمن.'});}
+ finally{try{await client?.end();if(admin&&createdUser)await admin.query({sql:`DROP USER ${account}`,timeout:10000});if(admin&&createdDatabase)await admin.query({sql:`DROP DATABASE \`${probe}\``,timeout:10000});}catch{cleanupFailed=true;}finally{await admin?.end().catch(()=>{});}if(cleanupFailed)console.error('Database verification cleanup required:',probe,user);}
+}
+export async function saveDatabaseServer(req:AuthenticatedRequest,res:Response){let conn:mysql.PoolConnection|undefined;try{const c=await config(req);let proof:any;try{proof=jwt.verify(String(req.body.verified||''),provisioningKey(),{algorithms:['HS256']});}catch{throw new Error('افحص الاتصال قبل حفظ الخادم.');}if(proof.kind!=='database-inspect'||proof.admin!==req.auth!.accountId||proof.hash!==fingerprint(c))throw new Error('بيانات الاتصال تغيرت؛ أعد الفحص.');
+ conn=await db.pool.getConnection();await conn.beginTransaction();let id=c.id;
+ if(id){const [rows]:any=await conn.query('SELECT id FROM database_servers WHERE id=? AND archived_at IS NULL FOR UPDATE',[id]);if(!rows.length)throw new Error('الخادم غير موجود.');const [used]:any=await conn.query('SELECT id FROM tenant_databases WHERE database_server_id=? LIMIT 1',[id]);if(used.length)throw new Error('لا يمكن تغيير اتصال خادم مرتبط ببيئات قائمة من هذه الشاشة.');await conn.query("UPDATE database_servers SET name=?,host=?,port=?,provisioning_username=?,provisioning_password_encrypted=?,tls_required=?,status='disabled',accepts_new_environments=0 WHERE id=?",[c.name,c.host,c.port,c.username,encryptProvisioningSecret(c.password),c.tlsRequired,id]);}
+ else{const [r]:any=await conn.query('INSERT INTO database_servers (name,host,port,provisioning_username,provisioning_password_encrypted,tls_required) VALUES (?,?,?,?,?,?)',[c.name,c.host,c.port,c.username,encryptProvisioningSecret(c.password),c.tlsRequired]);id=r.insertId;}
+ await writeAuditLog(req,{actionCode:c.id?'UPDATE':'CREATE',entityTypeCode:'DATABASE_SERVER',entityId:id,description:'حفظ اتصال خادم قواعد البيانات بعد التحقق',metadata:{verified:true,acceptsNewEnvironments:false}},conn);await conn.commit();res.json({id,message:'تم حفظ الاتصال. استقبال البيئات ينتظر إعداد حدود الاتصالات وعامل التجهيز.'});
+ }catch(e){await conn?.rollback();res.status(400).json({message:e instanceof Error&&!('code' in e)?e.message:'تعذر حفظ الخادم؛ تحقق من الترحيل وعدم تكرار العنوان والمنفذ.'});}finally{conn?.release();}}

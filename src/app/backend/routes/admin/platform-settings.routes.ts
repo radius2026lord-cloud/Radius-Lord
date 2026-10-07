@@ -1,9 +1,15 @@
+import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer} from '../../controllers/database-servers.controller';
 import { getOvpnSettings, updateOvpnSettings, inspectOvpnGateway, applyOvpnGateway, getOvpnGatewayHealth, selectOvpnHealthDashboard } from '../../controllers/ovpn-settings.controller';
 import { Router } from 'express';
 import { getContactPaymentSettingsController, updateContactPaymentSettingsController } from '../../controllers/platform-settings.controller';
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.get('/database-servers',listDatabaseServers);
+router.post('/database-servers/inspect',inspectDatabaseServer);
+router.post('/database-servers/:id/inspect',inspectDatabaseServer);
+router.post('/database-servers',saveDatabaseServer);
+router.put('/database-servers/:id',saveDatabaseServer);
 router.get('/contact-payment',getContactPaymentSettingsController);
 router.put('/contact-payment',updateContactPaymentSettingsController);
 router.get('/ovpn-gateways',getOvpnSettings);

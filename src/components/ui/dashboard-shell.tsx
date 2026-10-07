@@ -68,6 +68,7 @@ const masterAdminGroups: NavGroup[] = [
     { label: "حالة الشبكات", href: "/Dashboard/networks/status", icon: Activity },
   ]},
   { label: "خوادم الاتصال", icon: Server, items: [
+    { label: "خوادم قواعد البيانات", href: "/Dashboard/database-servers", icon: Server },
     { label: "خوادم OpenVPN", href: "/Dashboard/connection-servers", icon: Server },
     { label: "إضافة خادم", href: "/Dashboard/connection-servers/add", icon: PackagePlus },
   ]},

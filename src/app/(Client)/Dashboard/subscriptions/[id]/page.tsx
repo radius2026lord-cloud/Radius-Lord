@@ -2,16 +2,17 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers } from "lucide-react";
+import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink } from "lucide-react";
 import { CollectionState } from "@/components/ui/collection-display";
 import SubscriptionPaymentHistory from "@/components/subscription-payment-history";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 
 type Environment = {
-  registered:boolean;canRequest:boolean;blockedReason:string|null;tenantId?:number;subscriptionId?:number;
+  registered:boolean;canRequest:boolean;canSendDetails?:boolean;blockedReason:string|null;tenantId?:number;subscriptionId?:number;
   networkName?:string;licenseNumber?:string;licenseStatus?:string;subscriptionStatus?:string;
   startsAt?:string|null;expiresAt?:string|null;status?:string;systemUrl?:string|null;readyAt?:string|null;
+  health?:{databaseName:string|null;reportedAt:string|null;lastSeenAt:string|null;databaseStatus:string;radiusStatus:string};
   job?:{id:number;status:string;currentStep:string|null;attemptCount:number;errorCode:string|null}|null;
 };
 type Subscription = {
@@ -37,6 +38,7 @@ export default function SubscriptionDetailsPage(){
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[id,revision]);
+  async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
   async function requestEnvironment(){
     if(submitting || !item?.environment.canRequest)return;
     setSubmitting(true);setNotice("");setActionError("");
@@ -63,10 +65,15 @@ export default function SubscriptionDetailsPage(){
           </div>
           <ProjectTooltip label={item.environment.blockedReason?"راجع حالة البيئة":"تسجيل طلب إنشاء البيئة"}>
             <ProjectButton disabled={submitting||!item.environment.canRequest} onClick={()=>void requestEnvironment()} className="min-h-10 w-full sm:w-auto">
-              {submitting?<LoaderCircle className="animate-spin"/>:<Server/>}{submitting?"جارٍ تسجيل الطلب...":item.environment.job?.status==="failed"?"إعادة طلب إنشاء البيئة":"إنشاء البيئة"}
+              {submitting?<LoaderCircle className="animate-spin"/>:<Server/>}{submitting?"جارٍ تسجيل الطلب...":item.environment.job?.status==="failed"?"معالجة فشل التجهيز وإعادة المحاولة":"إنشاء البيئة"}
             </ProjectButton>
           </ProjectTooltip>
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {item.environment.canSendDetails&&<ProjectTooltip label="إرسال رابط واجهة العميل وبيانات الدخول والخطة والرخصة بعد التفعيل"><ProjectButton variant="secondary" disabled={submitting||item.environment.status!=="ready"||item.environment.subscriptionStatus!=="active"||!item.environment.systemUrl} onClick={()=>void sendDetails()}><Send className="text-emerald-500"/>إرسال بيانات التفعيل للعميل</ProjectButton></ProjectTooltip>}
+          {item.environment.status==="ready"&&item.environment.systemUrl&&<ProjectButton variant="secondary" onClick={()=>{const u=new URL(item.environment.systemUrl!,window.location.origin);if(["http:","https:"].includes(u.protocol))window.open(u.href,"_blank","noopener,noreferrer");}}><ExternalLink className="text-blue-500"/>فتح واجهة الشبكة</ProjectButton>}
+        </div>
+        {item.environment.registered&&<div className="mt-4 rounded-[14px] border border-slate-100 p-3 dark:border-white/10"><p className="flex items-center gap-2 text-sm font-semibold"><Database className={item.environment.health?.databaseStatus==="healthy"?"text-emerald-500":"text-amber-500"}/>اتصال قاعدة بيانات البيئة</p><p className="mt-2 text-xs text-slate-500">{item.environment.health?.databaseStatus==="healthy"?"آخر قراءة مسجلة: الاتصال سليم":item.environment.health?.databaseStatus==="unavailable"?"فشل اتصال البيئة بقاعدة البيانات؛ يحتاج إلى معالجة":item.environment.health?.databaseStatus==="degraded"?"آخر قراءة مسجلة: الاتصال يحتاج مراجعة":"لم يصل تحقق فعلي من اتصال البيئة بعد"}</p><p className="mt-1 text-xs text-slate-400">اسم القاعدة: <bdi>{item.environment.health?.databaseName||"لم تُنشأ بعد"}</bdi> · وقت آخر تقرير: {formatDate(item.environment.health?.reportedAt||null)}</p></div>}
         {item.environment.registered&&<dl className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="الشبكة">{item.environment.networkName||"—"}</Field>
           <Field label="رقم الرخصة"><bdi className="font-mono">{item.environment.licenseNumber||"—"}</bdi></Field>

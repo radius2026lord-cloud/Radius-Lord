@@ -84,7 +84,8 @@ export type EnvironmentSummary = {
   subscriptionStatus?:string;startsAt?:string|null;expiresAt?:string|null;environmentId?:number;
   status?:string;systemUrl?:string|null;readyAt?:string|null;
   job?:{id:number;status:string;currentStep:string|null;attemptCount:number;errorCode:string|null}|null;
-  health?:{lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string;radiusStatus:string};
+  canSendDetails?:boolean;
+  health?:{databaseName:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string;radiusStatus:string};
 };
 // Read one network summary from core; never fan out to customer databases.
 export async function readEnvironmentSummary(query: (sql: string, params?: any[]) => Promise<any>, order: any): Promise<EnvironmentSummary> {
@@ -96,11 +97,13 @@ export async function readEnvironmentSummary(query: (sql: string, params?: any[]
     s.id subscription_id,s.plan_id,s.status subscription_status,s.starts_at,s.expires_at,s.plan_limits_snapshot,s.duration_months_snapshot,s.deployment_type_id,
     e.id environment_id,e.deployment_type_id environment_deployment_type_id,e.status environment_status,e.system_url,e.ready_at,e.archived_at environment_archived_at,
     l.license_key,l.status license_status,l.subscription_id license_subscription_id,
-    h.last_seen_at,h.online_users_count,h.active_sessions_count,h.database_status,h.radius_status,
+    d.db_name,h.reported_at,h.last_seen_at,h.online_users_count,h.active_sessions_count,h.database_status,h.radius_status,
+    (SELECT COUNT(*) FROM environment_notifications n WHERE n.environment_id=e.id AND n.subscription_id=s.id AND n.status IN ('pending','failed') AND n.initial_username IS NOT NULL AND n.initial_password_encrypted IS NOT NULL AND n.credentials_expires_at>CURRENT_TIMESTAMP) notification_ready,
     j.id job_id,j.status job_status,j.current_step,j.error_code,j.error_message,j.attempt_count
     FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id AND s.id=?
     LEFT JOIN subscription_licenses l ON l.tenant_id=t.id
     LEFT JOIN tenant_environments e ON e.tenant_id=t.id
+    LEFT JOIN tenant_databases d ON d.id=e.tenant_database_id AND d.tenant_id=t.id
     LEFT JOIN tenant_environment_status h ON h.environment_id=e.id
     LEFT JOIN environment_provisioning_jobs j ON j.id=(SELECT MAX(j2.id) FROM environment_provisioning_jobs j2 WHERE j2.environment_id=e.id)
     WHERE t.id=? LIMIT 1`, [order.subscription_id,order.tenant_id]);
@@ -119,6 +122,7 @@ export async function readEnvironmentSummary(query: (sql: string, params?: any[]
   else if (r.environment_status === 'provisioning') blockedReason='البيئة قيد التجهيز.';
   return {registered:true,tenantId:r.tenant_id,subscriptionId:r.subscription_id,networkName:r.name,licenseNumber:r.license_number,licenseStatus:r.license_status,
     subscriptionStatus:r.subscription_status,startsAt:r.starts_at,expiresAt:r.expires_at,environmentId:r.environment_id,status:r.environment_status || 'pending',systemUrl:r.system_url,readyAt:r.ready_at,
+    canSendDetails:process.env.ENVIRONMENT_NOTIFICATION_WORKER_ENABLED==='true'&&r.environment_status==='ready'&&r.job_status==='success'&&r.subscription_status==='active'&&r.license_status==='active'&&Boolean(r.system_url)&&r.database_status==='healthy'&&r.radius_status==='healthy'&&Boolean(r.reported_at)&&Date.now()-new Date(r.reported_at).getTime()>=0&&Date.now()-new Date(r.reported_at).getTime()<90000&&Boolean(r.expires_at)&&new Date(r.expires_at).getTime()>Date.now()&&r.notification_ready>0,
     canRequest:!blockedReason,blockedReason,job:r.job_id ? {id:r.job_id,status:r.job_status,currentStep:r.current_step,attemptCount:r.attempt_count,errorCode:r.error_code} : null,
-    health:{lastSeenAt:r.last_seen_at,onlineUsers:r.online_users_count,activeSessions:r.active_sessions_count,databaseStatus:r.database_status || 'unknown',radiusStatus:r.radius_status || 'unknown'}};
+    health:{databaseName:r.db_name||null,reportedAt:r.reported_at,lastSeenAt:r.last_seen_at,onlineUsers:r.online_users_count,activeSessions:r.active_sessions_count,databaseStatus:r.database_status || 'unknown',radiusStatus:r.radius_status || 'unknown'}};
 }
