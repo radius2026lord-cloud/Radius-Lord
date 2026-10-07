@@ -1,4 +1,4 @@
-import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer} from '../../controllers/database-servers.controller';
+import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer,databaseServerHealth,setDatabaseServerAdmission} from '../../controllers/database-servers.controller';
 import { getOvpnSettings, updateOvpnSettings, inspectOvpnGateway, applyOvpnGateway, getOvpnGatewayHealth, selectOvpnHealthDashboard } from '../../controllers/ovpn-settings.controller';
 import { Router } from 'express';
 import { getContactPaymentSettingsController, updateContactPaymentSettingsController } from '../../controllers/platform-settings.controller';
@@ -6,6 +6,8 @@ import { authenticate, requireAccountType } from '../../middleware/auth.middlewa
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
 router.get('/database-servers',listDatabaseServers);
+router.get('/database-servers/:id/health',databaseServerHealth);
+router.put('/database-servers/:id/admission',setDatabaseServerAdmission);
 router.post('/database-servers/inspect',inspectDatabaseServer);
 router.post('/database-servers/:id/inspect',inspectDatabaseServer);
 router.post('/database-servers',saveDatabaseServer);
