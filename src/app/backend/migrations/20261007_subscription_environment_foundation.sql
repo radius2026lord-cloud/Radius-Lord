@@ -1,3 +1,5 @@
+-- SUPERSEDED: use 20261007_central_environment_architecture.sql for the agreed final scope.
+-- Retained for migration history; do not apply as the final architecture.
 -- Apply to lord_radius_core after the billing and plan-limits migrations.
 -- Foundation only: this does NOT provision databases, activate subscriptions or send messages.
 -- Run the complete script in one session. MySQL DDL is not transactional.
