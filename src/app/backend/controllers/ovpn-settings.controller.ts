@@ -35,7 +35,7 @@ async function config(req:AuthenticatedRequest):Promise<{id:number|null;settings
 async function persist(req:AuthenticatedRequest,id:number|null,settings:Settings,password:string,description:string){
  const connection=await db.pool.getConnection();
  try{await connection.beginTransaction();let savedId=id;
- if(id)await connection.query('UPDATE ovpn_gateways SET settings_json=?,api_password_encrypted=?,updated_by_master_admin_id=? WHERE id=?',[JSON.stringify(settings),encrypt(password),req.auth!.accountId,id]);
+ if(id){const [current]=await connection.query('SELECT settings_json FROM ovpn_gateways WHERE id=? FOR UPDATE',[id]);const saved=(current as any[])[0];if(!saved)throw new Error('الخادم غير موجود.');const display_health=JSON.parse(saved.settings_json).display_health===true;await connection.query('UPDATE ovpn_gateways SET settings_json=?,api_password_encrypted=?,updated_by_master_admin_id=? WHERE id=?',[JSON.stringify({...settings,display_health}),encrypt(password),req.auth!.accountId,id]);}
  else{const [r]=await connection.query('INSERT INTO ovpn_gateways (settings_json,api_password_encrypted,updated_by_master_admin_id) VALUES (?,?,?)',[JSON.stringify(settings),encrypt(password),req.auth!.accountId]);savedId=(r as any).insertId;}
  await writeAuditLog(req,{actionCode:id?'UPDATE':'CREATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:savedId,description,metadata:{settingGroup:'nas_ovpn',provisionState:settings.provision_state??null}},connection);
  await connection.commit();return savedId!;
@@ -102,4 +102,14 @@ export async function getOvpnGatewayHealth(req:AuthenticatedRequest,res:Response
   }
   return res.json(await read.result);
  }catch(e){return res.status(503).json({api_status:'unreachable',message:errorMessage(e,'تعذر قراءة صحة الخادم.')});}
+}
+
+export async function selectOvpnHealthDashboard(req:AuthenticatedRequest,res:Response){
+ const id=Number(req.params.id),selected=req.body?.selected;
+ if(!Number.isSafeInteger(id)||id<1||typeof selected!=='boolean')return res.status(400).json({message:'اختيار الخادم غير صالح.'});
+ const connection=await db.pool.getConnection();
+ try{await connection.beginTransaction();const [rows]=await connection.query('SELECT id,settings_json FROM ovpn_gateways ORDER BY id FOR UPDATE');const gateways=rows as any[];const target=gateways.find(row=>row.id===id);if(!target)throw new Error('الخادم غير موجود.');
+  for(const row of gateways){const settings=JSON.parse(row.settings_json);const display=selected?row.id===id:(row.id===id?false:settings.display_health===true);if(settings.display_health!==display)await connection.query('UPDATE ovpn_gateways SET settings_json=?,updated_by_master_admin_id=? WHERE id=?',[JSON.stringify({...settings,display_health:display}),req.auth!.accountId,row.id]);}
+  await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:id,description:selected?'اختيار خادم لعرض صحته في لوحة الخوادم':'إخفاء صحة الخادم من لوحة الخوادم',metadata:{selected}},connection);await connection.commit();return res.json({success:true});
+ }catch(e){await connection.rollback();return res.status(400).json({message:errorMessage(e,'تعذر حفظ خيار العرض.')});}finally{connection.release();}
 }

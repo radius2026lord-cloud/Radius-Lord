@@ -1,4 +1,4 @@
-import { getOvpnSettings, updateOvpnSettings, inspectOvpnGateway, applyOvpnGateway, getOvpnGatewayHealth } from '../../controllers/ovpn-settings.controller';
+import { getOvpnSettings, updateOvpnSettings, inspectOvpnGateway, applyOvpnGateway, getOvpnGatewayHealth, selectOvpnHealthDashboard } from '../../controllers/ovpn-settings.controller';
 import { Router } from 'express';
 import { getContactPaymentSettingsController, updateContactPaymentSettingsController } from '../../controllers/platform-settings.controller';
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
@@ -8,6 +8,7 @@ router.get('/contact-payment',getContactPaymentSettingsController);
 router.put('/contact-payment',updateContactPaymentSettingsController);
 router.get('/ovpn-gateways',getOvpnSettings);
 router.get('/ovpn-gateways/:id/health',getOvpnGatewayHealth);
+router.put('/ovpn-gateways/:id/dashboard-health',selectOvpnHealthDashboard);
 router.post('/ovpn-gateways/inspect',inspectOvpnGateway);
 router.post('/ovpn-gateways/:id/inspect',inspectOvpnGateway);
 router.post('/ovpn-gateways/:id/apply',applyOvpnGateway);
