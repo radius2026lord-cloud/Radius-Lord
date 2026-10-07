@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { Response } from 'express';
 import { db } from '../config/db';
 import { writeAuditLog } from '../services/audit.service';
+import { ensureCentralSubscription, readEnvironmentSummary, EnvironmentRequestError } from '../services/subscription-environment.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 const publicKeys=['contact_name','whatsapp_number','whatsapp_enabled','whatsapp_button_text','whatsapp_message_template','payment_instructions','support_email','support_phone_primary','support_phone_secondary'];
@@ -35,15 +36,20 @@ export async function getMasterActivityController(req:AuthenticatedRequest,res:R
 export async function createPaymentOrderController(req:AuthenticatedRequest,res:Response){
  const customerId=req.auth!.accountId,planId=Number(req.body?.planId),deploymentOptionId=Number(req.body?.deploymentOptionId),addonIds=Array.isArray(req.body?.addonIds)?req.body.addonIds.map(Number):[];
  if(!Number.isInteger(planId)||planId<1||!Number.isInteger(deploymentOptionId)||deploymentOptionId<1)return res.status(400).json({success:false,message:'بيانات الخطة أو الاستضافة غير صالحة.'});
+ let conn;
  try{
   const [plans]=await db.query("SELECT p.id,p.name,p.duration_months,p.max_tenants,p.max_subscribers,p.max_nas,p.price,c.code currency_code FROM payment_plans p LEFT JOIN currencies c ON c.id=p.currency_id WHERE p.id=? AND p.status='active' LIMIT 1",[planId]);const plan=(plans as any[])[0];if(!plan)return res.status(404).json({success:false,message:'الخطة غير متاحة.'});
-  const [opts]=await db.query("SELECT o.id,o.deployment_type_id,dt.name_ar FROM plan_deployment_options o JOIN deployment_types dt ON dt.id=o.deployment_type_id WHERE o.id=? AND o.plan_id=? AND o.status='active' LIMIT 1",[deploymentOptionId,planId]);const opt=(opts as any[])[0];if(!opt)return res.status(400).json({success:false,message:'خيار الاستضافة غير متاح.'});
+  const [opts]=await db.query("SELECT o.id,o.deployment_type_id,o.price,dt.name_ar FROM plan_deployment_options o JOIN deployment_types dt ON dt.id=o.deployment_type_id WHERE o.id=? AND o.plan_id=? AND o.status='active' LIMIT 1",[deploymentOptionId,planId]);const opt=(opts as any[])[0];if(!opt)return res.status(400).json({success:false,message:'خيار الاستضافة غير متاح.'});
   let addons:any[]=[];if(addonIds.length){const marks=addonIds.map(()=>'?').join(',');const [rows]=await db.query(`SELECT id,code,name_ar,price FROM plan_addons WHERE plan_id=? AND deployment_type_id=? AND status='active' AND id IN (${marks})`,[planId,opt.deployment_type_id,...addonIds]);addons=rows as any[];if(addons.length!==new Set(addonIds).size)return res.status(400).json({success:false,message:'إحدى القيم المضافة غير متاحة.'});}
-  const base=Number(plan.price||0),addonsTotal=addons.reduce((s,a)=>s+Number(a.price||0),0),total=base+addonsTotal,code=paymentCode();
-  const [result]:any=await db.query("INSERT INTO payment_orders (payment_code,customer_id,plan_id,deployment_type_id,payment_purpose,plan_name_snapshot,duration_months_snapshot,deployment_name_snapshot,base_price,addons_total,total_amount,currency_code,addons_snapshot,plan_limits_snapshot,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending')",[code,customerId,planId,opt.deployment_type_id,'initial_subscription',plan.name,plan.duration_months,opt.name_ar,base,addonsTotal,total,plan.currency_code||'USD',JSON.stringify(addons.map(a=>({id:a.id,code:a.code,nameAr:a.name_ar,price:Number(a.price)}))),JSON.stringify({maxTenants:Number(plan.max_tenants),maxSubscribers:Number(plan.max_subscribers),maxNas:Number(plan.max_nas)})]);
-  await db.query("INSERT INTO payment_order_events (payment_order_id,event_type,to_status) VALUES (?,'created','pending')",[result.insertId]);
+  const base=Number(opt.price),addonsTotal=addons.reduce((s,a)=>s+Number(a.price||0),0),total=base+addonsTotal,code=paymentCode();
+  conn=await db.pool.getConnection();
+  await conn.beginTransaction();
+  const [result]:any=await conn.query("INSERT INTO payment_orders (payment_code,customer_id,plan_id,deployment_type_id,payment_purpose,plan_name_snapshot,duration_months_snapshot,deployment_name_snapshot,base_price,addons_total,total_amount,currency_code,addons_snapshot,plan_limits_snapshot,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending')",[code,customerId,planId,opt.deployment_type_id,'initial_subscription',plan.name,plan.duration_months,opt.name_ar,base,addonsTotal,total,plan.currency_code||'USD',JSON.stringify(addons.map(a=>({id:a.id,code:a.code,nameAr:a.name_ar,price:Number(a.price)}))),JSON.stringify({maxTenants:Number(plan.max_tenants),maxSubscribers:Number(plan.max_subscribers),maxNas:Number(plan.max_nas)})]);
+  await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,to_status) VALUES (?,'created','pending')",[result.insertId]);
+  await conn.commit();
   return res.status(201).json({success:true,paymentOrder:{id:result.insertId,paymentCode:code,purpose:'initial_subscription',planName:plan.name,deploymentName:opt.name_ar,basePrice:base,addonsTotal,totalAmount:total,currency:plan.currency_code||'USD',addons}});
- }catch(e){console.error('Create payment order error:',e);return res.status(500).json({success:false,message:'تعذر إنشاء طلب الدفع.'});}
+ }catch(e){if(conn)await conn.rollback();console.error('Create payment order error:',(e as any)?.code || 'UNKNOWN');return res.status(500).json({success:false,message:'تعذر إنشاء طلب الدفع.'});}
+ finally{conn?.release();}
 }
 
 export async function getMyPaymentOrderController(req:AuthenticatedRequest,res:Response){
@@ -51,8 +57,21 @@ export async function getMyPaymentOrderController(req:AuthenticatedRequest,res:R
  catch(e){console.error(e);return res.status(500).json({success:false,message:'تعذر تحميل طلب الدفع.'});}
 }
 export async function markPaymentOrderWhatsappController(req:AuthenticatedRequest,res:Response){
- try{const code=String(req.params.code??'').trim();const [rows]=await db.query("SELECT id,status FROM payment_orders WHERE payment_code=? AND customer_id=? LIMIT 1",[code,req.auth!.accountId]);const r=(rows as any[])[0];if(!r)return res.status(404).json({success:false,message:'طلب الدفع غير موجود.'});if(!['pending','awaiting_confirmation'].includes(r.status))return res.status(409).json({success:false,message:'حالة طلب الدفع لا تسمح بهذه العملية.'});if(r.status==='pending'){await db.query("UPDATE payment_orders SET status='awaiting_confirmation' WHERE id=?",[r.id]);await db.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status) VALUES (?,'sent_to_whatsapp','pending','awaiting_confirmation')",[r.id]);}return res.json({success:true,status:'awaiting_confirmation'});}
- catch(e){console.error(e);return res.status(500).json({success:false,message:'تعذر تحديث طلب الدفع.'});}
+ let conn;
+ try{
+  conn=await db.pool.getConnection();await conn.beginTransaction();
+  const code=String(req.params.code??'').trim();
+  const [rows]:any=await conn.query("SELECT id,status FROM payment_orders WHERE payment_code=? AND customer_id=? FOR UPDATE",[code,req.auth!.accountId]);
+  const order=rows[0];
+  if(!order){await conn.rollback();return res.status(404).json({success:false,message:'طلب الدفع غير موجود.'});}
+  if(!['pending','awaiting_confirmation'].includes(order.status)){await conn.rollback();return res.status(409).json({success:false,message:'حالة طلب الدفع لا تسمح بهذه العملية.'});}
+  if(order.status==='pending'){
+    await conn.query("UPDATE payment_orders SET status='awaiting_confirmation' WHERE id=?",[order.id]);
+    await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status) VALUES (?,'sent_to_whatsapp','pending','awaiting_confirmation')",[order.id]);
+  }
+  await conn.commit();return res.json({success:true,status:'awaiting_confirmation'});
+ }catch(error){if(conn)await conn.rollback();console.error('WhatsApp payment status failed:',(error as any)?.code || 'UNKNOWN');return res.status(500).json({success:false,message:'تعذر تحديث طلب الدفع.'});}
+ finally{conn?.release();}
 }
 
 export async function listPaymentOrdersController(req:AuthenticatedRequest,res:Response){
@@ -74,18 +93,21 @@ export async function confirmPaymentOrderController(req:AuthenticatedRequest,res
   conn=await db.pool.getConnection();
   await conn.beginTransaction();
   const code=String(req.params.code??'').trim();
-  const [rows]:any=await conn.query("SELECT id,customer_id,total_amount,currency_code,status FROM payment_orders WHERE payment_code=? FOR UPDATE",[code]);
+  const [rows]:any=await conn.query("SELECT * FROM payment_orders WHERE payment_code=? FOR UPDATE",[code]);
   const order=rows[0];
   if(!order){await conn.rollback();return res.status(404).json({success:false,message:'طلب الدفع غير موجود.'});}
   if(!['pending','awaiting_confirmation'].includes(order.status)){await conn.rollback();return res.status(409).json({success:false,message:'تمت معالجة طلب الدفع مسبقًا أو أن حالته لا تسمح بالتأكيد.'});}
+  const central=await ensureCentralSubscription(conn,req,order);
   await conn.query("UPDATE payment_orders SET status='paid',paid_at=CURRENT_TIMESTAMP,confirmed_by_master_admin_id=? WHERE id=?",[req.auth!.accountId,order.id]);
   await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status,master_admin_id,metadata) VALUES (?,'confirmed_paid',?,'paid',?,?)",[order.id,order.status,req.auth!.accountId,JSON.stringify({customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code})]);
-  await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'CUSTOMER',entityId:order.customer_id,description:`تأكيد استلام دفعة ${code} بقيمة ${order.total_amount} ${order.currency_code}`,metadata:{eventType:'payment_confirmed',paymentOrderId:order.id,paymentCode:code,customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code,fromStatus:order.status,toStatus:'paid'}},conn);
+  await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'CUSTOMER',entityId:order.customer_id,tenantId:central.tenantId,description:`تأكيد استلام دفعة ${code} بقيمة ${order.total_amount} ${order.currency_code}`,metadata:{eventType:'payment_confirmed',tenantId:central.tenantId,subscriptionId:central.subscriptionId,paymentOrderId:order.id,paymentCode:code,customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code,fromStatus:order.status,toStatus:'paid'}},conn);
   const [confirmed]:any=await conn.query('SELECT paid_at FROM payment_orders WHERE id=?',[order.id]);
   await conn.commit();
-  return res.json({success:true,status:'paid',paidAt:confirmed[0].paid_at,message:'تم تأكيد استلام الدفعة وتسجيلها في سجل النشاط.'});
+  return res.json({success:true,status:'paid',central,paidAt:confirmed[0].paid_at,message:'تم تأكيد استلام الدفعة وتسجيلها في سجل النشاط.'});
  } catch(error) {
   if(conn)await conn.rollback();
+  if(error instanceof EnvironmentRequestError)return res.status(error.status).json({success:false,message:error.message});
+  if(['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes((error as any)?.code))return res.status(503).json({success:false,message:'طبّق ترحيل القاعدة المركزية قبل تأكيد الدفع. لم تُحفظ العملية.'});
   console.error('Confirm payment:',error);
   return res.status(500).json({success:false,message:'تعذر تأكيد عملية الدفع وتسجيل نشاطها.'});
  } finally {conn?.release();}
@@ -102,6 +124,7 @@ export async function getSubscriptionRequestController(req:AuthenticatedRequest,
   try{const value=typeof r.addons_snapshot==='string'?JSON.parse(r.addons_snapshot):r.addons_snapshot;if(Array.isArray(value))addons=value.filter(a=>a&&typeof a==='object').map(a=>({name:String(a.nameAr||a.name_ar||a.name||a.code||'إضافة'),price:a.price==null?null:String(a.price)}));}catch{}
   let planLimits:null|{maxTenants:number;maxSubscribers:number;maxNas:number}=null;
   try{const value=typeof r.plan_limits_snapshot==='string'?JSON.parse(r.plan_limits_snapshot):r.plan_limits_snapshot;if(value&&['maxTenants','maxSubscribers','maxNas'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0))planLimits={maxTenants:value.maxTenants,maxSubscribers:value.maxSubscribers,maxNas:value.maxNas};}catch{}
-  return res.json({success:true,subscription:{planLimits,id:r.id,customerId:r.customer_id,customerName:r.customer_name,customerUsername:r.customer_username,customerEmail:r.customer_email,paymentCode:r.payment_code,planName:r.plan_name_snapshot,durationMonths:r.duration_months_snapshot,deploymentName:r.deployment_name_snapshot,basePrice:String(r.base_price),addonsTotal:String(r.addons_total),totalAmount:String(r.total_amount),currency:r.currency_code,addons,status:r.status,requestedAt:r.requested_at,paidAt:r.paid_at,confirmedBy:r.confirmed_by_name||r.confirmed_by_username||null}});
+  const environment=await readEnvironmentSummary(db.query,r);
+  return res.json({success:true,subscription:{environment,planLimits,id:r.id,customerId:r.customer_id,customerName:r.customer_name,customerUsername:r.customer_username,customerEmail:r.customer_email,paymentCode:r.payment_code,planName:r.plan_name_snapshot,durationMonths:r.duration_months_snapshot,deploymentName:r.deployment_name_snapshot,basePrice:String(r.base_price),addonsTotal:String(r.addons_total),totalAmount:String(r.total_amount),currency:r.currency_code,addons,status:r.status,requestedAt:r.requested_at,paidAt:r.paid_at,confirmedBy:r.confirmed_by_name||r.confirmed_by_username||null}});
  }catch(error){console.error('Subscription details:',error);return res.status(500).json({success:false,message:'تعذر تحميل تفاصيل الاشتراك.'});}
 }
