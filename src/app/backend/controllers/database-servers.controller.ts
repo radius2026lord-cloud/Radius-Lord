@@ -24,7 +24,7 @@ export async function inspectDatabaseServer(req:AuthenticatedRequest,res:Respons
  stage='create_database';await admin.query({sql:`CREATE DATABASE \`${probe}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,timeout:10000});createdDatabase=true;
  stage='create_user';await admin.query({sql:`CREATE USER ${account} IDENTIFIED BY ${mysql.escape(password)}`,timeout:10000});createdUser=true;
  stage='create_table';await admin.query({sql:`CREATE TABLE \`${probe}\`.verification (id INT PRIMARY KEY,value INT NOT NULL) ENGINE=InnoDB`,timeout:10000});
- stage='grant';await admin.query({sql:`GRANT SELECT,INSERT,UPDATE,DELETE ON \`${probe}\`.* TO ${account}`,timeout:10000});
+ stage='grant';const grantDatabase=probe.replace(/_/g,'\\_');await admin.query({sql:`GRANT SELECT,INSERT,UPDATE,DELETE ON \`${grantDatabase}\`.* TO ${account}`,timeout:10000});
  stage='client_connection';client=await mysql.createConnection({...options(c),user,password,database:probe});stage='read_write';for(const sql of ['INSERT INTO verification VALUES (1,1)','UPDATE verification SET value=2 WHERE id=1','SELECT value FROM verification WHERE id=1','DELETE FROM verification WHERE id=1'])await client.query({sql,timeout:10000});
  stage='cleanup';await client.end();client=undefined;await admin.query({sql:`DROP USER ${account}`,timeout:10000});createdUser=false;await admin.query({sql:`DROP DATABASE \`${probe}\``,timeout:10000});createdDatabase=false;
  const verified=jwt.sign({kind:'database-inspect',admin:req.auth!.accountId,hash:fingerprint(c)},provisioningKey(),{algorithm:'HS256',expiresIn:'10m'});
