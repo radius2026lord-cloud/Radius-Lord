@@ -1,10 +1,10 @@
 /* Shared Arabic UI typography, as agreed for Radius Lord. */
 :root {
-  --rl-type-page: 20px;
-  --rl-type-section: 16px;
-  --rl-type-nav-main: 16px;
-  --rl-type-nav-sub: 14px;
-  --rl-type-label: 15px;
+  --rl-type-page: 19px;
+  --rl-type-section: 15px;
+  --rl-type-nav-main: 15px;
+  --rl-type-nav-sub: 13px;
+  --rl-type-label: 14px;
   --rl-type-body: 14px;
   --rl-type-note: 13px;
   --rl-type-leading: 1.6;

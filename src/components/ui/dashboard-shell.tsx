@@ -201,7 +201,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       if (groupRect.bottom > bottomSafe) delta = groupRect.bottom - bottomSafe;
       else if (groupRect.top < topSafe) delta = groupRect.top - topSafe;
       if (Math.abs(delta) > 2) nav.scrollTo({ top: nav.scrollTop + delta, behavior: "smooth" });
-    }, 890);
+    }, 490);
   };
 
   const toggleNavGroup = (label: string, willOpen: boolean, mobile = false) => {
@@ -238,7 +238,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right font-[600] ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"}`}>{group.label}</span>
                 {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-500 ${open ? "rotate-180" : ""}`} />}
               </button>
-              <div className={`grid transition-[grid-template-rows,opacity] duration-[850ms] ease-[cubic-bezier(.45,0,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+              <div className={`grid transition-[grid-template-rows,opacity] duration-[450ms] ease-[cubic-bezier(.45,0,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                 <div className="min-h-0 overflow-hidden"><div className="space-y-1 py-1 pr-5">
                   {group.items.map((item) => {
                     const Icon = item.icon; const active = (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")));

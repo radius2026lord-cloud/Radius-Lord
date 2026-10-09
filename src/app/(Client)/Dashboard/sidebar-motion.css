@@ -1,5 +1,5 @@
 /* Shared explicit timing for sidebar, workspace and footer. */
-.dashboard-shell-root { --rl-sidebar-duration: 1200ms; --rl-sidebar-easing: cubic-bezier(.45, 0, .25, 1); }
+.dashboard-shell-root { --rl-sidebar-duration: 650ms; --rl-sidebar-easing: cubic-bezier(.45, 0, .25, 1); }
 .dashboard-shell-root .rl-sidebar-motion {
   transition-property: width, margin-right, right, padding, gap, max-width, opacity, transform, background-color, color, border-color;
   transition-duration: var(--rl-sidebar-duration);
