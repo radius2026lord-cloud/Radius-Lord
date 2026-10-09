@@ -1,4 +1,5 @@
 "use client";
+import ProjectLoading from "@/components/ui/project-loading";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -40,7 +41,7 @@ export default function CustomerSubscriptions({ customerId }: { customerId: numb
         <p className="mt-1 text-[11px] text-slate-400">طلبات الاشتراك التي انتقل العميل منها إلى مرحلة الدفع.</p></div>
       <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#9db8d1] px-3 text-xs text-[#0758e9] disabled:opacity-50 dark:text-[#8fc0ff]"><RefreshCw className="h-4 w-4" />تحديث</button>
     </div>
-    {loading ? <p className="p-5 text-center text-xs text-slate-500">جارٍ تحميل الاشتراكات...</p>
+    {loading ? <div className="p-5"><ProjectLoading>جارٍ تحميل الاشتراكات...</ProjectLoading></div>
       : error ? <p role="alert" className="p-3 text-xs text-red-600 dark:text-red-300">{error}</p>
       : items.length === 0 ? <p className="p-5 text-center text-xs text-slate-400">لا توجد طلبات اشتراك لهذا العميل حتى الآن.</p>
       : <div className="grid gap-3 md:grid-cols-2">{items.map(item => <article key={item.id} className="rl-surface-soft min-w-0 rounded-[16px] bg-[#f9fbfe] p-4 dark:bg-white/[.035]">

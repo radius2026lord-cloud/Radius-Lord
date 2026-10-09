@@ -1,4 +1,5 @@
 "use client";
+import ProjectLoading from "@/components/ui/project-loading";
 
 import { useEffect, useState } from "react";
 import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Mail, MapPin, Pencil, Phone, Trash2, UserRound, X } from "lucide-react";
@@ -91,7 +92,7 @@ export default function CustomerDetailsPage() {
     finally { setSaving(false); }
   };
 
-  if (loading) return <StateCard>جارٍ تحميل بيانات العميل...</StateCard>;
+  if (loading) return <StateCard><ProjectLoading>جارٍ تحميل بيانات العميل...</ProjectLoading></StateCard>;
   if (notFound || !customer) return <StateCard>تعذر العثور على العميل.</StateCard>;
 
   const statusTone = customer.status === "active" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : customer.status === "suspended" ? "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400";

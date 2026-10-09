@@ -7,7 +7,7 @@ import { CollectionState } from "@/components/ui/collection-display";
 
 export default function HomepageSettingsPage() {
   const { accountType, loading } = useAuth();
-  if (loading) return <CollectionState>جارٍ تحميل حسابك...</CollectionState>;
+  if (loading) return <CollectionState loading>جارٍ تحميل حسابك...</CollectionState>;
   if (accountType !== "master_admin") return <CollectionState>هذه الإعدادات متاحة للمسؤول الرئيسي فقط.</CollectionState>;
   return <div dir="rtl" className="space-y-4">
     <header className="rl-surface flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]">

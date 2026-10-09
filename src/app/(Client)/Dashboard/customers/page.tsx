@@ -70,7 +70,7 @@ export default function CustomersPage() {
       <BulkSelectionBar count={selected.size} noun="العملاء" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())} show={{activate:true,suspend:true,disable:true}} handlers={{activate:()=>{},suspend:()=>{},disable:()=>{}}}/>
 
       {loading ? (
-        <CollectionState>جارٍ تحميل العملاء...</CollectionState>
+        <CollectionState loading>جارٍ تحميل العملاء...</CollectionState>
       ) : filtered.length === 0 ? (
         <CollectionState>لا يوجد عملاء مطابقون.</CollectionState>
       ) : view === "grid" ? (

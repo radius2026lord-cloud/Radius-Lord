@@ -1,4 +1,5 @@
 "use client";
+import ProjectLoading from "@/components/ui/project-loading";
 import { useEffect,useMemo,useState } from "react";
 import { CheckCircle2,Copy,MessageCircle,ReceiptText } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -8,7 +9,7 @@ export default function CustomerPaymentPage(){
  const message=useMemo(()=>{if(!order||!settings)return"";let t=settings.whatsapp_message_template||"مرحبًا، أرغب بإتمام اشتراكي في Radius Lord. كود الدفع: {{payment_code}}";t=t.replaceAll("{{payment_code}}",order.paymentCode);return t+"\nالخطة: "+order.planName+"\nالاستضافة: "+(order.deploymentName||"-")+"\nالإجمالي: "+order.totalAmount+" "+order.currency},[order,settings]);
  const whatsapp=async()=>{if(!order||!settings?.whatsapp_number)return;try{await fetch("/api/billing/orders/"+encodeURIComponent(order.paymentCode)+"/whatsapp",{method:"POST",credentials:"include"});}finally{window.open("https://wa.me/"+settings.whatsapp_number.replace(/\D/g,"")+"?text="+encodeURIComponent(message),"_blank","noopener,noreferrer")}};
  if(error)return <div className="m-5 rounded-3xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10">{error}</div>;
- if(!order||!settings)return <div className="p-10 text-center text-sm text-slate-500">جارٍ تجهيز صفحة الدفع...</div>;
+ if(!order||!settings)return <div className="p-10"><ProjectLoading>جارٍ تجهيز صفحة الدفع...</ProjectLoading></div>;
  return <div dir="rtl" className="mx-auto max-w-4xl p-4 sm:p-6"><header className="mb-5 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#0758e9] text-white"><ReceiptText className="h-6 w-6"/></span><h1 className="mt-3 text-2xl font-bold text-[#102a63] dark:text-white">الدفع والتفعيل</h1><p className="mt-1 text-xs text-slate-500">احتفظ بكود الدفع، فهو المرجع الخاص بهذه العملية.</p></header>
  <section className="rounded-[26px] border border-[#b9cee3] bg-white/90 p-5 shadow-[0_16px_42px_rgba(39,69,103,.10)] dark:border-white/10 dark:bg-white/[.04]">
   <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#f2f7fd] p-4 dark:bg-white/[.05]"><div><div className="text-[10px] text-slate-400">كود الدفع</div><div dir="ltr" className="mt-1 font-mono text-lg font-extrabold text-[#0758e9]">{order.paymentCode}</div></div><button onClick={()=>{navigator.clipboard.writeText(order.paymentCode);setCopied(true);setTimeout(()=>setCopied(false),1200)}} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#c9dbea] px-3 text-xs font-bold"><Copy className="h-4 w-4"/>{copied?"تم النسخ":"نسخ الكود"}</button></div>

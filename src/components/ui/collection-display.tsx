@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import CollectionViewToggle,{type CollectionViewMode} from "@/components/ui/collection-view-toggle";
 import { useCollectionState } from "@/components/ui/use-collection-state";
 import ProjectTooltip from "@/components/ui/project-tooltip";
+import ProjectLoading from "@/components/ui/project-loading";
 
 export function useCollectionDisplay<T extends string|number>(key:string,defaultView:CollectionViewMode="row"){return useCollectionState<T>(key,defaultView)}
 
@@ -72,7 +73,7 @@ export function collectionRowClass(selected=false){
 }
 
 
-export function CollectionState({children}:{children:React.ReactNode}){return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">{children}</div>}
+export function CollectionState({children,loading=false}:{children:React.ReactNode;loading?:boolean}){return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">{loading?<ProjectLoading>{children}</ProjectLoading>:children}</div>}
 
 export function CollectionCard({selected=false,selectionMode=false,onToggle,onOpen,children}:{selected?:boolean;selectionMode?:boolean;onToggle?:()=>void;onOpen:()=>void;children:React.ReactNode}){
  return <article onClick={()=>selectionMode&&onToggle?onToggle():onOpen()} className={`${collectionCardClass(selected)} ${selected?"bg-[#f2f7fd] dark:bg-white/[.055]":"bg-white hover:bg-[#e9f2ff] dark:bg-[#0d243b]"}`}>{selectionMode&&<div className="-mx-1 -mt-1 mb-3 flex items-center justify-end border-b border-slate-100 pb-2 dark:border-white/[.07]"><CollectionGridSelectionMark checked={selected}/></div>}{children}</article>

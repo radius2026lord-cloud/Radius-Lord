@@ -45,7 +45,7 @@ export default function CollectionReportsPage(){
   };
   const reset=()=>{setDraft(defaults());setApplied(defaults());setPage(1);setAdvanced(false);setValidation("");};
   const currencies=Array.from(new Set([...(report?.currencies??[]),...(draft.currency==="all"?[]:[draft.currency])]));
-  if(authLoading)return <CollectionState>جارٍ تحميل حسابك...</CollectionState>;
+  if(authLoading)return <CollectionState loading>جارٍ تحميل حسابك...</CollectionState>;
   if(accountType!=="master_admin")return <CollectionState>تقارير التحصيل متاحة للمسؤول الرئيسي فقط.</CollectionState>;
   return <div dir="rtl" className="space-y-4">
     <header className="rl-surface flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]">
@@ -66,7 +66,7 @@ export default function CollectionReportsPage(){
       {(applied.currency!=="all"||applied.purpose!=="all"||applied.search)&&<p className="text-[11px] text-slate-500">الفلاتر المطبقة: {[applied.search&&`العميل: ${applied.search}`,applied.currency!=="all"&&`العملة: ${applied.currency}`,applied.purpose!=="all"&&paymentPurposeOptions.find(option=>option.value===applied.purpose)?.label].filter(Boolean).join(" · ")}</p>}
     </form>
     {error&&<p role="alert" className="rounded-2xl bg-red-50 p-4 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
-    {loading?<CollectionState>جارٍ تحميل التحصيل...</CollectionState>:!error&&report&&<>
+    {loading?<CollectionState loading>جارٍ تحميل التحصيل...</CollectionState>:!error&&report&&<>
       <section className="rl-surface rounded-[22px] bg-white p-4 dark:bg-[#0d243b]"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-[#17386d] dark:text-white">ملخص الفترة المختارة</h2><span className="text-xs text-slate-500" dir="ltr">{report.range.startDate} — {report.range.endDate}</span></div>
         {report.summary.length?<div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{report.summary.map(item=><div key={item.currency} className="rl-surface-soft rounded-[16px] bg-[#f9fbfe] p-3 dark:bg-white/[.035]"><b className="block text-xl text-[#17386d] dark:text-white" dir="ltr">{formatAmount(item.amount)} <span className="text-xs font-normal">{item.currency}</span></b><p className="mt-2 text-xs text-slate-500">{item.count} دفعة مستلمة</p></div>)}</div>:<p className="mt-3 text-xs text-slate-400">لا توجد دفعات مستلمة مطابقة خلال هذه الفترة.</p>}
       </section>
