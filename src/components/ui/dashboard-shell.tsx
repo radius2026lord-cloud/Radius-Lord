@@ -216,7 +216,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <div className="mb-3">
               <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-[15px] font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${pathname === masterAdminHome.href ? "sidebar-active-icon bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><Home className="h-5 w-5" /></span>
-                <span className={`overflow-hidden whitespace-nowrap ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] opacity-100"}`}>الصفحة الرئيسية</span>
+                <span className={`overflow-hidden whitespace-nowrap font-[600] ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] opacity-100"}`}>الصفحة الرئيسية</span>
               </Link>
             </div>
           )}
@@ -227,7 +227,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             return <div key={group.label} ref={mobile ? undefined : (el) => { navGroupRefs.current[group.label] = el; }} className="mb-2">
               <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-[15px] font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${groupActive ? "sidebar-active-icon bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.20)]" : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><GroupIcon className="h-5 w-5" /></span>
-                <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"}`}>{group.label}</span>
+                <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right font-[600] ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"}`}>{group.label}</span>
                 {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />}
               </button>
               <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
