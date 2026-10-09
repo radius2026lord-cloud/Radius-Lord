@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "@/styles/typography.css";
 import "./dashboard-entry.css";
+import "./sidebar-motion.css";
 
 import { ThemeProvider } from "next-themes";
 import DashboardShell from "@/components/ui/dashboard-shell";

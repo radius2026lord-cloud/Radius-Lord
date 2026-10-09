@@ -1,13 +1,14 @@
 /* Shared Arabic UI typography, as agreed for Radius Lord. */
 :root {
-  --rl-type-page: 22px;
-  --rl-type-section: 18px;
-  --rl-type-nav-main: 17px;
+  --rl-type-page: 20px;
+  --rl-type-section: 16px;
+  --rl-type-nav-main: 16px;
   --rl-type-nav-sub: 14px;
   --rl-type-label: 15px;
   --rl-type-body: 14px;
   --rl-type-note: 13px;
   --rl-type-leading: 1.6;
+  --rl-type-heading-color: #17386d;
   --font-arabic-ui: "LBC", "LBC Arabic", Tahoma, Arial, sans-serif;
 }
 
@@ -105,8 +106,8 @@ body.dashboard-enter .rl-breadcrumb {
 }
 @media (max-width: 639px) {
   :root {
-    --rl-type-page: 20px;
-    --rl-type-nav-main: 16px;
+    --rl-type-page: 18px;
+    --rl-type-nav-main: 15px;
     --rl-type-label: 14px;
   }
   /* Keep native fields at 16px to avoid focus zoom on mobile browsers. */
@@ -114,4 +115,11 @@ body.dashboard-enter .rl-breadcrumb {
   .rl-field-value {
     font-size: 16px;
   }
+}
+
+/* Brand navy in light mode, a readable blue tint over dark surfaces. */
+:root.dark { --rl-type-heading-color: #a8c7f4; }
+body.dashboard-enter :is(h1, h2, .rl-shell-title)[class] {
+  /* Existing dark font utilities set an important color. */
+  color: var(--rl-type-heading-color) !important;
 }

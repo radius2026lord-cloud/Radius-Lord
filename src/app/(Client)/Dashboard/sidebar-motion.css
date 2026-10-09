@@ -1,0 +1,27 @@
+/* Shared explicit timing for sidebar, workspace and footer. */
+.dashboard-shell-root { --rl-sidebar-duration: 1200ms; --rl-sidebar-easing: cubic-bezier(.45, 0, .25, 1); }
+.dashboard-shell-root .rl-sidebar-motion {
+  transition-property: width, margin-right, right, padding, gap, max-width, opacity, transform, background-color, color, border-color;
+  transition-duration: var(--rl-sidebar-duration);
+  transition-timing-function: var(--rl-sidebar-easing);
+}
+.rl-mobile-sidebar {
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s var(--rl-sidebar-duration);
+}
+.rl-mobile-sidebar[data-open="true"] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.rl-mobile-sidebar-backdrop { opacity: 0; transition: opacity var(--rl-sidebar-duration) var(--rl-sidebar-easing); }
+.rl-mobile-sidebar-panel { transform: translateX(calc(100% + 24px)); transition: transform var(--rl-sidebar-duration) var(--rl-sidebar-easing); }
+.rl-mobile-sidebar[data-open="true"] .rl-mobile-sidebar-backdrop { opacity: 1; }
+.rl-mobile-sidebar[data-open="true"] .rl-mobile-sidebar-panel { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shell-root .rl-sidebar-motion,
+  .rl-mobile-sidebar,
+  .rl-mobile-sidebar-backdrop,
+  .rl-mobile-sidebar-panel { transition: none; }
+}
