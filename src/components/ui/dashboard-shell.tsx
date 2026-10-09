@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
+import ServerStatusFooter from "./server-status-footer";
 import TransitionOverlay from "@/components/ui/transition-overlay";
 import { useAuth } from "@/components/auth/auth-provider";
 import CustomerOnboardingShell from "./customer-onboarding-shell";
@@ -304,13 +305,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </div>
           </div>
         </div></header>
-        <main className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : "pb-[66px]"}`}><div className={`workspace-scroll h-full rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-y-auto p-3 sm:p-4"}`}>
+        <main className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[148px] sm:pb-[112px] xl:pb-[66px]" : "pb-[66px]"}`}><div className={`workspace-scroll h-full rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-y-auto p-3 sm:p-4"}`}>
 
           <div className="min-w-0">{children}</div>
         </div></main>
-        {!customerOnboarding && <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap} ${shellMotion}`}><div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[12px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
+        {!customerOnboarding && <footer className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap} ${shellMotion}`}>{accountType === "master_admin" ? <ServerStatusFooter/> : <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[12px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
           <div className="flex items-center gap-2"><Database className="h-4 w-4 text-[#0758e9]" /><span>radius.lord.local</span></div><div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 sm:block" /><div><span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">Ubuntu 22.04.4 LTS</span></div><div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 md:block" /><div className="hidden items-center gap-2 md:flex"><span>CPU</span><span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full w-[23%] rounded-full bg-[#ffad16]" /></span><b>23%</b></div><div className="hidden items-center gap-2 lg:flex"><span>RAM</span><span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full w-[42%] rounded-full bg-[#1479ff]" /></span><b>42%</b></div><div className="mr-auto flex items-center gap-4"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />FreeRADIUS</span><span className="hidden items-center gap-1.5 sm:flex"><span className="h-2 w-2 rounded-full bg-emerald-500" />MySQL</span><span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">10:24:45 AM</span></div>
-        </div></footer>}
+        </div>}</footer>}
       </div>
 
       {loggingOut && <TransitionOverlay variant="logout" />}
