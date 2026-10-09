@@ -1,12 +1,12 @@
 /* Shared Arabic UI typography, as agreed for Radius Lord. */
 :root {
-  --rl-type-page: 19px;
-  --rl-type-section: 15px;
-  --rl-type-nav-main: 15px;
-  --rl-type-nav-sub: 13px;
-  --rl-type-label: 14px;
-  --rl-type-body: 14px;
-  --rl-type-note: 13px;
+  --rl-type-page: 18px;
+  --rl-type-section: 14px;
+  --rl-type-nav-main: 14px;
+  --rl-type-nav-sub: 12.5px;
+  --rl-type-label: 13px;
+  --rl-type-body: 13px;
+  --rl-type-note: 12.5px;
   --rl-type-leading: 1.6;
   --rl-type-heading-color: #17386d;
   --font-arabic-ui: "LBC", "LBC Arabic", Tahoma, Arial, sans-serif;
@@ -107,8 +107,8 @@ body.dashboard-enter .rl-breadcrumb {
 @media (max-width: 639px) {
   :root {
     --rl-type-page: 18px;
-    --rl-type-nav-main: 15px;
-    --rl-type-label: 14px;
+    --rl-type-nav-main: 14px;
+    --rl-type-label: 13px;
   }
   /* Keep native fields at 16px to avoid focus zoom on mobile browsers. */
   body.dashboard-enter :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea):not(.xterm *),
