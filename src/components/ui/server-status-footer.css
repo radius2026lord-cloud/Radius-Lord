@@ -1,0 +1,9 @@
+/* Compact status bar typography, independent of form/button sizes. */
+body.dashboard-enter .rl-server-footer { font-size: 11px; line-height: 1.4; }
+body.dashboard-enter .rl-server-footer button {
+  height: 28px;
+  min-height: 28px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+body.dashboard-enter .rl-server-footer button svg { width: 14px; height: 14px; }
