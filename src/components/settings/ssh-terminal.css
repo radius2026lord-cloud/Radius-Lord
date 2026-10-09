@@ -1,3 +1,14 @@
 /* Terminal chrome stays readable over its navy surface in both themes. */
 .dashboard-enter .rl-ssh-dialog .rl-ssh-title[class] { color: #dbeafe !important; }
 .dashboard-enter .rl-ssh-dialog button { color: #dbeafe; }
+
+.rl-ssh-overlay[data-state="open"] { animation: rlSshBackdropIn 220ms ease-out both; }
+.rl-ssh-dialog[data-state="open"] { animation: rlSshWindowIn 320ms cubic-bezier(.22,.8,.25,1) both; }
+@keyframes rlSshBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rlSshWindowIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)) scale(.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rl-ssh-overlay[data-state="open"], .rl-ssh-dialog[data-state="open"] { animation: none; }
+}
