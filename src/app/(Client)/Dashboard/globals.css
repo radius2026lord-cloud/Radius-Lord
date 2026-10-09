@@ -477,6 +477,11 @@ textarea,
   color: inherit;
 }
 
+/* Selected sidebar badges need contrast over their blue background in both themes. */
+.sidebar .sidebar-active-icon > .lucide {
+  color: #fff;
+}
+
 /* Shared field warning: same gentle attention movement as the login form. */
 @keyframes radiusFieldWarningShake {
   0%, 100% { transform: translateX(0); }
