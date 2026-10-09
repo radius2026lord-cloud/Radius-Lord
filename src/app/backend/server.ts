@@ -1,4 +1,5 @@
 import { startDatabaseProvisioningWorker } from './workers/database-provisioning.worker';
+import { attachSshTerminal } from './services/ssh-terminal.service';
 import http from 'http';
 
 import cors from 'cors';
@@ -19,6 +20,7 @@ app.use('/api', apiRoutes);
 
 const startServer = (port: number) => {
   const server = http.createServer(app);
+  attachSshTerminal(server);
 
   server.once('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

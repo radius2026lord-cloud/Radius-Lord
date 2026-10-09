@@ -1,10 +1,21 @@
 import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer,databaseServerHealth,setDatabaseServerAdmission} from '../../controllers/database-servers.controller';
+import {getSshConnection,inspectSshConnection,saveSshConnection,createSshTicket} from '../../services/ssh-terminal.service';
+import { env } from '../../config/env';
 import { getOvpnSettings, updateOvpnSettings, inspectOvpnGateway, applyOvpnGateway, getOvpnGatewayHealth, selectOvpnHealthDashboard } from '../../controllers/ovpn-settings.controller';
 import { Router } from 'express';
 import { getContactPaymentSettingsController, updateContactPaymentSettingsController } from '../../controllers/platform-settings.controller';
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.use('/database-servers/:id/ssh', (req,res,next)=>{
+ if(req.method==='GET')return next();
+ if(req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر طلب SSH غير مصرح.'});
+ return next();
+});
+router.get('/database-servers/:id/ssh',getSshConnection);
+router.post('/database-servers/:id/ssh/inspect',inspectSshConnection);
+router.put('/database-servers/:id/ssh',saveSshConnection);
+router.post('/database-servers/:id/ssh/ticket',createSshTicket);
 router.get('/database-servers',listDatabaseServers);
 router.get('/database-servers/:id/health',databaseServerHealth);
 router.put('/database-servers/:id/admission',setDatabaseServerAdmission);

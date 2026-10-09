@@ -28,6 +28,7 @@ import {
   PackagePlus,
   Radio,
   Server,
+  TerminalSquare,
   Settings,
   ShieldCheck,
   ScrollText,
@@ -78,6 +79,7 @@ const masterAdminGroups: NavGroup[] = [
     { label: "حالة الأجهزة", href: "/Dashboard/nas/status", icon: Activity },
   ]},
   { label: "النظام", icon: Database, items: [
+    { label: "طرفية SSH", href: "/Dashboard/ssh-terminal", icon: TerminalSquare },
     { label: "FreeRADIUS", href: "/Dashboard/system/freeradius", icon: Radio },
     { label: "قواعد البيانات", href: "/Dashboard/system/databases", icon: Database },
     { label: "حالة الخدمات", href: "/Dashboard/system/services", icon: Activity },

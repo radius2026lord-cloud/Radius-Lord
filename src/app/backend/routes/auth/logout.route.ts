@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { writeAuditLog } from '../../services/audit.service';
+import { closeAdminSshSessions } from '../../services/ssh-terminal.service';
 
 const router = Router();
 
 router.post('/logout', authenticate, async (req: AuthenticatedRequest, res) => {
+  if(req.auth?.accountType==='master_admin')closeAdminSshSessions(req.auth.accountId);
   try {
     if (req.auth?.accountType === 'master_admin') {
       await writeAuditLog(req, {
