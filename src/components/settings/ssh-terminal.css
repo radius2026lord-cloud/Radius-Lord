@@ -1,0 +1,3 @@
+/* Terminal chrome stays readable over its navy surface in both themes. */
+.dashboard-enter .rl-ssh-dialog .rl-ssh-title[class] { color: #dbeafe !important; }
+.dashboard-enter .rl-ssh-dialog button { color: #dbeafe; }

@@ -107,7 +107,7 @@ export async function saveSshConnection(req: AuthenticatedRequest, res: Response
     res.json({ message: 'تم حفظ اتصال SSH بشكل مشفّر.' });
   } catch (e) { fail(res, e); }
 }
-type Ticket = { adminId: number; serverId: number; expires: number };
+type Ticket = { adminId: number; serverId: number; expires: number; config?: Config };
 const tickets = new Map<string, Ticket>();
 const sessions = new Set<{ adminId: number; serverId: number; close: () => void }>();
 export function closeAdminSshSessions(adminId: number) { for (const s of Array.from(sessions)) if (s.adminId === adminId) s.close(); for (const [key,t] of Array.from(tickets)) if (t.adminId === adminId) tickets.delete(key); }
@@ -115,10 +115,17 @@ function closeServerSessions(id: number) { for (const s of Array.from(sessions))
 export async function createSshTicket(req: AuthenticatedRequest, res: Response) {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const id = serverId(req); if (!await savedConfig(id)) throw new Error('احفظ إعدادات SSH بعد الفحص أولًا.');
+    const id = serverId(req); let config: Config | undefined;
+    if (req.body?.verified) {
+      config = await readConfig(req);
+      let proof: any;
+      try { proof = jwt.verify(String(req.body.verified), provisioningKey(), { algorithms: ['HS256'] }); } catch { throw new Error('افحص اتصال SSH قبل فتح الطرفية.'); }
+      if (proof.kind !== 'ssh-inspect' || proof.admin !== req.auth!.accountId || proof.hash !== hash(config)) throw new Error('تغيرت بيانات SSH؛ أعد الفحص.');
+    } else if (!await savedConfig(id)) throw new Error('أدخل بيانات SSH ثم اتصل بالمخدم.');
     for (const [key, t] of Array.from(tickets)) if (t.expires < Date.now() || t.adminId === req.auth!.accountId) tickets.delete(key);
     if (tickets.size >= 64) throw new Error('الطرفيات مشغولة؛ أعد المحاولة بعد قليل.');
-    const ticket = randomBytes(32).toString('base64url'); tickets.set(ticket, { adminId: req.auth!.accountId, serverId: id, expires: Date.now() + 30000 });
+    const ticket = randomBytes(32).toString('base64url'); tickets.set(ticket, { adminId: req.auth!.accountId, serverId: id, expires: Date.now() + 30000, config });
+    setTimeout(() => tickets.delete(ticket), 30000).unref();
     res.json({ ticket });
   } catch (e) { fail(res, e); }
 }
@@ -172,7 +179,7 @@ export function attachSshTerminal(server: Server) {
           if (sessions.size >= 8 || Array.from(sessions).some(s => s.adminId === ticket.adminId)) return close('لديك طرفية مفتوحة، أو بلغ عدد الجلسات الحد المتاح.');
           record = { adminId: ticket.adminId, serverId: ticket.serverId, close: () => close() }; sessions.add(record);
           try {
-            const c = await savedConfig(ticket.serverId); if (closed) return; if (!c) throw new Error('لم يعد اتصال SSH متاحًا.');
+            const c = ticket.config ?? await savedConfig(ticket.serverId); if (closed) return; if (!c) throw new Error('لم يعد اتصال SSH متاحًا.');
             await writeAuditLog(request as AuthenticatedRequest, { actionCode: 'UPDATE', entityTypeCode: 'DATABASE_SERVER', entityId: c.id, description: 'طلب فتح طرفية SSH للمدير الرئيسي', metadata: { operation: 'ssh_open', port: c.port } });
             if (closed) return;
             client.once('ready', () => {
