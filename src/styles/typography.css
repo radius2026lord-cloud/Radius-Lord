@@ -119,7 +119,13 @@ body.dashboard-enter .rl-breadcrumb {
 
 /* Brand navy in light mode, a readable blue tint over dark surfaces. */
 :root.dark { --rl-type-heading-color: #a8c7f4; }
-body.dashboard-enter :is(h1, h2, .rl-shell-title)[class] {
+body.dashboard-enter :is(h1, h2, h3, .rl-shell-title)[class] {
   /* Existing dark font utilities set an important color. */
   color: var(--rl-type-heading-color) !important;
+}
+
+/* Color navigation labels independently of their colored icon badges. */
+body.dashboard-enter .rl-nav-main > span:last-of-type,
+body.dashboard-enter .rl-nav-sub > span {
+  color: var(--rl-type-heading-color);
 }
