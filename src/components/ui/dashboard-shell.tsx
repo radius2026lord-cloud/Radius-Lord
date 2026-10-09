@@ -165,7 +165,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const sidebarWidth = collapsed ? "lg:w-[92px]" : "lg:w-[232px]";
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
-  const shellMotion = "transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)]";
+  const shellMotion = "transition-[width,margin-right,right,padding,gap,max-width,opacity,transform,background-color,color,border-color] duration-[400ms] ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none";
   const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
   const currentTitle = useMemo(() => {
     if (accountType === "master_admin" && /^\/Dashboard\/connection-servers\/[^/]+$/.test(pathname) && !pathname.endsWith("/add")) return "تفاصيل وإعداد خادم الاتصال";
@@ -202,7 +202,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     if (willOpen && !mobile) revealNavGroup(label);
   };
 
-  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => {
+  // Render directly so state updates preserve sidebar DOM and CSS transitions.
+  const renderSidebarContent = (mobile = false) => {
     const compact = !mobile && collapsed;
     return (
       <div className="flex h-full flex-col">
@@ -213,7 +214,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <nav ref={mobile ? undefined : desktopNavRef} className={`sidebar min-h-0 flex-1 overflow-y-auto pb-3 scroll-smooth ${shellMotion} ${compact ? "px-3" : "px-2"}`}>
           {accountType === "master_admin" && (
             <div className="mb-3">
-              <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-sm font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+              <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] text-[15px] font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${pathname === masterAdminHome.href ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><Home className="h-5 w-5" /></span>
                 <span className={`overflow-hidden whitespace-nowrap ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[150px] opacity-100"}`}>الصفحة الرئيسية</span>
               </Link>
@@ -224,23 +225,23 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             const groupActive = group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
             const open = Boolean(openNavGroups[group.label]);
             return <div key={group.label} ref={mobile ? undefined : (el) => { navGroupRefs.current[group.label] = el; }} className="mb-2">
-              <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-sm font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+              <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] text-[15px] font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${groupActive ? "bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.20)]" : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><GroupIcon className="h-5 w-5" /></span>
                 <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"}`}>{group.label}</span>
                 {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />}
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] ${!compact && open ? "max-h-[260px] opacity-100" : "max-h-0 opacity-0"}`}>
-                <div className="space-y-1 py-1 pr-5">
+              <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                <div className="min-h-0 overflow-hidden"><div className="space-y-1 py-1 pr-5">
                   {group.items.map((item) => {
                     const Icon = item.icon; const active = (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")));
-                    return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 text-[12px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
+                    return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 text-[13px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
                   })}
-                </div>
+                </div></div>
               </div>
             </div>;
           })}
         </nav>
-        <div className={`p-2 ${shellMotion}`}><button type="button" onClick={logout} disabled={loggingOut} className={`flex min-h-12 w-full items-center rounded-[18px] border border-red-500 text-sm font-semibold text-red-500 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+        <div className={`p-2 ${shellMotion}`}><button type="button" onClick={logout} disabled={loggingOut} className={`flex min-h-12 w-full items-center rounded-[18px] border border-red-500 text-[15px] font-semibold text-red-500 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400"><LogOut className="h-5 w-5" /></span>
           <span className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>{loggingOut ? "جارٍ تسجيل الخروج..." : "تسجيل الخروج"}</span>
         </button></div>
@@ -257,9 +258,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     
     <div dir="rtl" className={`dashboard-shell-root relative h-screen overflow-hidden bg-[#dce5ef] text-[#102a63] transition-colors dark:bg-[#1d1721] dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
       <aside onMouseLeave={(event) => { if (collapsed) return; const rect = event.currentTarget.getBoundingClientRect(); const exitedThroughLeft = event.clientX <= rect.left && event.clientY >= rect.top && event.clientY <= rect.bottom; if (exitedThroughLeft) setCollapsed(true); }} className={`dashboard-logout-surface fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
-        {collapsed && <div aria-hidden="true" onMouseEnter={() => setCollapsed(false)} className="absolute inset-y-0 left-0 z-50 w-3" />}<SidebarContent />
+        {collapsed && <div aria-hidden="true" onMouseEnter={() => setCollapsed(false)} className="absolute inset-y-0 left-0 z-50 w-3" />}{renderSidebarContent()}
       </aside>
-      {mobileOpen && <div className="dashboard-logout-surface fixed inset-0 z-[80] lg:hidden"><button className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" /><aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]"><SidebarContent mobile /></aside></div>}
+      {mobileOpen && <div className="dashboard-logout-surface fixed inset-0 z-[80] lg:hidden"><button className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" /><aside className="absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]">{renderSidebarContent(true)}</aside></div>}
 
       <div className={`dashboard-main-shell dashboard-logout-surface ${mainGap} h-screen min-w-0 overflow-hidden ${shellMotion}`}>
         <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5"><div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
