@@ -7,3 +7,21 @@ body.dashboard-enter .rl-server-footer button {
   line-height: 1.4;
 }
 body.dashboard-enter .rl-server-footer button svg { width: 14px; height: 14px; }
+
+/* Trial separation between workspace and the compact status bar. */
+body.dashboard-enter .rl-workspace-separated {
+  border-bottom-color: #87acd0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 4px 10px rgba(49,89,133,.06);
+}
+body.dashboard-enter .rl-server-footer {
+  border-top-color: #bed3e8;
+  box-shadow: 0 -5px 14px rgba(49,89,133,.07), 0 6px 16px rgba(49,89,133,.06);
+}
+.dark body.dashboard-enter .rl-workspace-separated {
+  border-bottom-color: #47759c;
+  box-shadow: 0 4px 10px rgba(0,0,0,.12);
+}
+.dark body.dashboard-enter .rl-server-footer {
+  border-top-color: rgba(143,192,255,.22);
+  box-shadow: 0 -5px 14px rgba(0,0,0,.14), 0 6px 16px rgba(0,0,0,.1);
+}

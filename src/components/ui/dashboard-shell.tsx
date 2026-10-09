@@ -180,7 +180,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     if (accountType !== "master_admin" || customerOnboarding) return;
     const root = shellRootRef.current, footer = footerRef.current;
     if (!root || !footer) return;
-    const measure = () => root.style.setProperty("--rl-footer-space", `${Math.ceil(footer.getBoundingClientRect().height) + 24}px`);
+    const measure = () => root.style.setProperty("--rl-footer-space", `${Math.ceil(footer.getBoundingClientRect().height) + 32}px`);
     measure();const observer = new ResizeObserver(measure);observer.observe(footer);
     return () => { observer.disconnect();root.style.removeProperty("--rl-footer-space"); };
   }, [accountType, customerOnboarding]);
@@ -316,7 +316,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </div>
           </div>
         </div></header>
-        <main style={accountType === "master_admin" ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-scroll h-full rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-y-auto p-3 sm:p-4"}`}>
+        <main style={accountType === "master_admin" ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-scroll ${accountType === "master_admin" ? "rl-workspace-separated" : ""} h-full rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-y-auto p-3 sm:p-4"}`}>
 
           <div className="min-w-0">{children}</div>
         </div></main>
