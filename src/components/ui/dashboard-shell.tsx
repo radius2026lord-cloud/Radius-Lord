@@ -124,11 +124,11 @@ const shortcuts = [
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`flex min-w-0 items-center transition-[gap,max-width,opacity,transform] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "justify-center gap-0" : "gap-3"}`}>
-      <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#0a70ff] to-[#063bbd] text-white shadow-[0_10px_25px_rgba(26,111,255,.28)] transition-[gap,max-width,opacity,transform] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)]">
+    <div className={`flex min-w-0 items-center transition-[gap,max-width,opacity,transform] duration-[900ms] ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "justify-center gap-0" : "gap-3"}`}>
+      <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#0a70ff] to-[#063bbd] text-white shadow-[0_10px_25px_rgba(26,111,255,.28)] transition-[gap,max-width,opacity,transform] duration-[900ms] ease-[cubic-bezier(.22,.8,.25,1)]">
         <Crown className="h-6 w-6 text-[#ffad16]" strokeWidth={2.2} /><Radio className="absolute bottom-1.5 h-3.5 w-3.5" strokeWidth={2.5} />
       </div>
-      <div className={`overflow-hidden whitespace-nowrap leading-tight transition-[gap,max-width,opacity,transform] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100"}`}>
+      <div className={`overflow-hidden whitespace-nowrap leading-tight transition-[gap,max-width,opacity,transform] duration-[900ms] ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100"}`}>
         <div className="truncate text-[15px] font-bold text-[#102a63] dark:text-white">اللورد لخدمات الإنترنت</div>
         <div className="mt-1 text-[11px] font-semibold tracking-wide text-[#e99100]">LORD RADIUS</div>
       </div>
@@ -171,7 +171,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const sidebarWidth = collapsed ? "lg:w-[92px]" : "lg:w-[232px]";
   const mainGap = collapsed ? "lg:mr-[112px]" : "lg:mr-[252px]";
   const footerGap = collapsed ? "lg:right-[132px]" : "lg:right-[272px]";
-  const shellMotion = "transition-[width,margin-right,right,padding,gap,max-width,opacity,transform,background-color,color,border-color] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none";
+  const shellMotion = "transition-[width,margin-right,right,padding,gap,max-width,opacity,transform,background-color,color,border-color] duration-[900ms] ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none";
   const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
   const currentTitle = useMemo(() => {
     if (accountType === "master_admin" && /^\/Dashboard\/connection-servers\/[^/]+$/.test(pathname) && !pathname.endsWith("/add")) return "تفاصيل وإعداد خادم الاتصال";
@@ -201,7 +201,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       if (groupRect.bottom > bottomSafe) delta = groupRect.bottom - bottomSafe;
       else if (groupRect.top < topSafe) delta = groupRect.top - topSafe;
       if (Math.abs(delta) > 2) nav.scrollTo({ top: nav.scrollTop + delta, behavior: "smooth" });
-    }, 540);
+    }, 690);
   };
 
   const toggleNavGroup = (label: string, willOpen: boolean, mobile = false) => {
@@ -238,7 +238,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right font-[600] ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"}`}>{group.label}</span>
                 {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-500 ${open ? "rotate-180" : ""}`} />}
               </button>
-              <div className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+              <div className={`grid transition-[grid-template-rows,opacity] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                 <div className="min-h-0 overflow-hidden"><div className="space-y-1 py-1 pr-5">
                   {group.items.map((item) => {
                     const Icon = item.icon; const active = (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")));
@@ -250,8 +250,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           })}
         </nav>
         <div className={`p-2 ${shellMotion}`}><button type="button" onClick={logout} disabled={loggingOut} className={`flex min-h-12 w-full items-center rounded-[18px] border border-red-500 text-[15px] font-semibold text-red-500 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-500/10 ${shellMotion} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-[gap,max-width,opacity,transform] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400"><LogOut className="h-5 w-5" /></span>
-          <span className={`overflow-hidden whitespace-nowrap transition-[gap,max-width,opacity,transform] duration-[650ms] ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>{loggingOut ? "جارٍ تسجيل الخروج..." : "تسجيل الخروج"}</span>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-500 transition-[gap,max-width,opacity,transform] duration-[900ms] ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-red-500/10 dark:text-red-400"><LogOut className="h-5 w-5" /></span>
+          <span className={`overflow-hidden whitespace-nowrap transition-[gap,max-width,opacity,transform] duration-[900ms] ease-[cubic-bezier(.22,.8,.25,1)] ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[120px] translate-x-0 opacity-100"}`}>{loggingOut ? "جارٍ تسجيل الخروج..." : "تسجيل الخروج"}</span>
         </button></div>
       </div>
     );
