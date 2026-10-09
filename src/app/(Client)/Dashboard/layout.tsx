@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Changa } from "next/font/google";
 import "./globals.css";
+import "@/styles/typography.css";
 import "./dashboard-entry.css";
 
 import { ThemeProvider } from "next-themes";
@@ -8,11 +8,6 @@ import DashboardShell from "@/components/ui/dashboard-shell";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const changa = Changa({
-  subsets: ["arabic"],
-  weight: ["300", "400", "500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "الصفحة الرئيسية | Radius Lord",
@@ -30,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body className={`${changa.className} dashboard-enter`}>
+      <body className="dashboard-enter">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             <DashboardShell>{children}</DashboardShell>

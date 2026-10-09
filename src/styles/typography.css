@@ -1,0 +1,13 @@
+/* Shared Arabic UI typography, as agreed for Radius Lord. */
+:root {
+  --font-arabic-ui: "LBC", "LBC Arabic", Tahoma, Arial, sans-serif;
+}
+
+:where([dir="rtl"], [lang="ar"], .rl-tooltip) {
+  font-family: var(--font-arabic-ui);
+}
+
+/* The dashboard body must inherit the agreed family rather than next/font. */
+body.dashboard-enter {
+  font-family: var(--font-arabic-ui);
+}
