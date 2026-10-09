@@ -1,5 +1,13 @@
 /* Shared Arabic UI typography, as agreed for Radius Lord. */
 :root {
+  --rl-type-page: 22px;
+  --rl-type-section: 18px;
+  --rl-type-nav-main: 17px;
+  --rl-type-nav-sub: 14px;
+  --rl-type-label: 15px;
+  --rl-type-body: 14px;
+  --rl-type-note: 13px;
+  --rl-type-leading: 1.6;
   --font-arabic-ui: "LBC", "LBC Arabic", Tahoma, Arial, sans-serif;
 }
 
@@ -10,4 +18,100 @@
 /* The dashboard body must inherit the agreed family rather than next/font. */
 body.dashboard-enter {
   font-family: var(--font-arabic-ui);
+}
+
+/* Central UI scale. Colors stay with the existing light/dark theme. */
+body.dashboard-enter {
+  font-size: var(--rl-type-body);
+  font-weight: 500;
+  line-height: var(--rl-type-leading);
+}
+
+body.dashboard-enter h1 {
+  font-size: var(--rl-type-page);
+  font-weight: 700;
+  line-height: 1.5;
+}
+body.dashboard-enter h2 {
+  font-size: var(--rl-type-section);
+  font-weight: 600;
+  line-height: 1.5;
+}
+body.dashboard-enter h3 {
+  font-size: var(--rl-type-label);
+  font-weight: 600;
+  line-height: var(--rl-type-leading);
+}
+
+/* Raise legacy tiny content text while keeping terminal cells independent. */
+body.dashboard-enter :where(.workspace-scroll) :where(.text-xs, .text-\[10px\], .text-\[11px\], .text-\[12px\]):not(:where(.xterm *)) {
+  font-size: var(--rl-type-note);
+}
+body.dashboard-enter label,
+.rl-field-label {
+  font-size: var(--rl-type-label);
+  font-weight: 600;
+  line-height: var(--rl-type-leading);
+}
+body.dashboard-enter label > span:first-child {
+  font-size: inherit;
+  font-weight: inherit;
+}
+body.dashboard-enter :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea):not(.xterm *),
+.rl-field-value {
+  font-family: var(--font-arabic-ui);
+  font-size: var(--rl-type-body);
+  font-weight: 500;
+  line-height: var(--rl-type-leading);
+}
+body.dashboard-enter :is(button, [role="tab"]),
+.rl-action {
+  font-size: var(--rl-type-body);
+  font-weight: 600;
+  line-height: var(--rl-type-leading);
+}
+body.dashboard-enter table {
+  font-size: var(--rl-type-body);
+  font-weight: 500;
+  line-height: var(--rl-type-leading);
+}
+body.dashboard-enter :is(th, dt) {
+  font-size: var(--rl-type-body);
+  font-weight: 600;
+}
+body.dashboard-enter td {
+  font-size: var(--rl-type-body);
+}
+body.dashboard-enter :is(p.text-xs, p.text-sm, p.text-\[10px\], p.text-\[11px\], p.text-\[12px\], small, [role="alert"], .rl-note):not(.xterm *),
+.rl-note {
+  font-size: var(--rl-type-note);
+  font-weight: 400;
+  line-height: 1.7;
+}
+body.dashboard-enter .rl-nav-main {
+  font-size: var(--rl-type-nav-main);
+  font-weight: 600;
+}
+body.dashboard-enter .rl-nav-sub {
+  font-size: var(--rl-type-nav-sub);
+  font-weight: 500;
+}
+body.dashboard-enter .rl-shell-title {
+  font-size: var(--rl-type-section);
+  font-weight: 600;
+}
+body.dashboard-enter .rl-breadcrumb {
+  font-size: var(--rl-type-note);
+}
+@media (max-width: 639px) {
+  :root {
+    --rl-type-page: 20px;
+    --rl-type-nav-main: 16px;
+    --rl-type-label: 14px;
+  }
+  /* Keep native fields at 16px to avoid focus zoom on mobile browsers. */
+  body.dashboard-enter :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea):not(.xterm *),
+  .rl-field-value {
+    font-size: 16px;
+  }
 }
