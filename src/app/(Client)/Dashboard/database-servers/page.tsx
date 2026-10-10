@@ -6,6 +6,7 @@ import DatabaseAccountScript from "@/components/settings/database-account-script
 import SshTerminal from "@/components/settings/ssh-terminal";
 import DatabaseHealthCard from "@/components/settings/database-health-card";
 import ProjectInput from "@/components/ui/project-input";
+import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 import ProjectDropdown from "@/components/ui/project-dropdown";
@@ -21,7 +22,7 @@ export default function DatabaseServersPage(){const {isMasterAdmin,loading}=useA
  async function submit(save:boolean){if(busy)return;setBusy(true);setError("");setMessage("");try{const url=endpoint+(editing?`/${editing}`:"")+(save?"":"/inspect"),r=await fetch(url,{method:save&&editing?"PUT":"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,port:Number(form.port),appBudget:Number(form.appBudget),radiusBudget:Number(form.radiusBudget),verified})}),j=await r.json();if(!r.ok)throw new Error(j.message);setMessage(j.message);if(save){setForm(initial);setOpen(false);setEditing(null);setVerified("");await load();}else setVerified(j.verified);}catch(e){setError(e instanceof Error?e.message:"تعذر تنفيذ العملية.");}finally{setBusy(false);}}
  if(loading)return <CollectionState loading>جارٍ التحميل...</CollectionState>;if(!isMasterAdmin)return <CollectionState>هذه الصفحة خاصة بالمدير الرئيسي.</CollectionState>;
  return <div dir="rtl" className="space-y-4 text-slate-800 dark:text-slate-200"><CollectionToolbar responsive icon={Database} title="خوادم قواعد البيانات" description="اتصالات إنشاء قواعد الشبكات المستقلة" query={query} onQueryChange={setQuery} searchPlaceholder="بحث عن خادم..." primaryAction={<ProjectButton disabled={busy} onClick={()=>{setForm(initial);setEditing(null);setVerified("");setError("");setMessage("");setOpen(true);}}><Plus/>إضافة خادم</ProjectButton>}/>
- {error&&<p role="alert" className="ui-field-warning rounded-[14px] bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10">{error}</p>}{message&&<p role="status" className="rounded-[14px] bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{message}</p>}
+ <FloatingNotice error={error} message={message} onDismiss={()=>{setError("");setMessage("");}}/>
  {scriptServer&&!open&&<DatabaseAccountScript key={scriptServer.id} serverName={scriptServer.name} serverHost={scriptServer.host} defaultUsername={scriptServer.username} onClose={()=>setScriptServer(null)} onUse={(username,password)=>{setEditing(scriptServer.id);setForm({...initial,...scriptServer,port:String(scriptServer.port),appBudget:String(scriptServer.appBudget),radiusBudget:String(scriptServer.radiusBudget),username,password});setVerified("");setError("");setMessage("تم ملء بيانات الحساب لهذا الخادم. نفّذ السكربت على MySQL أولًا، ثم افحص الاتصال قبل حفظ التعديل.");setScriptServer(null);setOpen(true);}}/>}
  {terminal&&!open&&<SshTerminal key={terminal.id} serverId={terminal.id} name={terminal.name} host={terminal.host} onClose={()=>setTerminal(null)}/> }
  {monitored&&!open&&!terminal&&<DatabaseHealthCard serverId={monitored.id} name={monitored.name}/>}

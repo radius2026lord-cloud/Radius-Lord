@@ -1,0 +1,10 @@
+@keyframes rl-notice-enter {
+ from { opacity: 0; transform: translateY(-12px) scale(.98); }
+ to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes rl-notice-countdown { to { transform: scaleX(0); } }
+.rl-floating-notice { animation: rl-notice-enter 220ms ease-out both; }
+.rl-notice-progress { animation: rl-notice-countdown linear forwards; }
+@media (prefers-reduced-motion: reduce) {
+ .rl-floating-notice, .rl-notice-progress { animation: none; }
+}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import {Activity,ShieldCheck} from "lucide-react";
 import {useAuth} from "@/components/auth/auth-provider";
 import {CollectionState} from "@/components/ui/collection-display";
+import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 type Selection={databaseServerId:string;radiusServerId:string;gatewayId:string;radiusSshServerId:string};
@@ -38,7 +39,7 @@ export default function InfrastructureHealthPage(){
    {report?.nextCheckAt&&<p className="text-xs text-slate-500">موعد الفحص التالي: {new Date(report.nextCheckAt).toLocaleString("ar")}</p>}
    <p className="text-xs leading-6 text-slate-500">اختر اتصال SSH الذي حفظته لمخدم Ubuntu الذي يعمل عليه FreeRADIUS. فحص الإعدادات يحتاج صلاحية sudo دون طلب كلمة مرور. حساب RADIUS وقاعدة الاختبار المستقلة يُحددان في صفحة خوادم FreeRADIUS؛ استخدم حسابًا مخصصًا للفحص.</p>
    <div className="flex flex-wrap items-center gap-3"><ProjectButton disabled={busy||Object.values(selection).some(v=>!v)} onClick={()=>void run()}><Activity/>{busy?"جارٍ فحص الخدمات...":dirty?"حفظ الاختيار وفحص البنية التحتية":"فحص البنية التحتية"}</ProjectButton><ProjectButton variant="secondary" disabled={busy} onClick={()=>void load()}>تحديث الحالة</ProjectButton><Link className="text-sm text-blue-500" href="/Dashboard/radius-servers">إعداد اختبار FreeRADIUS</Link></div>
-   {error&&<p role="alert" className="rounded-[14px] bg-red-500/10 p-3 text-sm text-red-600">{error}</p>}
+   <FloatingNotice error={error} onDismiss={()=>setError("")}/>
    {report&&<p className="text-xs text-slate-500">آخر فحص: {new Date(report.checkedAt).toLocaleString("ar")} — {ready?`صالح لمدة ${Math.max(0,Math.ceil(((report.validityMs??300000)-age)/1000))} ثانية`:report.stale||age>=(report.validityMs??300000)?"انتهت صلاحية النتيجة؛ أعد الفحص.":"أكمل الشروط الفاشلة ثم أعد الفحص."}</p>}
   </section>
   <div className="grid gap-3 sm:grid-cols-2">{expected.map(item=>{const check=report?.checks.find(c=>c.key===item.key);const status=check?.status??"not_checked";return <section key={item.key} className="rl-surface rounded-[18px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.035]"><div className="flex items-start justify-between gap-3"><h2 className="text-sm font-semibold">{item.label}</h2><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${status==="ready"?"bg-emerald-500/10 text-emerald-600":status==="failed"?"bg-red-500/10 text-red-600":"bg-slate-500/10 text-slate-500"}`}>{status==="ready"?"جاهزة":status==="failed"?"فاشلة":"لم تُفحص"}</span></div><p className="mt-3 text-sm leading-6 text-slate-500">{check?.message??"تظهر نتيجة الخدمة بعد تنفيذ الفحص."}</p>{check&&<p className="mt-2 text-xs text-slate-400">{new Date(check.checkedAt).toLocaleString("ar")}</p>}</section>;})}</div>
