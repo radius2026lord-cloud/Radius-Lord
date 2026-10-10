@@ -494,7 +494,7 @@ textarea,
 
 /* Content fades inside the frame, above a permanent bottom breathing space. */
 .rl-workspace-inset-scroll {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 40px), rgba(0,0,0,.85) calc(100% - 24px), rgba(0,0,0,.35) calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 40px), rgba(0,0,0,.85) calc(100% - 24px), rgba(0,0,0,.35) calc(100% - 10px), transparent 100%);
 }
-.rl-workspace-content-end { padding-bottom: 36px; }
+.rl-workspace-content-end { padding-bottom: 48px; }
