@@ -50,7 +50,7 @@ export async function verifyRadiusDatabase(config:any,connection:mysql.Connectio
  return {...health,accounting:'verified',database:'verified',overall:'healthy',checkedAt:new Date().toISOString()};
 }
 export async function bootstrapRadiusTest(radiusId:number,databaseServerId:number){
- const lock=await db.pool.getConnection();let acquired=false;let admin:mysql.Connection|undefined;
+ const lock=await db.pool.getConnection();let acquired=false;let admin:mysql.Connection|undefined;let stage="load_configuration";
  try{
  const [locked]:any=await lock.query("SELECT GET_LOCK('radius-lord:radius-setup',0) acquired");acquired=Boolean(locked[0]?.acquired);if(!acquired)error('RADIUS_SETUP_BUSY');
  const [rows]:any=await db.query("SELECT setting_value FROM platform_settings WHERE id=? AND setting_group='free_radius'",[radiusId]);
@@ -60,21 +60,31 @@ export async function bootstrapRadiusTest(radiusId:number,databaseServerId:numbe
  if(state&&state.databaseServerId!==databaseServerId)error('RADIUS_TEST_DATABASE_SERVER_CHANGED');
  if(!state){state={databaseServerId,name:'rl_infrastructure_auto_'+radiusId,username:'rlt_'+radiusId+'_'+randomBytes(4).toString('hex'),passwordEncrypted:encryptProvisioningSecret(randomBytes(32).toString('hex')),secretEncrypted:encryptProvisioningSecret(randomBytes(32).toString('hex')),testUsername:'rl_probe_'+radiusId,testPasswordEncrypted:encryptProvisioningSecret(randomBytes(24).toString('hex'))};await savePrivateSetting('radius_bootstrap',key,state);}
  const [tenant]:any=await db.query('SELECT id FROM tenant_databases WHERE db_name=?',[state.name]);if(tenant[0])error('RADIUS_TEST_DATABASE_SCOPE');
+ stage="database_connection";
  admin=await mysql.createConnection({host:server.host,port:server.port,user:server.provisioning_username,password:decryptProvisioningSecret(server.provisioning_password_encrypted),connectTimeout:8000});
+ stage="database_ownership";
  const [exists]:any=await admin.query('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=?',[state.name]);
  if(exists[0]){const [owner]:any=await admin.query(`SELECT marker FROM \`${state.name}\`.rl_probe_owner LIMIT 1`).catch(()=>[[],[]]);if(owner[0]?.marker!==key)error('RADIUS_TEST_DATABASE_NOT_OWNED');}
+ stage="create_database";
  if(!exists[0]){await admin.query(`CREATE DATABASE \`${state.name}\``);await admin.query(`CREATE TABLE \`${state.name}\`.rl_probe_owner (marker VARCHAR(100) PRIMARY KEY)`);await admin.query(`INSERT INTO \`${state.name}\`.rl_probe_owner VALUES (?)`,[key]);state.databaseCreated=true;await savePrivateSetting('radius_bootstrap',key,state);}
+ stage="select_database";
  await admin.changeUser({database:state.name});
+ stage="create_schema";
  for(const sql of splitTenantTemplate(readFileSync(join(__dirname,'../tenant-schema/vendor/freeradius-mysql-schema.sql'),'utf8')))await admin.query(sql);
+ stage="radius_accounts";
  await grantRadiusAccounts(admin,server,c.host,state.username,decryptProvisioningSecret(state.passwordEncrypted),state.name);
  // Separate reader/probe account for the backend source, limited to this test schema.
+ stage="probe_account";
  const [source]:any=await admin.query('SELECT USER() source');const clientHost=String(source[0].source).split('@').slice(1).join('@');if(!clientHost||/[\x00-\x20%_\x27\x22\\]/.test(clientHost))error('RADIUS_TEST_CLIENT_HOST');
  const account=mysql.escape(state.username)+'@'+mysql.escape(clientHost);await admin.query(`CREATE USER IF NOT EXISTS ${account} IDENTIFIED BY ${mysql.escape(decryptProvisioningSecret(state.passwordEncrypted))} WITH MAX_USER_CONNECTIONS 4`);await admin.query(`GRANT SELECT ON \`${state.name.replace(/_/g,'\\_')}\`.* TO ${account}`);
+ stage="test_user";
  await admin.query('DELETE FROM radcheck WHERE username=?',[state.testUsername]);await admin.query("INSERT INTO radcheck (username,attribute,op,value) VALUES (?,'Cleartext-Password',':=',?)",[state.testUsername,decryptProvisioningSecret(state.testPasswordEncrypted)]);
  const databaseHost=await radiusDatabaseHost(server,c.host);const authPort=18120,accountingPort=18121;
+ stage="apply_radius";
  await applyRadiusDatabase({sshServerId:c.sshServerId,radiusHost:c.host,databaseHost,databasePort:server.port,databaseName:state.name,username:state.username,password:decryptProvisioningSecret(state.passwordEncrypted),authPort,accountingPort,name:'rl_test_'+radiusId,secret:decryptProvisioningSecret(state.secretEncrypted)});
+ stage="verify_radius";
  const config={...c,authPort,accountingPort,secretEncrypted:state.secretEncrypted,testUsername:state.testUsername,testPasswordEncrypted:state.testPasswordEncrypted,tenantDatabaseId:null,probeDatabaseHost:server.host,probeDatabasePort:server.port,probeDatabaseName:state.name,probeDatabaseUsername:state.username,probeDatabasePasswordEncrypted:state.passwordEncrypted,probeDatabaseTls:false,bootstrapDatabaseServerId:databaseServerId,lastHealth:await verifyRadiusDatabase({...state,host:c.host,authPort,accountingPort},admin)};
  const [saved]:any=await db.query("UPDATE platform_settings SET setting_value=? WHERE id=? AND setting_group='free_radius' AND BINARY setting_value=BINARY ?",[JSON.stringify(config),radiusId,original]);if(!saved.affectedRows)error('RADIUS_CONFIG_CHANGED_DURING_SETUP');
  return config.lastHealth;
- }finally{await admin?.end().catch(()=>{});if(acquired)await lock.query("SELECT RELEASE_LOCK('radius-lord:radius-setup')");lock.release();}
+ }catch(reason){const failure=reason instanceof Error?reason:new Error("RADIUS_SETUP_FAILED");Object.assign(failure,{setupStage:stage});throw failure;}finally{await admin?.end().catch(()=>{});if(acquired)await lock.query("SELECT RELEASE_LOCK('radius-lord:radius-setup')");lock.release();}
 }
