@@ -2,10 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink } from "lucide-react";
+import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink, ShieldCheck, TriangleAlert } from "lucide-react";
 import { CollectionState } from "@/components/ui/collection-display";
 import SubscriptionPaymentHistory from "@/components/subscription-payment-history";
 import ProjectButton from "@/components/ui/project-button";
+import FloatingNotice from "@/components/ui/floating-notice";
+import {ProjectInfoCard} from "@/components/ui/project-info-card";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 
 type Environment = {
@@ -27,6 +29,7 @@ type Subscription = {
 export default function SubscriptionDetailsPage(){
   const {id}=useParams<{id:string}>();
   const router=useRouter();
+  const [infrastructureWarning,setInfrastructureWarning]=useState("");
   const [delivery,setDelivery]=useState<{text:string;whatsappUrl:string|null;emailUrl:string|null}|null>(null);
   const [submitting,setSubmitting]=useState(false),[notice,setNotice]=useState(""),[actionError,setActionError]=useState("");
   const [item,setItem]=useState<Subscription|null>(null);
@@ -40,6 +43,8 @@ export default function SubscriptionDetailsPage(){
     return()=>controller.abort();
   },[id,revision]);
   useEffect(()=>{if(!item?.environment.job||!["queued","running"].includes(item.environment.job.status))return;const controller=new AbortController();let active=false;const timer=setInterval(async()=>{if(active)return;active=true;try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}`,{credentials:"include",cache:"no-store",signal:controller.signal});if(r.ok){const j=await r.json();if(!controller.signal.aborted)setItem(j.subscription);}}catch{/* Keep last state; manual refresh remains available. */}finally{active=false;}},5000);return()=>{clearInterval(timer);controller.abort();};},[id,item?.environment.job?.status]);
+  const infrastructureBlocked=Boolean(item?.environment.blockedReason?.startsWith('افحص صحة البنية التحتية')||item?.environment.job?.errorCode==='INFRASTRUCTURE_NOT_READY');
+  useEffect(()=>{if(infrastructureBlocked)setInfrastructureWarning("لا يمكن توليد البيئة قبل نجاح فحوص البنية التحتية. افتح صفحة التحقق لمعالجة الخدمات غير الجاهزة ثم أعد المحاولة.");else setInfrastructureWarning("");},[infrastructureBlocked]);
   async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);setDelivery(j);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
   async function requestEnvironment(){
     if(submitting || !item?.environment.canRequest)return;
@@ -47,13 +52,14 @@ export default function SubscriptionDetailsPage(){
     try{
       const response=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment`,{method:"POST",credentials:"include"});
       const data=await response.json();
-      if(!response.ok)throw new Error(data.message||"تعذر تسجيل طلب إنشاء البيئة.");
+      if(!response.ok){if(data.code==='INFRASTRUCTURE_NOT_READY'||data.message?.includes('صحة البنية التحتية')){setInfrastructureWarning(data.message||"البنية التحتية غير جاهزة للتوليد.");return;}throw new Error(data.message||"تعذر تسجيل طلب إنشاء البيئة.");}
       setItem(current=>current?{...current,environment:data.environment}:current);
       setNotice("تم تسجيل طلب إنشاء البيئة. مدة الاشتراك لم تبدأ بعد.");
     }catch(reason){setActionError(reason instanceof Error?reason.message:"تعذر تسجيل طلب إنشاء البيئة.");}
     finally{setSubmitting(false);}
   }
   return <div className="space-y-4">
+    <FloatingNotice error={actionError} warning={infrastructureWarning} message={notice} action={infrastructureWarning?{label:"فتح صحة البنية التحتية",onClick:()=>router.push('/Dashboard/infrastructure-health')}:undefined} onDismiss={()=>{setActionError("");setInfrastructureWarning("");setNotice("");}}/>
     <section className="rl-surface flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]"><div className="min-w-0"><h1 className="flex items-center gap-2 text-base font-semibold text-[#17386d] dark:text-slate-200"><CreditCard className="h-5 w-5 shrink-0 text-[#0758e9]"/>تفاصيل الاشتراك</h1><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">بيانات العميل والخطة وعملية الدفع</p></div><div className="flex flex-wrap items-center gap-2">
       <ProjectTooltip label="العودة إلى عرض الاشتراكات"><ProjectButton variant="back" size="icon" aria-label="العودة إلى عرض الاشتراكات" onClick={()=>router.push("/Dashboard/subscriptions")}><ArrowRight/></ProjectButton></ProjectTooltip>
       <ProjectButton variant="secondary" disabled={loading||submitting} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>
@@ -73,6 +79,7 @@ export default function SubscriptionDetailsPage(){
             </ProjectButton>
           </ProjectTooltip>
         </div>
+        {(infrastructureBlocked||infrastructureWarning)&&<ProjectInfoCard tone="warning" className="mt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-sm font-semibold"><TriangleAlert className="h-5 w-5 shrink-0 text-amber-500"/>التوليد متوقف حتى اكتمال التحقق</p><p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">تحقق من الخدمات في صفحة صحة البنية التحتية، ثم عد إلى الاشتراك وحدّث الحالة لإعادة المحاولة.</p></div><ProjectButton variant="secondary" onClick={()=>router.push('/Dashboard/infrastructure-health')}><ShieldCheck className="text-amber-500"/>فتح صفحة التحقق</ProjectButton></div></ProjectInfoCard>}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {item.environment.canSendDetails&&<ProjectTooltip label="إرسال رابط واجهة العميل وبيانات الدخول والخطة والرخصة بعد التفعيل"><ProjectButton variant="secondary" disabled={submitting||item.environment.status!=="ready"||item.environment.subscriptionStatus!=="active"||!item.environment.systemUrl} onClick={()=>void sendDetails()}><Send className="text-emerald-500"/>إرسال بيانات التفعيل للعميل</ProjectButton></ProjectTooltip>}
           {item.environment.status==="ready"&&item.environment.systemUrl&&<ProjectButton variant="secondary" onClick={()=>{const u=new URL(item.environment.systemUrl!,window.location.origin);if(["http:","https:"].includes(u.protocol))window.open(u.href,"_blank","noopener,noreferrer");}}><ExternalLink className="text-blue-500"/>فتح واجهة الشبكة</ProjectButton>}
@@ -84,8 +91,7 @@ export default function SubscriptionDetailsPage(){
           <Field label="بداية الاشتراك">{item.environment.startsAt?formatDate(item.environment.startsAt):"بعد جاهزية البيئة"}</Field>
           <Field label="انتهاء الاشتراك">{formatDate(item.environment.expiresAt||null)}</Field>
         </dl>}
-        {notice&&<p role="status" className="mt-3 rounded-[14px] bg-emerald-50 p-3 text-xs leading-6 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{notice}</p>}
-        {actionError&&<p role="alert" className="mt-3 rounded-[14px] bg-red-50 p-3 text-xs leading-6 text-red-600 dark:bg-red-500/10 dark:text-red-300">{actionError}</p>}
+
       </Panel>
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Panel title="الخطة المختارة">

@@ -48,7 +48,7 @@ export async function requestEnvironmentController(req: AuthenticatedRequest, re
     return res.status(202).json({success:true,environment,message:'تم تسجيل طلب إنشاء البيئة؛ ستتولى خدمة التجهيز تنفيذه تلقائيًا. لم تبدأ مدة الاشتراك.'});
   } catch(error) {
     if (conn) await conn.rollback();
-    if (error instanceof InfrastructureNotReady) return res.status(409).json({success:false,message:error.message});
+    if (error instanceof InfrastructureNotReady) return res.status(409).json({success:false,code:error.code,message:error.message});
     if (error instanceof EnvironmentRequestError) return res.status(error.status).json({success:false,message:error.message});
     if (['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes((error as any)?.code)) return res.status(503).json({success:false,message:'طبّق ترحيل القاعدة المركزية قبل طلب إنشاء البيئة.'});
     console.error('Environment request failed:',(error as any)?.code || 'UNKNOWN');
