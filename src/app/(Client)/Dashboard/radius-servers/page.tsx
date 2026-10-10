@@ -5,6 +5,7 @@ import {useAuth} from "@/components/auth/auth-provider";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
+import FloatingNotice from "@/components/ui/floating-notice";
 import {CollectionCard,CollectionToolbar,CollectionState} from "@/components/ui/collection-display";
 type Candidate={serverId:number;name:string;host:string;status:string;version?:string;serviceState?:string;message?:string;addedId?:number|null};
 type Health={checkedAt:string;service:string;authentication:string;accounting:string;database:string;overall:string;sessionId:string|null};
@@ -30,7 +31,7 @@ export default function RadiusServersPage(){
  if(!isMasterAdmin)return <CollectionState>هذه الصفحة خاصة بالمدير الرئيسي.</CollectionState>;
  return <div dir="rtl" className="space-y-4 text-slate-800 dark:text-slate-200">
  <CollectionToolbar responsive icon={Radio} title="خوادم FreeRADIUS" description="إعداد الاتصال والتحقق من المصادقة والمحاسبة وقاعدة الاختبار" query={query} onQueryChange={setQuery} searchPlaceholder="بحث عن مخدم..." primaryAction={<ProjectButton disabled={busy||discovering} onClick={()=>void discover()}><Plus/>إضافة مخدم</ProjectButton>}/>
- {error&&<p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300">{error}</p>}{message&&<p role="status" className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">{message}</p>}
+ <FloatingNotice error={error} message={message} onDismiss={()=>{setError("");setMessage("");}}/>
  {choosing&&<section className="rl-surface space-y-4 rounded-[22px] border border-slate-200 bg-white p-4 sm:p-6 dark:border-white/10 dark:bg-white/[.035]"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">خدمات FreeRADIUS المتاحة</h2><p className="mt-2 text-sm text-slate-500">اكتشاف الخدمات المثبتة على المخدمات ذات اتصال SSH المحفوظ. الإضافة لا تعني اجتياز فحص الصحة.</p></div><ProjectButton variant="back" size="icon" aria-label="إغلاق قائمة الخدمات" disabled={busy||discovering} onClick={()=>setChoosing(false)}><ArrowRight/></ProjectButton></div>
  {discovering?<CollectionState loading>جارٍ اكتشاف خدمات FreeRADIUS...</CollectionState>:<div className="grid gap-3 sm:grid-cols-2">{candidates.map(candidate=><div key={candidate.serverId} className="rounded-[16px] border border-slate-200 p-4 dark:border-white/10"><h3 className="font-semibold">{candidate.name}</h3><p dir="ltr" className="mt-2 break-all text-xs text-slate-500">{candidate.host}</p><p className="mt-2 text-xs text-slate-500">{candidate.status==="discovered"?`${candidate.serviceState==="active"?"الخدمة تعمل":"الخدمة متوقفة أو غير جاهزة"} — ${candidate.version??""}`:candidate.message}</p><div className="mt-3"><ProjectButton disabled={busy||candidate.status!=="discovered"||Boolean(candidate.addedId)} onClick={()=>void addCandidate(candidate)}><Plus/>{candidate.addedId?"مضافة بالفعل":busy?"جارٍ الإضافة...":"إضافة"}</ProjectButton></div></div>)}</div>}
  {!discovering&&!candidates.length&&<CollectionState>لا توجد اتصالات SSH محفوظة. أضف مخدم Ubuntu واحفظ اتصال SSH أولًا.</CollectionState>}
