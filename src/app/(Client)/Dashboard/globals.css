@@ -147,27 +147,27 @@ a {
 }
 
 /* Workspace scrollbar: hidden until hover, with the same slow reveal/hide motion. */
-main > div:first-child {
+:is(main > div:first-child, .workspace-scroll) {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
-main > div:first-child:hover {
+:is(main > div:first-child, .workspace-scroll):hover {
   scrollbar-color: rgba(59, 130, 246, 0.72) transparent;
 }
 
-main > div:first-child::-webkit-scrollbar {
+:is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 
-main > div:first-child::-webkit-scrollbar-track {
+:is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar-track {
   background: transparent;
   border-block: 26px solid transparent;
   background-clip: padding-box;
 }
 
-main > div:first-child::-webkit-scrollbar-thumb {
+:is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar-thumb {
   min-height: 52px;
   border: 2px solid transparent;
   border-radius: 999px;
@@ -179,56 +179,56 @@ main > div:first-child::-webkit-scrollbar-thumb {
     box-shadow 520ms cubic-bezier(.22,.8,.25,1);
 }
 
-main > div:first-child:hover::-webkit-scrollbar-thumb {
+:is(main > div:first-child, .workspace-scroll):hover::-webkit-scrollbar-thumb {
   background-color: rgba(59, 130, 246, 0.68);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
 }
 
-main > div:first-child::-webkit-scrollbar-thumb:hover {
+:is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar-thumb:hover {
   background-color: rgba(37, 99, 235, 0.94);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.28);
 }
 
-main > div:first-child::-webkit-scrollbar-thumb:active {
+:is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar-thumb:active {
   background-color: rgba(29, 78, 216, 1);
 }
 
-.dark main > div:first-child:hover {
+.dark :is(main > div:first-child, .workspace-scroll):hover {
   scrollbar-color: rgba(126, 164, 255, 0.78) transparent;
 }
 
-.dark main > div:first-child:hover::-webkit-scrollbar-thumb {
+.dark :is(main > div:first-child, .workspace-scroll):hover::-webkit-scrollbar-thumb {
   background-color: rgba(126, 164, 255, 0.78);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
 }
 
-.dark main > div:first-child::-webkit-scrollbar-thumb:hover {
+.dark :is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar-thumb:hover {
   background-color: rgba(166, 190, 255, 0.96);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.24);
 }
 
-.dark main > div:first-child::-webkit-scrollbar-thumb:active {
+.dark :is(main > div:first-child, .workspace-scroll)::-webkit-scrollbar-thumb:active {
   background-color: rgba(126, 164, 255, 1);
 }
 
 /* Keep the quick-shortcuts row compact to leave more vertical workspace. */
-main > div:first-child > div.mt-4 {
+:is(main > div:first-child, .workspace-scroll) > div.mt-4 {
   margin-top: 0.65rem;
 }
 
-main > div:first-child > div.mt-4 > div {
+:is(main > div:first-child, .workspace-scroll) > div.mt-4 > div {
   padding: 0.3rem;
   border-radius: 18px;
 }
 
-main > div:first-child > div.mt-4 button {
+:is(main > div:first-child, .workspace-scroll) > div.mt-4 button {
   height: 36px;
   padding-left: 0.65rem;
   padding-right: 0.65rem;
   border-radius: 13px;
 }
 
-main > div:first-child > div.mt-4 button svg {
+:is(main > div:first-child, .workspace-scroll) > div.mt-4 button svg {
   width: 16px;
   height: 16px;
 }
@@ -239,7 +239,7 @@ main > div:first-child > div.mt-4 button svg {
   color: var(--oneui-text);
 }
 
-.dark main > div:first-child {
+.dark :is(main > div:first-child, .workspace-scroll) {
   background-color: var(--oneui-workspace) !important;
   border-color: var(--oneui-border) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035) !important;
@@ -492,17 +492,9 @@ textarea,
 .ui-field-warning { animation: radiusFieldWarningShake 420ms cubic-bezier(.22,.8,.25,1) both; }
 @media (prefers-reduced-motion: reduce) { .ui-field-warning { animation: none; } }
 
-/* A subtle roll at the end of the content, inside the workspace frame. */
-.rl-workspace-content-end { padding-bottom: 24px; }
-.rl-workspace-inner-curl {
-  pointer-events: none;
-  height: 16px;
-  margin: 0 6px 3px;
-  border-radius: 0 0 50% 50% / 0 0 70% 70%;
-  background: linear-gradient(to bottom, transparent, rgba(255,255,255,.45) 45%, rgba(203,218,232,.28) 80%, transparent);
-  box-shadow: 0 5px 8px -7px rgba(53,86,119,.25);
+/* Content fades inside the frame, above a permanent bottom breathing space. */
+.rl-workspace-inset-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 28px), transparent 100%);
 }
-.dark .rl-workspace-inner-curl {
-  background: linear-gradient(to bottom, transparent, rgba(255,255,255,.045) 45%, rgba(0,0,0,.13) 80%, transparent);
-  box-shadow: 0 5px 8px -7px rgba(0,0,0,.25);
-}
+.rl-workspace-content-end { padding-bottom: 36px; }
