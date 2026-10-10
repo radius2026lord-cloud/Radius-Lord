@@ -491,3 +491,18 @@ textarea,
 }
 .ui-field-warning { animation: radiusFieldWarningShake 420ms cubic-bezier(.22,.8,.25,1) both; }
 @media (prefers-reduced-motion: reduce) { .ui-field-warning { animation: none; } }
+
+/* Fade the viewport into the shell rather than cutting cards off at its border.
+   End spacing allows the final controls to scroll above the fade. */
+.rl-workspace-soft-edge {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 44px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 44px), transparent 100%);
+}
+.rl-workspace-content-end { padding-bottom: 48px; }
+@media (max-width: 639px) {
+  .rl-workspace-soft-edge {
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
+  }
+  .rl-workspace-content-end { padding-bottom: 36px; }
+}
