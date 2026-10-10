@@ -1,9 +1,11 @@
 @keyframes rl-dialog-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rl-dialog-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes rl-dialog-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(.96); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@keyframes rl-dialog-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) scale(.98); } }
-.rl-dialog-overlay[data-state="open"] { animation: rl-dialog-backdrop-in 260ms ease-out both; }
-.rl-dialog-overlay[data-state="closed"] { animation: rl-dialog-backdrop-out 200ms ease-in both; }
-.rl-dialog-panel[data-state="open"] { animation: rl-dialog-in 320ms cubic-bezier(.16,1,.3,1) both; }
-.rl-dialog-panel[data-state="closed"] { animation: rl-dialog-out 200ms ease-in both; pointer-events: none; }
+@keyframes rl-dialog-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(.96); } }
+.rl-dialog-overlay[data-state="open"] { animation: rl-dialog-backdrop-in 280ms ease-in-out both; }
+.rl-dialog-overlay[data-state="closed"] { animation: rl-dialog-backdrop-out 280ms ease-in-out both; }
+.rl-dialog-panel[data-state="open"] { animation: rl-dialog-in 280ms ease-in-out both; }
+.rl-dialog-panel[data-state="closed"] { animation: rl-dialog-out 280ms ease-in-out both; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .rl-dialog-overlay, .rl-dialog-panel { animation: none !important; } }
+
+.rl-dialog-panel { box-shadow: 0 0 0 1px rgba(148,163,184,.28), 0 0 0 6px rgba(255,255,255,.08), 0 32px 90px -16px rgba(0,0,0,.6); }
