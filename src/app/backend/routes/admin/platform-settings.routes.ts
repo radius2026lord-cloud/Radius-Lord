@@ -1,3 +1,4 @@
+import {listRadiusServers,saveRadiusServer,radiusServerHealth} from '../../controllers/radius-servers.controller';
 import { getLocalHostingSettings, saveLocalHostingSettings } from '../../controllers/local-hosting.controller';
 import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer,databaseServerHealth,setDatabaseServerAdmission} from '../../controllers/database-servers.controller';
 import {getSshConnection,inspectSshConnection,saveSshConnection,createSshTicket} from '../../services/ssh-terminal.service';
@@ -24,6 +25,14 @@ router.post('/database-servers/inspect',inspectDatabaseServer);
 router.post('/database-servers/:id/inspect',inspectDatabaseServer);
 router.post('/database-servers',saveDatabaseServer);
 router.put('/database-servers/:id',saveDatabaseServer);
+router.use('/radius-servers',(req,res,next)=>{
+ if(req.method!=='GET'&&req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر طلب FreeRADIUS غير مصرح.'});
+ return next();
+});
+router.get('/radius-servers',listRadiusServers);
+router.post('/radius-servers',saveRadiusServer);
+router.put('/radius-servers/:id',saveRadiusServer);
+router.post('/radius-servers/:id/health',radiusServerHealth);
 router.get('/local-hosting',getLocalHostingSettings);
 router.put('/local-hosting',(req,res,next)=>{
  if(req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر طلب إعدادات الاستضافة غير مصرح.'});

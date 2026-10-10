@@ -69,10 +69,11 @@ const masterAdminGroups: NavGroup[] = [
     { label: "إضافة شبكة", href: "/Dashboard/networks/add", icon: PackagePlus },
     { label: "حالة الشبكات", href: "/Dashboard/networks/status", icon: Activity },
   ]},
-  { label: "خوادم الاتصال", icon: Server, items: [
+  { label: "الخوادم والبنية التحتية", icon: Server, items: [
     { label: "خوادم قواعد البيانات", href: "/Dashboard/database-servers", icon: Server },
-    { label: "خوادم OpenVPN", href: "/Dashboard/connection-servers", icon: Server },
-    { label: "إضافة خادم", href: "/Dashboard/connection-servers/add", icon: PackagePlus },
+    { label: "بوابات OpenVPN", href: "/Dashboard/connection-servers", icon: Server },
+    { label: "خوادم FreeRADIUS", href: "/Dashboard/radius-servers", icon: Radio },
+    { label: "استضافة المنصة", href: "/Dashboard/hosting", icon: Server },
   ]},
   { label: "أجهزة NAS", icon: Server, items: [
     { label: "عرض أجهزة NAS", href: "/Dashboard/nas", icon: Server },
@@ -81,7 +82,6 @@ const masterAdminGroups: NavGroup[] = [
   ]},
   { label: "النظام", icon: Database, items: [
     { label: "طرفية SSH", href: "/Dashboard/ssh-terminal", icon: TerminalSquare },
-    { label: "FreeRADIUS", href: "/Dashboard/system/freeradius", icon: Radio },
     { label: "قواعد البيانات", href: "/Dashboard/system/databases", icon: Database },
     { label: "حالة الخدمات", href: "/Dashboard/system/services", icon: Activity },
   ]},
@@ -247,7 +247,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             return <div key={group.label} ref={mobile ? undefined : (el) => { navGroupRefs.current[group.label] = el; }} className="mb-2">
               <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] rl-nav-main text-[15px] font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${groupActive ? "sidebar-active-icon bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.20)]" : "bg-[#e2e9f1] text-[#315985] group-hover:bg-[#d7e7f8] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><GroupIcon className="h-5 w-5" /></span>
-                <span className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-right font-[600] ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"}`}>{group.label}</span>
+                <span className={`min-w-0 flex-1 overflow-hidden ${group.label === "الخوادم والبنية التحتية" ? "whitespace-normal leading-5" : "whitespace-nowrap"} text-right font-[600] ${shellMotion} ${compact ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"}`}>{group.label}</span>
                 {!compact && <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-500 ${open ? "rotate-180" : ""}`} />}
               </button>
               <div className={`grid transition-[grid-template-rows,opacity] duration-[450ms] ease-[cubic-bezier(.45,0,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
