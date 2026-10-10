@@ -1,3 +1,4 @@
+import {getServerReadiness,runServerReadiness,saveServerReadinessSchedule} from "../../controllers/server-readiness.controller";
 import {getInfrastructureHealth,saveInfrastructureSelection,runInfrastructureHealth} from '../../controllers/infrastructure-health.controller';
 import {listRadiusServers,saveRadiusServer,radiusServerHealth,discoverRadiusServers,addDiscoveredRadiusServer,setupRadiusServer} from '../../controllers/radius-servers.controller';
 import { getLocalHostingSettings, saveLocalHostingSettings } from '../../controllers/local-hosting.controller';
@@ -10,6 +11,14 @@ import { getContactPaymentSettingsController, updateContactPaymentSettingsContro
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.use('/server-readiness',(req,res,next)=>{
+ if(req.method!=='GET'&&req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر الطلب غير مصرح.'});
+ return next();
+});
+router.get('/server-readiness',getServerReadiness);
+router.post('/server-readiness/check',runServerReadiness);
+router.put('/server-readiness/schedule',saveServerReadinessSchedule);
+
 router.get('/infrastructure-health',getInfrastructureHealth);
 router.use('/infrastructure-health',(req,res,next)=>{
  if(req.method!=='GET'&&req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر طلب فحص البنية التحتية غير مصرح.'});

@@ -276,3 +276,9 @@ async function managedSshExec(serverId:number,command:string,input?:string){
 export async function readSshSource(serverId:number){const value=(await managedSshExec(serverId,'printf "%s" "$SSH_CONNECTION"')).trim().split(/\s+/)[0];if(isIP(value)!==4)throw new Error('RADIUS_BACKEND_SOURCE_REQUIRED');return value;}
 // Internal generated operations only; no route accepts arbitrary script/command input.
 export async function runManagedRadiusScript(serverId:number,script:string){return managedSshExec(serverId,'sudo -n python3 -',script);}
+
+// Fixed read-only Ubuntu metrics, using the saved host fingerprint and credentials.
+export async function readUbuntuReadiness(serverId:number){
+ const script="import json,time,shutil,pathlib\ndef cpu():\n v=list(map(int,pathlib.Path('/proc/stat').read_text().splitlines()[0].split()[1:]));return sum(v[:8]),v[3]+v[4]\na=cpu();time.sleep(0.2);b=cpu();m={k:int(v.split()[0]) for k,v in (line.split(':',1) for line in pathlib.Path('/proc/meminfo').read_text().splitlines())};d=shutil.disk_usage('/');print(json.dumps({'cpu':round(100*(1-(b[1]-a[1])/max(1,b[0]-a[0])),1),'memory':round(100*(1-m.get('MemAvailable',m['MemFree'])/m['MemTotal']),1),'disk':round(100*d.used/d.total,1)}))\n";
+ return JSON.parse(await managedSshExec(serverId,'python3 -',script));
+}

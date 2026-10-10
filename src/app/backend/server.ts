@@ -1,3 +1,4 @@
+import {startServerReadinessWorker} from './services/server-readiness.service';
 import {startInfrastructureHealthWorker} from './services/infrastructure-health.service';
 import { startDatabaseProvisioningWorker } from './workers/database-provisioning.worker';
 import { attachSshTerminal } from './services/ssh-terminal.service';
@@ -37,6 +38,8 @@ const startServer = (port: number) => {
   server.listen(port, () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
+    const stopReadiness=startServerReadinessWorker();
+    if(stopReadiness)server.once('close',stopReadiness);
     const stopHealth=startInfrastructureHealthWorker();
     if(stopHealth)server.once('close',stopHealth);
   });

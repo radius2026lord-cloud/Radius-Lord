@@ -74,6 +74,7 @@ const masterAdminGroups: NavGroup[] = [
     { label: "بوابات OpenVPN", href: "/Dashboard/connection-servers", icon: Server },
     { label: "خوادم FreeRADIUS", href: "/Dashboard/radius-servers", icon: Radio },
     { label: "استضافة المنصة", href: "/Dashboard/hosting", icon: Server },
+    { label: "جاهزية الخوادم", href: "/Dashboard/server-readiness", icon: Activity },
     { label: "صحة البنية التحتية", href: "/Dashboard/infrastructure-health", icon: ShieldCheck },
   ]},
   { label: "أجهزة NAS", icon: Server, items: [
