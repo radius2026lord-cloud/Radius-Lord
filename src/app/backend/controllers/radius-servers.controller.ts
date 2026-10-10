@@ -1,3 +1,4 @@
+import {discoverInstalledRadius} from '../services/ssh-terminal.service';
 import { randomUUID } from 'crypto';
 import { isIP } from 'net';
 import { Response } from 'express';
@@ -90,4 +91,40 @@ export async function radiusServerHealth(req: AuthenticatedRequest, res: Respons
     return res.json({health});
   } catch {return res.status(400).json({message:'تعذر تنفيذ فحص FreeRADIUS أو حفظ نتيجته.'});}
   finally {if(ownsProbe&&serverId)active.delete(serverId);}
+}
+
+let discoveryRunning=false;
+export async function discoverRadiusServers(req:AuthenticatedRequest,res:Response){
+ res.setHeader('Cache-Control','no-store');
+ if(discoveryRunning)return res.status(429).json({message:'جارٍ اكتشاف الخدمات؛ انتظر اكتمال الفحص.'});
+ discoveryRunning=true;
+ try{
+  const [hosts]:any=await db.query('SELECT s.id,s.name,c.host FROM server_ssh_connections c JOIN database_servers s ON s.id=c.database_server_id WHERE s.archived_at IS NULL ORDER BY s.id LIMIT 50');
+  const [saved]:any=await db.query("SELECT id,setting_value FROM platform_settings WHERE setting_group='free_radius'");
+  const configured=saved.map((row:any)=>({id:row.id,...JSON.parse(row.setting_value)}));
+  const candidates:any[]=[];
+  // Bound concurrent SSH sessions and return per-server failures.
+  for(let offset=0;offset<hosts.length;offset+=2){
+   candidates.push(...await Promise.all(hosts.slice(offset,offset+2).map(async(host:any)=>{
+    try{const discovery=await discoverInstalledRadius(host.id);const existing=configured.find((r:any)=>r.sshServerId===host.id||r.host===discovery.host);
+     return {serverId:host.id,name:host.name,...discovery,addedId:existing?.id??null};
+    }catch{return {serverId:host.id,name:host.name,host:host.host,status:'unavailable',message:'تعذر اكتشاف FreeRADIUS؛ تحقق من SSH ووجود الخدمة.'};}
+   })));
+  }
+  return res.json({candidates});
+ }catch{return res.status(503).json({message:'تعذر قراءة اتصالات SSH المحفوظة. احفظ اتصال مخدم Ubuntu أولًا.'});}
+ finally{discoveryRunning=false;}
+}
+export async function addDiscoveredRadiusServer(req:AuthenticatedRequest,res:Response){
+ try{
+  const serverId=id(req);
+  const discovery=await discoverInstalledRadius(serverId);
+  const [rows]:any=await db.query("SELECT id,setting_value FROM platform_settings WHERE setting_group='free_radius'");
+  const existing=rows.find((row:any)=>{const c=JSON.parse(row.setting_value);return c.sshServerId===serverId||c.host===discovery.host;});
+  if(existing)return res.json({server:safe(existing),alreadyAdded:true});
+  await discoverInstalledRadius(serverId,true);
+  const [added]:any=await db.query("SELECT id,setting_value FROM platform_settings WHERE setting_group='free_radius' AND setting_key=?",['ssh_server_'+serverId]);
+  await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:added[0].id,description:'إضافة خدمة FreeRADIUS المكتشفة عبر SSH',metadata:{sshServerId:serverId}});
+  return res.json({server:safe(added[0])});
+ }catch{return res.status(400).json({message:'تعذرت إضافة الخدمة؛ أعد الاكتشاف وتحقق من اتصال SSH.'});}
 }

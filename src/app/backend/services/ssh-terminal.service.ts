@@ -229,7 +229,7 @@ export async function inspectInstalledRadius(serverId: number) {
 }
 
 // Discovery reads public service metadata only, never configuration secrets.
-async function discoverInstalledRadius(serverId:number){
+export async function discoverInstalledRadius(serverId:number,add=false){
  const c=await savedConfig(serverId);if(!c)throw new Error('SSH unavailable');
  const client=new Client();
  try{
@@ -245,6 +245,7 @@ async function discoverInstalledRadius(serverId:number){
   });
   const lines=output.trim().split('\n');
   const discovery={status:'discovered',version:lines[0]??'',serviceState:lines[1]??'unknown',unitPath:lines[2]??'',checkedAt:new Date().toISOString()};
+  if(!add)return {...discovery,host:c.host,sshServerId:serverId};
   const key='ssh_server_'+serverId;
   const lock=await db.pool.getConnection();
   try{
@@ -259,6 +260,6 @@ async function discoverInstalledRadius(serverId:number){
   }catch(e){await lock.rollback();throw e;}finally{lock.release();}
   const infrastructure=await import('./infrastructure-health.service');
   if(await infrastructure.readInfrastructureSelection())void infrastructure.checkInfrastructure().catch(()=>{});
-  return discovery;
+  return {...discovery,host:c.host,sshServerId:serverId};
  }finally{client.destroy();}
 }

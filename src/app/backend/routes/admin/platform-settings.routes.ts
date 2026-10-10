@@ -1,5 +1,5 @@
 import {getInfrastructureHealth,saveInfrastructureSelection,runInfrastructureHealth} from '../../controllers/infrastructure-health.controller';
-import {listRadiusServers,saveRadiusServer,radiusServerHealth} from '../../controllers/radius-servers.controller';
+import {listRadiusServers,saveRadiusServer,radiusServerHealth,discoverRadiusServers,addDiscoveredRadiusServer} from '../../controllers/radius-servers.controller';
 import { getLocalHostingSettings, saveLocalHostingSettings } from '../../controllers/local-hosting.controller';
 import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer,databaseServerHealth,setDatabaseServerAdmission} from '../../controllers/database-servers.controller';
 import {getSshConnection,inspectSshConnection,saveSshConnection,createSshTicket} from '../../services/ssh-terminal.service';
@@ -38,6 +38,8 @@ router.use('/radius-servers',(req,res,next)=>{
  return next();
 });
 router.get('/radius-servers',listRadiusServers);
+router.post('/radius-servers/discover',discoverRadiusServers);
+router.post('/radius-servers/discover/:id/add',addDiscoveredRadiusServer);
 router.post('/radius-servers',saveRadiusServer);
 router.put('/radius-servers/:id',saveRadiusServer);
 router.post('/radius-servers/:id/health',radiusServerHealth);

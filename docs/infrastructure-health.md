@@ -28,6 +28,8 @@
 لا يلزم ترحيل جديد؛ تستخدم إعدادات `platform_settings` الحالية. يجب وجود الترحيلات المركزية السابقة وجدول إعدادات SSH الذي تنشئه شاشة SSH الحالية.
 
 ## Automatic discovery and monitoring
-After verified SSH credentials are saved, FreeRADIUS is discovered using a fixed read-only command. A stable record is linked to the SSH server; secrets are not imported and the default ports must be confirmed. Missing services or read failures do not undo saving SSH. Discovery does not prove authentication/accounting readiness.
+After verified SSH credentials are saved, FreeRADIUS is discovered using a fixed read-only command. The Add Server screen discovers services on saved SSH connections and adds a stable linked record only when Add is clicked; secrets are not imported and the default ports must be confirmed. Missing services or read failures do not undo saving SSH. Discovery does not prove authentication/accounting readiness.
 
 The central database stays configured through the existing backend environment and is checked without creating a replacement. Monitoring runs in the backend (including after restart), defaults to five minutes, and can be configured on the health page. Reports expire at the selected interval; generation still performs fresh checks. The MySQL provisioning probe creates and removes temporary resources, and RADIUS uses its independent test database. A MySQL advisory lock serializes probes across backend instances.
+
+The discovery list is limited to 50 saved SSH connections, probes at most two concurrently, and displays individual failures. Existing host/SSH records are shown as already added. Defaults 1812/1813 must be confirmed when completing the configuration.
