@@ -79,7 +79,8 @@ export async function bootstrapRadiusTest(radiusId:number,databaseServerId:numbe
  const account=mysql.escape(state.username)+'@'+mysql.escape(clientHost);await admin.query(`CREATE USER IF NOT EXISTS ${account} IDENTIFIED BY ${mysql.escape(decryptProvisioningSecret(state.passwordEncrypted))} WITH MAX_USER_CONNECTIONS 4`);await admin.query(`GRANT SELECT ON \`${state.name.replace(/_/g,'\\_')}\`.* TO ${account}`);
  stage="test_user";
  await admin.query('DELETE FROM radcheck WHERE username=?',[state.testUsername]);await admin.query("INSERT INTO radcheck (username,attribute,op,value) VALUES (?,'Cleartext-Password',':=',?)",[state.testUsername,decryptProvisioningSecret(state.testPasswordEncrypted)]);
- const databaseHost=await radiusDatabaseHost(server,c.host);const authPort=18120,accountingPort=18121;
+ // 18120 is occupied by the stock FreeRADIUS inner-tunnel listener.
+ const databaseHost=await radiusDatabaseHost(server,c.host);const authPort=19120,accountingPort=19121;
  stage="apply_radius";
  await applyRadiusDatabase({sshServerId:c.sshServerId,radiusHost:c.host,databaseHost,databasePort:server.port,databaseName:state.name,username:state.username,password:decryptProvisioningSecret(state.passwordEncrypted),authPort,accountingPort,name:'rl_test_'+radiusId,secret:decryptProvisioningSecret(state.secretEncrypted)});
  stage="verify_radius";
