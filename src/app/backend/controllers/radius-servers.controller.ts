@@ -1,3 +1,4 @@
+import {bootstrapRadiusTest} from '../services/radius-provision.service';
 import {discoverInstalledRadius} from '../services/ssh-terminal.service';
 import { randomUUID } from 'crypto';
 import { isIP } from 'net';
@@ -26,7 +27,8 @@ export async function listRadiusServers(req: AuthenticatedRequest, res: Response
   try {
     const [rows]: any = await db.query('SELECT id,setting_value FROM platform_settings WHERE setting_group=? ORDER BY id DESC',[group]);
     const [databases]: any = await db.query("SELECT id,db_name FROM tenant_databases WHERE credentials_state='ready' AND status='active' ORDER BY id DESC");
-    return res.json({ servers: rows.map(safe), databases: databases.map((d:any)=>({id:d.id,name:d.db_name})) });
+    const [provisioningServers]:any=await db.query("SELECT id,name FROM database_servers WHERE status='active' AND archived_at IS NULL ORDER BY id");
+    return res.json({ provisioningServers,servers: rows.map(safe), databases: databases.map((d:any)=>({id:d.id,name:d.db_name})) });
   } catch { return res.status(503).json({message:'تعذر تحميل خوادم FreeRADIUS؛ راجع ترحيلات القاعدة المركزية.'}); }
 }
 export async function saveRadiusServer(req: AuthenticatedRequest, res: Response) {
@@ -63,7 +65,7 @@ export async function saveRadiusServer(req: AuthenticatedRequest, res: Response)
     const probeDatabasePasswordEncrypted=hasProbe?(probeDatabasePassword?encryptProvisioningSecret(probeDatabasePassword):sameProbe?old.probeDatabasePasswordEncrypted:null):null;
     if(hasProbe&&!probeDatabasePasswordEncrypted)throw new Error('PROBE_CONFIG');
     if(hasProbe){const [used]:any=await db.query('SELECT id FROM tenant_databases WHERE db_name=? LIMIT 1',[probeDatabaseName]);if(used[0])throw new Error('PROBE_CONFIG');}
-    const config = { sshServerId:old.sshServerId??null,discovery:old.discovery??null, name, host, authPort, accountingPort, testUsername, tenantDatabaseId, secretEncrypted, testPasswordEncrypted, probeDatabaseHost,probeDatabaseName,probeDatabaseUsername,probeDatabasePort,probeDatabaseTls,probeDatabasePasswordEncrypted,lastHealth: null };
+    const config = { bootstrapDatabaseServerId:old.bootstrapDatabaseServerId??null,sshServerId:old.sshServerId??null,discovery:old.discovery??null, name, host, authPort, accountingPort, testUsername, tenantDatabaseId, secretEncrypted, testPasswordEncrypted, probeDatabaseHost,probeDatabaseName,probeDatabaseUsername,probeDatabasePort,probeDatabaseTls,probeDatabasePasswordEncrypted,lastHealth: null };
     connection = await db.pool.getConnection(); await connection.beginTransaction();
     let savedId = serverId;
     if (serverId) await connection.query('UPDATE platform_settings SET setting_value=?,is_public=0,updated_by_master_admin_id=? WHERE id=? AND setting_group=?',[JSON.stringify(config),req.auth!.accountId,serverId,group]);
@@ -127,4 +129,12 @@ export async function addDiscoveredRadiusServer(req:AuthenticatedRequest,res:Res
   await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:added[0].id,description:'إضافة خدمة FreeRADIUS المكتشفة عبر SSH',metadata:{sshServerId:serverId}});
   return res.json({server:safe(added[0])});
  }catch{return res.status(400).json({message:'تعذرت إضافة الخدمة؛ أعد الاكتشاف وتحقق من اتصال SSH.'});}
+}
+
+export async function setupRadiusServer(req:AuthenticatedRequest,res:Response){
+ try{const serverId=id(req),databaseServerId=Number(req.body?.databaseServerId);if(!Number.isSafeInteger(databaseServerId)||databaseServerId<1)return res.status(400).json({message:'اختر خادم قاعدة اختبار RADIUS.'});
+ const health=await bootstrapRadiusTest(serverId,databaseServerId);
+ await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:serverId,description:'تجهيز ربط FreeRADIUS وقاعدة الاختبار والتحقق الفعلي',metadata:{databaseServerId,result:health.overall}});
+ return res.json({health,message:'نجح ربط FreeRADIUS والمصادقة والمحاسبة على قاعدة اختبار مستقلة.'});
+ }catch(e){const code=typeof (e as any)?.code==='string'?(e as any).code:e instanceof Error?e.message:'RADIUS_SETUP_FAILED';res.status(409).json({message:'تعذر تجهيز RADIUS. تحقق من صلاحيات sudo ووجود MySQL driver والمنافذ وراجع رمز المرحلة.',code:/^[A-Z0-9_]+$/.test(code)?code:'RADIUS_SETUP_FAILED'});}
 }

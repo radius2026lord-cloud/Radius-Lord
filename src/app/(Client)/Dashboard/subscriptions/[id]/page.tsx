@@ -13,7 +13,7 @@ type Environment = {
   networkName?:string;licenseNumber?:string;licenseStatus?:string;subscriptionStatus?:string;
   startsAt?:string|null;expiresAt?:string|null;status?:string;systemUrl?:string|null;readyAt?:string|null;
   health?:{databaseName:string|null;reportedAt:string|null;lastSeenAt:string|null;databaseStatus:string;radiusStatus:string};
-  job?:{id:number;status:string;currentStep:string|null;attemptCount:number;errorCode:string|null}|null;
+  job?:{id:number;status:string;currentStep:string|null;attemptCount:number;errorCode:string|null;steps?:Array<{step_code:string;status:string;error_code:string|null}>}|null;
 };
 type Subscription = {
   environment:Environment;
@@ -27,11 +27,12 @@ type Subscription = {
 export default function SubscriptionDetailsPage(){
   const {id}=useParams<{id:string}>();
   const router=useRouter();
+  const [delivery,setDelivery]=useState<{text:string;whatsappUrl:string|null;emailUrl:string|null}|null>(null);
   const [submitting,setSubmitting]=useState(false),[notice,setNotice]=useState(""),[actionError,setActionError]=useState("");
   const [item,setItem]=useState<Subscription|null>(null);
   const [loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
   useEffect(()=>{
-    const controller=new AbortController();setLoading(true);setError("");setItem(null);
+    const controller=new AbortController();setLoading(true);setError("");setItem(null);setDelivery(null);
     fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}`,{credentials:"include",cache:"no-store",signal:controller.signal})
       .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحميل تفاصيل الاشتراك.");if(!controller.signal.aborted)setItem(data.subscription);})
       .catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:"تعذر تحميل تفاصيل الاشتراك.");})
@@ -39,7 +40,7 @@ export default function SubscriptionDetailsPage(){
     return()=>controller.abort();
   },[id,revision]);
   useEffect(()=>{if(!item?.environment.job||!["queued","running"].includes(item.environment.job.status))return;const controller=new AbortController();let active=false;const timer=setInterval(async()=>{if(active)return;active=true;try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}`,{credentials:"include",cache:"no-store",signal:controller.signal});if(r.ok){const j=await r.json();if(!controller.signal.aborted)setItem(j.subscription);}}catch{/* Keep last state; manual refresh remains available. */}finally{active=false;}},5000);return()=>{clearInterval(timer);controller.abort();};},[id,item?.environment.job?.status]);
-  async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
+  async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);setDelivery(j);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
   async function requestEnvironment(){
     if(submitting || !item?.environment.canRequest)return;
     setSubmitting(true);setNotice("");setActionError("");
@@ -58,6 +59,8 @@ export default function SubscriptionDetailsPage(){
       <ProjectButton variant="secondary" disabled={loading||submitting} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>
     </div></section>
     {loading?<CollectionState loading>جارٍ تحميل تفاصيل الاشتراك...</CollectionState>:error?<CollectionState><span role="alert">{error}</span></CollectionState>:item&&<>
+      {delivery&&<Panel title="بيانات التسليم اليدوي"><p className="mb-3 text-xs text-slate-500">راجع المستلم قبل الإرسال؛ فتح الرابط لا يثبت تسليم الرسالة.</p><pre className="whitespace-pre-wrap break-words rounded-xl bg-slate-500/5 p-3 text-sm">{delivery.text}</pre><div className="mt-3 flex flex-wrap gap-3">{delivery.whatsappUrl&&<a className="text-sm text-blue-500" href={delivery.whatsappUrl} target="_blank" rel="noopener noreferrer">فتح مسودة واتساب</a>}{delivery.emailUrl&&<a className="text-sm text-blue-500" href={delivery.emailUrl}>فتح مسودة البريد</a>}<ProjectButton variant="secondary" onClick={()=>setDelivery(null)}>إخفاء البيانات</ProjectButton></div></Panel>}
+      {Boolean(item.environment.job?.steps?.length)&&<Panel title="مراحل تجهيز البيئة"><div className="grid gap-2 sm:grid-cols-2">{item.environment.job!.steps!.map(step=><div key={step.step_code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3 text-xs"><span>{stepLabels[step.step_code]??step.step_code}</span><span className={step.status==="success"?"text-emerald-600":step.status==="failed"?"text-red-500":"text-blue-500"}>{step.status==="success"?"نجحت":step.status==="failed"?"فشلت":step.status==="running"?"جارٍ التنفيذ":"بانتظار التنفيذ"}</span></div>)}</div></Panel>}
       <Panel title="حالة البيئة">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
@@ -114,6 +117,7 @@ function formatDate(value:string|null){if(!value)return "—";const date=new Dat
 
 function formatLimit(value:number){return value===0?"غير محدود":new Intl.NumberFormat("ar").format(value)}
 
+const stepLabels:Record<string,string>={infrastructure_preflight:"صحة البنية التحتية",hosting_preflight:"الوصول للمنصة",database_create:"إنشاء قاعدة الشبكة",database_template:"تهيئة جداول الشبكة",database_users:"حسابات اتصال القاعدة",database_verify:"التحقق من القاعدة",network_manager:"إنشاء مدير الشبكة",network_license:"الرخصة وحدود الخطة",network_radius:"ربط RADIUS بقاعدة الشبكة",network_radius_verify:"المصادقة والمحاسبة",network_database_isolation:"عزل قاعدة الشبكة",network_application_verify:"دخول المدير عبر المنصة",environment_activation:"تفعيل البيئة وبدء الاشتراك"};
 function environmentLabel(environment:Environment,paymentStatus:string){
   if(!["paid","completed"].includes(paymentStatus))return "التجهيز متاح بعد تأكيد الدفع";
   if(environment.job?.status==="queued")return "تم الدفع — بانتظار تجهيز البيئة";

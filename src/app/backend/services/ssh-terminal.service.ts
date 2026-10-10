@@ -263,3 +263,16 @@ export async function discoverInstalledRadius(serverId:number,add=false){
   return {...discovery,host:c.host,sshServerId:serverId};
  }finally{client.destroy();}
 }
+
+async function managedSshExec(serverId:number,command:string,input?:string){
+ const c=await savedConfig(serverId);if(!c)throw new Error('RADIUS_SSH_REQUIRED');const client=new Client();
+ try{
+  await new Promise<void>((resolve,reject)=>{client.once('ready',resolve);client.once('error',reject);client.once('close',()=>reject(new Error('RADIUS_SSH_CLOSED')));client.connect(options(c));});
+  return await new Promise<string>((resolve,reject)=>{const timer=setTimeout(()=>{client.destroy();reject(new Error('RADIUS_SSH_OPERATION_TIMEOUT'));},100000);
+   client.exec(command,(err,stream)=>{if(err){clearTimeout(timer);reject(err);return;}let output='';stream.stderr.resume();stream.on('data',(data:Buffer)=>{output+=data.toString();if(output.length>8192){client.destroy();reject(new Error('RADIUS_SSH_OUTPUT_LIMIT'));}});stream.once('error',(e:Error)=>{clearTimeout(timer);reject(e);});stream.once('close',(code:number)=>{clearTimeout(timer);code===0?resolve(output):reject(new Error('RADIUS_REMOTE_OPERATION_'+code));});if(input)stream.end(input);});
+  });
+ }finally{client.destroy();}
+}
+export async function readSshSource(serverId:number){const value=(await managedSshExec(serverId,'printf "%s" "$SSH_CONNECTION"')).trim().split(/\s+/)[0];if(isIP(value)!==4)throw new Error('RADIUS_BACKEND_SOURCE_REQUIRED');return value;}
+// Internal generated operations only; no route accepts arbitrary script/command input.
+export async function runManagedRadiusScript(serverId:number,script:string){return managedSshExec(serverId,'sudo -n python3 -',script);}

@@ -1,3 +1,4 @@
+import networkRoutes from './network.routes';
 import { Router } from 'express';
 
 //Auth
@@ -20,6 +21,7 @@ router.get('/platform-health',(req,res)=>{
 
 // تجميع الروتات
 //Auth
+router.use('/network',networkRoutes);
 router.use('/auth', authRoutes); // Login
 router.use('/auth', authLogoutRoutes);
 router.use('/admin/customers', adminCustomersRoutes);

@@ -72,7 +72,7 @@ export async function probeRadius(config: { host: string; authPort: number; acco
   if (code !== 2) return { service: 'responding', authentication: code === 3 ? 'rejected' : 'challenge', accounting: 'not_checked', sessionId: null };
   const sessionId = 'rl-health-'+randomBytes(12).toString('hex');
   // A standalone Stop record, never a fabricated active subscriber session.
-  const accounting = packet(4,Buffer.alloc(16),[text(1,config.testUsername),text(32,'radius-lord-health'),number(40,2),text(44,sessionId),number(46,0),number(49,1)]);
+  const accounting = packet(4,Buffer.alloc(16),[text(1,config.testUsername),text(32,'radius-lord-health'),number(40,2),text(44,sessionId),number(46,1),number(49,1)]);
   md5(Buffer.concat([accounting,secret])).copy(accounting,4);
   try {
     await exchange(config.host,config.accountingPort,accounting,secret,false);
