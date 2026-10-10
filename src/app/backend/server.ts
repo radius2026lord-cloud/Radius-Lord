@@ -1,3 +1,4 @@
+import {startInfrastructureHealthWorker} from './services/infrastructure-health.service';
 import { startDatabaseProvisioningWorker } from './workers/database-provisioning.worker';
 import { attachSshTerminal } from './services/ssh-terminal.service';
 import http from 'http';
@@ -36,6 +37,8 @@ const startServer = (port: number) => {
   server.listen(port, () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
+    const stopHealth=startInfrastructureHealthWorker();
+    if(stopHealth)server.once('close',stopHealth);
   });
 };
 

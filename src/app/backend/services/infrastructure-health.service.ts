@@ -25,7 +25,7 @@ async function snapshot(){
  let ssh:any=null;try{const [rows]:any=await db.query('SELECT * FROM server_ssh_connections WHERE database_server_id=?',[selection.radiusSshServerId]);ssh=rows[0];}catch(e){if((e as any)?.code!=='ER_NO_SUCH_TABLE')throw e;}
  const radius=radiusRows[0]?JSON.parse(radiusRows[0].setting_value):null;
  // Probe output changes must not invalidate the saved configuration fingerprint.
- const {lastHealth,...radiusConfig}=radius??{};
+ const {lastHealth,discovery,...radiusConfig}=radius??{};
  const gateway=gateways[0]?JSON.parse(gateways[0].settings_json):null;
  const {display_health,last_checked_at,...gatewayConfig}=gateway??{};
  const fingerprint=createHash('sha256').update(JSON.stringify({selection,database:databases[0],radius:radiusConfig,gateway:gatewayConfig,gatewaySecret:gateways[0]?.api_password_encrypted,hosting:hosting[0]?.setting_value,ssh})).digest('hex');
@@ -36,9 +36,11 @@ export async function readInfrastructureReport(){
  if(!rows[0])return null;
  const report=JSON.parse(rows[0].setting_value);
  let current=false;try{current=(await snapshot()).fingerprint===report.fingerprint;}catch{}
+ const schedule=await readInfrastructureSchedule();
+ const validityMs=schedule.intervalMinutes*60000;
  const age=Date.now()-new Date(report.checkedAt).getTime();
- const ready=report.ready===true&&current&&age>=0&&age<60000;
- return {...report,ready,stale:!current||age<0||age>=60000};
+ const ready=report.ready===true&&current&&age>=0&&age<validityMs;
+ return {...report,ready,validityMs,nextCheckAt:new Date(new Date(report.checkedAt).getTime()+validityMs).toISOString(),stale:!current||age<0||age>=validityMs};
 }
 async function checkDatabase(s:any,environmentId?:number){
  if(!s||s.status!=='active'||(!environmentId&&!s.accepts_new_environments)||s.tls_ca_reference)throw new Error('خادم القواعد غير متاح لاستقبال البيئات أو يحتاج شهادة مخصصة.');
@@ -74,6 +76,7 @@ async function executeInfrastructureChecks(environmentId?:number){
  const s=await snapshot();
  const checks:Array<{key:string;label:string;status:'ready'|'failed'|'not_checked';message:string;checkedAt:string}>=[];
  async function check(key:string,label:string,operation:()=>Promise<string>){try{checks.push({key,label,status:'ready',message:await operation(),checkedAt:new Date().toISOString()});}catch(e){checks.push({key,label,status:'failed',message:e instanceof Error&&!('code' in e)&&!('level' in e)?e.message:'فشل الاتصال أو الصلاحيات؛ راجع إعداد الخدمة.',checkedAt:new Date().toISOString()});}}
+ await check('central_database','قاعدة البيانات المركزية',async()=>{const [rows]:any=await db.query('SELECT DATABASE() name,1 connected');if(!rows[0]?.name)throw new Error('تعذر التحقق من القاعدة المركزية الثابتة.');return 'نجح الاتصال بالقاعدة المركزية المحفوظة؛ لا تُنشأ قاعدة مركزية جديدة.';});
  await check('hosting','استضافة المنصة',async()=>{
   const hosting=await readHostingPreflight((sql,params)=>db.query(sql,params));const nonce=randomBytes(16).toString('hex');
   const response=await fetch(`${hosting.baseUrl}/api/platform-health?nonce=${nonce}`,{redirect:'error',signal:AbortSignal.timeout(8000)});
@@ -111,4 +114,27 @@ export async function checkInfrastructure(environmentId?:number){
  const lock=await db.pool.getConnection();let acquired=false;
  try{const [rows]:any=await lock.query("SELECT GET_LOCK('radius-lord:infrastructure-health',0) acquired");acquired=Boolean(rows[0]?.acquired);if(!acquired)throw new InfrastructureNotReady();return await executeInfrastructureChecks(environmentId);}
  finally{try{if(acquired)await lock.query("SELECT RELEASE_LOCK('radius-lord:infrastructure-health')");}finally{lock.release();}}
+}
+
+export async function readInfrastructureSchedule(){
+ const [rows]:any=await db.query("SELECT setting_value FROM platform_settings WHERE setting_group='infrastructure_health' AND setting_key='schedule'");
+ const value=rows[0]?JSON.parse(rows[0].setting_value):{};
+ const minutes=Number(value.intervalMinutes);
+ return {intervalMinutes:Number.isInteger(minutes)&&minutes>=1&&minutes<=1440?minutes:5};
+}
+let healthTimer:NodeJS.Timeout|undefined;
+export function startInfrastructureHealthWorker(){
+ if(healthTimer)return;
+ let running=false;
+ async function tick(){
+  if(running)return;running=true;
+  try{
+   if(!await readInfrastructureSelection())return;
+   const report=await readInfrastructureReport();
+   if(!report||report.stale)await checkInfrastructure();
+  }catch{console.warn('Infrastructure health unavailable; generation remains subject to fresh verification.');}
+  finally{running=false;}
+ }
+ healthTimer=setInterval(()=>void tick(),15000);healthTimer.unref();void tick();
+ return ()=>{clearInterval(healthTimer);healthTimer=undefined;};
 }

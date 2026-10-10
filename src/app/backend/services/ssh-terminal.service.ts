@@ -104,7 +104,9 @@ export async function saveSshConnection(req: AuthenticatedRequest, res: Response
       await conn.commit();
     } catch (e) { await conn.rollback(); throw e; } finally { conn.release(); }
     closeServerSessions(c.id);
-    res.json({ message: 'تم حفظ اتصال SSH بشكل مشفّر.' });
+    let discovery;
+    try{discovery=await discoverInstalledRadius(c.id);}catch{discovery={status:'failed',message:'تم حفظ SSH، لكن تعذر اكتشاف FreeRADIUS؛ راجع صلاحيات القراءة والخدمة.'};}
+    res.json({ message: 'تم حفظ اتصال SSH بشكل مشفّر.', discovery });
   } catch (e) { fail(res, e); }
 }
 type Ticket = { adminId: number; serverId: number; expires: number; config?: Config };
@@ -224,4 +226,39 @@ export async function inspectInstalledRadius(serverId: number) {
       });
     });
   } finally { client.destroy(); }
+}
+
+// Discovery reads public service metadata only, never configuration secrets.
+async function discoverInstalledRadius(serverId:number){
+ const c=await savedConfig(serverId);if(!c)throw new Error('SSH unavailable');
+ const client=new Client();
+ try{
+  await new Promise<void>((resolve,reject)=>{client.once('ready',resolve);client.once('error',reject);client.once('close',()=>reject(new Error('SSH closed')));client.connect(options(c));});
+  const output=await new Promise<string>((resolve,reject)=>{
+   const timer=setTimeout(()=>{client.destroy();reject(new Error('Discovery timeout'));},15000);
+   client.exec('test -x /usr/sbin/freeradius || exit 3; /usr/sbin/freeradius -v 2>/dev/null | head -n 1; systemctl is-active freeradius; systemctl show freeradius --property=FragmentPath --value; exit 0',(error,stream)=>{
+    if(error){clearTimeout(timer);reject(error);return;}
+    let out='';stream.on('data',(data:Buffer)=>{out+=data.toString();if(out.length>4096){clearTimeout(timer);client.destroy();reject(new Error('Discovery output too large'));}});stream.stderr.resume();
+    stream.once('error',(e:Error)=>{clearTimeout(timer);reject(e);});
+    stream.once('close',(code:number)=>{clearTimeout(timer);code===0?resolve(out):reject(new Error('FreeRADIUS not installed'));});
+   });
+  });
+  const lines=output.trim().split('\n');
+  const discovery={status:'discovered',version:lines[0]??'',serviceState:lines[1]??'unknown',unitPath:lines[2]??'',checkedAt:new Date().toISOString()};
+  const key='ssh_server_'+serverId;
+  const lock=await db.pool.getConnection();
+  try{
+   await lock.beginTransaction();
+   const [rows]:any=await lock.query("SELECT id,setting_value FROM platform_settings WHERE setting_group='free_radius' AND setting_key=? FOR UPDATE",[key]);
+   const old=rows[0]?JSON.parse(rows[0].setting_value):null;
+   // Do not infer listening ports or shared secrets from service presence.
+   const config=old?{...old,host:c.host,sshServerId:serverId,discovery,lastHealth:null}:{name:'FreeRADIUS — '+c.host,host:c.host,sshServerId:serverId,authPort:1812,accountingPort:1813,testUsername:'',tenantDatabaseId:null,secretEncrypted:null,testPasswordEncrypted:null,discovery,lastHealth:null};
+   if(old&&old.host!==c.host){config.secretEncrypted=null;config.testPasswordEncrypted=null;}
+   await lock.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public) VALUES ('free_radius',?,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",[key,JSON.stringify(config)]);
+   await lock.commit();
+  }catch(e){await lock.rollback();throw e;}finally{lock.release();}
+  const infrastructure=await import('./infrastructure-health.service');
+  if(await infrastructure.readInfrastructureSelection())void infrastructure.checkInfrastructure().catch(()=>{});
+  return discovery;
+ }finally{client.destroy();}
 }

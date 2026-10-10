@@ -26,3 +26,8 @@
 يحفظ عامل التجهيز معرفات مخدمات الفحص في خطوة `infrastructure_preflight`، ويرفض تغييرها عند إعادة المحاولة. يستعمل خادم MySQL المختار بدل اختيار خادم مختلف تلقائيًا. تغيير المخدمات لطلب بدأ سابقًا يحتاج مراجعة مستقلة.
 
 لا يلزم ترحيل جديد؛ تستخدم إعدادات `platform_settings` الحالية. يجب وجود الترحيلات المركزية السابقة وجدول إعدادات SSH الذي تنشئه شاشة SSH الحالية.
+
+## Automatic discovery and monitoring
+After verified SSH credentials are saved, FreeRADIUS is discovered using a fixed read-only command. A stable record is linked to the SSH server; secrets are not imported and the default ports must be confirmed. Missing services or read failures do not undo saving SSH. Discovery does not prove authentication/accounting readiness.
+
+The central database stays configured through the existing backend environment and is checked without creating a replacement. Monitoring runs in the backend (including after restart), defaults to five minutes, and can be configured on the health page. Reports expire at the selected interval; generation still performs fresh checks. The MySQL provisioning probe creates and removes temporary resources, and RADIUS uses its independent test database. A MySQL advisory lock serializes probes across backend instances.

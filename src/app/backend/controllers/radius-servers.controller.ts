@@ -62,7 +62,7 @@ export async function saveRadiusServer(req: AuthenticatedRequest, res: Response)
     const probeDatabasePasswordEncrypted=hasProbe?(probeDatabasePassword?encryptProvisioningSecret(probeDatabasePassword):sameProbe?old.probeDatabasePasswordEncrypted:null):null;
     if(hasProbe&&!probeDatabasePasswordEncrypted)throw new Error('PROBE_CONFIG');
     if(hasProbe){const [used]:any=await db.query('SELECT id FROM tenant_databases WHERE db_name=? LIMIT 1',[probeDatabaseName]);if(used[0])throw new Error('PROBE_CONFIG');}
-    const config = { name, host, authPort, accountingPort, testUsername, tenantDatabaseId, secretEncrypted, testPasswordEncrypted, probeDatabaseHost,probeDatabaseName,probeDatabaseUsername,probeDatabasePort,probeDatabaseTls,probeDatabasePasswordEncrypted,lastHealth: null };
+    const config = { sshServerId:old.sshServerId??null,discovery:old.discovery??null, name, host, authPort, accountingPort, testUsername, tenantDatabaseId, secretEncrypted, testPasswordEncrypted, probeDatabaseHost,probeDatabaseName,probeDatabaseUsername,probeDatabasePort,probeDatabaseTls,probeDatabasePasswordEncrypted,lastHealth: null };
     connection = await db.pool.getConnection(); await connection.beginTransaction();
     let savedId = serverId;
     if (serverId) await connection.query('UPDATE platform_settings SET setting_value=?,is_public=0,updated_by_master_admin_id=? WHERE id=? AND setting_group=?',[JSON.stringify(config),req.auth!.accountId,serverId,group]);
