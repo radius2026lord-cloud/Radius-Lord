@@ -85,7 +85,7 @@ export class AuthService {
         username: account.username,
       },
       env.JWT_SECRET,
-      { expiresIn: '1h' },
+      { expiresIn: '20m' },
     );
 
     const table = accountType === 'master_admin' ? 'master_admins' : 'customers';

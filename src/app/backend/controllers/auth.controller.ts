@@ -213,6 +213,7 @@ export const meController = async (req: AuthenticatedRequest, res: Response) => 
 
     return res.json({
       success: true,
+      sessionExpiresAt: req.auth.expiresAt ? new Date(req.auth.expiresAt * 1000).toISOString() : null,
       account: {
         id: account.id,
         fullName: account.full_name,
