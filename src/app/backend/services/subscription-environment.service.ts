@@ -1,3 +1,4 @@
+import {readInfrastructureReport} from './infrastructure-health.service';
 import { randomBytes } from 'crypto';
 import type { PoolConnection } from 'mysql2/promise';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware';
@@ -88,7 +89,7 @@ export type EnvironmentSummary = {
   health?:{databaseName:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string;radiusStatus:string};
 };
 // Read one network summary from core; never fan out to customer databases.
-export async function readEnvironmentSummary(query: (sql: string, params?: any[]) => Promise<any>, order: any): Promise<EnvironmentSummary> {
+async function readEnvironmentSummaryCore(query: (sql: string, params?: any[]) => Promise<any>, order: any): Promise<EnvironmentSummary> {
   if (!order.tenant_id || !order.subscription_id) {
     const blockedReason = !['paid','completed'].includes(order.status) ? 'يتاح إنشاء البيئة بعد تأكيد الدفع.' : !validLimits(order.plan_limits_snapshot) ? 'حدود الشراء القديمة غير محفوظة؛ راجع الطلب قبل التجهيز.' : !order.deployment_type_id || !Number.isSafeInteger(order.duration_months_snapshot) || order.duration_months_snapshot < 1 ? 'بيانات الاستضافة أو مدة الشراء ناقصة.' : null;
     return {registered:false,canRequest:!blockedReason,blockedReason};
@@ -125,4 +126,14 @@ export async function readEnvironmentSummary(query: (sql: string, params?: any[]
     canSendDetails:process.env.ENVIRONMENT_NOTIFICATION_WORKER_ENABLED==='true'&&r.environment_status==='ready'&&r.job_status==='success'&&r.subscription_status==='active'&&r.license_status==='active'&&Boolean(r.system_url)&&r.database_status==='healthy'&&r.radius_status==='healthy'&&Boolean(r.reported_at)&&Date.now()-new Date(r.reported_at).getTime()>=0&&Date.now()-new Date(r.reported_at).getTime()<90000&&Boolean(r.expires_at)&&new Date(r.expires_at).getTime()>Date.now()&&r.notification_ready>0,
     canRequest:!blockedReason,blockedReason,job:r.job_id ? {id:r.job_id,status:r.job_status,currentStep:r.current_step,attemptCount:r.attempt_count,errorCode:r.error_code} : null,
     health:{databaseName:r.db_name||null,reportedAt:r.reported_at,lastSeenAt:r.last_seen_at,onlineUsers:r.online_users_count,activeSessions:r.active_sessions_count,databaseStatus:r.database_status || 'unknown',radiusStatus:r.radius_status || 'unknown'}};
+}
+
+export async function readEnvironmentSummary(query:(sql:string,params?:any[])=>Promise<any>,order:any):Promise<EnvironmentSummary>{
+ const summary=await readEnvironmentSummaryCore(query,order);
+ if(!summary.canRequest)return summary;
+ const [types]:any=await query('SELECT code FROM deployment_types WHERE id=?',[order.deployment_type_id]);
+ if(types[0]?.code!=='shared_cloud')return {...summary,canRequest:false,blockedReason:'مسار التوليد الحالي مخصص للكلاود المشتركة فقط.'};
+ const report=await readInfrastructureReport();
+ if(!report?.ready)return {...summary,canRequest:false,blockedReason:'افحص صحة البنية التحتية وأكمل جميع الشروط؛ صلاحية الفحص دقيقة واحدة.'};
+ return summary;
 }

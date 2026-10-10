@@ -1,3 +1,4 @@
+import {getInfrastructureHealth,saveInfrastructureSelection,runInfrastructureHealth} from '../../controllers/infrastructure-health.controller';
 import {listRadiusServers,saveRadiusServer,radiusServerHealth} from '../../controllers/radius-servers.controller';
 import { getLocalHostingSettings, saveLocalHostingSettings } from '../../controllers/local-hosting.controller';
 import {listDatabaseServers,inspectDatabaseServer,saveDatabaseServer,databaseServerHealth,setDatabaseServerAdmission} from '../../controllers/database-servers.controller';
@@ -9,6 +10,13 @@ import { getContactPaymentSettingsController, updateContactPaymentSettingsContro
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.get('/infrastructure-health',getInfrastructureHealth);
+router.use('/infrastructure-health',(req,res,next)=>{
+ if(req.method!=='GET'&&req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر طلب فحص البنية التحتية غير مصرح.'});
+ return next();
+});
+router.put('/infrastructure-health',saveInfrastructureSelection);
+router.post('/infrastructure-health/check',runInfrastructureHealth);
 router.use('/database-servers/:id/ssh', (req,res,next)=>{
  if(req.method==='GET')return next();
  if(req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر طلب SSH غير مصرح.'});

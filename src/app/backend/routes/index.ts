@@ -11,6 +11,12 @@ import adminPlatformSettingsRoutes from './admin/platform-settings.routes';
 import customerPaymentSettingsRoutes from './customer/payment-settings.routes';
 
 const router = Router();
+router.get('/platform-health',(req,res)=>{
+ const nonce=String(req.query.nonce??'');
+ if(!/^[a-f0-9]{32}$/.test(nonce))return res.status(400).json({message:'Invalid probe'});
+ res.setHeader('Cache-Control','no-store');
+ return res.json({application:'radius-lord-backend',nonce});
+});
 
 // تجميع الروتات
 //Auth
