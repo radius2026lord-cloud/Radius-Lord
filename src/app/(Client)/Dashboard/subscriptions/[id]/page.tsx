@@ -125,6 +125,8 @@ function environmentLabel(environment:Environment,paymentStatus:string){
 }
 
 function environmentDescription(environment:Environment,paymentStatus:string){
+  if(environment.job?.errorCode==="HOSTING_SETTINGS_REQUIRED")return "احفظ إعدادات الوصول للمخدم المحلي من إعدادات المنصة ثم أعد محاولة التجهيز. لم تبدأ مدة الاشتراك.";
+  if(environment.job?.errorCode==="HOSTING_SETTINGS_INVALID")return "راجع IP المخدم ومنفذ التطبيق أو إعدادات الدومين المحفوظة، ثم أعد محاولة التجهيز. لم تبدأ مدة الاشتراك.";
   if(environment.job?.errorCode==="ENVIRONMENT_BOOTSTRAP_PENDING")return "أُنشئت قاعدة الشبكة وحسابا الاتصال وتم التحقق منهما. تبقى تهيئة حساب المدير وبيانات الاشتراك وخدمة RADIUS قبل التفعيل؛ مدة الاشتراك لم تبدأ.";
   if(environment.job?.errorCode)return `توقفت مرحلة التجهيز: ${environment.job.currentStep||"التحقق"} · رمز المشكلة: ${environment.job.errorCode}. لم تبدأ مدة الاشتراك.`;
   if(environment.status==="ready")return "البيئة جاهزة. يُتحقق من اتصال NAS بعد تطبيق سكربت الربط.";
