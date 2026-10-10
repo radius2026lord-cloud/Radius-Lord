@@ -1,0 +1,5 @@
+@keyframes rl-dialog-backdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rl-dialog-show { from { opacity: 0; margin-top: 10px; scale: .97; } to { opacity: 1; margin-top: 0; scale: 1; } }
+.rl-dialog-overlay { animation: rl-dialog-backdrop 180ms ease-out; }
+.rl-dialog-panel { animation: rl-dialog-show 220ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .rl-dialog-overlay, .rl-dialog-panel { animation: none; } }

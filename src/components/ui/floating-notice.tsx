@@ -20,7 +20,7 @@ export default function FloatingNotice({error,message,onDismiss}:{error?:string;
  },[error,message,paused,duration,text]);
  if(!mounted||!text)return null;
  const warning=Boolean(error);
- return createPortal(<div dir="rtl" className="pointer-events-none fixed inset-x-3 top-[110px] z-[100] flex justify-center sm:inset-x-6">
+ return createPortal(<div dir="rtl" className="pointer-events-none fixed inset-x-3 bottom-[90px] z-[11000] flex justify-center sm:inset-x-auto sm:left-6 sm:bottom-[90px] sm:w-[380px] sm:justify-start">
   <div key={`${warning}:${text}`} role={warning?"alert":"status"} aria-atomic="true" onMouseEnter={()=>setPaused(true)} onMouseLeave={()=>setPaused(false)} onFocusCapture={()=>setPaused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setPaused(false);}} className={`rl-floating-notice pointer-events-auto relative w-full max-w-md overflow-hidden rounded-[20px] border bg-white shadow-[0_16px_48px_-12px_rgba(15,23,42,0.25)] dark:bg-[#17263b] ${warning?"border-red-200 dark:border-red-400/25":"border-emerald-200 dark:border-emerald-400/25"}`}>
    <div className="flex max-h-[calc(100dvh-160px)] items-start gap-3 overflow-y-auto p-4">
     <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] ${warning?"bg-red-50 text-red-500 dark:bg-red-500/15 dark:text-red-300":"bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"}`}>
