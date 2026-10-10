@@ -495,14 +495,36 @@ textarea,
 /* Fade the viewport into the shell rather than cutting cards off at its border.
    End spacing allows the final controls to scroll above the fade. */
 .rl-workspace-soft-edge {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 44px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 44px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 68px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 68px), transparent 100%);
 }
-.rl-workspace-content-end { padding-bottom: 48px; }
+.rl-workspace-content-end { padding-bottom: 76px; }
 @media (max-width: 639px) {
   .rl-workspace-soft-edge {
-    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 48px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 48px), transparent 100%);
   }
-  .rl-workspace-content-end { padding-bottom: 36px; }
+  .rl-workspace-content-end { padding-bottom: 56px; }
+}
+
+/* A curled paper edge separates the scrolling sheet from the shell below. */
+.rl-workspace-paper-fold {
+  pointer-events: none;
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  height: 30px;
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  border-bottom: 1px solid rgba(112, 151, 190, .5);
+  background: linear-gradient(to bottom, rgba(237,243,248,0), rgba(248,251,254,.82) 38%, #ffffff 57%, #d3e0ed 85%, #afc4d9 100%);
+  box-shadow: 0 13px 12px -10px rgba(44,77,112,.55);
+  transform: translateY(4px);
+}
+.dark .rl-workspace-paper-fold {
+  border-bottom-color: rgba(171,147,188,.28);
+  background: linear-gradient(to bottom, rgba(33,26,37,0), #302638 40%, #44364f 57%, #251d2b 88%, #17111c);
+  box-shadow: 0 13px 12px -10px rgba(0,0,0,.8);
+}
+@media (max-width: 767px) {
+  .rl-workspace-paper-fold { left: 12px; right: 12px; height: 24px; }
 }
