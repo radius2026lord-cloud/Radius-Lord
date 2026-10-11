@@ -1,7 +1,8 @@
 "use client";
 
-import {useEffect,useState,type ReactNode} from "react";
+import {useEffect,useState,useRef,type ReactNode} from "react";
 import {CheckCircle2,CalendarDays,CreditCard,ExternalLink,Package,Server,Users,Wifi,RotateCw} from "lucide-react";
+import FloatingContentGuide from "@/components/ui/floating-content-guide";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectLoading from "@/components/ui/project-loading";
 import {ProjectInfoCard,ProjectCardIcon} from "@/components/ui/project-info-card";
@@ -12,6 +13,7 @@ const limit=(value:unknown)=>typeof value==="number"&&Number.isSafeInteger(value
 function safeUrl(value:string|null){try{const url=new URL(value||"");return ["http:","https:"].includes(url.protocol)?url.href:null;}catch{return null;}}
 
 export default function CustomerSubscriptionDashboard({welcome}:{welcome:ReactNode}){
+ const contentRef=useRef<HTMLDivElement>(null);
  const [items,setItems]=useState<Subscription[]|null>(null),[error,setError]=useState(""),[refresh,setRefresh]=useState(0);
  useEffect(()=>{
   let alive=true,busy=false;const controller=new AbortController();
@@ -21,10 +23,10 @@ export default function CustomerSubscriptionDashboard({welcome}:{welcome:ReactNo
  },[refresh]);
  if(items===null)return <div className="p-6" dir="rtl">{error?<ProjectInfoCard tone="danger"><p role="alert">{error}</p><ProjectButton className="mt-4" onClick={()=>{setError("");setRefresh(x=>x+1);}}>إعادة المحاولة<RotateCw/></ProjectButton></ProjectInfoCard>:<ProjectLoading>جارٍ التحقق من حالة اشتراكك...</ProjectLoading>}</div>;
  if(!items.length)return <>{welcome}{error&&<p role="alert" className="p-4 text-center text-sm text-red-500">تعذر تحديث حالة الاشتراك؛ أعد تحميل الصفحة.</p>}</>;
- return <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5 p-4 text-[#17386d] dark:text-slate-100 sm:p-7">
+ return <div ref={contentRef} dir="rtl" className="mx-auto w-full max-w-6xl space-y-5 p-4 text-[#17386d] dark:text-slate-100 sm:p-7">
   <ProjectInfoCard tone="success" className="flex items-start gap-4"><ProjectCardIcon icon={CheckCircle2} tone="success"/><div><h1 className="text-xl font-bold">تم تأكيد الدفع، شكرًا لاشتراكك</h1><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">هذه معلومات اشتراكك المعتمدة عند الشراء. تتحدث حالة تجهيز شبكتك تلقائيًا.</p></div></ProjectInfoCard>
   {error&&<ProjectInfoCard tone="warning"><p role="status" className="text-sm">تعذر تحديث المعلومات. نعرض آخر بيانات تم تحميلها.</p><ProjectButton variant="secondary" className="mt-3" onClick={()=>setRefresh(x=>x+1)}>تحديث<RotateCw/></ProjectButton></ProjectInfoCard>}
-  {items.map(item=>{
+  {items.slice(0,1).map(item=>{
    const url=safeUrl(item.systemUrl),status=item.environmentStatus;
    const state=status==='archived'?'البيئة مؤرشفة':(item.subscriptionStatus==='expired'||Boolean(item.expiresAt&&new Date(item.expiresAt).getTime()<=Date.now()))?'انتهى الاشتراك':status==='failed'?'التجهيز يحتاج متابعة من الإدارة':status==='ready'?'تم تجهيز البيئة':status==='provisioning'?'جارٍ تجهيز بيئتك':'بانتظار تجهيز البيئة';
    return <section key={item.id} className="space-y-4 rounded-[24px] border border-slate-200 bg-white/75 p-4 dark:border-white/10 dark:bg-white/[.025] sm:p-5">
@@ -39,5 +41,6 @@ export default function CustomerSubscriptionDashboard({welcome}:{welcome:ReactNo
     <ProjectInfoCard tone={status==='failed'?'warning':url?'success':'pending'}><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{state}</h3><p className="mt-2 text-xs leading-6 text-slate-500 dark:text-slate-400">{url?'شبكتك جاهزة. يمكنك الدخول باستخدام بيانات التفعيل المرسلة إليك.':status==='archived'?'تمت أرشفة هذه البيئة مع الاحتفاظ بسجل الدفع.':item.startsAt?'بيانات الفترة المعتمدة موضحة أعلاه.':'يبدأ احتساب فترة الاشتراك بعد اكتمال تجهيز البيئة وتفعيلها.'}</p></div>{url&&<a href={url} className="inline-flex items-center gap-2 rounded-[14px] bg-[#0758e9] px-5 py-3 text-xs font-semibold text-white">الدخول إلى شبكتي<ExternalLink className="h-4 w-4"/></a>}</div></ProjectInfoCard>
    </section>;
   })}
+  <FloatingContentGuide contentRef={contentRef}/>
  </div>;
 }

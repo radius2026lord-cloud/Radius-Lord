@@ -139,7 +139,7 @@ export async function getMySubscriptionsController(req:AuthenticatedRequest,res:
    LEFT JOIN subscriptions s ON s.id=po.subscription_id AND s.tenant_id=t.id
    LEFT JOIN tenant_environments te ON te.tenant_id=t.id
    WHERE po.customer_id=? AND po.payment_purpose='initial_subscription' AND po.status IN ('paid','completed')
-   ORDER BY po.paid_at DESC,po.id DESC`,[req.auth!.accountId]);
+   ORDER BY (s.status='active' AND s.expires_at>CURRENT_TIMESTAMP AND te.archived_at IS NULL) DESC, (te.archived_at IS NULL) DESC, po.paid_at DESC,po.id DESC LIMIT 1`,[req.auth!.accountId]);
   const parse=(value:any)=>{try{return typeof value==='string'?JSON.parse(value):value;}catch{return null;}};
   return res.json({success:true,subscriptions:(rows as any[]).map(r=>({id:r.id,paymentCode:r.payment_code,planName:r.plan_name_snapshot,durationMonths:r.duration_months_snapshot,deploymentName:r.deployment_name_snapshot,limits:parse(r.plan_limits_snapshot),addons:parse(r.addons_snapshot)||[],totalAmount:String(r.total_amount),currency:r.currency_code,paidAt:r.paid_at,subscriptionStatus:r.subscription_status||null,startsAt:r.starts_at,expiresAt:r.expires_at,networkName:r.network_name,environmentStatus:r.archived_at?'archived':r.environment_status||'pending',systemUrl:!r.archived_at&&r.environment_status==='ready'&&r.subscription_status==='active'&&r.expires_at&&new Date(r.expires_at).getTime()>Date.now()?r.system_url:null}))});
  }catch(e){console.error(e);return res.status(500).json({success:false,message:'تعذر تحميل معلومات الاشتراك.'});}
