@@ -3,9 +3,11 @@ import LocalHostingSettings from "@/components/settings/local-hosting-settings";
 import ProjectLoading from "@/components/ui/project-loading";
 
 import { useEffect,useState } from "react";
+import ProjectButton from "@/components/ui/project-button";
+import {useRouter} from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/auth-provider";
-import { Globe,Headphones,Mail,MessageCircle,Phone,Save,Settings2,ShieldCheck } from "lucide-react";
+import { ArrowRight,Globe,Headphones,Mail,MessageCircle,Phone,Save,Settings2,ShieldCheck } from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
 import { InputGroup,InputGroupTextarea } from "@/components/ui/input-group";
 
@@ -14,7 +16,9 @@ type Tab="payment"|"support"|"hosting";
 const empty:Form={contact_name:"",whatsapp_number:"",whatsapp_enabled:true,whatsapp_button_text:"التواصل عبر واتساب لإتمام الدفع",whatsapp_message_template:"مرحبًا، أرغب بإتمام اشتراكي في Radius Lord. كود الدفع: {{payment_code}}",payment_instructions:"",support_email:"",support_phone_primary:"",support_phone_secondary:""};
 
 export default function PlatformSettingsPage(){
- const {isMasterAdmin}=useAuth();
+ const {isMasterAdmin}=useAuth();const router=useRouter();
+ const [returnTo,setReturnTo]=useState("");
+ useEffect(()=>{const params=new URLSearchParams(window.location.search);if(params.get("tab")==="hosting"&&isMasterAdmin)setActiveTab("hosting");const path=params.get("returnTo")??"";if(/^\/Dashboard\/subscriptions\/[0-9]+$/.test(path))setReturnTo(path);},[isMasterAdmin]);
  const [form,setForm]=useState<Form>(empty),[activeTab,setActiveTab]=useState<Tab>("payment"),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[message,setMessage]=useState("");
  useEffect(()=>{(async()=>{try{const r=await fetch("/api/billing/settings",{credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);const m=Object.fromEntries((j.settings??[]).map((x:any)=>[x.setting_key,x.value_type==="boolean"?x.setting_value==="1":x.setting_value??""]));setForm({...empty,...m});}catch(e:any){setMessage(e.message||"تعذر تحميل الإعدادات.");}finally{setLoading(false)}})()},[]);
  const set=(k:keyof Form,v:string|boolean)=>setForm(x=>({...x,[k]:v}));
@@ -22,6 +26,7 @@ export default function PlatformSettingsPage(){
  const setWhatsapp=(v:string)=>set("whatsapp_number",digits(v));
  const save=async()=>{setSaving(true);setMessage("");try{const number=form.whatsapp_number.replace(/[^0-9]/g,"");if(form.whatsapp_enabled&&!/^[1-9][0-9]{6,14}$/.test(number))throw new Error("رقم WhatsApp يجب أن يكون من 7 إلى 15 رقمًا بصيغة دولية، من دون + أو مسافات.");if(form.support_email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.support_email))throw new Error("أدخل بريد دعم إلكتروني صالحًا.");if([form.support_phone_primary,form.support_phone_secondary].some(v=>v&&!/^[1-9][0-9]{6,14}$/.test(v)))throw new Error("أرقام التواصل يجب أن تكون من 7 إلى 15 رقمًا بصيغة دولية.");const r=await fetch("/api/billing/settings",{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,whatsapp_number:number})}),j=await r.json();if(!r.ok)throw new Error(j.message);setForm(x=>({...x,whatsapp_number:number}));setMessage("تم حفظ إعدادات التواصل والدفع بنجاح.");}catch(e:any){setMessage(e.message||"تعذر حفظ الإعدادات.");}finally{setSaving(false)}};
  return <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5">
+  {returnTo&&<ProjectButton variant="back" onClick={()=>router.push(returnTo)}><ArrowRight/>العودة إلى الاشتراك</ProjectButton>}
   <div><h1 className="text-2xl font-bold text-slate-900 dark:text-white">إعدادات المنصة</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">إعدادات التواصل والدفع وربط استضافة المنصة.</p></div>
   {isMasterAdmin&&<Link href="/Dashboard/settings/homepage" className="rl-surface flex items-center gap-3 rounded-[22px] bg-white p-4 text-sm font-semibold text-[#0758e9] dark:bg-[#0d243b] dark:text-[#8fc0ff]"><Settings2 className="h-5 w-5"/>تخصيص الصفحة الرئيسية</Link>}
   <section className="rl-surface overflow-hidden rounded-[26px] border border-slate-200/80 bg-white dark:border-white/10 dark:bg-white/[.035]">
