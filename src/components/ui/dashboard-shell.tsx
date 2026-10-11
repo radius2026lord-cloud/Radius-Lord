@@ -6,9 +6,10 @@ import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ServerStatusFooter from "./server-status-footer";
 import TransitionOverlay from "@/components/ui/transition-overlay";
-import { useAuth } from "@/components/auth/auth-provider";
+import { useOptionalAuth } from "@/components/auth/auth-provider";
 import CustomerOnboardingShell from "./customer-onboarding-shell";
 import {
+  Layers,
   Activity,
   Bell,
   CircleDollarSign,
@@ -139,9 +140,24 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export default function DashboardShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const { account, accountType } = useAuth();
+type NetworkShellContext={basePath:string;tab:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
+export default function DashboardShell({ children,network }: { children: React.ReactNode;network?:NetworkShellContext }) {
+  const actualPathname = usePathname();
+  const auth = useOptionalAuth();
+  const account=network?{fullName:network.fullName}:auth?.account;
+  const accountType=network?'customer':auth?.accountType;
+  const pathname=network?(network.tab==='overview'?network.basePath:`${network.basePath}?tab=${network.tab}`):actualPathname;
+  const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};
+  const networkGroups:NavGroup[]=network?[
+   {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users}]},
+   {label:'بروفايلات الخدمة',icon:Layers,items:[{label:'البروفايلات والباقات',href:`${network.basePath}?tab=profiles`,icon:Layers}]},
+   {label:'الهوتسبوت',icon:Radio,items:[{label:'حسابات الهوتسبوت',href:`${network.basePath}?tab=hotspot`,icon:Radio}]},
+   {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
+   {label:'إعدادات الشبكة',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings}]},
+   {label:'اشتراكي',icon:CreditCard,items:[{label:'معلومات الاشتراك',href:`${network.basePath}?tab=subscription`,icon:CreditCard}]},
+  ]:[];
+  const navGroups=network?networkGroups:accountType==='master_admin'?masterAdminGroups:customerNavGroups;
+  const home=network?networkHome:masterAdminHome;
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
@@ -164,6 +180,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const logout = async () => {
     if (loggingOut) return;
     setLoggingOut(true); setAccountOpen(false); setMobileOpen(false);
+    if(network){try{await network.onLogout();}finally{setLoggingOut(false);}return;}
     const startedAt = performance.now();
     try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); }
     finally {
@@ -179,30 +196,30 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const shellMotion = "rl-sidebar-motion";
   const customerOnboarding = accountType === "customer" && (pathname === "/Dashboard" || pathname.indexOf("/Dashboard/customer-plans") === 0 || pathname.indexOf("/Dashboard/customer-payment") === 0);
   useEffect(() => {
-    if (accountType !== "master_admin" || customerOnboarding) return;
+    if ((!network&&accountType !== "master_admin") || customerOnboarding) return;
     const root = shellRootRef.current, footer = footerRef.current;
     if (!root || !footer) return;
     const measure = () => root.style.setProperty("--rl-footer-space", `${Math.ceil(footer.getBoundingClientRect().height) + 32}px`);
     measure();const observer = new ResizeObserver(measure);observer.observe(footer);
     return () => { observer.disconnect();root.style.removeProperty("--rl-footer-space"); };
-  }, [accountType, customerOnboarding]);
+  }, [accountType, customerOnboarding,Boolean(network)]);
 
   const currentTitle = useMemo(() => {
     if (accountType === "master_admin" && /^\/Dashboard\/connection-servers\/[^/]+$/.test(pathname) && !pathname.endsWith("/add")) return "تفاصيل وإعداد خادم الاتصال";
-    if (pathname === masterAdminHome.href) return masterAdminHome.label;
-    const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
+    if (pathname === home.href) return home.label;
+    const groups = navGroups;
     for (const group of groups) {
       const match = group.items.find((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
       if (match) return match.label;
     }
     return "الصفحة الرئيسية";
-  }, [pathname, accountType]);
+  }, [pathname, accountType,network?.basePath]);
 
   useEffect(() => {
-    const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
+    const groups = navGroups;
     const activeGroup = groups.find((group) => group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")))));
     if (activeGroup) setOpenNavGroups((current) => ({ ...current, [activeGroup.label]: true }));
-  }, [pathname, accountType]);
+  }, [pathname, accountType,network?.basePath]);
 
   const revealNavGroup = (label: string) => {
     if(navRevealTimer.current)clearTimeout(navRevealTimer.current);
@@ -234,15 +251,15 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           {mobile && <button onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200/80 dark:border-white/10" aria-label="إغلاق القائمة"><X className="h-5 w-5" /></button>}
         </div>
         <nav ref={mobile ? undefined : desktopNavRef} style={{overflowAnchor:"none"}} className={`sidebar min-h-0 flex-1 overflow-y-auto pb-3 scroll-smooth ${shellMotion} ${compact ? "px-3" : "px-2"}`}>
-          {accountType === "master_admin" && (
+          {(accountType === "master_admin" || network) && (
             <div className="mb-3">
-              <Link href={masterAdminHome.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? masterAdminHome.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] rl-nav-main text-[15px] font-medium ${shellMotion} ${pathname === masterAdminHome.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${pathname === masterAdminHome.href ? "sidebar-active-icon bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><Home className="h-5 w-5" /></span>
+              <Link href={home.href} onClick={() => mobile && setMobileOpen(false)} title={compact ? home.label : undefined} className={`group flex min-h-12 items-center rounded-[18px] rl-nav-main text-[15px] font-medium ${shellMotion} ${pathname === home.href ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all duration-500 ${pathname === home.href ? "sidebar-active-icon bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_8px_20px_rgba(20,121,255,.28)]" : "bg-[#e2e9f1] text-[#315985] dark:bg-[#3b383e] dark:text-[#c4bec8]"}`}><Home className="h-5 w-5" /></span>
                 <span className={`overflow-hidden whitespace-nowrap font-[600] ${shellMotion} ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[180px] opacity-100"}`}>الصفحة الرئيسية</span>
               </Link>
             </div>
           )}
-          {(accountType === "master_admin" ? masterAdminGroups : customerNavGroups).map((group) => {
+          {(navGroups).map((group) => {
             const GroupIcon = group.icon;
             const groupActive = group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
             const open = Boolean(openNavGroups[group.label]);
@@ -289,7 +306,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة"><Menu className="h-5 w-5" /></button>
           <div className="min-w-0 flex-1 px-1">
             {(() => {
-              const groups = accountType === "master_admin" ? masterAdminGroups : customerNavGroups;
+              const groups = navGroups;
               const group = groups.find((item) => item.items.some((child) => (child.href === pathname || (child.href === "/Dashboard/connection-servers" && pathname.startsWith(child.href+"/")))));
               const current = group?.items.find((item) => item.href === pathname);
               const parent = group?.items[0];
@@ -303,26 +320,26 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             })()}
           </div>
           <div className="mr-auto flex items-center gap-2 sm:gap-3">
-            <div className="hidden min-h-10 items-center gap-3 rounded-[22px] border border-[#d7e3ef] bg-white px-4 dark:border-white/[.10] dark:bg-[#38363c] md:flex"><Radio className="h-5 w-5 text-[#0758e9]" /><div className="leading-tight"><div className="text-xs font-bold">RADIUS</div><div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]"><span className="h-2 w-2 rounded-full bg-emerald-500" />Online</div></div></div>
-            <button className="relative grid h-10 w-10 place-items-center rounded-full border border-[#d7e3ef] bg-white dark:border-white/[.10] dark:bg-[#38363c]" aria-label="التنبيهات"><Bell className="h-5 w-5" /><span className="absolute -left-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff9f0a] px-1 text-[10px] font-bold text-white">3</span></button>
+            {!network&&<div className="hidden min-h-10 items-center gap-3 rounded-[22px] border border-[#d7e3ef] bg-white px-4 dark:border-white/[.10] dark:bg-[#38363c] md:flex"><Radio className="h-5 w-5 text-[#0758e9]" /><div className="leading-tight"><div className="text-xs font-bold">RADIUS</div><div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]"><span className="h-2 w-2 rounded-full bg-emerald-500" />Online</div></div></div>}
+            {!network&&<button className="relative grid h-10 w-10 place-items-center rounded-full border border-[#d7e3ef] bg-white dark:border-white/[.10] dark:bg-[#38363c]" aria-label="التنبيهات"><Bell className="h-5 w-5" /><span className="absolute -left-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff9f0a] px-1 text-[10px] font-bold text-white">3</span></button>}
             <button type="button" onClick={() => setTheme(isDark ? "light" : "dark")} className="grid h-10 w-10 place-items-center rounded-full border border-[#d7e3ef] bg-white text-[#102a63] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#f4f1f5]" aria-label="تبديل الوضع">{mounted && isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</button>
             <div className="relative hidden sm:block">
               <button type="button" onClick={() => setAccountOpen((open) => !open)} aria-haspopup="menu" aria-expanded={accountOpen} className={`flex items-center gap-2 rounded-[22px] border bg-white py-1 pr-2 pl-3 transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:bg-[#38363c] ${accountOpen ? "border-[#8bb9f0] shadow-[0_8px_22px_rgba(20,121,255,.12)] dark:border-white/20" : "border-[#d7e3ef] dark:border-white/[.10]"}`}><div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[#0e74ff] to-[#073dbd] text-white"><Crown className="h-4 w-4 text-[#ffad16]" /></div><div className="leading-tight text-right"><div className="max-w-[120px] truncate text-xs font-bold">{account?.fullName || "..."}</div><div className="mt-0.5 text-[10px] text-slate-500 dark:text-[#b9b3bd]">{accountType === "master_admin" ? "Master Admin" : "Customer"}</div></div></button>
               <div role="menu" className={`absolute left-0 top-[calc(100%+6px)] z-[70] w-[225px] origin-top-left rounded-[20px] border border-[#d7e3ef] bg-[#f9fbfe] p-2 shadow-[0_18px_45px_rgba(44,65,92,.22)] transition-all duration-300 ease-[cubic-bezier(.22,.8,.25,1)] dark:border-white/[.12] dark:bg-[#302e33] dark:shadow-[0_22px_55px_rgba(0,0,0,.38)] ${accountOpen ? "visible translate-y-0 scale-100 opacity-100" : "invisible -translate-y-2 scale-[.97] opacity-0 pointer-events-none"}`}>
                 <div className="mb-2 flex items-center gap-3 rounded-[16px] bg-[#edf4fb] px-3 py-2.5 dark:bg-[#38363c]"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#0e74ff] to-[#073dbd] text-white"><Crown className="h-5 w-5 text-[#ffad16]" /></div><div className="min-w-0 leading-tight"><div className="truncate text-sm font-bold">{account?.fullName || "..."}</div><div className="mt-1 text-[10px] text-slate-500 dark:text-[#b9b3bd]">{accountType === "master_admin" ? "Master Admin" : "Customer"}</div></div></div>
-                <Link href="/Dashboard/profile" onClick={() => setAccountOpen(false)} role="menuitem" className="group flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-[#38363c] dark:hover:text-white"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#e2e9f1] text-[#315985] transition group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8]"><UserRound className="h-4 w-4" /></span><span>معلومات الحساب</span></Link>
-                <Link href="/Dashboard/settings" onClick={() => setAccountOpen(false)} role="menuitem" className="group mt-1 flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-[#38363c] dark:hover:text-white"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#e2e9f1] text-[#315985] transition group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8]"><Settings className="h-4 w-4" /></span><span>إعدادات الحساب</span></Link>
+                <Link href={network?`${network.basePath}?tab=settings`:"/Dashboard/profile"} onClick={() => setAccountOpen(false)} role="menuitem" className="group flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-[#38363c] dark:hover:text-white"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#e2e9f1] text-[#315985] transition group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8]"><UserRound className="h-4 w-4" /></span><span>معلومات الحساب</span></Link>
+                <Link href={network?`${network.basePath}?tab=settings`:"/Dashboard/settings"} onClick={() => setAccountOpen(false)} role="menuitem" className="group mt-1 flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-[#ece8ee] dark:hover:bg-[#38363c] dark:hover:text-white"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#e2e9f1] text-[#315985] transition group-hover:bg-[#d7e7f8] group-hover:text-[#0758e9] dark:bg-[#3b383e] dark:text-[#c4bec8]"><Settings className="h-4 w-4" /></span><span>إعدادات الحساب</span></Link>
                 <div className="my-2 h-px bg-slate-200/80 dark:bg-white/[.08]" />
                 <button type="button" onClick={logout} disabled={loggingOut} role="menuitem" className="group flex min-h-11 w-full items-center gap-3 rounded-[14px] border border-red-400/70 px-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70 dark:border-red-400/55 dark:text-red-400 dark:hover:bg-red-500/10"><span className="grid h-8 w-8 place-items-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400"><LogOut className="h-4 w-4" /></span><span>{loggingOut ? "جارٍ تسجيل الخروج..." : "تسجيل الخروج"}</span></button>
               </div>
             </div>
           </div>
         </div></header>
-        <main style={accountType === "master_admin" ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-frame ${accountType === "master_admin" ? "rl-workspace-separated" : ""} h-full rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-hidden pb-[18px]"}`}>
+        <main style={accountType === "master_admin" || network ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-frame ${accountType === "master_admin" || network ? "rl-workspace-separated" : ""} h-full rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-hidden pb-[18px]"}`}>
 
           <div className={customerOnboarding ? "min-w-0" : "workspace-scroll rl-workspace-inset-scroll h-full min-w-0 overflow-y-auto p-3 sm:p-4"}><div className={customerOnboarding ? "" : "rl-workspace-content-end"}>{children}</div></div>
         </div></main>
-        {!customerOnboarding && <footer ref={footerRef} className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap} ${shellMotion}`}>{accountType === "master_admin" ? <ServerStatusFooter/> : <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[12px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
+        {!customerOnboarding && <footer ref={footerRef} className={`fixed bottom-3 left-3 right-3 z-30 md:left-4 lg:left-5 ${footerGap} ${shellMotion}`}>{network?network.footer:accountType === "master_admin" ? <ServerStatusFooter/> : <div className="flex min-h-[46px] flex-wrap items-center gap-x-5 gap-y-1 rounded-[12px] border border-white/80 bg-[#f9fbfe]/95 px-4 py-1.5 text-[10px] text-slate-500 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:text-[#b9b3bd] dark:shadow-[0_8px_24px_rgba(0,0,0,.16)]">
           <div className="flex items-center gap-2"><Database className="h-4 w-4 text-[#0758e9]" /><span>radius.lord.local</span></div><div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 sm:block" /><div><span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">Ubuntu 22.04.4 LTS</span></div><div className="hidden h-5 w-px bg-slate-200 dark:bg-white/10 md:block" /><div className="hidden items-center gap-2 md:flex"><span>CPU</span><span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full w-[23%] rounded-full bg-[#ffad16]" /></span><b>23%</b></div><div className="hidden items-center gap-2 lg:flex"><span>RAM</span><span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full w-[42%] rounded-full bg-[#1479ff]" /></span><b>42%</b></div><div className="mr-auto flex items-center gap-4"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />FreeRADIUS</span><span className="hidden items-center gap-1.5 sm:flex"><span className="h-2 w-2 rounded-full bg-emerald-500" />MySQL</span><span className="font-semibold text-slate-700 dark:text-[#f4f1f5]">10:24:45 AM</span></div>
         </div>}</footer>}
       </div>
