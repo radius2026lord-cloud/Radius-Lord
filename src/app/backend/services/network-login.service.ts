@@ -1,3 +1,4 @@
+import {networkSessionVersion} from './network-session-version.service';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import {createHash} from 'crypto';
@@ -14,7 +15,7 @@ export async function loginNetworkPrincipal(username:string,password:string){
  JOIN subscriptions s ON s.id=l.subscription_id AND s.tenant_id=t.id AND s.status='active' AND s.expires_at>CURRENT_TIMESTAMP
  JOIN platform_settings r ON r.setting_group='environment_runtime' AND r.setting_key=CONCAT('environment_',e.id)
  WHERE t.archived_at IS NULL AND e.archived_at IS NULL AND t.status='active' AND e.status='ready'
- AND (JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.username'))=? OR JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.pendingUsername'))=?) LIMIT 101`,[username,username]);
+ AND (JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.username'))=? OR JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.pendingUsername'))=?) UNION SELECT t.slug FROM platform_settings d JOIN tenants t ON t.slug=JSON_UNQUOTE(JSON_EXTRACT(d.setting_value,'$.slug')) JOIN tenant_environments e ON e.tenant_id=t.id AND e.id=JSON_UNQUOTE(JSON_EXTRACT(d.setting_value,'$.environmentId')) WHERE d.setting_group='network_manager_directory' AND JSON_UNQUOTE(JSON_EXTRACT(d.setting_value,'$.username'))=? AND t.status='active' AND t.archived_at IS NULL AND e.status='ready' AND e.archived_at IS NULL LIMIT 101`,[username,username,username]);
  console.info('[network-login]',{stage:'directory',candidateCount:rows.length});
  if(rows.length>100)throw new Error('NETWORK_LOGIN_DIRECTORY_CAPACITY');
  let match:{token:string;redirectTo:string}|null=null;
@@ -22,12 +23,12 @@ export async function loginNetworkPrincipal(username:string,password:string){
   const batch=await Promise.all(rows.slice(offset,offset+4).map(async(row:any)=>{
    const scope=await networkScope(row.slug);
    return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);
-    const [managers]:any=await app.query({sql:"SELECT id,password_hash FROM managers WHERE username=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL LIMIT 1",values:[username],timeout:5000});
+    const [managers]:any=await app.query({sql:"SELECT id,password_hash FROM managers WHERE username=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL)) LIMIT 1",values:[username],timeout:5000});
     const manager=managers[0];
     const [stateRows]:any=await db.query("SELECT setting_value FROM platform_settings WHERE setting_group='environment_runtime' AND setting_key=?",['environment_'+scope.environment_id]);
     const state=stateRows[0]?JSON.parse(stateRows[0].setting_value):null;
     if(state?.mustChangeCredentials===true&&username!==state.pendingUsername&&(!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now()))return null;if(!manager||!await bcrypt.compare(password,manager.password_hash))return null;
-    return {token:jwt.sign({kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'}),redirectTo:`/network/${encodeURIComponent(scope.slug)}`};
+    return {token:jwt.sign({sessionVersion:await networkSessionVersion(scope,Number(manager.id)),kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'}),redirectTo:`/network/${encodeURIComponent(scope.slug)}`};
    });
   }));
   for(const candidate of batch){if(!candidate)continue;if(match)throw new Error('NETWORK_LOGIN_AMBIGUOUS');match=candidate;}
