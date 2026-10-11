@@ -55,7 +55,7 @@ export class RouterApi {
    else if(/timeout|timed out/.test(raw))reason='انتهت مهلة العملية على MikroTik.';
    p.failure=new Error(`فشل الأمر ${p.path}: ${reason}`);
   }
-  if(words[0]==='!done'){clearTimeout(p.timer);this.pending=undefined;if(p.failure)p.reject(p.failure);else p.resolve(p.rows);}
+  if(words[0]==='!done'){clearTimeout(p.timer);this.pending=undefined;if(p.failure)p.reject(p.failure);else {if(row.ret!==undefined)p.rows.push(row);p.resolve(p.rows);}}
   if(words[0]==='!fatal'){this.fail(p.failure!);this.close();}
  }
  command(path:string,attrs:Record<string,string>={},queries:string[]=[],timeout=15000):Promise<RouterRow[]>{
