@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import CustomerSubscriptionDashboard from "@/components/customer-subscription-dashboard";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -137,7 +138,7 @@ function MasterLiveActivity(){
 export default function HomePage() {
   const { accountType, loading } = useAuth();
   if (loading) return <CollectionState loading>جارٍ تحميل حسابك...</CollectionState>;
-  if (accountType === "customer") return <CustomerWelcome />;
+  if (accountType === "customer") return <CustomerSubscriptionDashboard welcome={<CustomerWelcome />} />;
   if (accountType === "master_admin") return <div className="space-y-4"><div className="flex justify-end"><Link href="/Dashboard/ssh-terminal" className="inline-flex items-center gap-2 rounded-[14px] border border-[#bfd4ea] bg-white px-4 py-3 text-sm font-semibold text-[#0758e9] dark:border-white/10 dark:bg-[#0d243b] dark:text-[#8fc0ff]"><TerminalSquare className="h-5 w-5 text-cyan-500"/>طرفية SSH للمخدمات</Link></div><MasterLiveActivity /></div>;
   return (
     <div className="space-y-3 sm:space-y-4">

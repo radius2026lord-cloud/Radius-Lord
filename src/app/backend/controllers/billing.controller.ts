@@ -128,3 +128,19 @@ export async function getSubscriptionRequestController(req:AuthenticatedRequest,
   return res.json({success:true,subscription:{environment,planLimits,id:r.id,customerId:r.customer_id,customerName:r.customer_name,customerUsername:r.customer_username,customerEmail:r.customer_email,paymentCode:r.payment_code,planName:r.plan_name_snapshot,durationMonths:r.duration_months_snapshot,deploymentName:r.deployment_name_snapshot,basePrice:String(r.base_price),addonsTotal:String(r.addons_total),totalAmount:String(r.total_amount),currency:r.currency_code,addons,status:r.status,requestedAt:r.requested_at,paidAt:r.paid_at,confirmedBy:r.confirmed_by_name||r.confirmed_by_username||null}});
  }catch(error){console.error('Subscription details:',error);return res.status(500).json({success:false,message:'تعذر تحميل تفاصيل الاشتراك.'});}
 }
+
+// Customer-scoped receipt; never return provisioning credentials or internal diagnostics.
+export async function getMySubscriptionsController(req:AuthenticatedRequest,res:Response){
+ try{
+  const [rows]=await db.query(`SELECT po.id,po.payment_code,po.plan_name_snapshot,po.duration_months_snapshot,po.deployment_name_snapshot,po.plan_limits_snapshot,po.addons_snapshot,po.total_amount,po.currency_code,po.paid_at,
+   s.status subscription_status,s.starts_at,s.expires_at,t.name network_name,te.status environment_status,te.system_url,te.archived_at
+   FROM payment_orders po
+   LEFT JOIN tenants t ON t.id=po.tenant_id AND t.customer_id=po.customer_id
+   LEFT JOIN subscriptions s ON s.id=po.subscription_id AND s.tenant_id=t.id
+   LEFT JOIN tenant_environments te ON te.tenant_id=t.id
+   WHERE po.customer_id=? AND po.payment_purpose='initial_subscription' AND po.status IN ('paid','completed')
+   ORDER BY po.paid_at DESC,po.id DESC`,[req.auth!.accountId]);
+  const parse=(value:any)=>{try{return typeof value==='string'?JSON.parse(value):value;}catch{return null;}};
+  return res.json({success:true,subscriptions:(rows as any[]).map(r=>({id:r.id,paymentCode:r.payment_code,planName:r.plan_name_snapshot,durationMonths:r.duration_months_snapshot,deploymentName:r.deployment_name_snapshot,limits:parse(r.plan_limits_snapshot),addons:parse(r.addons_snapshot)||[],totalAmount:String(r.total_amount),currency:r.currency_code,paidAt:r.paid_at,subscriptionStatus:r.subscription_status||null,startsAt:r.starts_at,expiresAt:r.expires_at,networkName:r.network_name,environmentStatus:r.archived_at?'archived':r.environment_status||'pending',systemUrl:!r.archived_at&&r.environment_status==='ready'&&r.subscription_status==='active'&&r.expires_at&&new Date(r.expires_at).getTime()>Date.now()?r.system_url:null}))});
+ }catch(e){console.error(e);return res.status(500).json({success:false,message:'تعذر تحميل معلومات الاشتراك.'});}
+}

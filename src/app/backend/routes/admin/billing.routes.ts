@@ -2,7 +2,7 @@ import {deleteEnvironment} from '../../controllers/environment-delete.controller
 import {requestEnvironmentNotification} from '../../controllers/environment-notification.controller';
 import { Router } from 'express';
 import { authenticate,requireAccountType } from '../../middleware/auth.middleware';
-import { createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,listSubscriptionRequestsController,getSubscriptionRequestController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController,getMasterActivityController } from '../../controllers/billing.controller';
+import { getMySubscriptionsController,createPaymentOrderController,getMyPaymentOrderController,getPaymentSettingsController,getPublicPaymentSettingsController,listPaymentOrdersController,listSubscriptionRequestsController,getSubscriptionRequestController,markPaymentOrderWhatsappController,confirmPaymentOrderController,updatePaymentSettingsController,getMasterActivityController } from '../../controllers/billing.controller';
 import { getCollectionReportController } from '../../controllers/payment-reports.controller';
 import { requestEnvironmentController } from '../../controllers/environment.controller';
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
@@ -14,6 +14,7 @@ router.post('/admin/subscriptions/:id/environment',authenticate,requireAccountTy
 router.get('/admin/collection-report',authenticate,requireAccountType('master_admin'),getCollectionReportController);
 router.get('/settings/public',authenticate,requireAccountType('customer'),getPublicPaymentSettingsController);
 router.post('/orders',authenticate,requireAccountType('customer'),createPaymentOrderController);
+router.get('/subscriptions/mine',authenticate,requireAccountType('customer'),getMySubscriptionsController);
 router.get('/orders/:code',authenticate,requireAccountType('customer'),getMyPaymentOrderController);
 router.post('/orders/:code/whatsapp',authenticate,requireAccountType('customer'),markPaymentOrderWhatsappController);
 router.get('/admin/activity',authenticate,requireAccountType('master_admin'),getMasterActivityController);
