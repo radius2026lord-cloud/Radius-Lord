@@ -1,4 +1,6 @@
 import bcrypt from 'bcryptjs';
+import {randomUUID} from 'crypto';
+import {centralAuthVersion} from './central-session.service';
 import jwt from 'jsonwebtoken';
 
 import { db } from '../config/db';
@@ -81,12 +83,13 @@ export class AuthService {
 
     const token = jwt.sign(
       {
+        kind:'central-account',authVersion:centralAuthVersion(account.password_hash),
         sub: account.id,
         accountType,
         username: account.username,
       },
       env.JWT_SECRET,
-      { expiresIn: '20m' },
+      { expiresIn: '20m',algorithm:'HS256',issuer:'radius-lord',audience:'central',jwtid:randomUUID() },
     );
 
     const table = accountType === 'master_admin' ? 'master_admins' : 'customers';

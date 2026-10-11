@@ -7,6 +7,8 @@ const BACKEND_API_URL = (
 ).replace(/\/$/, "");
 
 export async function POST(request: NextRequest) {
+  const origin=request.headers.get('origin');
+  if(request.headers.get('sec-fetch-site')==='cross-site'||(origin&&origin!==request.nextUrl.origin))return NextResponse.json({success:false,message:'مصدر الطلب غير مصرح.'},{status:403});
   try {
     const body = await request.json();
 
@@ -14,13 +16,17 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(origin?{origin}:{}),
       },
       body: JSON.stringify(body),
       cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(20000),
     });
 
     const data = await backendResponse.json();
     const response = NextResponse.json(data, {
+      headers:{"Cache-Control":"no-store"},
       status: backendResponse.status,
     });
 

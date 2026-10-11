@@ -1,3 +1,4 @@
+import {verifyCentralSession,checkCentralSession} from './central-session.service';
 import { createHash, createHmac, randomBytes } from 'crypto';
 import { isIP } from 'net';
 import type { Server } from 'http';
@@ -134,16 +135,17 @@ export async function createSshTicket(req: AuthenticatedRequest, res: Response) 
 
 export function attachSshTerminal(server: Server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16384, perMessageDeflate: false });
-  server.on('upgrade', (request, socket, head) => {
+  server.on('upgrade', async (request, socket, head) => {
     if (request.url?.split('?')[0] !== '/api/admin/ssh/terminal') return socket.destroy();
     let payload: any;
     try {
       if (request.headers.origin !== new URL(env.FRONTEND_URL).origin) throw new Error('Origin');
       const cookie = request.headers.cookie?.split(';').map(p => p.trim()).find(p => p.startsWith('token='));
       if (!cookie) throw new Error('Auth');
-      payload = jwt.verify(decodeURIComponent(cookie.slice(6)), env.JWT_SECRET, { algorithms: ['HS256'] });
+      payload = await verifyCentralSession(decodeURIComponent(cookie.slice(6)));
       if (payload.accountType !== 'master_admin' || !Number.isSafeInteger(Number(payload.sub)) || Number(payload.sub) < 1) throw new Error('Role');
     } catch { socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return socket.destroy(); }
+    if(socket.destroyed)return;
     if (wss.clients.size >= 16) return socket.destroy();
     wss.handleUpgrade(request, socket, head, ws => {
       const client = new Client(); let stream: ClientChannel | undefined, starting = false, closed = false, ready = false;
@@ -152,7 +154,9 @@ export function attachSshTerminal(server: Server) {
       const send = (data: unknown) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
       const authTimeout = setTimeout(() => close('انتهت مهلة فتح الجلسة.'), 10000);
       const lifetime = setTimeout(() => close('أغلقت الجلسة بعد ساعة. يمكنك فتح جلسة جديدة.'), 60 * 60 * 1000);
+      let lastAuthCheck=Date.now(),checkingAuth=false;
       const maintenance = setInterval(() => {
+        if(!checkingAuth&&Date.now()-lastAuthCheck>=30000){checkingAuth=true;lastAuthCheck=Date.now();void checkCentralSession(payload).catch(()=>close('أُلغيت جلسة تسجيل الدخول.')).finally(()=>{checkingAuth=false;});}
         if (Date.now() - lastInput > 5 * 60 * 1000) return close('أغلقت الجلسة بعد خمس دقائق دون إدخال.');
         if (payload.exp && Date.now() >= payload.exp * 1000) return close('انتهت جلسة تسجيل الدخول.');
         if (ws.bufferedAmount > 1024 * 1024) return close('تعذر مواكبة مخرجات الطرفية؛ أعد الاتصال.');

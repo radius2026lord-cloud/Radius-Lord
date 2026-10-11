@@ -1,9 +1,9 @@
+import {requireAuthOrigin} from './auth-origin.middleware';
 import { NextFunction, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
+import {verifyCentralSession} from '../services/central-session.service';
 
 export type AccountType = 'master_admin' | 'customer';
-export type AuthenticatedRequest = Request & { auth?: { accountId: number; accountType: AccountType; username: string | null; expiresAt?: number } };
+export type AuthenticatedRequest = Request & { auth?: { accountId: number; accountType: AccountType; username: string | null; sessionId?:string; expiresAt?: number } };
 type TokenPayload = { sub: number | string; accountType: AccountType; username?: string | null; exp?: number };
 
 function readCookie(req: Request, name: string) {
@@ -16,16 +16,16 @@ function readCookie(req: Request, name: string) {
   return null;
 }
 
-export function authenticate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const token = readCookie(req, 'token');
+export async function authenticate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  let token:string|null;try{token=readCookie(req,'token');}catch{return res.status(401).json({success:false,message:'بيانات الجلسة غير صالحة.'});}
   if (!token) return res.status(401).json({ success: false, message: 'غير مصرح. يرجى تسجيل الدخول.' });
 
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
+    const payload = await verifyCentralSession(token);
     const accountId = Number(payload.sub);
     if (!Number.isInteger(accountId) || !['master_admin', 'customer'].includes(payload.accountType)) throw new Error('Invalid auth payload');
-    req.auth = { accountId, accountType: payload.accountType, username: payload.username ?? null, expiresAt: payload.exp };
-    return next();
+    req.auth = { accountId, accountType: payload.accountType, username: payload.username ?? null, sessionId:payload.jti, expiresAt: payload.exp };
+    return requireAuthOrigin(req,res,next);
   } catch {
     return res.status(401).json({ success: false, message: 'انتهت الجلسة أو أن بياناتها غير صالحة.' });
   }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
+import FloatingNotice from "./floating-notice";
 import ServerStatusFooter from "./server-status-footer";
 import TransitionOverlay from "@/components/ui/transition-overlay";
 import { useOptionalAuth } from "@/components/auth/auth-provider";
@@ -164,6 +165,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError,setLogoutError]=useState("");
   const [openNavGroups, setOpenNavGroups] = useState<Record<string, boolean>>({});
   const shellRootRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLElement>(null);
@@ -182,8 +184,9 @@ export default function DashboardShell({ children,network }: { children: React.R
     setLoggingOut(true); setAccountOpen(false); setMobileOpen(false);
     if(network){try{await network.onLogout();}finally{setLoggingOut(false);}return;}
     const startedAt = performance.now();
-    try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); }
-    finally {
+    try {const response=await fetch("/api/auth/logout", { method: "POST", credentials: "include" });if(!response.ok)throw new Error('تعذر إلغاء الجلسة على الخادم. أعد المحاولة.');}
+    catch{setLoggingOut(false);setLogoutError('تعذر إلغاء الجلسة على الخادم. أعد المحاولة.');return;}
+    {
       const remaining = Math.max(0, 1400 - (performance.now() - startedAt));
       window.setTimeout(() => window.location.replace("/login"), remaining);
     }
@@ -344,6 +347,7 @@ export default function DashboardShell({ children,network }: { children: React.R
         </div>}</footer>}
       </div>
 
+      <FloatingNotice error={logoutError} onDismiss={()=>setLogoutError("")}/>
       {loggingOut && <TransitionOverlay variant="logout" />}
 
       <style jsx global>{`

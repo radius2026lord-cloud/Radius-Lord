@@ -1,11 +1,15 @@
+import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
+import {revokeCentralSession} from '../../services/central-session.service';
 import { Router } from 'express';
 import { authenticate, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { writeAuditLog } from '../../services/audit.service';
 import { closeAdminSshSessions } from '../../services/ssh-terminal.service';
 
 const router = Router();
+router.use(requireAuthOrigin);
 
 router.post('/logout', authenticate, async (req: AuthenticatedRequest, res) => {
+  try{if(req.auth?.sessionId&&req.auth.expiresAt)await revokeCentralSession(req.auth.sessionId,req.auth.expiresAt);}catch{return res.status(503).json({success:false,message:'تعذر إلغاء الجلسة؛ أعد المحاولة.'});}
   if(req.auth?.accountType==='master_admin')closeAdminSshSessions(req.auth.accountId);
   try {
     if (req.auth?.accountType === 'master_admin') {
