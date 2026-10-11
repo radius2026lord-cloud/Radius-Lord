@@ -5,7 +5,7 @@ import {db} from '../config/db';
 import type {AuthenticatedRequest} from '../middleware/auth.middleware';
 import {writeAuditLog} from '../services/audit.service';
 import {readPrivateSetting} from '../services/radius-provision.service';
-import {decryptProvisioningSecret} from '../services/provisioning-secrets.service';
+import {activationLink} from '../services/environment-activation.service';
 // Preparing a draft is manual delivery, never a claim that a message was sent.
 export async function requestEnvironmentNotification(req:AuthenticatedRequest,res:Response){
  res.setHeader('Cache-Control','no-store');
@@ -16,7 +16,8 @@ export async function requestEnvironmentNotification(req:AuthenticatedRequest,re
   const e=rows[0];if(!e||e.status!=='ready'||e.subscription_status!=='active'||e.license_status!=='active'||!e.system_url||!e.expires_at||new Date(e.expires_at).getTime()<=Date.now())return res.status(409).json({message:'يجب اكتمال تجهيز البيئة وتفعيل الاشتراك والرخصة أولًا.'});
   const state=await readPrivateSetting('environment_runtime','environment_'+e.environment_id);
   if(!state||state.tenantId!==Number(e.tenant_id)||state.subscriptionId!==Number(e.subscription_id)||!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now())return res.status(409).json({message:'انتهت مهلة تسليم بيانات الدخول الأولية أو لم تُجهّز بعد.'});
-  const text=`بيانات شبكة ${e.name}\nرابط الدخول: ${e.system_url}\nاسم المستخدم: ${state.username}\nكلمة المرور: ${decryptProvisioningSecret(state.passwordEncrypted)}\nالخطة: ${e.plan_name_snapshot}\nالرخصة: ${e.license_number}\nانتهاء الاشتراك: ${new Date(e.expires_at).toISOString()}`;
+  const activation=await activationLink(e,state.credentialsExpiresAt);
+  const text=`تفعيل شبكة ${e.name}\nرابط التفعيل المؤقت: ${activation.url}\nاسم المستخدم: ${state.username}\nافتح الرابط لتعيين كلمة مرورك. صالح للاستخدام مرة واحدة حتى: ${activation.expiresAt}\nالخطة: ${e.plan_name_snapshot}\nالرخصة: ${e.license_number}\nانتهاء الاشتراك: ${new Date(e.expires_at).toISOString()}`;
   const phone=String(e.phone??'').replace(/[\s+()-]/g,'');const whatsappUrl=/^[1-9][0-9]{7,14}$/.test(phone)?`https://wa.me/${phone}?text=${encodeURIComponent(text)}`:null;
   const email=String(e.email??'');const emailUrl=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)?`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('بيانات تفعيل Radius Lord')}&body=${encodeURIComponent(text)}`:null;
   await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'TENANT_ENVIRONMENT',entityId:e.environment_id,tenantId:e.tenant_id,description:'عرض مسودة تسليم بيانات البيئة يدويًا دون إرسال تلقائي',metadata:{event:'manual_delivery_draft',subscriptionId:e.subscription_id}});

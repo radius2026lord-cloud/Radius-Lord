@@ -28,10 +28,10 @@ export async function applyRadiusDatabase(options:{sshServerId:number;radiusHost
  return source;
 }
 export async function radiusDatabaseHost(server:any,radiusHost:string){const [a,b]=await Promise.all([lookup(server.host,{all:true}),lookup(radiusHost,{all:true})]);return a.some(x=>b.some(y=>x.address===y.address))?'127.0.0.1':server.host;}
+export async function radiusAccountHosts(server:any,radiusHost:string){const address=(await lookup(radiusHost,{family:4})).address;return (await radiusDatabaseHost(server,radiusHost))==='127.0.0.1'?['localhost','127.0.0.1']:[address];}
 export async function grantRadiusAccounts(admin:mysql.Connection,server:any,radiusHost:string,username:string,password:string,databaseName:string){
  if(!/^rl(?:r|t)_[a-z0-9_]+$/.test(username)||!/^rl_(?:tenant_(?:zone_[0-9]+|[0-9]+_[a-f0-9]{16})|infrastructure_[a-z0-9_]+)$/.test(databaseName))error('RADIUS_DATABASE_SCOPE');
- const address=(await lookup(radiusHost,{family:4})).address;
- const hosts=(await radiusDatabaseHost(server,radiusHost))==='127.0.0.1'?['localhost','127.0.0.1']:[address];
+ const hosts=await radiusAccountHosts(server,radiusHost);
  for(const host of hosts){const account=mysql.escape(username)+'@'+mysql.escape(host);await admin.query(`CREATE USER IF NOT EXISTS ${account} IDENTIFIED BY ${mysql.escape(password)} WITH MAX_USER_CONNECTIONS 4`);
   await admin.query(`ALTER USER ${account} IDENTIFIED BY ${mysql.escape(password)} WITH MAX_USER_CONNECTIONS 4`);
   for(const table of ['radcheck','radreply','radusergroup','radgroupcheck','radgroupreply','nas','nasreload'])await admin.query(`GRANT SELECT ON \`${databaseName}\`.\`${table}\` TO ${account}`);
@@ -88,4 +88,11 @@ export async function bootstrapRadiusTest(radiusId:number,databaseServerId:numbe
  const [saved]:any=await db.query("UPDATE platform_settings SET setting_value=? WHERE id=? AND setting_group='free_radius' AND BINARY setting_value=BINARY ?",[JSON.stringify(config),radiusId,original]);if(!saved.affectedRows)error('RADIUS_CONFIG_CHANGED_DURING_SETUP');
  return config.lastHealth;
  }catch(reason){const failure=reason instanceof Error?reason:new Error("RADIUS_SETUP_FAILED");Object.assign(failure,{setupStage:stage});throw failure;}finally{await admin?.end().catch(()=>{});if(acquired)await lock.query("SELECT RELEASE_LOCK('radius-lord:radius-setup')");lock.release();}
+}
+
+export async function removeEnvironmentRadius(sshServerId:number,environmentId:number,databaseName:string){
+ if(!Number.isSafeInteger(environmentId)||environmentId<1||!/^rl_tenant_(?:zone_[0-9]+|[0-9]+_[a-f0-9]{16})$/.test(databaseName))error('RADIUS_DELETE_SCOPE');
+ const payload=Buffer.from(JSON.stringify({name:'rl_env_'+environmentId,database:databaseName})).toString('base64');
+ const script=`import base64,json,pathlib,os,subprocess,fcntl\np=json.loads(base64.b64decode('${payload}'))\nroot=pathlib.Path('/etc/freeradius/3.0')\nif not root.is_dir(): raise SystemExit(21)\nlock=open('/run/lock/radius-lord.lock','w');fcntl.flock(lock,fcntl.LOCK_EX)\npaths=[root/'mods-enabled'/p['name'],root/'sites-enabled'/p['name']]\nold=[]\nfor path in paths:\n if path.is_symlink(): raise SystemExit(22)\n data=path.read_bytes() if path.exists() else None\n if data is not None and not data.startswith(('# Radius Lord managed '+p['name']+'\\n').encode()): raise SystemExit(23)\n old.append(data)\nif old[0] is not None and ('radius_db = "'+p['database']+'"').encode() not in old[0]: raise SystemExit(23)\ndef run(args): return subprocess.run(args,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=40).returncode==0\nwas_active=run(['systemctl','is-active','--quiet','freeradius'])\ntry:\n for path in paths: path.unlink(missing_ok=True)\n if not run(['/usr/sbin/freeradius','-C']): raise RuntimeError('config')\n if was_active and not run(['systemctl','restart','freeradius']): raise RuntimeError('restart')\n if was_active and not run(['systemctl','is-active','--quiet','freeradius']): raise RuntimeError('inactive')\nexcept Exception:\n import grp\n for path,data in zip(paths,old):\n  if data is not None:\n   path.write_bytes(data);os.chmod(path,0o640);os.chown(path,0,grp.getgrnam('freerad').gr_gid)\n if was_active: run(['systemctl','restart','freeradius'])\n raise SystemExit(24)\nprint('radius_lord_removed')\n`;
+ await runManagedRadiusScript(sshServerId,script);
 }

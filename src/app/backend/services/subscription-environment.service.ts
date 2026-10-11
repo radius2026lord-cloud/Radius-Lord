@@ -85,7 +85,7 @@ export type EnvironmentSummary = {
   subscriptionStatus?:string;startsAt?:string|null;expiresAt?:string|null;environmentId?:number;
   status?:string;systemUrl?:string|null;readyAt?:string|null;
   job?:{id:number;status:string;currentStep:string|null;attemptCount:number;errorCode:string|null;steps?:Array<{step_code:string;status:string;error_code:string|null}>}|null;
-  canSendDetails?:boolean;
+  canSendDetails?:boolean;canDelete?:boolean;cleanupStatus?:string|null;archived?:boolean;
   health?:{databaseName:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string;radiusStatus:string};
 };
 // Read one network summary from core; never fan out to customer databases.
@@ -100,21 +100,23 @@ async function readEnvironmentSummaryCore(query: (sql: string, params?: any[]) =
     l.license_key,l.status license_status,l.subscription_id license_subscription_id,
     d.db_name,h.reported_at,h.last_seen_at,h.online_users_count,h.active_sessions_count,h.database_status,h.radius_status,
     (SELECT COUNT(*) FROM environment_notifications n WHERE n.environment_id=e.id AND n.subscription_id=s.id AND n.status IN ('pending','failed') AND n.initial_username IS NOT NULL AND n.initial_password_encrypted IS NOT NULL AND n.credentials_expires_at>CURRENT_TIMESTAMP) notification_ready,
-    runtime.setting_value runtime_state,j.id job_id,j.status job_status,j.current_step,j.error_code,j.error_message,j.attempt_count
+    cleanup.setting_value cleanup_state,runtime.setting_value runtime_state,j.id job_id,j.status job_status,j.current_step,j.error_code,j.error_message,j.attempt_count
     FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id AND s.id=?
     LEFT JOIN subscription_licenses l ON l.tenant_id=t.id
     LEFT JOIN tenant_environments e ON e.tenant_id=t.id
     LEFT JOIN tenant_databases d ON d.id=e.tenant_database_id AND d.tenant_id=t.id
     LEFT JOIN platform_settings runtime ON runtime.setting_group='environment_runtime' AND runtime.setting_key=CONCAT('environment_',e.id)
+    LEFT JOIN platform_settings cleanup ON cleanup.setting_group='environment_cleanup' AND cleanup.setting_key=CONCAT('environment_',e.id)
     LEFT JOIN tenant_environment_status h ON h.environment_id=e.id
     LEFT JOIN environment_provisioning_jobs j ON j.id=(SELECT MAX(j2.id) FROM environment_provisioning_jobs j2 WHERE j2.environment_id=e.id)
     WHERE t.id=? LIMIT 1`, [order.subscription_id,order.tenant_id]);
   const r = rows[0];
   if (!r) return {registered:false,canRequest:false,blockedReason:'الربط المركزي يحتاج مراجعة.'};
-  const runtime=parseSnapshot(r.runtime_state);
+  const runtime=parseSnapshot(r.runtime_state),cleanup=parseSnapshot(r.cleanup_state);
   const [steps]:any=r.job_id?await query('SELECT step_code,status,error_code FROM environment_provisioning_steps WHERE job_id=? ORDER BY id',[r.job_id]):[[]];
   let blockedReason: string | null = null;
-  if (!['paid','completed'].includes(order.status)) blockedReason='يتاح إنشاء البيئة بعد تأكيد الدفع.';
+  if (r.environment_archived_at) blockedReason='حُذفت أو أُرشفت البيئة؛ سجل الاشتراك محفوظ للمراجعة.';
+  else if (!['paid','completed'].includes(order.status)) blockedReason='يتاح إنشاء البيئة بعد تأكيد الدفع.';
   else if (r.customer_id !== order.customer_id || r.license_key !== r.license_number || r.license_subscription_id !== r.subscription_id) blockedReason='ملكية الشبكة أو الرخصة تحتاج مراجعة.';
   else if (!['active','disabled'].includes(r.tenant_status) || r.license_status !== 'pending') blockedReason='حالة الشبكة أو الرخصة لا تسمح بالتجهيز الأول.';
   else if (r.tenant_archived_at || r.environment_archived_at) blockedReason='الشبكة أو البيئة مؤرشفة.';
@@ -126,7 +128,8 @@ async function readEnvironmentSummaryCore(query: (sql: string, params?: any[]) =
   else if (r.environment_status === 'provisioning') blockedReason='البيئة قيد التجهيز.';
   return {registered:true,tenantId:r.tenant_id,subscriptionId:r.subscription_id,networkName:r.name,licenseNumber:r.license_number,licenseStatus:r.license_status,
     subscriptionStatus:r.subscription_status,startsAt:r.starts_at,expiresAt:r.expires_at,environmentId:r.environment_id,status:r.environment_status || 'pending',systemUrl:r.system_url,readyAt:r.ready_at,
-    canSendDetails:Boolean(runtime?.credentialsExpiresAt)&&new Date(runtime.credentialsExpiresAt).getTime()>Date.now()&&runtime.tenantId===Number(r.tenant_id)&&runtime.subscriptionId===Number(r.subscription_id)&&r.environment_status==='ready'&&r.job_status==='success'&&r.subscription_status==='active'&&r.license_status==='active'&&Boolean(r.system_url)&&r.database_status==='healthy'&&r.radius_status==='healthy'&&Boolean(r.expires_at)&&new Date(r.expires_at).getTime()>Date.now(),
+    archived:Boolean(r.environment_archived_at),cleanupStatus:cleanup?.status??null,canDelete:Boolean(r.environment_id)&&cleanup?.status!=='complete'&&!['queued','running'].includes(r.job_status),
+    canSendDetails:!r.environment_archived_at&&Boolean(runtime?.credentialsExpiresAt)&&new Date(runtime.credentialsExpiresAt).getTime()>Date.now()&&runtime.tenantId===Number(r.tenant_id)&&runtime.subscriptionId===Number(r.subscription_id)&&r.environment_status==='ready'&&r.job_status==='success'&&r.subscription_status==='active'&&r.license_status==='active'&&Boolean(r.system_url)&&r.database_status==='healthy'&&r.radius_status==='healthy'&&Boolean(r.expires_at)&&new Date(r.expires_at).getTime()>Date.now(),
     canRequest:!blockedReason,blockedReason,job:r.job_id ? {id:r.job_id,status:r.job_status,currentStep:r.current_step,attemptCount:r.attempt_count,errorCode:r.error_code,steps} : null,
     health:{databaseName:r.db_name||null,reportedAt:r.reported_at,lastSeenAt:r.last_seen_at,onlineUsers:r.online_users_count,activeSessions:r.active_sessions_count,databaseStatus:r.database_status || 'unknown',radiusStatus:r.radius_status || 'unknown'}};
 }

@@ -6,7 +6,7 @@ import type {PoolConnection} from 'mysql2/promise';
 import {db} from '../config/db';
 import {env} from '../config/env';
 import {encryptProvisioningSecret,decryptProvisioningSecret,provisioningKey} from './provisioning-secrets.service';
-import {readPrivateSetting,savePrivateSetting,applyRadiusDatabase,radiusDatabaseHost,grantRadiusAccounts,verifyRadiusDatabase} from './radius-provision.service';
+import {readPrivateSetting,savePrivateSetting,applyRadiusDatabase,radiusDatabaseHost,grantRadiusAccounts,radiusAccountHosts,verifyRadiusDatabase} from './radius-provision.service';
 import {validLimits} from './subscription-environment.service';
 import {licenseSignature,validateLocalLicense} from './network-runtime.service';
 import {readHostingPreflight} from './hosting-preflight.service';
@@ -36,6 +36,7 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  if(!radiusConfig||!radiusConfig.sshServerId||Number(radiusConfig.sshServerId)!==Number(selection.radiusSshServerId))fail('RADIUS_SSH_SELECTION_REQUIRED');
  if(server.tls_required)fail('RADIUS_AUTOMATION_REQUIRES_LOCAL_MYSQL_WITHOUT_TLS');
  await step('network_radius',async()=>{
+  state.radiusAccountHosts=await radiusAccountHosts(server,radiusConfig.host);state.radiusSshServerId=selection.radiusSshServerId;await savePrivateSetting('environment_runtime',key,state);
   await grantRadiusAccounts(admin,server,radiusConfig.host,d.radius_username,decryptProvisioningSecret(d.radius_password_encrypted),d.db_name);
   const [checks]:any=await app.query("SELECT value FROM radcheck WHERE username=? AND attribute='Cleartext-Password'",[state.radiusUsername]);
   if(checks.length&&checks.some((r:any)=>r.value!==decryptProvisioningSecret(state.radiusPasswordEncrypted)))fail('RADIUS_TEST_ACCOUNT_CONFLICT');

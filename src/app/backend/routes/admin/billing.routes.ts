@@ -1,3 +1,4 @@
+import {deleteEnvironment} from '../../controllers/environment-delete.controller';
 import {requestEnvironmentNotification} from '../../controllers/environment-notification.controller';
 import { Router } from 'express';
 import { authenticate,requireAccountType } from '../../middleware/auth.middleware';
@@ -7,6 +8,7 @@ import { requestEnvironmentController } from '../../controllers/environment.cont
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
 router.get('/admin/subscriptions/:id/payments',authenticate,requireAccountType('master_admin'),listSubscriptionPaymentsController);
+router.delete('/admin/subscriptions/:id/environment',authenticate,requireAccountType('master_admin'),deleteEnvironment);
 router.post('/admin/subscriptions/:id/environment/send-details',authenticate,requireAccountType('master_admin'),requestEnvironmentNotification);
 router.post('/admin/subscriptions/:id/environment',authenticate,requireAccountType('master_admin'),requestEnvironmentController);
 router.get('/admin/collection-report',authenticate,requireAccountType('master_admin'),getCollectionReportController);
