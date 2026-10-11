@@ -16,6 +16,9 @@ type CountryPhoneInputProps = {
   className?: string;
   name?: string;
   autoComplete?: string;
+  minLength?:number;
+  maxLength?:number;
+  required?:boolean;
 };
 
 function CountryFlag({ country, size = "small" }: { country: ArabCountry; size?: "small" | "large" }) {
@@ -34,14 +37,14 @@ function adaptivePhoneFontSize(value: string) {
   return 8;
 }
 
-export function CountryPhoneInput({ label = "رقم الهاتف *", countries, country, onCountryChange, phone, onPhoneChange, placeholder = "أدخل رقم الهاتف", className = "", name = "phone", autoComplete = "tel" }: CountryPhoneInputProps) {
+export function CountryPhoneInput({ label = "رقم الهاتف *", countries, country, onCountryChange, phone, onPhoneChange, placeholder = "أدخل رقم الهاتف", className = "", name = "phone", autoComplete = "tel",minLength=1,maxLength=25,required=false }: CountryPhoneInputProps) {
   const hasValue = phone.length > 0;
   const [numberWarning, setNumberWarning] = useState(false);
 
   const handlePhoneChange = (nextValue: string) => {
     const digitsOnly = nextValue.replace(/[^0-9]/g, "");
     setNumberWarning(digitsOnly !== nextValue);
-    onPhoneChange(digitsOnly.slice(0, 25));
+    onPhoneChange(digitsOnly.slice(0, maxLength));
   };
 
   return (
@@ -60,8 +63,10 @@ export function CountryPhoneInput({ label = "رقم الهاتف *", countries, 
               onChange={(event) => handlePhoneChange(event.target.value)}
               placeholder={placeholder}
               inputMode="numeric"
-              maxLength={25}
-              pattern="[0-9]{1,25}"
+              maxLength={maxLength}
+              minLength={minLength}
+              required={required}
+              pattern={`[0-9]{${minLength},${maxLength}}`}
               style={{ fontFamily: "LBC, Tahoma, Arial, sans-serif", fontSize: `${adaptivePhoneFontSize(phone)}px` }}
               className="h-full w-full bg-transparent pr-[52px] pl-3 text-[#17386d] outline-none transition-[font-size,padding] duration-[820ms] ease-[cubic-bezier(.16,1,.3,1)] placeholder:text-[11px] placeholder:text-slate-400 dark:text-[#f4f1f5] dark:placeholder:text-[#8f8894]"
             />
