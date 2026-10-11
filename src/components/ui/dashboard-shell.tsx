@@ -150,13 +150,13 @@ export default function DashboardShell({ children,network }: { children: React.R
   const pathname=network?(network.tab==='overview'?network.basePath:`${network.basePath}?tab=${network.tab}`):actualPathname;
   const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};
   const networkGroups:NavGroup[]=network?[
-   ...(network.isPrincipal?[{label:'إدارة المستخدمين',icon:ShieldCheck,items:[{label:'المستخدمون',href:`${network.basePath}?tab=managers`,icon:Users},{label:'مجموعات الصلاحيات',href:`${network.basePath}?tab=permission-groups`,icon:ShieldCheck}]}]:[]),
    {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users}]},
    {label:'بروفايلات الخدمة',icon:Layers,items:[{label:'البروفايلات والباقات',href:`${network.basePath}?tab=profiles`,icon:Layers}]},
    {label:'الهوتسبوت',icon:Radio,items:[{label:'حسابات الهوتسبوت',href:`${network.basePath}?tab=hotspot`,icon:Radio}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    {label:'إعدادات الشبكة',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings}]},
    {label:'اشتراكي',icon:CreditCard,items:[{label:'معلومات الاشتراك',href:`${network.basePath}?tab=subscription`,icon:CreditCard}]},
+   ...(network.isPrincipal?[{label:'إدارة المستخدمين',icon:ShieldCheck,items:[{label:'المستخدمون',href:`${network.basePath}?tab=managers`,icon:Users},{label:'مجموعات الصلاحيات',href:`${network.basePath}?tab=permission-groups`,icon:ShieldCheck}]}]:[]),
   ]:[];
   const navGroups=network?networkGroups:accountType==='master_admin'?masterAdminGroups:customerNavGroups;
   const home=network?networkHome:masterAdminHome;
