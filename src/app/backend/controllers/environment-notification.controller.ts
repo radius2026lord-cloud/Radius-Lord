@@ -18,37 +18,43 @@ export async function requestEnvironmentNotification(req:AuthenticatedRequest,re
   if(!state||state.tenantId!==Number(e.tenant_id)||state.subscriptionId!==Number(e.subscription_id)||!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now())return res.status(409).json({message:'انتهت مهلة تسليم بيانات الدخول الأولية أو لم تُجهّز بعد.'});
   const activation=await activationLink(e,state.credentialsExpiresAt);
   const clean=(value:unknown)=>String(value??'').replace(/[\r\n\x00-\x1f*_~`]/g,' ').trim();
-  const date=(value:string)=>new Intl.DateTimeFormat('ar',{dateStyle:'long',timeStyle:'short',timeZone:'UTC'}).format(new Date(value))+' (UTC)';
-  const welcome=`أهلًا ${clean(e.customer_name)||'بك'} 👋`;
-  const content=(whatsapp=false)=>{const heading=(value:string)=>whatsapp?`*${value}*`:value;return [
-   welcome,
-   'مرحبًا بك في Radius Lord! يسعدنا إبلاغك بأن بيئة شبكتك أصبحت جاهزة ✅',
+  const date=(value:string)=>{const d=new Date(value);return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} - ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;};
+  const value=(input:unknown)=>{const plain=clean(input);return /[A-Za-z0-9]/.test(plain)?'\u200e'+plain+'\u200e':plain;};
+  const content=(whatsapp=false)=>{const heading=(label:string)=>whatsapp?`*${label}*`:label;return [
+   `أهلًا ${clean(e.customer_name)||'بك'}،`,
    '',
-   heading('🌐 بيانات الشبكة'),
-   `اسم الشبكة: ${clean(e.name)}`,
-   `اسم المستخدم: ${clean(state.username)}`,
+   'مرحبًا بك في راديوس لورد.',
+   'تم تجهيز بيئة شبكتك بنجاح، ويسعدنا انضمامك إلينا.',
    '',
-   heading('📦 تفاصيل الاشتراك'),
-   `الخطة: ${clean(e.plan_name_snapshot)}`,
-   `رقم الرخصة: ${clean(e.license_number)}`,
-   `انتهاء الاشتراك: ${date(e.expires_at)}`,
+   heading('بيانات الشبكة'),
+   'اسم الشبكة:',value(e.name),
    '',
-   heading('🔐 تفعيل حسابك'),
-   'افتح الرابط التالي واختر كلمة مرورك لبدء استخدام النظام:',
+   'اسم المستخدم:',value(state.username),
+   '',
+   heading('تفاصيل الاشتراك'),
+   'الخطة:',value(e.plan_name_snapshot),
+   '',
+   'رقم الرخصة:',value(e.license_number),
+   '',
+   'انتهاء الاشتراك:',value(date(e.expires_at)),
+   '',
+   heading('تفعيل حسابك'),
+   'افتح الرابط التالي لتعيين كلمة مرورك:',
    '',
    activation.url,
    '',
-   'الرابط مخصص لك ويُستخدم مرة واحدة فقط.',
-   `صالح حتى: ${date(activation.expiresAt)}`,
-   'احتفظ بالرابط ولا تشاركه مع الآخرين.',
+   'انتهاء صلاحية رابط التفعيل:',value(date(activation.expiresAt)),
+   'جميع الأوقات بتوقيت UTC.',
    '',
-   'بعد تعيين كلمة المرور، سجّل الدخول باسم المستخدم الموضح أعلاه.',
+   'الرابط خاص بك ويُستخدم مرة واحدة فقط. لا تشاركه مع الآخرين.',
+   'بعد تعيين كلمة المرور، يمكنك تسجيل الدخول باسم المستخدم أعلاه.',
    '',
-   'شكرًا لثقتك بنا 💙',
-   'فريق Radius Lord',
+   'شكرًا لثقتك بنا.',
+   'فريق راديوس لورد',
   ].join('\n');};
   const text=content(),whatsappText=content(true);
-  const phone=String(e.phone??'').replace(/[\s+()-]/g,'');const whatsappUrl=/^[1-9][0-9]{7,14}$/.test(phone)?`https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`:null;
+  const phone=String(e.phone??'').replace(/[\s+()-]/g,'');
+  const whatsappUrl=/^[1-9][0-9]{7,14}$/.test(phone)?`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(whatsappText.replace(/\n/g,'\r\n'))}`:null;
   const email=String(e.email??'');const emailUrl=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)?`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('مرحبًا بك — شبكتك جاهزة في Radius Lord')}&body=${encodeURIComponent(text)}`:null;
   await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'TENANT_ENVIRONMENT',entityId:e.environment_id,tenantId:e.tenant_id,description:'عرض مسودة تسليم بيانات البيئة يدويًا دون إرسال تلقائي',metadata:{event:'manual_delivery_draft',subscriptionId:e.subscription_id}});
   return res.json({message:'بيانات البيئة جاهزة للمراجعة والإرسال اليدوي. لم تُرسل رسالة تلقائيًا.',text,whatsappUrl,emailUrl});
