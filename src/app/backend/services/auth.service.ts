@@ -69,13 +69,14 @@ export class AuthService {
       return { success: false, status: 401, message: 'بيانات تسجيل الدخول غير صحيحة' };
     }
 
-    if (account.status !== 'active') {
-      return { success: false, status: 403, message: 'هذا الحساب غير نشط حاليًا' };
-    }
-
+    // An inactive central account must not shadow a different network account
+    // using the same identifier and a different password.
     const isMatch = await bcrypt.compare(password, account.password_hash);
     if (!isMatch) {
       return { success: false, status: 401, message: 'بيانات تسجيل الدخول غير صحيحة' };
+    }
+    if (account.status !== 'active') {
+      return { success: false, status: 403, message: 'هذا الحساب غير نشط حاليًا' };
     }
 
     const token = jwt.sign(

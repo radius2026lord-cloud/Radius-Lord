@@ -173,6 +173,7 @@ export const loginController = async (req: Request, res: Response) => {
       }
     }
     if (!result.success) {
+      console.info('[unified-login]',{stage:'rejected',centralStatus:result.status});
       return res.status(result.status).json({
         success: false,
         message: result.message,

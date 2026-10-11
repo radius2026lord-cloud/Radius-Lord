@@ -15,6 +15,7 @@ export async function loginNetworkPrincipal(username:string,password:string){
  JOIN platform_settings r ON r.setting_group='environment_runtime' AND r.setting_key=CONCAT('environment_',e.id)
  WHERE t.archived_at IS NULL AND e.archived_at IS NULL AND t.status='active' AND e.status='ready'
  AND JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.username'))=? LIMIT 101`,[username]);
+ console.info('[network-login]',{stage:'directory',candidateCount:rows.length});
  if(rows.length>100)throw new Error('NETWORK_LOGIN_DIRECTORY_CAPACITY');
  let match:{token:string;redirectTo:string}|null=null;
  for(let offset=0;offset<rows.length;offset+=4){
@@ -28,5 +29,6 @@ export async function loginNetworkPrincipal(username:string,password:string){
   }));
   for(const candidate of batch){if(!candidate)continue;if(match)throw new Error('NETWORK_LOGIN_AMBIGUOUS');match=candidate;}
  }
+ console.info('[network-login]',{stage:'verification',result:match?'matched':'no_matching_credentials'});
  return match;
 }
