@@ -1,15 +1,11 @@
 "use client";
 
-import {useEffect,useState,useRef,type ReactNode,type ComponentProps} from "react";
+import {useEffect,useState,useRef,type ReactNode} from "react";
 import {CheckCircle2,CalendarDays,CreditCard,ExternalLink,Package,Server,Users,Wifi,RotateCw} from "lucide-react";
 import FloatingContentGuide from "@/components/ui/floating-content-guide";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectLoading from "@/components/ui/project-loading";
-import {ProjectInfoCard as SharedInfoCard,ProjectCardIcon} from "@/components/ui/project-info-card";
-
-function ProjectInfoCard({className="",...props}:ComponentProps<typeof SharedInfoCard>){
- return <SharedInfoCard {...props} className={`!border-[#d7e3ef] !bg-[#f9fbfe] dark:!border-[#3b3442] shadow-[0_4px_14px_rgba(44,72,104,.035)] dark:!bg-[#25212c] ${className}`}/>;
-}
+import {ProjectInfoCard,ProjectCardIcon} from "@/components/ui/project-info-card";
 
 type Subscription={id:number;paymentCode:string;planName:string;durationMonths:number;deploymentName:string;limits:{maxTenants:number;maxSubscribers:number;maxNas:number}|null;addons:{nameAr?:string;name_ar?:string;code?:string}[];totalAmount:string;currency:string;paidAt:string|null;subscriptionStatus:string|null;startsAt:string|null;expiresAt:string|null;networkName:string|null;environmentStatus:string;systemUrl:string|null};
 const date=(value:string|null)=>{if(!value)return "لم تبدأ بعد";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":new Intl.DateTimeFormat("ar",{dateStyle:"medium"}).format(d);};
@@ -33,7 +29,7 @@ export default function CustomerSubscriptionDashboard({welcome}:{welcome:ReactNo
   {items.slice(0,1).map(item=>{
    const url=safeUrl(item.systemUrl),status=item.environmentStatus;
    const state=status==='archived'?'البيئة مؤرشفة':(item.subscriptionStatus==='expired'||Boolean(item.expiresAt&&new Date(item.expiresAt).getTime()<=Date.now()))?'انتهى الاشتراك':status==='failed'?'التجهيز يحتاج متابعة من الإدارة':status==='ready'?'تم تجهيز البيئة':status==='provisioning'?'جارٍ تجهيز بيئتك':'بانتظار تجهيز البيئة';
-   return <section key={item.id} className="space-y-4 rounded-[24px] border border-[#d7e3ef] bg-[#f3f7fb] p-4 shadow-[0_10px_28px_rgba(44,72,104,.05)] dark:border-[#3a3341] dark:bg-[#211c26] sm:p-5">
+   return <section key={item.id} className="space-y-4 rounded-[24px] border border-white/90 bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] dark:border-white/[.07] dark:bg-[#302e33] sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">{item.planName}</h2><p className="mt-1 text-xs text-slate-500">{item.networkName||"اشتراكك في Radius Lord"}</p></div><span className="rounded-full bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">الدفع مكتمل</span></div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
      <ProjectInfoCard tone="success"><ProjectCardIcon icon={CreditCard} tone="success"/><h3 className="mt-2 text-xs text-slate-500">المبلغ المدفوع</h3><p className="mt-1 font-bold" dir="ltr">{item.totalAmount} {item.currency}</p><p className="mt-2 text-xs">تاريخ التأكيد: {item.paidAt?date(item.paidAt):"غير مسجل"}</p><p className="mt-2 break-all text-xs" dir="ltr">{item.paymentCode}</p></ProjectInfoCard>
