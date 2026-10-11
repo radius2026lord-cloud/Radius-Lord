@@ -24,10 +24,11 @@ export async function POST(request: NextRequest) {
       status: backendResponse.status,
     });
 
-    const setCookie = backendResponse.headers.get("set-cookie");
-    if (setCookie) {
-      response.headers.set("set-cookie", setCookie);
-    }
+    // Login may clear the central cookie and set a separate network cookie.
+    // Preserve separate headers; a combined Set-Cookie string is unreliable.
+    const headers=backendResponse.headers as Headers & {getSetCookie?:()=>string[]};
+    const cookies=headers.getSetCookie?.() ?? (headers.get('set-cookie')?.split(/,(?=\s*[^;,=]+=[^;]*)/)||[]);
+    for(const cookie of cookies)response.headers.append('set-cookie',cookie);
 
     return response;
   } catch (error) {
