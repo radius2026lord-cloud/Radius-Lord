@@ -1,5 +1,6 @@
 "use client";
 import ProjectLoading from "@/components/ui/project-loading";
+import NetworkFirstLogin from "@/components/network-first-login";
 import NetworkDashboard from "@/components/network-dashboard";
 import FloatingNotice from "@/components/ui/floating-notice";
 import {useEffect,useState} from "react";
@@ -8,7 +9,7 @@ import {ShieldCheck,LogOut,Radio} from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectButton from "@/components/ui/project-button";
 import {CollectionState} from "@/components/ui/collection-display";
-type Network={manager:{full_name:string;manager_type:string};networkName:string;license:string;expiresAt:string;maxSubscribers:number;maxNas:number;planName:string;durationMonths:number;startsAt:string};
+type Network={mustChangeCredentials?:boolean;manager:{full_name:string;manager_type:string};networkName:string;license:string;expiresAt:string;maxSubscribers:number;maxNas:number;planName:string;durationMonths:number;startsAt:string};
 export default function NetworkPage(){
  const router=useRouter();
  const {slug}=useParams<{slug:string}>();const endpoint=`/api/network/${encodeURIComponent(slug)}`;
@@ -21,6 +22,7 @@ export default function NetworkPage(){
  async function logout(){setBusy(true);try{await fetch(`${endpoint}/logout`,{method:"POST",credentials:"include"});setNetwork(null);setPassword("");}finally{setBusy(false);}}
  useEffect(()=>{if(!network&&!activationToken&&!loading)router.replace('/login');},[network,activationToken,loading,router]);
  if(!network&&!activationToken&&!loading)return <ProjectLoading>جارٍ فتح صفحة تسجيل الدخول...</ProjectLoading>;
+ if(network?.mustChangeCredentials&&!activationToken&&!loading)return <NetworkFirstLogin endpoint={endpoint} onLogout={logout} onComplete={async()=>{const response=await fetch(`${endpoint}/me`,{credentials:'include',cache:'no-store'});if(!response.ok)throw new Error('تم الحفظ؛ أعد تسجيل الدخول ببياناتك الجديدة.');setNetwork(await response.json());}}/>;
  if(network&&!activationToken&&!loading)return <NetworkDashboard network={network} endpoint={endpoint} slug={slug} onLogout={logout}/>;
  return <main dir="rtl" className="min-h-screen bg-slate-50 px-4 py-8 text-slate-800 dark:bg-[#061728] dark:text-slate-200"><section className="rl-surface mx-auto max-w-2xl space-y-5 rounded-[22px] border border-slate-200 bg-white p-5 sm:p-8 dark:border-white/10 dark:bg-white/[.035]"><h1 className="flex items-center gap-2 text-lg font-bold"><Radio className="text-blue-500"/>Radius Lord — بيئة الشبكة</h1>{activationToken?<form onSubmit={activate} className="space-y-4"><h2 className="font-semibold">تعيين كلمة المرور لمدير الشبكة</h2><p className="text-xs leading-6 text-slate-500">رابط مؤقت للاستخدام مرة واحدة. اختر كلمة مرور من 8 إلى 128 محرفًا.</p><label className="rl-field-label">كلمة المرور الجديدة<ProjectInput className="mt-2" dir="ltr" type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8} maxLength={128}/></label><label className="rl-field-label">تأكيد كلمة المرور<ProjectInput className="mt-2" dir="ltr" type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required minLength={8} maxLength={128}/></label><ProjectButton type="submit" disabled={busy}>{busy?"جارٍ التفعيل...":"تفعيل وتعيين كلمة المرور"}</ProjectButton></form>:loading?<CollectionState loading>جارٍ التحقق من الجلسة...</CollectionState>:null}<FloatingNotice error={error} message={success} onDismiss={()=>{setError("");setSuccess("");}}/></section></main>;
 }

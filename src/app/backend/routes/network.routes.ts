@@ -1,3 +1,4 @@
+import {credentialsRequired,changeInitialCredentials} from '../services/network-credentials.service';
 import {readHostingPreflight} from '../services/hosting-preflight.service';
 import {consumeActivation} from '../services/environment-activation.service';
 import {createHash} from 'crypto';
@@ -18,6 +19,7 @@ async function principal(req:Request){
  const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
  const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('NETWORK_AUTH');
  await withNetwork(scope,async connection=>{await validateLocalLicense(connection,scope);const [rows]:any=await connection.query("SELECT password_hash FROM managers WHERE id=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('NETWORK_AUTH');});
+ if(await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  return {...scope,managerId:Number(token.sub)};
 }
 const nasError=(e:unknown)=>({message:(e as Error)?.message==='NAS_PLAN_LIMIT_REACHED'?'وصلت إلى عدد أجهزة NAS المسموح به في الخطة.':(e as Error)?.message==='NETWORK_AUTH'?'انتهت الجلسة أو لا تملك صلاحية إدارة الخوادم.':'تعذر تجهيز اتصال NAS. يمكنك إعادة المحاولة لاستكماله؛ راجع البوابة والشهادات وSSH.',code:/^[A-Z0-9_]+$/.test((e as Error)?.message??'')?(e as Error).message:'NAS_OPERATION_FAILED'});
@@ -65,14 +67,25 @@ router.post('/:slug/login',async(req,res)=>{
  try{
   const username=String(req.body?.username??''),password=String(req.body?.password??'');if(username.length>100||password.length>128||!username||!password)throw new Error('INVALID_LOGIN');
   const scope=await networkScope(String(req.params.slug));const manager=await withNetwork(scope,async connection=>{await validateLocalLicense(connection,scope);const [rows]:any=await connection.query('SELECT id,full_name,password_hash FROM managers WHERE username=? AND is_enabled=1 AND archived_at IS NULL',[username]);if(!rows[0]||!await bcrypt.compare(password,rows[0].password_hash))throw new Error('INVALID_LOGIN');return rows[0];});
+  const runtime=await readPrivateSetting('environment_runtime','environment_'+scope.environment_id);
+  if(runtime?.mustChangeCredentials===true&&username!==runtime.pendingUsername&&(!runtime.credentialsExpiresAt||new Date(runtime.credentialsExpiresAt).getTime()<=Date.now()))throw new Error('CREDENTIALS_EXPIRED');
   failed.delete(key);const token=jwt.sign({kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'});
   res.cookie('network_token',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/network',maxAge:1200000});return res.json({success:true,name:manager.full_name});
  }catch{for(const [k,v]of Array.from(failed))if(v.until<=now)failed.delete(k);if(failed.size>1000)failed.clear();failed.set(key,{count:attempts&&attempts.until>now?attempts.count+1:1,until:now+300000});return res.status(401).json({message:'بيانات الدخول غير صحيحة أو البيئة غير متاحة.'});}
 });
+router.post('/:slug/credentials',async(req,res)=>{try{
+ const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});
+ if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
+ const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('NETWORK_AUTH');
+ const fresh=await changeInitialCredentials(scope,token,req.body);
+ res.cookie('network_token',fresh,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/network',maxAge:1200000});return res.json({success:true});
+ }catch(e){const code=(e as Error).message;const messages:Record<string,string>={USERNAME_TAKEN:'اسم المستخدم مستخدم بالفعل، اختر اسمًا آخر.',CREDENTIALS_INPUT:'استخدم اسمًا إنكليزيًا من 3 إلى 64 محرفًا يبدأ بحرف، وكلمة مرور من 8 إلى 128 محرفًا.',CREDENTIALS_REUSE:'اختر اسم مستخدم وكلمة مرور مختلفين عن البيانات المؤقتة.',CREDENTIALS_EXPIRED:'انتهت صلاحية البيانات المؤقتة؛ راجع الإدارة.',CREDENTIALS_BUSY:'جارٍ حفظ بيانات حساب آخر؛ أعد المحاولة.'};return res.status(409).json({message:messages[code]||'تعذر حفظ البيانات. أعد الدخول ثم حاول مجددًا.'});}
+});
 router.post('/:slug/logout',(req,res)=>{res.clearCookie('network_token',{path:'/api/network',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});return res.json({success:true});});
 router.get('/:slug/me',async(req,res)=>{
  try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('SCOPE');const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('SCOPE');
- const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope);const [rows]:any=await connection.query('SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL',[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');return {manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type},networkName:scope.name,license:license.license_number,expiresAt:license.expires_at,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.starts_at,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});return res.json(result);
+ const mustChangeCredentials=await credentialsRequired(scope);
+ const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope);const [rows]:any=await connection.query('SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL',[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');return {mustChangeCredentials,manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type},networkName:scope.name,license:license.license_number,expiresAt:license.expires_at,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.starts_at,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});return res.json(result);
  }catch{return res.status(401).json({message:'انتهت الجلسة أو البيئة غير متاحة.'});}
 });
 // Worker-only HTTP proof: this exercises the same network scope, DB and password verification as login.

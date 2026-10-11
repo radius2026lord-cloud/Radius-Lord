@@ -1,4 +1,5 @@
 import {readHostingPreflight} from '../services/hosting-preflight.service';
+import {decryptProvisioningSecret} from '../services/provisioning-secrets.service';
 import {env} from '../config/env';
 import type {Response} from 'express';
 import {db} from '../config/db';
@@ -16,7 +17,9 @@ export async function requestEnvironmentNotification(req:AuthenticatedRequest,re
   const e=rows[0];if(!e||e.status!=='ready'||e.subscription_status!=='active'||e.license_status!=='active'||!e.system_url||!e.expires_at||new Date(e.expires_at).getTime()<=Date.now())return res.status(409).json({message:'يجب اكتمال تجهيز البيئة وتفعيل الاشتراك والرخصة أولًا.'});
   const state=await readPrivateSetting('environment_runtime','environment_'+e.environment_id);
   if(!state||state.tenantId!==Number(e.tenant_id)||state.subscriptionId!==Number(e.subscription_id)||!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now())return res.status(409).json({message:'انتهت مهلة تسليم بيانات الدخول الأولية أو لم تُجهّز بعد.'});
-  const activation=await activationLink(e,state.credentialsExpiresAt);
+  const temporary=state.mustChangeCredentials===true;
+  const activation=temporary?null:await activationLink(e,state.credentialsExpiresAt);
+  const temporaryPassword=temporary?decryptProvisioningSecret(state.passwordEncrypted):null;
   const clean=(value:unknown)=>String(value??'').replace(/[\r\n\x00-\x1f*_~`]/g,' ').trim();
   const date=(value:string)=>{const d=new Date(value);return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} - ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;};
   const value=(input:unknown)=>{const plain=clean(input);return /[A-Za-z0-9]/.test(plain)?'\u200e'+plain+'\u200e':plain;};
@@ -38,16 +41,23 @@ export async function requestEnvironmentNotification(req:AuthenticatedRequest,re
    '',
    'انتهاء الاشتراك:',value(date(e.expires_at)),
    '',
-   heading('تفعيل حسابك'),
-   'افتح الرابط التالي لتعيين كلمة مرورك:',
-   '',
-   activation.url,
-   '',
-   'انتهاء صلاحية رابط التفعيل:',value(date(activation.expiresAt)),
+   ...(temporary?[
+    heading('بيانات الدخول المؤقتة'),
+    'اسم المستخدم المؤقت:',whatsapp?'`'+String(state.username)+'`':String(state.username),
+    'كلمة المرور المؤقتة:',whatsapp?'`'+String(temporaryPassword)+'`':String(temporaryPassword),
+    '',
+    'صفحة تسجيل الدخول:',new URL('/login',e.system_url).href,
+    '',
+    'عند أول تسجيل دخول سيُطلب منك اختيار اسم مستخدم وكلمة مرور خاصين بك قبل فتح إدارة الشبكة.',
+    'صلاحية البيانات المؤقتة حتى:',value(date(state.credentialsExpiresAt)),
+    'لا تشارك بيانات الدخول. تُلغى البيانات المؤقتة بعد حفظ بياناتك الجديدة.',
+   ]:[
+    heading('تفعيل حسابك'),'افتح الرابط التالي لتعيين كلمة مرورك:',activation!.url,
+    'انتهاء صلاحية رابط التفعيل:',value(date(activation!.expiresAt)),
+    'الرابط خاص بك ويُستخدم مرة واحدة فقط. لا تشاركه مع الآخرين.',
+    'بعد تعيين كلمة المرور، يمكنك تسجيل الدخول باسم المستخدم أعلاه.',
+   ]),
    'جميع الأوقات بتوقيت UTC.',
-   '',
-   'الرابط خاص بك ويُستخدم مرة واحدة فقط. لا تشاركه مع الآخرين.',
-   'بعد تعيين كلمة المرور، يمكنك تسجيل الدخول باسم المستخدم أعلاه.',
    '',
    'شكرًا لثقتك بنا.',
    'فريق راديوس لورد',
