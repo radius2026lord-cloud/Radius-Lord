@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import {loginNetworkPrincipal} from '../services/network-login.service';
 
 import { db } from '../config/db';
 import { loginSchema } from '../schemas/auth.schema';
@@ -138,7 +139,17 @@ export const signupController = async (req: Request, res: Response) => {
   }
 };
 
+const loginAttempts=new Map<string,{count:number;until:number}>();
+let activeLogins=0;
 export const loginController = async (req: Request, res: Response) => {
+  const ip=req.ip||'unknown',now=Date.now();
+  for(const [key,value]of Array.from(loginAttempts))if(value.until<=now)loginAttempts.delete(key);
+  const attempts=loginAttempts.get(ip);
+  if(attempts&&attempts.count>=10)return res.status(429).json({success:false,message:'انتظر دقائق قبل إعادة المحاولة.'});
+  if(activeLogins>=4)return res.status(503).json({success:false,message:'الخدمة مشغولة، أعد المحاولة.'});
+  if(loginAttempts.size>=10000&&!attempts)return res.status(429).json({success:false,message:'انتظر قبل إعادة المحاولة.'});
+  loginAttempts.set(ip,{count:(attempts?.count||0)+1,until:attempts?.until||now+300000});
+  activeLogins++;
   try {
     const parsed = loginSchema.safeParse(req.body);
 
@@ -152,6 +163,15 @@ export const loginController = async (req: Request, res: Response) => {
     const { username, password } = parsed.data;
     const result = await AuthService.login(username, password);
 
+    if (!result.success&&result.status===401) {
+      const network=await loginNetworkPrincipal(username.trim(),password);
+      if(network){
+        loginAttempts.delete(ip);
+        res.clearCookie('token',{path:'/',httpOnly:true,secure:process.env.NODE_ENV==='production'});
+        res.cookie('network_token',network.token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/network',maxAge:1200000});
+        return res.json({success:true,accountType:'network_manager',redirectTo:network.redirectTo});
+      }
+    }
     if (!result.success) {
       return res.status(result.status).json({
         success: false,
@@ -170,6 +190,8 @@ export const loginController = async (req: Request, res: Response) => {
       });
     }
 
+    loginAttempts.delete(ip);
+    res.clearCookie('network_token',{path:'/api/network',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});
     res.cookie('token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -190,6 +212,7 @@ export const loginController = async (req: Request, res: Response) => {
       message: 'خطأ في الخادم',
     });
   }
+  finally {activeLogins--;}
 };
 
 

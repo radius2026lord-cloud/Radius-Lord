@@ -1,15 +1,16 @@
 "use client";
-import LordAuth from "@/components/auth/lord-auth";
+import ProjectLoading from "@/components/ui/project-loading";
 import NetworkDashboard from "@/components/network-dashboard";
 import FloatingNotice from "@/components/ui/floating-notice";
 import {useEffect,useState} from "react";
-import {useParams} from "next/navigation";
+import {useParams,useRouter} from "next/navigation";
 import {ShieldCheck,LogOut,Radio} from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectButton from "@/components/ui/project-button";
 import {CollectionState} from "@/components/ui/collection-display";
 type Network={manager:{full_name:string;manager_type:string};networkName:string;license:string;expiresAt:string;maxSubscribers:number;maxNas:number;planName:string;durationMonths:number;startsAt:string};
 export default function NetworkPage(){
+ const router=useRouter();
  const {slug}=useParams<{slug:string}>();const endpoint=`/api/network/${encodeURIComponent(slug)}`;
  const [activationToken,setActivationToken]=useState(""),[confirmPassword,setConfirmPassword]=useState(""),[success,setSuccess]=useState("");
  useEffect(()=>{const token=new URLSearchParams(window.location.hash.slice(1)).get("activate");if(token){setActivationToken(token);window.history.replaceState(null,"",window.location.pathname+window.location.search);}},[]);
@@ -18,7 +19,8 @@ export default function NetworkPage(){
  void read();const timer=setInterval(()=>void read(),30000);const onFocus=()=>void read();window.addEventListener("focus",onFocus);return()=>{live=false;controller.abort();clearInterval(timer);window.removeEventListener("focus",onFocus);};},[endpoint]);
  async function activate(e:React.FormEvent){e.preventDefault();if(busy)return;if(password!==confirmPassword){setError("كلمتا المرور غير متطابقتين.");return;}setBusy(true);setError("");try{const r=await fetch(`${endpoint}/activate`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:activationToken,password})}),j=await r.json();if(!r.ok)throw new Error(j.message);setActivationToken("");setUsername(j.username);setPassword("");setConfirmPassword("");setSuccess(j.message);}catch(e){setError(e instanceof Error?e.message:"تعذر التفعيل.");}finally{setBusy(false);}}
  async function logout(){setBusy(true);try{await fetch(`${endpoint}/logout`,{method:"POST",credentials:"include"});setNetwork(null);setPassword("");}finally{setBusy(false);}}
- if(!network&&!activationToken&&!loading)return <><LordAuth mode="login" networkLogin={{endpoint:`${endpoint}/login`,onSuccess:async()=>{const response=await fetch(`${endpoint}/me`,{credentials:'include',cache:'no-store'});if(!response.ok)throw new Error('NETWORK_LOGIN');setNetwork(await response.json());}}}/><FloatingNotice message={success} onDismiss={()=>setSuccess('')}/></>;
+ useEffect(()=>{if(!network&&!activationToken&&!loading)router.replace('/login');},[network,activationToken,loading,router]);
+ if(!network&&!activationToken&&!loading)return <ProjectLoading>جارٍ فتح صفحة تسجيل الدخول...</ProjectLoading>;
  if(network&&!activationToken&&!loading)return <NetworkDashboard network={network} endpoint={endpoint} slug={slug} onLogout={logout}/>;
  return <main dir="rtl" className="min-h-screen bg-slate-50 px-4 py-8 text-slate-800 dark:bg-[#061728] dark:text-slate-200"><section className="rl-surface mx-auto max-w-2xl space-y-5 rounded-[22px] border border-slate-200 bg-white p-5 sm:p-8 dark:border-white/10 dark:bg-white/[.035]"><h1 className="flex items-center gap-2 text-lg font-bold"><Radio className="text-blue-500"/>Radius Lord — بيئة الشبكة</h1>{activationToken?<form onSubmit={activate} className="space-y-4"><h2 className="font-semibold">تعيين كلمة المرور لمدير الشبكة</h2><p className="text-xs leading-6 text-slate-500">رابط مؤقت للاستخدام مرة واحدة. اختر كلمة مرور من 8 إلى 128 محرفًا.</p><label className="rl-field-label">كلمة المرور الجديدة<ProjectInput className="mt-2" dir="ltr" type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8} maxLength={128}/></label><label className="rl-field-label">تأكيد كلمة المرور<ProjectInput className="mt-2" dir="ltr" type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required minLength={8} maxLength={128}/></label><ProjectButton type="submit" disabled={busy}>{busy?"جارٍ التفعيل...":"تفعيل وتعيين كلمة المرور"}</ProjectButton></form>:loading?<CollectionState loading>جارٍ التحقق من الجلسة...</CollectionState>:null}<FloatingNotice error={error} message={success} onDismiss={()=>{setError("");setSuccess("");}}/></section></main>;
 }

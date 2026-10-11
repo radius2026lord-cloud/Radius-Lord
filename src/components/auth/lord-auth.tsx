@@ -275,7 +275,7 @@ export default function LordAuth({ mode,networkLogin }: { mode: Mode;networkLogi
       if (response.ok && data.success) {
         setLoginStatus("success");
         if(networkLogin){window.setTimeout(()=>{void networkLogin.onSuccess().catch(()=>triggerLoginError("تعذر فتح بيئة الشبكة. أعد المحاولة."));},1400);}
-        else{await requestBrowserCredentialSave();window.setTimeout(() => { window.location.href = "/Dashboard"; }, 1400);}
+        else{await requestBrowserCredentialSave();window.setTimeout(() => { window.location.href = typeof data.redirectTo==='string'&&/^\/network\/network-[a-f0-9]+$/.test(data.redirectTo)?data.redirectTo:"/Dashboard"; }, 1400);}
       } else {
         triggerLoginError(data.message || "فشل تسجيل الدخول.");
       }
