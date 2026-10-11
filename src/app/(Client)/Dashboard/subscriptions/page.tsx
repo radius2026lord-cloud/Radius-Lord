@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, RefreshCw, UserRound } from "lucide-react";
 import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
+import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ItemActionsDropdown from "@/components/ui/item-actions-dropdown";
@@ -13,7 +14,7 @@ type Status = "awaiting_confirmation" | "paid" | "completed" | "cancelled" | "ex
 type Order = {
   id:number; customerId:number; paymentCode:string; planName:string; deploymentName:string|null;
   totalAmount:number; currency:string; status:Status|"pending"; requestedAt:string; paidAt:string|null;
-  environmentStatus?:string|null;customerName:string; customerUsername:string|null; customerEmail:string;
+  environmentStatus?:string|null;environmentArchived?:boolean;customerName:string; customerUsername:string|null; customerEmail:string;
 };
 
 const meta:Record<Status,{label:string;tone:string}> = {
@@ -29,7 +30,7 @@ export default function SubscriptionsPage(){
   const [orders,setOrders]=useState<Order[]>([]);
   const [loading,setLoading]=useState(true);
   const [query,setQuery]=useState("");
-  const [filter,setFilter]=useState<"all"|Status>("all");
+  const [filter,setFilter]=useState<"all"|"awaiting_confirmation"|"paid"|"ready"|"attention">("all");
   const [busy,setBusy]=useState<string|null>(null);
   const [message,setMessage]=useState("");
   const {view,setView,selected,setSelected,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("subscriptions","row");
@@ -45,15 +46,19 @@ export default function SubscriptionsPage(){
 
   const counts=useMemo(()=>({
     all:orders.length,
-    awaiting_confirmation:orders.filter(x=>x.status==="awaiting_confirmation").length,
-    paid:orders.filter(x=>x.status==="paid").length,
-    completed:orders.filter(x=>x.status==="completed").length,
+    awaiting_confirmation:orders.filter(x=>["pending","awaiting_confirmation"].includes(x.status)).length,
+    paid:orders.filter(x=>["paid","completed"].includes(x.status)).length,
+    ready:orders.filter(x=>x.environmentStatus==="ready"&&!x.environmentArchived).length,
+    attention:orders.filter(x=>x.environmentStatus==="failed"&&!x.environmentArchived).length,
   }),[orders]);
 
   const filtered=useMemo(()=>{
     const q=query.trim().toLowerCase();
     return orders.filter(x=>{
-      if(filter!=="all"&&x.status!==filter)return false;
+      if(filter==='awaiting_confirmation'&&!["pending","awaiting_confirmation"].includes(x.status))return false;
+      if(filter==='paid'&&!["paid","completed"].includes(x.status))return false;
+      if(filter==='ready'&&(x.environmentStatus!=='ready'||x.environmentArchived))return false;
+      if(filter==='attention'&&(x.environmentStatus!=='failed'||x.environmentArchived))return false;
       if(!q)return true;
       return [x.customerName,x.customerUsername,x.customerEmail,x.paymentCode,x.planName,x.deploymentName].filter(Boolean).some(v=>String(v).toLowerCase().includes(q));
     });
@@ -82,7 +87,7 @@ export default function SubscriptionsPage(){
       responsive
       icon={CreditCard}
       title="عرض الاشتراكات"
-      description="متابعة طلبات الاشتراك والدفع"
+      description="الدفع وحالة تجهيز الشبكة، كل منهما ظاهر بشكل مستقل"
       view={view}
       onViewChange={setView}
       selectionMode={selectionMode}
@@ -94,14 +99,15 @@ export default function SubscriptionsPage(){
       searchPlaceholder="بحث بالعميل، الخطة أو كود الدفع..."
       filters={<CollectionStatusFilters value={filter} onChange={setFilter} items={[
         {value:"all",label:"الكل",count:counts.all,dot:"bg-[#0758e9]"},
-        {value:"awaiting_confirmation",label:"بانتظار التأكيد",count:counts.awaiting_confirmation,dot:"bg-amber-500"},
-        {value:"paid",label:"تم الدفع",count:counts.paid,dot:"bg-emerald-500"},
-        {value:"completed",label:"مكتمل",count:counts.completed,dot:"bg-blue-500"},
+        {value:"awaiting_confirmation",label:"بانتظار الدفع والتأكيد",count:counts.awaiting_confirmation,dot:"bg-amber-500"},
+        {value:"paid",label:"الدفع مكتمل",count:counts.paid,dot:"bg-emerald-500"},
+        {value:"ready",label:"البيئة جاهزة",count:counts.ready,dot:"bg-blue-500"},
+        {value:"attention",label:"التجهيز يحتاج معالجة",count:counts.attention,dot:"bg-amber-500"},
       ]}/>}
       primaryAction={<ProjectButton variant="secondary" disabled={loading||busy!==null} onClick={load}><RefreshCw/>تحديث</ProjectButton>}
     />
 
-    {message&&<div className="rounded-[16px] border border-[#c8d7e6] bg-white px-4 py-3 text-xs dark:border-white/[.10] dark:bg-[#0d243b]">{message}</div>}
+    <FloatingNotice message={message.startsWith("تم ")?message:undefined} error={message&&!message.startsWith("تم ")?message:undefined} onDismiss={()=>setMessage("")}/>
 
     <BulkSelectionBar count={selected.size} noun="الاشتراكات" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())}/>
 
@@ -111,26 +117,26 @@ export default function SubscriptionsPage(){
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{o.customerUsername||"—"}</div></div>
         <div className="flex shrink-0 items-center gap-2">{!selectionMode&&<SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/>}</div>
       </div>
-      <div className="mt-3"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus}/></div>
+      <div className="mt-3"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus} environmentArchived={o.environmentArchived}/></div>
       <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[.07] dark:text-slate-400">
         <div className="flex items-center justify-between gap-3"><b className="min-w-0 break-words text-slate-700 dark:text-slate-200">{o.planName}</b><span className="shrink-0">{o.deploymentName||"—"}</span></div>
         <div className="flex items-center justify-between gap-3"><span className="break-all font-mono text-[10px] text-[#0758e9]" dir="ltr">{o.paymentCode}</span><b className="text-[#17386d] dark:text-white">{o.totalAmount} {o.currency}</b></div>
         <div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div>
       </div>
     </CollectionCard>)}</CollectionGrid>:<>
-      <CollectionTable minWidth="760px">
-        <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
+      <CollectionTable minWidth="880px">
+        <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الإجمالي</th><th>الدفع</th><th>البيئة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
         <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openSubscription(o)} className={collectionRowClass(selected.has(o.id))}>
           <td className="w-12 p-3 text-center" onClick={e=>e.stopPropagation()}><CollectionSelectionBox checked={selected.has(o.id)} onChange={()=>toggle(o.id)} label={`تحديد اشتراك ${o.customerName}`}/></td>
           <td className="p-3"><b className="block text-[#17386d] dark:text-[#d8d2dc]">{o.customerName}</b><span className="text-[10px] text-slate-400"><bdi>{o.paymentCode}</bdi></span></td>
           <td className="p-3"><b className="block">{o.planName}</b><span className="mt-1 block text-[11px] text-slate-400">{o.deploymentName||"—"}</span></td>
-          <td className="font-bold">{o.totalAmount} {o.currency}</td><td><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus}/></td><td>{formatDate(o.requestedAt)}</td>
+          <td className="font-bold">{o.totalAmount} {o.currency}</td><td><PaymentBadge status={o.status}/></td><td><EnvironmentBadge status={o.environmentStatus} archived={o.environmentArchived} paid={["paid","completed"].includes(o.status)}/></td><td>{formatDate(o.requestedAt)}</td>
           <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
       <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openSubscription(o)}>
         <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="break-words text-sm font-semibold">{o.customerName}</div><div className="mt-1 text-[11px] text-slate-500">{o.planName}</div></div><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus}/><bdi className="text-xs font-semibold">{o.totalAmount} {o.currency}</bdi></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus} environmentArchived={o.environmentArchived}/><bdi className="text-xs font-semibold">{o.totalAmount} {o.currency}</bdi></div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-400 dark:border-white/10"><bdi className="break-all font-mono">{o.paymentCode}</bdi><span>{formatDate(o.requestedAt)}</span></div>
       </CollectionMobileCard>)}</CollectionMobileList>
     </>}
@@ -139,8 +145,10 @@ export default function SubscriptionsPage(){
 }
 
 function SubscriptionActions({order,busy,onOpen,onPayment,onConfirm}:{order:Order;busy:boolean;onOpen:()=>void;onPayment:()=>void;onConfirm:()=>void}){
-  return <ItemActionsDropdown show={{view:true,payment:true,confirmPayment:order.status==="awaiting_confirmation"&&!busy}} handlers={{view:onOpen,payment:onPayment,confirmPayment:onConfirm}}/>;
+  return <ItemActionsDropdown show={{view:true,payment:true,confirmPayment:["pending","awaiting_confirmation"].includes(order.status)&&!busy}} handlers={{view:onOpen,payment:onPayment,confirmPayment:onConfirm}}/>;
 }
 
-function StatusBadge({status,environmentStatus}:{status:Status;environmentStatus?:string|null}){const m=meta[status]||meta.awaiting_confirmation;return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${m.tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current"/>{["paid","completed"].includes(status)?environmentStatus==="ready"?"تم الدفع — البيئة جاهزة":environmentStatus==="failed"?"تم الدفع — التجهيز يحتاج معالجة":environmentStatus==="provisioning"?"تم الدفع — جارٍ تجهيز البيئة":"تم الدفع — بانتظار تجهيز البيئة":m.label}</span>}
+function StatusBadge({status,environmentStatus,environmentArchived}:{status:Status;environmentStatus?:string|null;environmentArchived?:boolean}){return <div className="flex flex-wrap gap-2"><PaymentBadge status={status}/><EnvironmentBadge status={environmentStatus} archived={environmentArchived} paid={["paid","completed"].includes(status)}/></div>}
+function PaymentBadge({status}:{status:Order['status']}){const paid=["paid","completed"].includes(status),m=status==='pending'?{label:'بانتظار الدفع',tone:'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'}:meta[status];return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${paid?meta.paid.tone:m.tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current"/>{paid?'الدفع مكتمل':m.label}</span>}
+function EnvironmentBadge({status,archived,paid}:{status?:string|null;archived?:boolean;paid:boolean}){const label=archived?'البيئة مؤرشفة':status==='ready'?'البيئة جاهزة':status==='failed'?'التجهيز يحتاج معالجة':status==='provisioning'?'جارٍ التجهيز':paid?'بانتظار التجهيز':'التجهيز بعد الدفع',tone=archived?'bg-slate-100 text-slate-500 dark:bg-white/5':status==='ready'?'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300':status==='failed'?'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300':'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300';return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${tone}`}><i className="h-1.5 w-1.5 rounded-full bg-current"/>{label}</span>}
 function formatDate(value:string){return new Intl.DateTimeFormat("ar",{year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value))}

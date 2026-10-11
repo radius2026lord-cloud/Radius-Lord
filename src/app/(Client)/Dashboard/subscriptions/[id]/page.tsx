@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink, Mail, MessageCircle, ShieldCheck, TriangleAlert, Trash2, Copy } from "lucide-react";
+import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink, Mail, MessageCircle, ShieldCheck, TriangleAlert, Trash2, Copy, ChevronDown } from "lucide-react";
 import { CollectionState } from "@/components/ui/collection-display";
 import EnvironmentProgress from "@/components/environment-progress";
 import ProjectInput from "@/components/ui/project-input";
@@ -10,7 +10,7 @@ import ProjectDialog from "@/components/ui/project-dialog";
 import SubscriptionPaymentHistory from "@/components/subscription-payment-history";
 import ProjectButton from "@/components/ui/project-button";
 import FloatingNotice from "@/components/ui/floating-notice";
-import {ProjectInfoCard} from "@/components/ui/project-info-card";
+import {ProjectInfoCard,ProjectCardDetails,ProjectCardIcon} from "@/components/ui/project-info-card";
 import {environmentAction,type EnvironmentAction} from "@/lib/environment-actions";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 
@@ -33,6 +33,7 @@ type Subscription = {
 export default function SubscriptionDetailsPage(){
   const {id}=useParams<{id:string}>();
   const router=useRouter();
+  const [detailsSection,setDetailsSection]=useState<"plan"|"history"|"technical"|null>(null),[optionsOpen,setOptionsOpen]=useState(false);
   const [reviewOpen,setReviewOpen]=useState(false),[actionCode,setActionCode]=useState("");
   const [deleteOpen,setDeleteOpen]=useState(false),[deleteName,setDeleteName]=useState("");
   const [requesting,setRequesting]=useState(false),[progressOpen,setProgressOpen]=useState(false);
@@ -53,6 +54,7 @@ export default function SubscriptionDetailsPage(){
   const infrastructureBlocked=Boolean(item?.environment.blockedReason?.startsWith('افحص صحة البنية التحتية')||item?.environment.job?.errorCode==='INFRASTRUCTURE_NOT_READY');
   useEffect(()=>{if(infrastructureBlocked)setInfrastructureWarning("لا يمكن توليد البيئة قبل نجاح فحوص البنية التحتية. افتح صفحة التحقق لمعالجة الخدمات غير الجاهزة ثم أعد المحاولة.");else setInfrastructureWarning("");},[infrastructureBlocked]);
   const guidance=item?environmentAction(item.environment,item.status):null;
+  function openNetwork(){if(!item?.environment.systemUrl)return;const url=new URL(item.environment.systemUrl,window.location.origin);if(["http:","https:"].includes(url.protocol))window.open(url.href,"_blank","noopener,noreferrer");}
   function followAction(action:EnvironmentAction){
     if(action.kind==='purchase')setReviewOpen(true);
     else if(action.kind==='progress')setProgressOpen(true);
@@ -77,8 +79,8 @@ export default function SubscriptionDetailsPage(){
   }
   return <div className="space-y-4">
     <FloatingNotice error={actionError} warning={infrastructureWarning} message={notice} action={noticeGuidance?{label:noticeGuidance.label,onClick:()=>followAction(noticeGuidance)}:undefined} onDismiss={()=>{setActionError("");setActionCode("");setInfrastructureWarning("");setNotice("");}}/>
-    <ProjectDialog open={reviewOpen} title="مراجعة بيانات الشراء" description="راجع السجل التاريخي الذي يعتمد عليه تجهيز البيئة." onClose={()=>setReviewOpen(false)} footer={<><ProjectButton variant="back" onClick={()=>setReviewOpen(false)}><ArrowRight/>رجوع</ProjectButton>{item&&<ProjectButton onClick={()=>router.push(`/Dashboard/payments?code=${encodeURIComponent(item.paymentCode)}`)}><CreditCard/>عرض عملية الدفع</ProjectButton>}</>}>
-      {item&&<div className="space-y-4"><ProjectInfoCard tone="warning"><p className="text-xs leading-7">{guidance?.description||item.environment.blockedReason}</p></ProjectInfoCard><dl className="grid gap-4 sm:grid-cols-2"><Field label="كود الشراء"><bdi>{item.paymentCode}</bdi></Field><Field label="الخطة وقت الشراء">{item.planName}</Field><Field label="الاستضافة المحفوظة">{item.deploymentName||"غير محفوظة"}</Field><Field label="المدة المحفوظة">{item.durationMonths>0?`${item.durationMonths} شهر`:"غير محفوظة"}</Field><Field label="حدود الشراء">{item.planLimits?`شبكات: ${formatLimit(item.planLimits.maxTenants)} · حسابات: ${formatLimit(item.planLimits.maxSubscribers)} · NAS: ${formatLimit(item.planLimits.maxNas)}`:"غير محفوظة — يلزم مراجعة السجل الأصلي"}</Field></dl><p className="text-xs leading-7 text-slate-500">هذه مراجعة للطلب. فتح عملية الدفع لا يثبت حدودًا ناقصة ولا يغيّر الطلب. عند نقص الحدود، يلزم تثبيتها من بيانات الشراء الأصلية بواسطة المسؤول قبل إتاحة التوليد.</p><ProjectButton variant="secondary" onClick={()=>router.push(`/Dashboard/customers/${item.customerId}?from=subscriptions`)}><UserRound/>مراجعة ملف العميل</ProjectButton></div>}
+    <ProjectDialog open={reviewOpen} title="بيانات الطلب المطلوبة للتجهيز" description="الدفع وبيانات التجهيز حالتان منفصلتان. يظهر هنا ما يحتاج إلى مراجعة." onClose={()=>setReviewOpen(false)} footer={<><ProjectButton variant="back" onClick={()=>setReviewOpen(false)}><ArrowRight/>رجوع</ProjectButton>{item&&!["paid","completed"].includes(item.status)&&<ProjectButton onClick={()=>router.push(`/Dashboard/payments?code=${encodeURIComponent(item.paymentCode)}`)}><CreditCard/>عرض عملية الدفع</ProjectButton>}</>}>
+      {item&&<div className="space-y-4"><ProjectInfoCard tone="warning"><p className="text-xs leading-7">{guidance?.description||item.environment.blockedReason}</p></ProjectInfoCard><dl className="grid gap-4 sm:grid-cols-2"><Field label="كود الشراء"><bdi>{item.paymentCode}</bdi></Field><Field label="الخطة وقت الشراء">{item.planName}</Field><Field label="الاستضافة المحفوظة">{item.deploymentName||"غير محفوظة"}</Field><Field label="المدة المحفوظة">{item.durationMonths>0?`${item.durationMonths} شهر`:"غير محفوظة"}</Field><Field label="حدود الشراء">{item.planLimits?`شبكات: ${formatLimit(item.planLimits.maxTenants)} · حسابات: ${formatLimit(item.planLimits.maxSubscribers)} · NAS: ${formatLimit(item.planLimits.maxNas)}`:"غير محفوظة — يلزم مراجعة السجل الأصلي"}</Field></dl><p className="text-xs leading-7 text-slate-500">هذه مراجعة للطلب. فتح عملية الدفع لا يثبت حدودًا ناقصة ولا يغيّر الطلب. عند نقص الحدود، يلزم تثبيتها من بيانات الشراء الأصلية بواسطة المسؤول قبل إتاحة التوليد.</p></div>}
     </ProjectDialog>
     <ProjectDialog open={deleteOpen} title="حذف موارد البيئة التجريبية" description="حذف قاعدة الشبكة وحساباتها وإعداد FreeRADIUS الخاص بها نهائيًا. يبقى سجل الاشتراك والدفع محفوظًا. لا يمكن التراجع عن الحذف." danger busy={submitting} onClose={()=>setDeleteOpen(false)} footer={<><ProjectButton variant="secondary" disabled={submitting} onClick={()=>setDeleteOpen(false)}>إلغاء</ProjectButton><ProjectButton className="bg-red-600 hover:bg-red-700" disabled={submitting||!deleteName||deleteName!==item?.environment.networkName} onClick={()=>void removeEnvironment()}><Trash2/>{submitting?"جارٍ تنظيف الموارد...":"حذف البيئة نهائيًا"}</ProjectButton></>}><p className="mb-3 text-xs leading-6 text-slate-500">الدخول ورابط التفعيل يتوقفان عند بدء التنظيف. تُمنع العملية أثناء التجهيز أو عند وجود موارد غير مدارة. يشمل التنظيف أنفاق NAS المدارة وشهاداتها. عند فشل خطوة يمكن إعادة الحذف لاستكمال التنظيف.</p><label className="rl-field-label">اكتب اسم الشبكة: {item?.environment.networkName}<ProjectInput className="mt-2" value={deleteName} onChange={e=>setDeleteName(e.target.value)} autoComplete="off"/></label></ProjectDialog>
     <ProjectDialog open={progressOpen} title="متابعة تجهيز البيئة" description="تُحدّث المراحل تلقائيًا. يمكنك إغلاق النافذة ومتابعة التجهيز من صفحة الاشتراك." onClose={()=>setProgressOpen(false)} maxWidth="max-w-5xl" footer={<><ProjectButton variant="back" onClick={()=>setProgressOpen(false)}><ArrowRight/>العودة إلى الاشتراك</ProjectButton>{guidance&&["navigate","purchase"].includes(guidance.kind)&&<ProjectButton onClick={()=>{setProgressOpen(false);followAction(guidance);}}><ExternalLink/>{guidance.label}</ProjectButton>}</>}><EnvironmentProgress job={item?.environment.job} requesting={requesting}/></ProjectDialog>
@@ -90,37 +92,43 @@ export default function SubscriptionDetailsPage(){
       <ProjectDialog open={Boolean(delivery)} title="تسليم بيانات التفعيل" description="راجع المستلم والرابط المؤقت قبل إرسال الرسالة من حساب واتساب أو البريد." onClose={()=>setDelivery(null)} footer={<ProjectButton variant="back" onClick={()=>setDelivery(null)}><ArrowRight/>رجوع</ProjectButton>}>
        {delivery&&<div className="space-y-4"><ProjectInfoCard><p className="text-sm font-semibold">{item.customerName}</p><p className="mt-1 break-all text-xs text-slate-500">{item.customerEmail}</p><p className="mt-2 text-xs leading-6 text-slate-500">هذه رسالة جاهزة للإرسال اليدوي. فتح التطبيق لا يؤكد إرسالها أو استلامها.</p></ProjectInfoCard><pre className="[unicode-bidi:plaintext] whitespace-pre-wrap break-words rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-xs leading-7 dark:border-white/10 dark:bg-white/5">{delivery.text}</pre><div className="grid gap-3 sm:grid-cols-3"><ProjectButton variant="secondary" onClick={()=>void copyDelivery()}><Copy className="text-violet-500"/>نسخ الرسالة</ProjectButton><ProjectButton disabled={!delivery.whatsappUrl} onClick={()=>{if(delivery.whatsappUrl)window.open(delivery.whatsappUrl,'_blank','noopener,noreferrer');}}><MessageCircle/>فتح رسالة واتساب</ProjectButton><ProjectButton variant="secondary" disabled={!delivery.emailUrl} onClick={()=>{if(delivery.emailUrl)window.location.href=delivery.emailUrl;}}><Mail className="text-blue-500"/>فتح رسالة البريد</ProjectButton></div><p className="text-xs leading-6 text-slate-500">إذا دمج واتساب الأسطر عند فتح الرابط، استخدم «نسخ الرسالة» والصقها مباشرة في المحادثة.</p>{!delivery.whatsappUrl&&<p className="text-xs text-amber-600">أضف رقم واتساب دوليًا صحيحًا إلى ملف العميل لتفعيل الزر.</p>}{!delivery.emailUrl&&<p className="text-xs text-amber-600">راجع البريد الإلكتروني في ملف العميل لتفعيل الزر.</p>}</div>}
       </ProjectDialog>
-      <Panel title="حالة البيئة">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <ProjectInfoCard tone={["paid","completed"].includes(item.status)?"success":"warning"}><div className="flex items-center gap-2"><ProjectCardIcon icon={CreditCard} tone={["paid","completed"].includes(item.status)?"success":"warning"}/><h2 className="text-xs font-semibold">الدفع</h2></div><p className="mt-3 text-sm font-bold">{paymentLabel(item.status)}</p><p className="mt-1 text-xs text-slate-500"><bdi>{item.totalAmount} {item.currency}</bdi></p></ProjectInfoCard>
+        <ProjectInfoCard tone={item.environment.status==="ready"&&!item.environment.archived?"success":item.environment.job?.status==="failed"?"warning":"pending"}><div className="flex items-center gap-2"><ProjectCardIcon icon={Server} tone="connections"/><h2 className="text-xs font-semibold">البيئة</h2></div><p className="mt-3 text-sm font-bold">{environmentLabel(item.environment,item.status)}</p><p className="mt-1 text-xs text-slate-500">{item.deploymentName||"الاستضافة غير محفوظة"}</p></ProjectInfoCard>
+        <ProjectInfoCard tone={item.environment.subscriptionStatus==="active"&&!item.environment.archived?"success":"pending"}><div className="flex items-center gap-2"><ProjectCardIcon icon={CalendarClock} tone="memory"/><h2 className="text-xs font-semibold">فترة الاشتراك</h2></div><p className="mt-3 text-sm font-bold">{item.environment.archived?"التشغيل متوقف":item.environment.startsAt?`بدأت ${formatDate(item.environment.startsAt)}`:"تبدأ بعد جاهزية البيئة"}</p><p className="mt-1 text-xs text-slate-500">{item.environment.expiresAt?`تنتهي ${formatDate(item.environment.expiresAt)}`:`المدة: ${item.durationMonths} شهر`}</p></ProjectInfoCard>
+      </div>
+      <Panel title="الخطوة التالية">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-sm font-semibold text-[#17386d] dark:text-slate-200"><Server className="h-5 w-5 shrink-0 text-violet-500"/>{environmentLabel(item.environment,item.status)}</p>
-            <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-500 dark:text-slate-400">{guidance?.description||environmentDescription(item.environment,item.status)}</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#17386d] dark:text-slate-200"><Server className="h-5 w-5 shrink-0 text-violet-500"/>{item.environment.archived?"راجع سجل البيئة":item.environment.status==="ready"?"يمكنك الدخول إلى شبكة العميل":!["paid","completed"].includes(item.status)?"أكد استلام الدفعة للمتابعة":guidance?.kind==="purchase"?"بيانات التجهيز تحتاج مراجعة":guidance?.kind==="progress"?"تابع تقدم تجهيز الشبكة":"تجهيز شبكة العميل"}</p>
+            <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-500 dark:text-slate-400">{item.environment.blockedReason&&item.environment.status!=="ready"?item.environment.blockedReason:environmentDescription(item.environment,item.status)}</p>
           </div>
-          {!item.environment.canRequest&&guidance?<ProjectButton variant="secondary" disabled={submitting} onClick={()=>followAction(guidance)} className="min-h-10 w-full sm:w-auto"><ExternalLink className="text-blue-500"/>{guidance.label}</ProjectButton>:item.environment.canRequest?<ProjectTooltip label="تسجيل طلب إنشاء البيئة">
+          {item.environment.status==="ready"&&!item.environment.archived&&item.environment.systemUrl?<ProjectButton onClick={openNetwork}><ExternalLink/>فتح واجهة الشبكة</ProjectButton>:!item.environment.canRequest&&guidance?<ProjectButton variant="secondary" disabled={submitting} onClick={()=>followAction(guidance)} className="min-h-10 w-full sm:w-auto"><ExternalLink className="text-blue-500"/>{guidance.label}</ProjectButton>:item.environment.canRequest?<ProjectTooltip label="تسجيل طلب إنشاء البيئة">
             <ProjectButton disabled={submitting||!item.environment.canRequest} onClick={()=>void requestEnvironment()} className="min-h-10 w-full sm:w-auto">
-              {submitting?<LoaderCircle className="animate-spin"/>:<Server/>}{submitting?"جارٍ تسجيل الطلب...":item.environment.job?.status==="failed"?"معالجة فشل التجهيز وإعادة المحاولة":"إنشاء البيئة"}
+              {submitting?<LoaderCircle className="animate-spin"/>:<Server/>}{submitting?"جارٍ تسجيل الطلب...":item.environment.job?.status==="failed"?"إعادة محاولة التجهيز":"إنشاء البيئة"}
             </ProjectButton>
           </ProjectTooltip>:null}
         </div>
-        {(infrastructureBlocked||infrastructureWarning)&&<ProjectInfoCard tone="warning" className="mt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-sm font-semibold"><TriangleAlert className="h-5 w-5 shrink-0 text-amber-500"/>التوليد متوقف حتى اكتمال التحقق</p><p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">تحقق من الخدمات في صفحة صحة البنية التحتية، ثم عد إلى الاشتراك وحدّث الحالة لإعادة المحاولة.</p></div><ProjectButton variant="secondary" onClick={()=>router.push('/Dashboard/infrastructure-health')}><ShieldCheck className="text-amber-500"/>فتح صفحة التحقق</ProjectButton></div></ProjectInfoCard>}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {item.environment.canRequest&&guidance&&<ProjectButton variant="secondary" disabled={submitting} onClick={()=>followAction(guidance)}><ExternalLink className="text-blue-500"/>{guidance.label}</ProjectButton>}
-          {item.environment.canDelete&&<ProjectButton variant="secondary" className="border-red-200 text-red-600 dark:text-red-400" disabled={submitting} onClick={()=>{setDeleteName("");setDeleteOpen(true);}}><Trash2/>{item.environment.cleanupStatus==='failed'?"استكمال حذف البيئة":"حذف البيئة التجريبية"}</ProjectButton>}
-          {item.environment.job&&!item.environment.archived&&<ProjectButton variant="secondary" onClick={()=>setProgressOpen(true)}><Layers className="text-blue-500"/>عرض مراحل التجهيز</ProjectButton>}
-          {item.environment.canSendDetails&&<ProjectTooltip label="تسليم رابط مؤقت لتعيين كلمة المرور مع الخطة والرخصة بعد التفعيل"><ProjectButton variant="secondary" disabled={submitting||item.environment.status!=="ready"||item.environment.subscriptionStatus!=="active"||!item.environment.systemUrl} onClick={()=>void sendDetails()}><Send className="text-emerald-500"/>تسليم التفعيل عبر واتساب أو البريد</ProjectButton></ProjectTooltip>}
-          {item.environment.status==="ready"&&item.environment.systemUrl&&<ProjectButton variant="secondary" onClick={()=>{const u=new URL(item.environment.systemUrl!,window.location.origin);if(["http:","https:"].includes(u.protocol))window.open(u.href,"_blank","noopener,noreferrer");}}><ExternalLink className="text-blue-500"/>فتح واجهة الشبكة</ProjectButton>}
+          {item.environment.canSendDetails&&<ProjectButton variant="secondary" disabled={submitting} onClick={()=>void sendDetails()}><Send className="text-emerald-500"/>تسليم رابط التفعيل</ProjectButton>}
+          {(item.environment.canDelete||item.environment.job&&!item.environment.archived)&&<ProjectButton variant="ghost" aria-expanded={optionsOpen} disabled={submitting} onClick={()=>setOptionsOpen(v=>!v)}><ChevronDown className={optionsOpen?"rotate-180":""}/>خيارات البيئة</ProjectButton>}
         </div>
-        {item.environment.registered&&<div className="mt-4 rounded-[14px] border border-slate-100 p-3 dark:border-white/10"><p className="flex items-center gap-2 text-sm font-semibold"><Database className={item.environment.health?.databaseStatus==="healthy"?"text-emerald-500":"text-amber-500"}/>اتصال قاعدة بيانات البيئة</p><p className="mt-2 text-xs text-slate-500">{item.environment.health?.databaseStatus==="healthy"?"آخر قراءة مسجلة: الاتصال سليم":item.environment.health?.databaseStatus==="unavailable"?"فشل اتصال البيئة بقاعدة البيانات؛ يحتاج إلى معالجة":item.environment.health?.databaseStatus==="degraded"?"آخر قراءة مسجلة: الاتصال يحتاج مراجعة":"لم يصل تحقق فعلي من اتصال البيئة بعد"}</p><p className="mt-1 text-xs text-slate-400">اسم القاعدة: <bdi>{item.environment.health?.databaseName||"لم تُنشأ بعد"}</bdi> · وقت آخر تقرير: {formatDate(item.environment.health?.reportedAt||null)}</p></div>}
-        {item.environment.registered&&<dl className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-4">
+        <ProjectCardDetails open={optionsOpen}><ProjectInfoCard tone="pending" className="mt-3"><div className="flex flex-wrap gap-3">
+          {item.environment.job&&!item.environment.archived&&<ProjectButton variant="secondary" onClick={()=>setProgressOpen(true)}><Layers className="text-blue-500"/>مراحل التجهيز</ProjectButton>}
+          {item.environment.canDelete&&<ProjectButton variant="secondary" className="border-red-200 text-red-600 dark:text-red-400" disabled={submitting} onClick={()=>{setDeleteName("");setDeleteOpen(true);}}><Trash2/>{item.environment.cleanupStatus==='failed'?"استكمال حذف البيئة":"حذف البيئة التجريبية"}</ProjectButton>}
+        </div></ProjectInfoCard></ProjectCardDetails>
+
+
+      </Panel>
+
+      <section className="space-y-3"><div className="flex flex-wrap gap-2" aria-label="تفاصيل إضافية للاشتراك">{([{key:'plan',label:'الخطة والعميل',icon:Package},{key:'history',label:'سجل الدفع',icon:CreditCard},{key:'technical',label:'التشخيص الفني',icon:Database}] as const).map(section=><ProjectButton key={section.key} variant={detailsSection===section.key?'primary':'secondary'} aria-expanded={detailsSection===section.key} onClick={()=>setDetailsSection(current=>current===section.key?null:section.key)}><section.icon/>{section.label}<ChevronDown className={detailsSection===section.key?'rotate-180':''}/></ProjectButton>)}</div>
+      <ProjectCardDetails open={detailsSection==='plan'}><div className="space-y-3 pt-1">{item.environment.registered&&<Panel title="هوية الشبكة والرخصة"><dl className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="الشبكة">{item.environment.networkName||"—"}</Field>
           <Field label="رقم الرخصة"><bdi className="font-mono">{item.environment.licenseNumber||"—"}</bdi></Field>
           <Field label="بداية الاشتراك">{item.environment.startsAt?formatDate(item.environment.startsAt):"بعد جاهزية البيئة"}</Field>
           <Field label="انتهاء الاشتراك">{formatDate(item.environment.expiresAt||null)}</Field>
-        </dl>}
-
-      </Panel>
-      {(requesting||item.environment.job&&!item.environment.archived)&&<EnvironmentProgress job={item.environment.job} requesting={requesting}/>}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        </dl></Panel>}<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Panel title="الخطة المختارة">
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-[18px] bg-gradient-to-l from-blue-50 to-indigo-50/50 p-4 dark:from-blue-500/10 dark:to-indigo-500/5">
             <div className="flex min-w-0 flex-1 items-start gap-3"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><Package className="h-6 w-6"/></span><div className="min-w-0"><h3 className="break-words text-base font-bold text-[#17386d] dark:text-slate-200">{item.planName}</h3><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">بيانات الخطة المحفوظة عند الشراء</p></div></div>
@@ -139,8 +147,11 @@ export default function SubscriptionDetailsPage(){
           <dl className="mt-4 border-t border-slate-100 pt-4 dark:border-white/10"><Field label="البريد الإلكتروني">{item.customerEmail}</Field></dl>
           <ProjectButton variant="secondary" className="mt-4 w-full sm:w-auto" onClick={()=>router.push(`/Dashboard/customers/${item.customerId}?from=subscriptions`)}><UserRound className="text-blue-500"/>عرض ملف العميل</ProjectButton>
         </Panel>
-      </div>
-      <SubscriptionPaymentHistory orderId={item.id}/>
+      </div><ProjectButton variant="back" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق التفاصيل</ProjectButton></div></ProjectCardDetails>
+      <ProjectCardDetails open={detailsSection==='history'}><div className="space-y-3 pt-1">{detailsSection==='history'&&<SubscriptionPaymentHistory orderId={item.id}/>}<ProjectButton variant="back" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق السجل</ProjectButton></div></ProjectCardDetails>
+      <ProjectCardDetails open={detailsSection==='technical'}><Panel title="التشخيص الفني">{item.environment.registered&&<div className="mt-4 rounded-[14px] border border-slate-100 p-3 dark:border-white/10"><p className="flex items-center gap-2 text-sm font-semibold"><Database className={item.environment.health?.databaseStatus==="healthy"?"text-emerald-500":"text-amber-500"}/>اتصال قاعدة بيانات البيئة</p><p className="mt-2 text-xs text-slate-500">{item.environment.health?.databaseStatus==="healthy"?"آخر قراءة مسجلة: الاتصال سليم":item.environment.health?.databaseStatus==="unavailable"?"فشل اتصال البيئة بقاعدة البيانات؛ يحتاج إلى معالجة":item.environment.health?.databaseStatus==="degraded"?"آخر قراءة مسجلة: الاتصال يحتاج مراجعة":"لم يصل تحقق فعلي من اتصال البيئة بعد"}</p><p className="mt-1 text-xs text-slate-400">اسم القاعدة: <bdi>{item.environment.health?.databaseName||"لم تُنشأ بعد"}</bdi> · وقت آخر تقرير: {formatDate(item.environment.health?.reportedAt||null)}</p></div>}{!item.environment.registered&&<p className="text-xs text-slate-500">تظهر قراءات الاتصال بعد تسجيل البيئة وتجهيز مواردها.</p>}{item.environment.job&&!item.environment.archived&&<ProjectButton variant="secondary" className="mt-3" onClick={()=>setProgressOpen(true)}><Layers/>عرض نتائج المراحل</ProjectButton>}<ProjectButton variant="back" className="mt-3 ms-2" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق التشخيص</ProjectButton></Panel></ProjectCardDetails>
+      </section>
+
     </>}
   </div>;
 }
@@ -150,17 +161,18 @@ function formatDate(value:string|null){if(!value)return "—";const date=new Dat
 
 function formatLimit(value:number){return value===0?"غير محدود":new Intl.NumberFormat("ar").format(value)}
 
+function paymentLabel(status:string){return ["paid","completed"].includes(status)?"الدفع مكتمل":status==="cancelled"?"الدفع ملغى":status==="expired"?"طلب الدفع منتهي":status==="awaiting_confirmation"?"بانتظار تأكيد الاستلام":"بانتظار الدفع";}
 function environmentLabel(environment:Environment,paymentStatus:string){
   if(environment.cleanupStatus==='complete')return "حُذفت موارد البيئة";
   if(environment.cleanupStatus==='failed')return "تنظيف البيئة غير مكتمل — أعد الحذف";
   if(environment.archived)return "البيئة مؤرشفة وغير متاحة";
   if(!["paid","completed"].includes(paymentStatus))return "التجهيز متاح بعد تأكيد الدفع";
-  if(environment.job?.status==="queued")return "تم الدفع — بانتظار تجهيز البيئة";
+  if(environment.job?.status==="queued")return "بانتظار التجهيز";
   if(environment.job?.status==="running")return "جارٍ تجهيز البيئة";
   if(environment.status==="ready")return "البيئة جاهزة";
-  if(environment.job?.errorCode==="ENVIRONMENT_BOOTSTRAP_PENDING")return "تم الدفع — قاعدة البيئة جاهزة وبانتظار استكمال التهيئة";
-  if(environment.job?.status==="failed"||environment.status==="failed")return "تم الدفع — التجهيز يحتاج معالجة";
-  return ["paid","completed"].includes(paymentStatus)?"تم الدفع — بانتظار تجهيز البيئة":environment.registered?"بانتظار إنشاء البيئة":"لم يُثبت سجل البيئة بعد";
+  if(environment.job?.errorCode==="ENVIRONMENT_BOOTSTRAP_PENDING")return "بانتظار استكمال التهيئة";
+  if(environment.job?.status==="failed"||environment.status==="failed")return "التجهيز يحتاج معالجة";
+  return ["paid","completed"].includes(paymentStatus)?"بانتظار التجهيز":environment.registered?"بانتظار إنشاء البيئة":"لم يُثبت سجل البيئة بعد";
 }
 
 function environmentDescription(environment:Environment,paymentStatus:string){
