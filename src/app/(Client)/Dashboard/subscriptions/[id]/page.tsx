@@ -2,8 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowRight, CreditCard, RefreshCw, UserRound, Server, LoaderCircle, Package, CalendarClock, Cloud, Network, UsersRound, Router, Layers, Send, Database, ExternalLink, Mail, MessageCircle, ShieldCheck, TriangleAlert } from "lucide-react";
 import { CollectionState } from "@/components/ui/collection-display";
+import EnvironmentProgress from "@/components/environment-progress";
+import ProjectDialog from "@/components/ui/project-dialog";
 import SubscriptionPaymentHistory from "@/components/subscription-payment-history";
 import ProjectButton from "@/components/ui/project-button";
 import FloatingNotice from "@/components/ui/floating-notice";
@@ -29,6 +31,7 @@ type Subscription = {
 export default function SubscriptionDetailsPage(){
   const {id}=useParams<{id:string}>();
   const router=useRouter();
+  const [requesting,setRequesting]=useState(false),[progressOpen,setProgressOpen]=useState(false);
   const [infrastructureWarning,setInfrastructureWarning]=useState("");
   const [delivery,setDelivery]=useState<{text:string;whatsappUrl:string|null;emailUrl:string|null}|null>(null);
   const [submitting,setSubmitting]=useState(false),[notice,setNotice]=useState(""),[actionError,setActionError]=useState("");
@@ -48,25 +51,27 @@ export default function SubscriptionDetailsPage(){
   async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);setDelivery(j);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
   async function requestEnvironment(){
     if(submitting || !item?.environment.canRequest)return;
-    setSubmitting(true);setNotice("");setActionError("");
+    setSubmitting(true);setRequesting(true);setProgressOpen(true);setNotice("");setActionError("");
     try{
       const response=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment`,{method:"POST",credentials:"include"});
       const data=await response.json();
-      if(!response.ok){if(data.code==='INFRASTRUCTURE_NOT_READY'||data.message?.includes('صحة البنية التحتية')){setInfrastructureWarning(data.message||"البنية التحتية غير جاهزة للتوليد.");return;}throw new Error(data.message||"تعذر تسجيل طلب إنشاء البيئة.");}
+      if(!response.ok){if(data.code==='INFRASTRUCTURE_NOT_READY'||data.message?.includes('صحة البنية التحتية')){setInfrastructureWarning(data.message||"البنية التحتية غير جاهزة للتوليد.");setProgressOpen(false);return;}throw new Error(data.message||"تعذر تسجيل طلب إنشاء البيئة.");}
       setItem(current=>current?{...current,environment:data.environment}:current);
       setNotice("تم تسجيل طلب إنشاء البيئة. مدة الاشتراك لم تبدأ بعد.");
-    }catch(reason){setActionError(reason instanceof Error?reason.message:"تعذر تسجيل طلب إنشاء البيئة.");}
-    finally{setSubmitting(false);}
+    }catch(reason){setProgressOpen(false);setActionError(reason instanceof Error?reason.message:"تعذر تسجيل طلب إنشاء البيئة.");}
+    finally{setSubmitting(false);setRequesting(false);}
   }
   return <div className="space-y-4">
     <FloatingNotice error={actionError} warning={infrastructureWarning} message={notice} action={infrastructureWarning?{label:"فتح صحة البنية التحتية",onClick:()=>router.push('/Dashboard/infrastructure-health')}:undefined} onDismiss={()=>{setActionError("");setInfrastructureWarning("");setNotice("");}}/>
+    <ProjectDialog open={progressOpen} title="متابعة تجهيز البيئة" description="تُحدّث المراحل تلقائيًا. يمكنك إغلاق النافذة ومتابعة التجهيز من صفحة الاشتراك." onClose={()=>setProgressOpen(false)} maxWidth="max-w-5xl" footer={<ProjectButton variant="back" onClick={()=>setProgressOpen(false)}><ArrowRight/>العودة إلى الاشتراك</ProjectButton>}><EnvironmentProgress job={item?.environment.job} requesting={requesting}/></ProjectDialog>
     <section className="rl-surface flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-white p-4 dark:bg-[#0d243b]"><div className="min-w-0"><h1 className="flex items-center gap-2 text-base font-semibold text-[#17386d] dark:text-slate-200"><CreditCard className="h-5 w-5 shrink-0 text-[#0758e9]"/>تفاصيل الاشتراك</h1><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">بيانات العميل والخطة وعملية الدفع</p></div><div className="flex flex-wrap items-center gap-2">
       <ProjectTooltip label="العودة إلى عرض الاشتراكات"><ProjectButton variant="back" size="icon" aria-label="العودة إلى عرض الاشتراكات" onClick={()=>router.push("/Dashboard/subscriptions")}><ArrowRight/></ProjectButton></ProjectTooltip>
       <ProjectButton variant="secondary" disabled={loading||submitting} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>
     </div></section>
     {loading?<CollectionState loading>جارٍ تحميل تفاصيل الاشتراك...</CollectionState>:error?<CollectionState><span role="alert">{error}</span></CollectionState>:item&&<>
-      {delivery&&<Panel title="بيانات التسليم اليدوي"><p className="mb-3 text-xs text-slate-500">راجع المستلم قبل الإرسال؛ فتح الرابط لا يثبت تسليم الرسالة.</p><pre className="whitespace-pre-wrap break-words rounded-xl bg-slate-500/5 p-3 text-sm">{delivery.text}</pre><div className="mt-3 flex flex-wrap gap-3">{delivery.whatsappUrl&&<a className="text-sm text-blue-500" href={delivery.whatsappUrl} target="_blank" rel="noopener noreferrer">فتح مسودة واتساب</a>}{delivery.emailUrl&&<a className="text-sm text-blue-500" href={delivery.emailUrl}>فتح مسودة البريد</a>}<ProjectButton variant="secondary" onClick={()=>setDelivery(null)}>إخفاء البيانات</ProjectButton></div></Panel>}
-      {Boolean(item.environment.job?.steps?.length)&&<Panel title="مراحل تجهيز البيئة"><div className="grid gap-2 sm:grid-cols-2">{item.environment.job!.steps!.map(step=><div key={step.step_code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3 text-xs"><span>{stepLabels[step.step_code]??step.step_code}</span><span className={step.status==="success"?"text-emerald-600":step.status==="failed"?"text-red-500":"text-blue-500"}>{step.status==="success"?"نجحت":step.status==="failed"?"فشلت":step.status==="running"?"جارٍ التنفيذ":"بانتظار التنفيذ"}</span></div>)}</div></Panel>}
+      <ProjectDialog open={Boolean(delivery)} title="تسليم بيانات التفعيل" description="راجع المستلم والرسالة قبل إرسالها من حساب واتساب أو البريد." onClose={()=>setDelivery(null)} footer={<ProjectButton variant="back" onClick={()=>setDelivery(null)}><ArrowRight/>رجوع</ProjectButton>}>
+       {delivery&&<div className="space-y-4"><ProjectInfoCard><p className="text-sm font-semibold">{item.customerName}</p><p className="mt-1 break-all text-xs text-slate-500">{item.customerEmail}</p><p className="mt-2 text-xs leading-6 text-slate-500">هذه رسالة جاهزة للإرسال اليدوي. فتح التطبيق لا يؤكد إرسالها أو استلامها.</p></ProjectInfoCard><pre className="whitespace-pre-wrap break-words rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-xs leading-7 dark:border-white/10 dark:bg-white/5">{delivery.text}</pre><div className="grid gap-3 sm:grid-cols-2"><ProjectButton disabled={!delivery.whatsappUrl} onClick={()=>{if(delivery.whatsappUrl)window.open(delivery.whatsappUrl,'_blank','noopener,noreferrer');}}><MessageCircle/>فتح رسالة واتساب</ProjectButton><ProjectButton variant="secondary" disabled={!delivery.emailUrl} onClick={()=>{if(delivery.emailUrl)window.location.href=delivery.emailUrl;}}><Mail className="text-blue-500"/>فتح رسالة البريد</ProjectButton></div>{!delivery.whatsappUrl&&<p className="text-xs text-amber-600">أضف رقم واتساب دوليًا صحيحًا إلى ملف العميل لتفعيل الزر.</p>}{!delivery.emailUrl&&<p className="text-xs text-amber-600">راجع البريد الإلكتروني في ملف العميل لتفعيل الزر.</p>}</div>}
+      </ProjectDialog>
       <Panel title="حالة البيئة">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
@@ -81,7 +86,8 @@ export default function SubscriptionDetailsPage(){
         </div>
         {(infrastructureBlocked||infrastructureWarning)&&<ProjectInfoCard tone="warning" className="mt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-sm font-semibold"><TriangleAlert className="h-5 w-5 shrink-0 text-amber-500"/>التوليد متوقف حتى اكتمال التحقق</p><p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">تحقق من الخدمات في صفحة صحة البنية التحتية، ثم عد إلى الاشتراك وحدّث الحالة لإعادة المحاولة.</p></div><ProjectButton variant="secondary" onClick={()=>router.push('/Dashboard/infrastructure-health')}><ShieldCheck className="text-amber-500"/>فتح صفحة التحقق</ProjectButton></div></ProjectInfoCard>}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          {item.environment.canSendDetails&&<ProjectTooltip label="إرسال رابط واجهة العميل وبيانات الدخول والخطة والرخصة بعد التفعيل"><ProjectButton variant="secondary" disabled={submitting||item.environment.status!=="ready"||item.environment.subscriptionStatus!=="active"||!item.environment.systemUrl} onClick={()=>void sendDetails()}><Send className="text-emerald-500"/>إرسال بيانات التفعيل للعميل</ProjectButton></ProjectTooltip>}
+          {item.environment.job&&<ProjectButton variant="secondary" onClick={()=>setProgressOpen(true)}><Layers className="text-blue-500"/>عرض مراحل التجهيز</ProjectButton>}
+          {item.environment.canSendDetails&&<ProjectTooltip label="إرسال رابط واجهة العميل وبيانات الدخول والخطة والرخصة بعد التفعيل"><ProjectButton variant="secondary" disabled={submitting||item.environment.status!=="ready"||item.environment.subscriptionStatus!=="active"||!item.environment.systemUrl} onClick={()=>void sendDetails()}><Send className="text-emerald-500"/>تسليم التفعيل عبر واتساب أو البريد</ProjectButton></ProjectTooltip>}
           {item.environment.status==="ready"&&item.environment.systemUrl&&<ProjectButton variant="secondary" onClick={()=>{const u=new URL(item.environment.systemUrl!,window.location.origin);if(["http:","https:"].includes(u.protocol))window.open(u.href,"_blank","noopener,noreferrer");}}><ExternalLink className="text-blue-500"/>فتح واجهة الشبكة</ProjectButton>}
         </div>
         {item.environment.registered&&<div className="mt-4 rounded-[14px] border border-slate-100 p-3 dark:border-white/10"><p className="flex items-center gap-2 text-sm font-semibold"><Database className={item.environment.health?.databaseStatus==="healthy"?"text-emerald-500":"text-amber-500"}/>اتصال قاعدة بيانات البيئة</p><p className="mt-2 text-xs text-slate-500">{item.environment.health?.databaseStatus==="healthy"?"آخر قراءة مسجلة: الاتصال سليم":item.environment.health?.databaseStatus==="unavailable"?"فشل اتصال البيئة بقاعدة البيانات؛ يحتاج إلى معالجة":item.environment.health?.databaseStatus==="degraded"?"آخر قراءة مسجلة: الاتصال يحتاج مراجعة":"لم يصل تحقق فعلي من اتصال البيئة بعد"}</p><p className="mt-1 text-xs text-slate-400">اسم القاعدة: <bdi>{item.environment.health?.databaseName||"لم تُنشأ بعد"}</bdi> · وقت آخر تقرير: {formatDate(item.environment.health?.reportedAt||null)}</p></div>}
@@ -93,6 +99,7 @@ export default function SubscriptionDetailsPage(){
         </dl>}
 
       </Panel>
+      {(requesting||item.environment.job)&&<EnvironmentProgress job={item.environment.job} requesting={requesting}/>}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Panel title="الخطة المختارة">
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-[18px] bg-gradient-to-l from-blue-50 to-indigo-50/50 p-4 dark:from-blue-500/10 dark:to-indigo-500/5">
@@ -123,7 +130,6 @@ function formatDate(value:string|null){if(!value)return "—";const date=new Dat
 
 function formatLimit(value:number){return value===0?"غير محدود":new Intl.NumberFormat("ar").format(value)}
 
-const stepLabels:Record<string,string>={infrastructure_preflight:"صحة البنية التحتية",hosting_preflight:"الوصول للمنصة",database_create:"إنشاء قاعدة الشبكة",database_template:"تهيئة جداول الشبكة",database_users:"حسابات اتصال القاعدة",database_verify:"التحقق من القاعدة",network_manager:"إنشاء مدير الشبكة",network_license:"الرخصة وحدود الخطة",network_radius:"ربط RADIUS بقاعدة الشبكة",network_radius_verify:"المصادقة والمحاسبة",network_database_isolation:"عزل قاعدة الشبكة",network_application_verify:"دخول المدير عبر المنصة",environment_activation:"تفعيل البيئة وبدء الاشتراك"};
 function environmentLabel(environment:Environment,paymentStatus:string){
   if(!["paid","completed"].includes(paymentStatus))return "التجهيز متاح بعد تأكيد الدفع";
   if(environment.job?.status==="queued")return "تم الدفع — بانتظار تجهيز البيئة";
