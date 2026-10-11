@@ -1,8 +1,8 @@
 import {createHash} from 'crypto';
 import {withNetwork,validateLocalLicense} from './network-runtime.service';
 const fields=`network_name networkName,description,contact_email email,address,latitude,longitude,government_license_number governmentLicense,internal_notes internalNotes,timezone,primary_contact_phone primaryPhone`;
-async function snapshot(app:any){const [rows]:any=await app.query(`SELECT ${fields} FROM network_settings WHERE id=1`);if(!rows[0])throw new Error('NETWORK_SETTINGS_MISSING');const [phones]:any=await app.query('SELECT phone,label FROM network_contact_numbers WHERE network_settings_id=1 ORDER BY display_order,id');const value={...rows[0],phones};return {...value,version:createHash('sha256').update(JSON.stringify(value)).digest('hex')};}
-export async function readNetworkSettings(scope:any){return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);return snapshot(app);});}
+async function snapshot(app:any,scope:any){const [rows]:any=await app.query(`SELECT ${fields} FROM network_settings WHERE id=1`);const configured=Boolean(rows[0]);const [phones]:any=await app.query('SELECT phone,label FROM network_contact_numbers WHERE network_settings_id=1 ORDER BY display_order,id');const value={...(rows[0]||{networkName:scope.name||'',description:null,email:null,address:null,latitude:null,longitude:null,governmentLicense:null,internalNotes:null,timezone:'',primaryPhone:''}),configured,phones};return {...value,version:createHash('sha256').update(JSON.stringify(value)).digest('hex')};}
+export async function readNetworkSettings(scope:any){return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);return snapshot(app,scope);});}
 export async function saveNetworkSettings(scope:any,input:any){
  const errors:Record<string,string>={};
  const string=(key:string,max:number,required=false)=>{if(typeof input?.[key]!=='string'){errors[key]='قيمة الحقل غير صالحة.';return '';}const value=input[key].trim();if(value.length>max||required&&!value)errors[key]=required&&!value?'هذا الحقل مطلوب.':`الحد الأقصى ${max} محرفًا.`;return value;};
@@ -18,10 +18,11 @@ export async function saveNetworkSettings(scope:any,input:any){
  if(Object.keys(errors).length){const error:any=new Error('SETTINGS_INPUT');error.fields=errors;throw error;}
  return withNetwork(scope,async app=>{await app.beginTransaction();try{
  await validateLocalLicense(app,scope);const [actors]:any=await app.query("SELECT id,full_name,password_hash FROM managers WHERE id=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL FOR UPDATE",[scope.managerId]);if(!actors[0]||scope.authVersion!==createHash('sha256').update(actors[0].password_hash).digest('hex'))throw new Error('NETWORK_AUTH');delete actors[0].password_hash;
- await app.query('SELECT id FROM network_settings WHERE id=1 FOR UPDATE');const before=await snapshot(app);if(before.version!==input.version)throw new Error('SETTINGS_CONFLICT');
+ await app.query('SELECT id FROM network_settings WHERE id=1 FOR UPDATE');const before=await snapshot(app,scope);if(before.version!==input.version)throw new Error('SETTINGS_CONFLICT');
+ if(!before.configured)await app.query('INSERT INTO network_settings(id,network_name,timezone,primary_contact_phone) VALUES(1,?,?,?)',[networkName,timezone,primaryPhone]);
  await app.query('UPDATE network_settings SET network_name=?,description=?,contact_email=?,address=?,latitude=?,longitude=?,government_license_number=?,internal_notes=?,timezone=?,primary_contact_phone=? WHERE id=1',[networkName,description||null,email||null,address||null,latitude,longitude,governmentLicense||null,internalNotes||null,timezone,primaryPhone]);
  await app.query('DELETE FROM network_contact_numbers WHERE network_settings_id=1');for(let index=0;index<phones.length;index++)await app.query('INSERT INTO network_contact_numbers(network_settings_id,phone,label,display_order) VALUES(1,?,?,?)',[phones[index].phone,phones[index].label,index]);
- const after=await snapshot(app);await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result) VALUES(?,?,'manager','network.settings.update','network_settings',1,?,?,'success')",[scope.managerId,JSON.stringify(actors[0]),JSON.stringify(before),JSON.stringify(after)]);await app.commit();return after;
+ const after=await snapshot(app,scope);await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result) VALUES(?,?,'manager','network.settings.update','network_settings',1,?,?,'success')",[scope.managerId,JSON.stringify(actors[0]),JSON.stringify(before),JSON.stringify(after)]);await app.commit();return after;
  }catch(e){await app.rollback();throw e;}});
 }
 
