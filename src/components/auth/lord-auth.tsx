@@ -108,7 +108,7 @@ function VisualPanel() {
   );
 }
 
-export default function LordAuth({ mode }: { mode: Mode }) {
+export default function LordAuth({ mode,networkLogin }: { mode: Mode;networkLogin?:{endpoint:string;onSuccess:()=>Promise<void>} }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>(mode);
@@ -135,7 +135,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
   useEffect(() => {
     setMounted(true);
 
-    if (mode === "login") {
+    if (mode === "login"&&!networkLogin) {
       const pendingCredentials = sessionStorage.getItem("lord-radius-signup-credentials");
       if (pendingCredentials) {
         try {
@@ -265,7 +265,7 @@ export default function LordAuth({ mode }: { mode: Mode }) {
 
     setLoginStatus("loading");
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(networkLogin?.endpoint||"/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -274,8 +274,8 @@ export default function LordAuth({ mode }: { mode: Mode }) {
       const data = await response.json();
       if (response.ok && data.success) {
         setLoginStatus("success");
-        await requestBrowserCredentialSave();
-        window.setTimeout(() => { window.location.href = "/Dashboard"; }, 1400);
+        if(networkLogin){window.setTimeout(()=>{void networkLogin.onSuccess().catch(()=>triggerLoginError("تعذر فتح بيئة الشبكة. أعد المحاولة."));},1400);}
+        else{await requestBrowserCredentialSave();window.setTimeout(() => { window.location.href = "/Dashboard"; }, 1400);}
       } else {
         triggerLoginError(data.message || "فشل تسجيل الدخول.");
       }
@@ -373,11 +373,11 @@ export default function LordAuth({ mode }: { mode: Mode }) {
                 </div>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    <CompactField label="اسم المستخدم أو البريد الإلكتروني *" icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder="أدخل اسم المستخدم أو البريد الإلكتروني" />
+                    <CompactField label={networkLogin?"اسم مستخدم مدير الشبكة *":"اسم المستخدم أو البريد الإلكتروني *"} icon={UserRound} name="username" autoComplete="username" value={email} onChange={setEmail} placeholder={networkLogin?"أدخل اسم مستخدم مدير الشبكة":"أدخل اسم المستخدم أو البريد الإلكتروني"} />
                     <CompactField label="كلمة المرور *" icon={LockKeyhole} type={showPassword ? "text" : "password"} name="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="أدخل كلمة المرور" suffix={eye(showPassword, () => setShowPassword((value) => !value))} />
                     {message && <div className="rounded-[14px] border border-[#e5a42e]/30 bg-[#fff4df] px-3 py-2.5 text-[10px] text-[#9c6500] dark:border-[#ffad16]/25 dark:bg-[#ffad16]/10 dark:text-[#ffc45c]">{message}</div>}
                     <div className="pt-3"><PrimaryFormButton status={loginStatus} disabled={loginStatus !== "idle" && loginStatus !== "error"}>تسجيل الدخول <span>←</span></PrimaryFormButton></div>
-                    <div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd]">ليس لديك حساب؟ <button type="button" onClick={() => switchMode("signup")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">إنشاء حساب جديد</button></div>
+                    {!networkLogin&&<div className="pt-1 text-center text-[10px] text-slate-500 dark:text-[#b9b3bd]">ليس لديك حساب؟ <button type="button" onClick={() => switchMode("signup")} className="mr-2 font-bold text-[#0758e9] transition-colors hover:text-[#063fbf] dark:text-[#8ab5ff] dark:hover:text-white">إنشاء حساب جديد</button></div>}
                   </div>
                 )}
               </form>
