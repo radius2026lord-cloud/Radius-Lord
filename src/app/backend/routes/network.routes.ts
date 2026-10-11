@@ -1,10 +1,11 @@
+import {readNetworkSettings,saveNetworkSettings,readNetworkLogo,saveNetworkLogo} from '../services/network-settings.service';
 import {networkSessionVersion} from '../services/network-session-version.service';
 import {readManagers,mutateManagers} from '../services/network-managers.service';
 import {credentialsRequired,changeInitialCredentials} from '../services/network-credentials.service';
 import {readHostingPreflight} from '../services/hosting-preflight.service';
 import {consumeActivation} from '../services/environment-activation.service';
 import {createHash} from 'crypto';
-import {Router,type Request} from 'express';
+import {Router,raw,type Request} from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import {env} from '../config/env';
@@ -24,6 +25,11 @@ async function principal(req:Request){
  if(await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  return {...scope,managerId:Number(token.sub),authVersion:token.authVersion};
 }
+const settingsError=(e:any)=>({message:e.message==='NETWORK_AUTH'?'انتهت الجلسة أو لا تملك صلاحية تعديل بيانات الشبكة.':e.message==='SETTINGS_INPUT'?'راجع الحقول المحددة.':e.message==='SETTINGS_CONFLICT'?'تغيرت البيانات من جلسة أخرى. حدّث الصفحة قبل الحفظ.':e.code==='ER_BAD_FIELD_ERROR'?'تحتاج قاعدة هذه الشبكة إلى تحديث حقول البيانات العامة.':'تعذر تحميل أو حفظ بيانات الشبكة.',fields:e.fields||{}});
+router.get('/:slug/logo',async(req,res)=>{try{const bytes=await readNetworkLogo(await principal(req));res.type('image/webp');res.setHeader('X-Content-Type-Options','nosniff');return res.send(bytes);}catch{return res.status(404).json({message:'اللوغو غير متاح.'});}});
+router.post('/:slug/logo',raw({type:'application/octet-stream',limit:'2mb'}),async(req,res)=>{try{return res.json(await saveNetworkLogo(await principal(req),req.body));}catch(e){return res.status(409).json({message:(e as Error).message==='LOGO_INPUT'?'اختر صورة PNG أو JPEG أو WebP ثابتة حتى 2 ميغابايت و4 ملايين بكسل، وبُعد لا يتجاوز 4000 بكسل.':'تعذر حفظ اللوغو. أعد المحاولة.'});}});
+router.get('/:slug/settings',async(req,res)=>{try{return res.json(await readNetworkSettings(await principal(req)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json(settingsError(e));}});
+router.post('/:slug/settings',async(req,res)=>{try{return res.json(await saveNetworkSettings(await principal(req),req.body));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:(e as Error).message==='SETTINGS_INPUT'?422:409).json(settingsError(e));}});
 router.get('/:slug/managers',async(req,res)=>{try{return res.json(await readManagers(await principal(req)));}catch{return res.status(401).json({message:'انتهت الجلسة أو لا تملك صلاحية إدارة المستخدمين.'});}});
 router.post('/:slug/managers',async(req,res)=>{try{return res.json(await mutateManagers(await principal(req),req.body));}catch(e){const message=(e as Error).message;return res.status(message==='NETWORK_AUTH'?401:409).json({message:message==='NETWORK_AUTH'?'انتهت الجلسة.':(e as any).code==='ER_DUP_ENTRY'?'الاسم مستخدم بالفعل.':(e as any).code||/^[A-Z_]+$/.test(message)?'تعذر حفظ العملية.':message});}});
 const nasError=(e:unknown)=>({message:(e as Error)?.message==='NAS_PLAN_LIMIT_REACHED'?'وصلت إلى عدد أجهزة NAS المسموح به في الخطة.':(e as Error)?.message==='NETWORK_AUTH'?'انتهت الجلسة أو لا تملك صلاحية إدارة الخوادم.':'تعذر تجهيز اتصال NAS. يمكنك إعادة المحاولة لاستكماله؛ راجع البوابة والشهادات وSSH.',code:/^[A-Z0-9_]+$/.test((e as Error)?.message??'')?(e as Error).message:'NAS_OPERATION_FAILED'});
@@ -90,7 +96,7 @@ router.get('/:slug/me',async(req,res)=>{
  try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('SCOPE');const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('SCOPE');
  if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub)))throw new Error('NETWORK_AUTH');
  const mustChangeCredentials=await credentialsRequired(scope);
- const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope);const [rows]:any=await connection.query("SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL))",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');return {mustChangeCredentials,manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type},networkName:scope.name,license:license.license_number,expiresAt:license.expires_at,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.starts_at,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});return res.json(result);
+ const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope);const [rows]:any=await connection.query("SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL))",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');return {mustChangeCredentials,manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type},networkName:(await connection.query<any[]>('SELECT network_name FROM network_settings WHERE id=1'))[0][0]?.network_name||scope.name,license:license.license_number,expiresAt:license.expires_at,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.starts_at,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});return res.json(result);
  }catch{return res.status(401).json({message:'انتهت الجلسة أو البيئة غير متاحة.'});}
 });
 // Worker-only HTTP proof: this exercises the same network scope, DB and password verification as login.
