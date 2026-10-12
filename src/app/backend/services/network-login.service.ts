@@ -1,3 +1,4 @@
+import {managerAccess} from './network-manager-access.service';
 import {networkSessionVersion} from './network-session-version.service';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -24,7 +25,7 @@ export async function loginNetworkPrincipal(username:string,password:string){
    const scope=await networkScope(row.slug);
    return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);
     const [managers]:any=await app.query({sql:"SELECT id,password_hash FROM managers WHERE username=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL)) LIMIT 1",values:[username],timeout:5000});
-    const manager=managers[0];
+    const manager=managers[0];if(manager){try{await managerAccess(app,Number(manager.id));}catch{return null;}}
     const [stateRows]:any=await db.query("SELECT setting_value FROM platform_settings WHERE setting_group='environment_runtime' AND setting_key=?",['environment_'+scope.environment_id]);
     const state=stateRows[0]?JSON.parse(stateRows[0].setting_value):null;
     if(state?.mustChangeCredentials===true&&username!==state.pendingUsername&&(!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now()))return null;if(!manager||!await bcrypt.compare(password,manager.password_hash))return null;
