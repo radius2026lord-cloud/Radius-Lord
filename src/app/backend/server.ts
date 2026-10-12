@@ -1,4 +1,5 @@
 import {startNetworkArchiveWorker} from './services/network-archive.service';
+import {startProfileSpeedBoostWorker} from './services/profile-speed-boost.worker';
 import {startServerReadinessWorker} from './services/server-readiness.service';
 import {startInfrastructureHealthWorker} from './services/infrastructure-health.service';
 import { startDatabaseProvisioningWorker } from './workers/database-provisioning.worker';
@@ -40,6 +41,8 @@ const startServer = (port: number) => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
     const stopArchive=startNetworkArchiveWorker();
+    const stopProfileBoosts=startProfileSpeedBoostWorker();
+    if(stopProfileBoosts)server.once('close',stopProfileBoosts);
     if(stopArchive)server.once('close',stopArchive);
     const stopReadiness=startServerReadinessWorker();
     if(stopReadiness)server.once('close',stopReadiness);
