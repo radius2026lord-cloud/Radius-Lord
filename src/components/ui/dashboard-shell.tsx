@@ -157,7 +157,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const networkGroups:NavGroup[]=network?[
    {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users},...(network.canViewCategories?[{label:'تصنيفات المشتركين',href:`${network.basePath}?tab=categories`,icon:Tags}]:[])]},
    {label:'بروفايلات الخدمة',icon:Gauge,items:[{label:'عرض البروفايلات',href:`${network.basePath}?tab=profiles&profileTab=list`,icon:List},{label:'إنشاء بروفايل',href:`${network.basePath}?tab=profiles&profileTab=create`,icon:PlusCircle},{label:'مضاعفة السرعة',href:`${network.basePath}?tab=profiles&profileTab=double`,icon:ChevronsUp}]},
-   {label:'الهوتسبوت',icon:Radio,items:[{label:'حسابات الهوتسبوت',href:`${network.basePath}?tab=hotspot`,icon:Radio}]},
+   {label:'الهوتسبوت',icon:Radio,items:[{label:'إدارة الهوتسبوت',href:`${network.basePath}?tab=hotspot`,icon:Radio}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    {label:'الإعدادات',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings},{label:'إعدادات RADIUS',href:`${network.basePath}?tab=radius-settings`,icon:Server}]},
    {label:'اشتراكي',icon:CreditCard,items:[{label:'معلومات الاشتراك',href:`${network.basePath}?tab=subscription`,icon:CreditCard}]},
