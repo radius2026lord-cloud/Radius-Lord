@@ -11,6 +11,7 @@ import { useOptionalAuth } from "@/components/auth/auth-provider";
 import CustomerOnboardingShell from "./customer-onboarding-shell";
 import {
   History,
+  Tags,
   Layers,
   Activity,
   Bell,
@@ -142,7 +143,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-type NetworkShellContext={isPrincipal?:boolean;canViewActivity?:boolean;canManageStaff?:boolean;canManageGroups?:boolean;basePath:string;tab:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
+type NetworkShellContext={isPrincipal?:boolean;canViewCategories?:boolean;canViewActivity?:boolean;canManageStaff?:boolean;canManageGroups?:boolean;basePath:string;tab:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
 export default function DashboardShell({ children,network }: { children: React.ReactNode;network?:NetworkShellContext }) {
   const actualPathname = usePathname();
   const auth = useOptionalAuth();
@@ -151,8 +152,8 @@ export default function DashboardShell({ children,network }: { children: React.R
   const pathname=network?(network.tab==='overview'?network.basePath:`${network.basePath}?tab=${network.tab}`):actualPathname;
   const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};
   const networkGroups:NavGroup[]=network?[
-   {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users}]},
-   {label:'بروفايلات الخدمة',icon:Layers,items:[{label:'البروفايلات والباقات',href:`${network.basePath}?tab=profiles`,icon:Layers}]},
+   {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users},...(network.canViewCategories?[{label:'تصنيفات المشتركين',href:`${network.basePath}?tab=categories`,icon:Tags}]:[])]},
+   {label:'بروفايلات الخدمة',icon:Gauge,items:[{label:'البروفايلات والباقات',href:`${network.basePath}?tab=profiles`,icon:Gauge}]},
    {label:'الهوتسبوت',icon:Radio,items:[{label:'حسابات الهوتسبوت',href:`${network.basePath}?tab=hotspot`,icon:Radio}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    {label:'الإعدادات',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings},{label:'إعدادات RADIUS',href:`${network.basePath}?tab=radius-settings`,icon:Server}]},
