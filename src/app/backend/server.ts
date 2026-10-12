@@ -1,3 +1,4 @@
+import {startNetworkArchiveWorker} from './services/network-archive.service';
 import {startServerReadinessWorker} from './services/server-readiness.service';
 import {startInfrastructureHealthWorker} from './services/infrastructure-health.service';
 import { startDatabaseProvisioningWorker } from './workers/database-provisioning.worker';
@@ -38,6 +39,8 @@ const startServer = (port: number) => {
   server.listen(port, () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
+    const stopArchive=startNetworkArchiveWorker();
+    if(stopArchive)server.once('close',stopArchive);
     const stopReadiness=startServerReadinessWorker();
     if(stopReadiness)server.once('close',stopReadiness);
     const stopHealth=startInfrastructureHealthWorker();

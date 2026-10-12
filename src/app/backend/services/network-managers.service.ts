@@ -1,34 +1,41 @@
+import {randomUUID} from 'crypto';
+import {auditNetworkEvent} from './network-audit.service';
 import {managementAccess} from './network-manager-access.service';
 import {invalidateNetworkManager} from './network-session-version.service';
 import bcrypt from 'bcryptjs';
 import {db} from '../config/db';
 import {withNetwork,validateLocalLicense} from './network-runtime.service';
 
-const managerFields='id,full_name,username,manager_type,permission_group_id,is_enabled,phone,notes,account_role,scope_id,parent_agent_manager_id,contact_email';
+const managerFields='id,full_name,username,manager_type,permission_group_id,is_enabled,phone,notes,account_role,scope_id,parent_agent_manager_id,contact_email,archived_at,purged_at';
 export async function readManagers(scope:any){return withNetwork(scope,async app=>{
  const access=await managementAccess(app,scope,scope.groupsMode);const principal=access.role==='principal';
+ const archive=scope.archiveMode===true;
+ const archiveWhere=archive?'archived_at IS NOT NULL AND purged_at IS NULL':'archived_at IS NULL';
  const filter=principal?'':' AND parent_agent_manager_id=?';const params=principal?[]:[scope.managerId];
- const [managers]=await app.query(`SELECT ${managerFields} FROM managers WHERE archived_at IS NULL ${filter} ORDER BY manager_type,id`,params);
- const [groups]:any=await app.query('SELECT id,name,description,is_enabled,scope_id FROM permission_groups WHERE archived_at IS NULL'+(principal?'':' AND scope_id=?')+' ORDER BY name',principal?[]:[access.manager.scope_id]);
+ const [managers]=await app.query(`SELECT ${managerFields} FROM managers WHERE ${archiveWhere} ${filter} ORDER BY manager_type,id`,params);
+ const [groups]:any=await app.query('SELECT id,name,description,is_enabled,scope_id,archived_at,purged_at FROM permission_groups WHERE '+archiveWhere+(principal?'':' AND scope_id=?')+' ORDER BY name',principal?[]:[access.manager.scope_id]);
  const [counts]:any=await app.query("SELECT g.id,(SELECT COUNT(*) FROM managers m WHERE m.archived_at IS NULL AND m.manager_type='subordinate' AND (m.permission_group_id=g.id OR EXISTS(SELECT 1 FROM managers a WHERE a.id=m.parent_agent_manager_id AND a.permission_group_id=g.id))) affected_count FROM permission_groups g WHERE g.archived_at IS NULL"+(principal?'':' AND g.scope_id=?'),principal?[]:[access.manager.scope_id]);
  const [permissions]:any=await app.query('SELECT id,code,name_ar,module FROM permissions WHERE principal_only=0 AND is_enabled=1 ORDER BY module,id');
  const [grants]=await app.query('SELECT gp.permission_group_id,gp.permission_id FROM permission_group_permissions gp JOIN permission_groups g ON g.id=gp.permission_group_id'+(principal?'':' WHERE g.scope_id=?'),principal?[]:[access.manager.scope_id]);
  const [contacts]=await app.query('SELECT c.manager_id,c.phone,c.label FROM manager_contact_numbers c JOIN managers m ON m.id=c.manager_id WHERE m.archived_at IS NULL'+(principal?'':' AND m.parent_agent_manager_id=?')+' ORDER BY c.display_order,c.id',params);
  const [scopes]=await app.query('SELECT id,name,scope_kind,owner_manager_id FROM network_scopes WHERE archived_at IS NULL'+(principal?'':' AND id=?'),principal?[]:[access.manager.scope_id]);
- return {managers,groups:groups.map((group:any)=>({...group,affected_count:Number(counts.find((count:any)=>Number(count.id)===Number(group.id))?.affected_count||0),read_only:!principal&&Number(group.id)===Number(access.manager.permission_group_id)})),permissions:principal?permissions:permissions.filter((p:any)=>access.permissions.includes(p.code)),grants,scopes,contacts,actor:{id:scope.managerId,role:access.role,scopeId:access.manager.scope_id}};
+ await auditNetworkEvent(app,{action:scope.groupsMode?'permission_groups.view':'managers.view',managerId:scope.managerId});
+ const [policy]:any=await app.query('SELECT retention_days,automatic_cleanup FROM network_archive_policy WHERE id=1');
+ return {archiveMode:archive,archivePolicy:principal?policy[0]:null,managers,groups:groups.map((group:any)=>({...group,affected_count:Number(counts.find((count:any)=>Number(count.id)===Number(group.id))?.affected_count||0),read_only:!principal&&Number(group.id)===Number(access.manager.permission_group_id)})),permissions:principal?permissions:permissions.filter((p:any)=>access.permissions.includes(p.code)),grants,scopes,contacts,actor:{id:scope.managerId,role:access.role,scopeId:access.manager.scope_id}};
 });}
 export async function mutateManagers(scope:any,input:any){
- const action=String(input?.action),id=Number(input?.id),central=await db.pool.getConnection();let locked=false;
+ const requestId=randomUUID(),action=String(input?.action),id=Number(input?.id),central=await db.pool.getConnection();let locked=false;
  try{
  const [lock]:any=await central.query("SELECT GET_LOCK('radius-lord:manager-credentials',0) acquired");if(!lock[0]?.acquired)throw new Error('عملية أخرى قيد الحفظ، أعد المحاولة.');locked=true;
  return await withNetwork(scope,async app=>{await app.beginTransaction();try{
  await validateLocalLicense(app,scope);
- const access=await managementAccess(app,scope,action.startsWith('group-'));const isPrincipal=access.role==='principal';const actors=[{id:access.manager.id,full_name:access.manager.full_name}];
+ const access=await managementAccess(app,scope,action.startsWith('group-'));const isPrincipal=access.role==='principal';const actors=[{id:access.manager.id,full_name:access.manager.full_name,role:access.role,scopeId:access.manager.scope_id}];
  // Lock the actor while checking subordinate changes.
  await app.query('SELECT id FROM managers WHERE id=? FOR UPDATE',[scope.managerId]);
  let before:any=null,after:any=null,target='manager',targetId=id;
- if(['create','update','toggle','password'].includes(action)){
- if(action!=='create'){if(!Number.isSafeInteger(id)||id<1)throw new Error('المستخدم غير صالح.');const [rows]:any=await app.query(`SELECT ${managerFields} FROM managers WHERE id=? AND manager_type='subordinate' AND archived_at IS NULL FOR UPDATE`,[id]);before=rows[0];if(!before)throw new Error('هذه العملية متاحة للمستخدم الفرعي فقط.');if(!isPrincipal&&Number(before.parent_agent_manager_id)!==scope.managerId)throw new Error('NETWORK_AUTH');}
+ if(action==='archive-policy'){if(!isPrincipal)throw new Error('NETWORK_AUTH');const days=Number(input.retentionDays);if(!Number.isInteger(days)||days<1||days>3650||typeof input.automaticCleanup!=='boolean')throw new Error('حدد مدة من 1 إلى 3650 يومًا.');const [oldPolicy]:any=await app.query('SELECT * FROM network_archive_policy WHERE id=1 FOR UPDATE');await app.query('UPDATE network_archive_policy SET retention_days=?,automatic_cleanup=?,updated_by_manager_id=? WHERE id=1',[days,input.automaticCleanup?1:0,scope.managerId]);await app.query("INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,target_id,before_data,after_data,result) VALUES(?,'manager','archive.policy.update','archive_policy',1,?,?,'success')",[scope.managerId,JSON.stringify(oldPolicy[0]),JSON.stringify({retentionDays:days,automaticCleanup:input.automaticCleanup})]);await app.commit();return {success:true};}
+ if(['create','update','toggle','password','archive','restore'].includes(action)){
+ if(action!=='create'){if(!Number.isSafeInteger(id)||id<1)throw new Error('المستخدم غير صالح.');const [rows]:any=await app.query(`SELECT ${managerFields} FROM managers WHERE id=? AND manager_type='subordinate' AND ${action==='restore'?'archived_at IS NOT NULL AND purged_at IS NULL':'archived_at IS NULL'} FOR UPDATE`,[id]);before=rows[0];if(!before)throw new Error('هذه العملية متاحة للمستخدم الفرعي فقط.');if(!isPrincipal&&Number(before.parent_agent_manager_id)!==scope.managerId)throw new Error('NETWORK_AUTH');}
  if(action==='create'||action==='update'){
  const name=String(input.fullName||'').trim(),username=String(input.username||'').trim().toLowerCase(),phone=String(input.phone||'').trim(),notes=String(input.notes||'').trim(),group=Number(input.groupId);
  if(!name||name.length>150||! /^[a-z][a-z0-9_.-]{2,63}$/.test(username)||username.startsWith('setup_')||phone.length>20||notes.length>5000)throw new Error('تحقق من الاسم واسم المستخدم والهاتف والملاحظات.');
@@ -54,14 +61,18 @@ export async function mutateManagers(scope:any,input:any){
  // reservation, never a valid account. Old aliases cannot authenticate after rename.
  const directory=JSON.stringify({slug:scope.slug,username,environmentId:Number(scope.environment_id),managerId:targetId});
  await central.query("INSERT INTO platform_settings(setting_group,setting_key,setting_value) VALUES('network_manager_directory',?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",['alias_'+username,directory]);
- }else if(action==='toggle')await app.query('UPDATE managers SET is_enabled=? WHERE id=?',[before.is_enabled?0:1,id]);
+ }else if(action==='archive')await app.query('UPDATE managers SET archived_at=CURRENT_TIMESTAMP,archived_by_manager_id=?,is_enabled=0 WHERE id=?',[scope.managerId,id]);
+ else if(action==='restore'){const [available]:any=await app.query('SELECT id FROM permission_groups WHERE id=? AND archived_at IS NULL AND purged_at IS NULL',[before.permission_group_id]);if(!available[0])throw new Error('استرجع مجموعة الصلاحيات أولًا.');await app.query('UPDATE managers SET archived_at=NULL,archived_by_manager_id=NULL,is_enabled=0 WHERE id=?',[id]);}
+ else if(action==='toggle')await app.query('UPDATE managers SET is_enabled=? WHERE id=?',[before.is_enabled?0:1,id]);
  else {const password=String(input.password||'');if(password.length<8||password.length>128)throw new Error('كلمة المرور يجب أن تكون من 8 إلى 128 محرفًا.');await app.query('UPDATE managers SET password_hash=? WHERE id=?',[await bcrypt.hash(password,12),id]);}
  if(action!=='create'){await invalidateNetworkManager(central,scope,id);const [children]:any=await app.query('SELECT id FROM managers WHERE parent_agent_manager_id=?',[id]);for(const child of children)await invalidateNetworkManager(central,scope,Number(child.id));}
  const [rows]:any=await app.query(`SELECT ${managerFields} FROM managers WHERE id=?`,[targetId]);after=rows[0];const [savedContacts]=await app.query('SELECT phone,label FROM manager_contact_numbers WHERE manager_id=? ORDER BY display_order,id',[targetId]);after.contacts=savedContacts;
- }else if(['group-create','group-update','group-toggle','group-copy'].includes(action)){
- target='permission_group';if(action!=='group-create'){const [rows]:any=await app.query('SELECT id,name,description,is_enabled,scope_id FROM permission_groups WHERE id=? AND archived_at IS NULL FOR UPDATE',[id]);before=rows[0];if(!before)throw new Error('مجموعة الصلاحيات غير متاحة.');const [source]:any=await app.query('SELECT scope_id FROM permission_groups WHERE id=?',[id]);if(!isPrincipal&&Number(source[0].scope_id)!==Number(access.manager.scope_id))throw new Error('NETWORK_AUTH');if(!isPrincipal&&action!=='group-copy'&&id===Number(access.manager.permission_group_id))throw new Error('NETWORK_AUTH');}
- if(['group-update','group-toggle'].includes(action)){const [affected]:any=await app.query("SELECT COUNT(*) count FROM managers WHERE archived_at IS NULL AND manager_type='subordinate' AND (permission_group_id=? OR parent_agent_manager_id IN (SELECT a.id FROM (SELECT id,permission_group_id FROM managers) a WHERE a.permission_group_id=?))",[id,id]);if(Number(affected[0].count)>0&&Number(input.confirmedAffected)!==Number(affected[0].count))throw new Error('تغير عدد المستخدمين المتأثرين. حدّث القائمة وراجع التغيير قبل الحفظ.');}
- if(action==='group-toggle')await app.query('UPDATE permission_groups SET is_enabled=? WHERE id=?',[before.is_enabled?0:1,id]);else {
+ }else if(['group-create','group-update','group-toggle','group-copy','group-archive','group-restore'].includes(action)){
+ target='permission_group';if(action!=='group-create'){const [rows]:any=await app.query("SELECT id,name,description,is_enabled,scope_id,archived_at,purged_at FROM permission_groups WHERE id=? AND "+(action==='group-restore'?'archived_at IS NOT NULL AND purged_at IS NULL':'archived_at IS NULL')+' FOR UPDATE',[id]);before=rows[0];if(!before)throw new Error('مجموعة الصلاحيات غير متاحة.');const [source]:any=await app.query('SELECT scope_id FROM permission_groups WHERE id=?',[id]);if(!isPrincipal&&Number(source[0].scope_id)!==Number(access.manager.scope_id))throw new Error('NETWORK_AUTH');if(!isPrincipal&&action!=='group-copy'&&id===Number(access.manager.permission_group_id))throw new Error('NETWORK_AUTH');}
+ if(['group-update','group-toggle','group-archive'].includes(action)){const [affected]:any=await app.query("SELECT COUNT(*) count FROM managers WHERE archived_at IS NULL AND manager_type='subordinate' AND (permission_group_id=? OR parent_agent_manager_id IN (SELECT a.id FROM (SELECT id,permission_group_id FROM managers) a WHERE a.permission_group_id=?))",[id,id]);if(Number(affected[0].count)>0&&Number(input.confirmedAffected)!==Number(affected[0].count))throw new Error('تغير عدد المستخدمين المتأثرين. حدّث القائمة وراجع التغيير قبل الحفظ.');}
+ if(action==='group-archive')await app.query('UPDATE permission_groups SET archived_at=CURRENT_TIMESTAMP,is_enabled=0 WHERE id=?',[id]);
+ else if(action==='group-restore')await app.query('UPDATE permission_groups SET archived_at=NULL,is_enabled=0 WHERE id=?',[id]);
+ else if(action==='group-toggle')await app.query('UPDATE permission_groups SET is_enabled=? WHERE id=?',[before.is_enabled?0:1,id]);else {
  const name=String(input.name||'').trim(),description=String(input.description||'').trim();if(!name||name.length>100||description.length>5000)throw new Error('تحقق من اسم المجموعة ووصفها.');
  const ids=Array.from(new Set((Array.isArray(input.permissions)?input.permissions:[]).map(Number))) as number[];if(ids.some(n=>!Number.isSafeInteger(n)||n<1)||ids.length>500)throw new Error('الصلاحيات غير صالحة.');
  if(ids.length){const [valid]:any=await app.query(`SELECT id FROM permissions WHERE principal_only=0 AND is_enabled=1 AND id IN (${ids.map(()=>'?').join(',')}) FOR UPDATE`,ids);if(valid.length!==ids.length)throw new Error('لا يمكن منح صلاحيات المدير الرئيسي.');}
@@ -73,12 +84,12 @@ export async function mutateManagers(scope:any,input:any){
  await app.query('DELETE FROM permission_group_permissions WHERE permission_group_id=?',[targetId]);for(const permissionId of ids)await app.query('INSERT INTO permission_group_permissions(permission_group_id,permission_id) VALUES(?,?)',[targetId,permissionId]);
  }
  const [members]:any=await app.query("SELECT id FROM managers WHERE manager_type='subordinate' AND (permission_group_id=? OR parent_agent_manager_id IN (SELECT a.id FROM (SELECT id,permission_group_id FROM managers) a WHERE a.permission_group_id=?))",[targetId,targetId]);for(const member of members)await invalidateNetworkManager(central,scope,Number(member.id));
- const [rows]:any=await app.query('SELECT id,name,description,is_enabled,scope_id FROM permission_groups WHERE id=?',[targetId]);after=rows[0];const [grants]=await app.query('SELECT permission_id FROM permission_group_permissions WHERE permission_group_id=?',[targetId]);after.permissions=grants;
+ const [rows]:any=await app.query('SELECT id,name,description,is_enabled,scope_id,archived_at,purged_at FROM permission_groups WHERE id=?',[targetId]);after=rows[0];const [grants]=await app.query('SELECT permission_id FROM permission_group_permissions WHERE permission_group_id=?',[targetId]);after.permissions=grants;
  }else throw new Error('العملية غير صالحة.');
- await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result) VALUES(?,?,'manager',?,?,?,?,?,'success')",[scope.managerId,JSON.stringify(actors[0]),'managers.'+action,target,targetId,before?JSON.stringify(before):null,JSON.stringify(after)]);
+ await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result,request_id) VALUES(?,?,'manager',?,?,?,?,?,'success',?)",[scope.managerId,JSON.stringify(actors[0]),'managers.'+action,target,targetId,before?JSON.stringify(before):null,JSON.stringify(after),requestId]);
  await app.commit();return {success:true};
  }catch(e){await app.rollback();
  // Failed attempts contain only the action and a generic reason, never submitted credentials.
- try{await app.query("INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,result,failure_code,failure_reason) VALUES(?,'manager',?,'manager','failed','MANAGEMENT_REJECTED','Operation rejected')",[scope.managerId,'managers.'+(['create','update','toggle','password','group-create','group-update','group-toggle','group-copy'].includes(action)?action:'invalid')]);}catch{console.error('[network-managers] failure audit unavailable');}throw e;}});
+ try{await app.query("INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,result,failure_code,failure_reason) VALUES(?,'manager',?,'manager','failed','MANAGEMENT_REJECTED','Operation rejected')",[scope.managerId,'managers.'+(['create','update','toggle','password','group-create','group-update','group-toggle','group-copy','archive','restore','group-archive','group-restore','archive-policy'].includes(action)?action:'invalid')]);}catch{console.error('[network-managers] failure audit unavailable');}throw e;}});
  }finally{if(locked)await central.query("SELECT RELEASE_LOCK('radius-lord:manager-credentials')");central.release();}
 }

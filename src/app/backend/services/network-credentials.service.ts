@@ -1,3 +1,4 @@
+import {auditNetworkEvent} from './network-audit.service';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import {createHash} from 'crypto';
@@ -28,7 +29,7 @@ export async function changeInitialCredentials(scope:any,token:any,input:any){
  const [local]:any=await app.query('SELECT id FROM managers WHERE username=? AND id<>? LIMIT 1',[username,manager.id]);if(local.length)throw new Error('USERNAME_TAKEN');
  // Persist the new directory alias first, so a failed central finalization is resumable.
  state.pendingUsername=username;await savePrivateSetting('environment_runtime',key,state);
- const hash=await bcrypt.hash(password,12);await app.query('UPDATE managers SET username=?,password_hash=? WHERE id=?',[username,hash,manager.id]);await app.commit();return hash;
+ const hash=await bcrypt.hash(password,12);await app.query('UPDATE managers SET username=?,password_hash=? WHERE id=?',[username,hash,manager.id]);await auditNetworkEvent(app,{action:'auth.initial_credentials.update',managerId:Number(manager.id)});await app.commit();return hash;
  }catch(e){await app.rollback();throw e;}});
  state.username=username;state.mustChangeCredentials=false;state.credentialsChangedAt=new Date().toISOString();delete state.pendingUsername;delete state.passwordEncrypted;delete state.credentialsExpiresAt;
  await savePrivateSetting('environment_runtime',key,state);
