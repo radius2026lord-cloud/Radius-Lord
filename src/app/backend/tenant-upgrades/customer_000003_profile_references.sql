@@ -6,9 +6,9 @@ CREATE PROCEDURE `rl_tenant_zone_000003`.`rl_profile_refs_v1`()
 BEGIN
  DECLARE missing_count INT DEFAULT 0;
  IF DATABASE()<>'rl_tenant_zone_000003' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Wrong tenant database'; END IF;
- CREATE TABLE IF NOT EXISTS speed_units(id SMALLINT UNSIGNED NOT NULL PRIMARY KEY,code VARCHAR(10) NOT NULL UNIQUE,name_ar VARCHAR(50) NOT NULL,bps_factor BIGINT UNSIGNED NOT NULL,is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,CHECK(bps_factor>0),CHECK(is_enabled IN(0,1))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
- CREATE TABLE IF NOT EXISTS data_units(id SMALLINT UNSIGNED NOT NULL PRIMARY KEY,code VARCHAR(10) NOT NULL UNIQUE,name_ar VARCHAR(50) NOT NULL,bytes_factor BIGINT UNSIGNED NOT NULL,is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,CHECK(bytes_factor>0),CHECK(is_enabled IN(0,1))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
- CREATE TABLE IF NOT EXISTS currencies(id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,code VARCHAR(10) NOT NULL UNIQUE,name_ar VARCHAR(80) NOT NULL,symbol VARCHAR(12) NOT NULL DEFAULT '',decimal_places TINYINT UNSIGNED NOT NULL DEFAULT 2,is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,CHECK(decimal_places BETWEEN 0 AND 2),CHECK(is_enabled IN(0,1))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ CREATE TABLE IF NOT EXISTS speed_units(id SMALLINT UNSIGNED NOT NULL PRIMARY KEY,code VARCHAR(10) NOT NULL UNIQUE,name_ar VARCHAR(50) NOT NULL,bps_factor BIGINT UNSIGNED NOT NULL,is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,CHECK(bps_factor>0),CHECK(is_enabled IN(0,1))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ CREATE TABLE IF NOT EXISTS data_units(id SMALLINT UNSIGNED NOT NULL PRIMARY KEY,code VARCHAR(10) NOT NULL UNIQUE,name_ar VARCHAR(50) NOT NULL,bytes_factor BIGINT UNSIGNED NOT NULL,is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,CHECK(bytes_factor>0),CHECK(is_enabled IN(0,1))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ CREATE TABLE IF NOT EXISTS currencies(id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,code VARCHAR(10) NOT NULL UNIQUE,name_ar VARCHAR(80) NOT NULL,symbol VARCHAR(12) NOT NULL DEFAULT '',decimal_places TINYINT UNSIGNED NOT NULL DEFAULT 2,is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,CHECK(decimal_places BETWEEN 0 AND 2),CHECK(is_enabled IN(0,1))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
  INSERT IGNORE INTO speed_units VALUES(1,'Kbps','كيلوبت/ثانية',1000,1),(2,'Mbps','ميغابت/ثانية',1000000,1),(3,'Gbps','غيغابت/ثانية',1000000000,1);
  INSERT IGNORE INTO data_units VALUES(1,'MB','ميغابايت',1000000,1),(2,'GB','غيغابايت',1000000000,1),(3,'TB','تيرابايت',1000000000000,1);
  IF (SELECT COUNT(*) FROM speed_units WHERE (id=1 AND code='Kbps' AND bps_factor=1000) OR (id=2 AND code='Mbps' AND bps_factor=1000000) OR (id=3 AND code='Gbps' AND bps_factor=1000000000))<>3 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Incompatible speed factors'; END IF;
@@ -18,7 +18,8 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pppoe_packages' AND COLUMN_NAME='currency_id') THEN
   ALTER TABLE pppoe_packages ADD COLUMN currency_id SMALLINT UNSIGNED NULL,ADD CONSTRAINT fk_ppp_currency_reference FOREIGN KEY(currency_id) REFERENCES currencies(id);
  END IF;
- UPDATE pppoe_packages p JOIN currencies c ON c.code=p.currency_code SET p.currency_id=c.id WHERE p.currency_id IS NULL;
+ -- Explicit comparison also handles reference tables created by an earlier partial run.
+ UPDATE pppoe_packages p JOIN currencies c ON CONVERT(c.code USING utf8mb4) COLLATE utf8mb4_unicode_ci=CONVERT(p.currency_code USING utf8mb4) COLLATE utf8mb4_unicode_ci SET p.currency_id=c.id WHERE p.currency_id IS NULL;
  ALTER TABLE pppoe_packages MODIFY package_type ENUM('prepaid','daily','addon','free') NOT NULL DEFAULT 'prepaid';
  IF NOT EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='pppoe_packages' AND CONSTRAINT_NAME='chk_ppp_free_profile') THEN ALTER TABLE pppoe_packages ADD CONSTRAINT chk_ppp_free_profile CHECK(package_type<>'free' OR (base_price=0 AND offer_price IS NULL AND offer_ends_at IS NULL AND is_gift=0 AND daily_package_id IS NULL)); END IF;
  IF NOT EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='network_settings' AND COLUMN_NAME='default_currency_id') THEN
