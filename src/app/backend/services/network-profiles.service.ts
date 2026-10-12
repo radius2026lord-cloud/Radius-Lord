@@ -7,7 +7,7 @@ const hash=(row:any)=>createHash('sha256').update(JSON.stringify(row)).digest('h
 async function saveProfileVersion(app:any,id:number,refs:any,boost:any=null){
  const [policies]:any=await app.query('SELECT * FROM package_service_policies WHERE package_id=?',[id]);
  const [defaults]:any=await app.query('SELECT mikrotik_group,framed_pool FROM package_radius_defaults WHERE package_id=?',[id]);
- const [versions]:any=await app.query('SELECT COALESCE(MAX(version_no),0)+1 next_version FROM pppoe_package_versions WHERE package_id=? FOR UPDATE',[id]);
+ const [versions]:any=await app.query('SELECT COALESCE(MAX(version_no),0)+1 next_version FROM pppoe_package_versions WHERE package_id=?',[id]);
  const number=Number(versions[0].next_version),group='rl_ppp_'+id+'_v'+number;
  const [packages]:any=await app.query('SELECT * FROM pppoe_packages WHERE id=?',[id]);
  const packageRow=packages[0],policy=policies[0];
