@@ -1,6 +1,6 @@
 -- Existing tenant databases only. Select the target tenant database before running this whole file.
 -- Existing fixed-day profiles retain midnight; new profiles can choose an exact local hour and minute.
--- DDL commits implicitly. Pause application writes and inspect any failure before rerunning.
+-- Back up the tenant database and pause application writes first. DDL commits implicitly; inspect any failure before rerunning.
 DELIMITER $$
 DROP PROCEDURE IF EXISTS rl_profile_expiry_time_v1$$
 CREATE PROCEDURE rl_profile_expiry_time_v1()
