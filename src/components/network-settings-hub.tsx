@@ -1,0 +1,7 @@
+"use client";
+import {useState} from 'react';
+import {Settings,Archive,Users,ShieldCheck} from 'lucide-react';
+import ProjectTabs from '@/components/ui/project-tabs';
+import NetworkSettings from '@/components/network-settings';
+import NetworkManagers from '@/components/network-managers';
+export default function NetworkSettingsHub({endpoint,refresh}:{endpoint:string;refresh:number}){const [tab,setTab]=useState('general'),[kind,setKind]=useState('users');return <div className="space-y-4"><ProjectTabs id="network-settings-hub" value={tab} onChange={setTab} items={[{value:'general',label:'بيانات الشبكة',icon:Settings,iconClassName:'text-sky-500'},{value:'archive',label:'الأرشيف',icon:Archive,iconClassName:'text-amber-500'}]}/><section id={`network-settings-hub-panel-${tab}`} role="tabpanel" aria-labelledby={`network-settings-hub-tab-${tab}`}>{tab==='general'?<NetworkSettings endpoint={endpoint} refresh={refresh}/>:<div className="space-y-4"><ProjectTabs id="archive-types" value={kind} onChange={setKind} items={[{value:'users',label:'المستخدمون المؤرشفون',icon:Users,iconClassName:'text-sky-500'},{value:'groups',label:'المجموعات المؤرشفة',icon:ShieldCheck,iconClassName:'text-violet-500'}]}/><section id={`archive-types-panel-${kind}`} role="tabpanel" aria-labelledby={`archive-types-tab-${kind}`}><NetworkManagers key={kind} endpoint={endpoint} groupsMode={kind==='groups'} refresh={refresh} archiveOnly/></section></div>}</section></div>;}
