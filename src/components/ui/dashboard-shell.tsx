@@ -26,11 +26,14 @@ import {
   Gauge,
   Home,
   Layers3,
+  List,
   LogOut,
   Menu,
   Moon,
   MoreHorizontal,
   PackagePlus,
+  PlusCircle,
+  ChevronsUp,
   Radio,
   Server,
   TerminalSquare,
@@ -143,17 +146,17 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-type NetworkShellContext={isPrincipal?:boolean;canViewCategories?:boolean;canViewActivity?:boolean;canManageStaff?:boolean;canManageGroups?:boolean;basePath:string;tab:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
+type NetworkShellContext={isPrincipal?:boolean;canViewCategories?:boolean;canViewActivity?:boolean;canManageStaff?:boolean;canManageGroups?:boolean;basePath:string;tab:string;profileTab?:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
 export default function DashboardShell({ children,network }: { children: React.ReactNode;network?:NetworkShellContext }) {
   const actualPathname = usePathname();
   const auth = useOptionalAuth();
   const account=network?{fullName:network.fullName}:auth?.account;
   const accountType=network?'customer':auth?.accountType;
-  const pathname=network?(network.tab==='overview'?network.basePath:`${network.basePath}?tab=${network.tab}`):actualPathname;
+  const pathname=network?(network.tab==='overview'?network.basePath:network.tab==='profiles'?`${network.basePath}?tab=profiles&profileTab=${network.profileTab||'list'}`:`${network.basePath}?tab=${network.tab}`):actualPathname;
   const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};
   const networkGroups:NavGroup[]=network?[
    {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users},...(network.canViewCategories?[{label:'تصنيفات المشتركين',href:`${network.basePath}?tab=categories`,icon:Tags}]:[])]},
-   {label:'بروفايلات الخدمة',icon:Gauge,items:[{label:'البروفايلات والباقات',href:`${network.basePath}?tab=profiles`,icon:Gauge}]},
+   {label:'بروفايلات الخدمة',icon:Gauge,items:[{label:'عرض البروفايلات',href:`${network.basePath}?tab=profiles&profileTab=list`,icon:List},{label:'إنشاء بروفايل',href:`${network.basePath}?tab=profiles&profileTab=create`,icon:PlusCircle},{label:'مضاعفة السرعة',href:`${network.basePath}?tab=profiles&profileTab=double`,icon:ChevronsUp}]},
    {label:'الهوتسبوت',icon:Radio,items:[{label:'حسابات الهوتسبوت',href:`${network.basePath}?tab=hotspot`,icon:Radio}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    {label:'الإعدادات',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings},{label:'إعدادات RADIUS',href:`${network.basePath}?tab=radius-settings`,icon:Server}]},
@@ -318,7 +321,7 @@ export default function DashboardShell({ children,network }: { children: React.R
               const current = group?.items.find((item) => item.href === pathname);
               const parent = group?.items[0];
               return <div className="min-w-0">
-                <div key={group?.label ?? currentTitle} className="rl-shell-title truncate text-sm font-bold text-[#102a63] transition-all duration-300 dark:text-[#f4f1f5]">{group?.label ?? currentTitle}</div>
+                {network?.tab!=="profiles"&&<div key={group?.label ?? currentTitle} className="rl-shell-title truncate text-sm font-bold text-[#102a63] transition-all duration-300 dark:text-[#f4f1f5]">{group?.label ?? currentTitle}</div>}
                 <nav aria-label="دليل التنقل" className="rl-breadcrumb mt-1.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] font-medium">
                   {parent && pathname !== parent.href && <><Link href={parent.href} className="group/crumb relative shrink-0 rounded-[9px] px-2 py-1 text-slate-500 transition-all duration-200 hover:bg-[#edf5ff] hover:text-[#0758e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/35 dark:text-[#b9b3bd] dark:hover:bg-white/[.07] dark:hover:text-white"><span>{parent.label}</span><span className="absolute inset-x-2 -bottom-px h-px origin-right scale-x-0 bg-[#0758e9] transition-transform duration-200 group-hover/crumb:scale-x-100" /></Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 transition-transform duration-200 dark:text-[#77717b]" /></>}
                   <span aria-current="page" className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/30 bg-emerald-50 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.08)] dark:border-emerald-400/45 dark:bg-emerald-400/[.16] dark:text-emerald-100"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-45 transition-transform duration-300 group-hover:scale-150" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/15 dark:bg-emerald-300 dark:ring-emerald-300/25" /></span><span className="truncate">{current?.label ?? currentTitle}</span></span>
