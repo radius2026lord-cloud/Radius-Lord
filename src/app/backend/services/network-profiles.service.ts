@@ -47,6 +47,9 @@ export async function revertExpiredProfileBoosts(scope:any){
    for(const item of due){
     await app.beginTransaction();
     try{
+     const [duePackage]:any=await app.query("SELECT package_id FROM pppoe_package_speed_boosts WHERE id=?",[item.id]);
+     if(!duePackage[0]){await app.rollback();continue;}
+     await app.query("SELECT id FROM pppoe_packages WHERE id=? FOR UPDATE",[duePackage[0].package_id]);
      const [rows]:any=await app.query("SELECT * FROM pppoe_package_speed_boosts WHERE id=? AND status='active' AND expires_at<=UTC_TIMESTAMP(6) FOR UPDATE",[item.id]);
      if(!rows[0]){await app.rollback();continue;}
      const boost=rows[0],[policyRows]:any=await app.query("SELECT download_bps,upload_bps FROM package_service_policies WHERE package_id=? FOR UPDATE",[boost.package_id]);
