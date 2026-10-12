@@ -157,7 +157,7 @@ export default function DashboardShell({ children,network }: { children: React.R
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    {label:'الإعدادات',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings},{label:'إعدادات RADIUS',href:`${network.basePath}?tab=radius-settings`,icon:Server}]},
    {label:'اشتراكي',icon:CreditCard,items:[{label:'معلومات الاشتراك',href:`${network.basePath}?tab=subscription`,icon:CreditCard}]},
-   ...(network.canViewActivity?[{label:'سجل النشاط',icon:History,items:[{label:'سجل النشاط',href:`${network.basePath}?tab=activity`,icon:History}]}]:[]),
+   ...(network.canViewActivity?[{label:'السجلات',icon:ScrollText,items:[{label:'سجل النظام',href:`${network.basePath}?tab=activity`,icon:ScrollText},{label:'سجل الإدارة',href:`${network.basePath}?tab=admin-activity`,icon:ShieldCheck}]}]:[]),
    ...(network.isPrincipal||network.canManageStaff||network.canManageGroups?[{label:'إدارة المستخدمين',icon:ShieldCheck,items:[...(network.isPrincipal||network.canManageStaff?[{label:'المستخدمون',href:`${network.basePath}?tab=managers`,icon:Users}]:[]),...(network.isPrincipal||network.canManageGroups?[{label:'مجموعات الصلاحيات',href:`${network.basePath}?tab=permission-groups`,icon:ShieldCheck}]:[])]}]:[]),
   ]:[];
   const navGroups=network?networkGroups:accountType==='master_admin'?masterAdminGroups:customerNavGroups;
