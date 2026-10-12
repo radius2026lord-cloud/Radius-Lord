@@ -7,6 +7,7 @@ export type BulkActionTone="primary"|"success"|"warning"|"danger"|"default";
 export type BulkActionKey="activate"|"suspend"|"disable"|"delete";
 export type BulkActionHandlers=Partial<Record<BulkActionKey,()=>void>>;
 export type BulkActionVisibility=Partial<Record<BulkActionKey,boolean>>;
+export type BulkActionItem={label:string;icon:LucideIcon;tone?:BulkActionTone;onClick:()=>void;disabled?:boolean};
 
 const definitions:Record<BulkActionKey,{label:string;icon:LucideIcon;tone:BulkActionTone}>={
  activate:{label:"تفعيل المحدد",icon:CirclePlay,tone:"success"},
@@ -23,11 +24,11 @@ const toneClass:Record<BulkActionTone,string>={
  default:"text-slate-600 hover:bg-[#edf4fb] dark:text-slate-200 dark:hover:bg-white/[.07]",
 };
 
-function Row({label,Icon,tone,onClick}:{label:string;Icon:LucideIcon;tone:BulkActionTone;onClick:()=>void}){
- return <button type="button" onClick={onClick} className={`flex min-h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-right text-xs font-semibold transition ${toneClass[tone]}`}><span className="min-w-0 flex-1">{label}</span><Icon className="h-4 w-4 shrink-0"/></button>;
+function Row({label,Icon,tone,onClick,disabled=false}:{label:string;Icon:LucideIcon;tone:BulkActionTone;onClick:()=>void;disabled?:boolean}){
+ return <button type="button" disabled={disabled} onClick={onClick} className={`flex min-h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-right text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${toneClass[tone]}`}><span className="min-w-0 flex-1">{label}</span><Icon className="h-4 w-4 shrink-0"/></button>;
 }
 
-export default function BulkActionsDropdown({allSelected,onToggleAll,onClearSelection,show={},handlers={}}:{allSelected:boolean;onToggleAll:()=>void;onClearSelection:()=>void;show?:BulkActionVisibility;handlers?:BulkActionHandlers}){
+export default function BulkActionsDropdown({allSelected,onToggleAll,onClearSelection,show={},handlers={},customActions=[]}:{allSelected:boolean;onToggleAll:()=>void;onClearSelection:()=>void;show?:BulkActionVisibility;handlers?:BulkActionHandlers;customActions?:BulkActionItem[]}){
  const [open,setOpen]=useState(false);const ref=useRef<HTMLDivElement>(null);
  useEffect(()=>{if(!open)return;const close=(e:MouseEvent)=>{if(ref.current&&!ref.current.contains(e.target as Node))setOpen(false)};document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close)},[open]);
  const run=(fn:()=>void)=>{setOpen(false);fn()};
@@ -40,6 +41,7 @@ export default function BulkActionsDropdown({allSelected,onToggleAll,onClearSele
     <Row label="إلغاء التحديد" Icon={XSquare} tone="default" onClick={()=>run(onClearSelection)}/>
    </div>
    {visible.map(key=>{const d=definitions[key];return <Row key={key} label={d.label} Icon={d.icon} tone={d.tone} onClick={()=>run(handlers[key]!)}/>})}
+   {customActions.map((action,i)=><Row key={`${action.label}-${i}`} label={action.label} Icon={action.icon} tone={action.tone??"default"} onClick={()=>run(action.onClick)} disabled={action.disabled}/>)}
   </div>}
  </div>;
 }
