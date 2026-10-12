@@ -271,6 +271,31 @@ CREATE TABLE pppoe_package_versions (
   CONSTRAINT chk_pppoe_radius_snapshot CHECK (JSON_TYPE(radius_snapshot) = 'OBJECT')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE pppoe_package_speed_boosts (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+ package_id BIGINT UNSIGNED NOT NULL,
+ multiplier TINYINT UNSIGNED NOT NULL,
+ original_download_bps BIGINT UNSIGNED NOT NULL,
+ original_upload_bps BIGINT UNSIGNED NOT NULL,
+ boosted_download_bps BIGINT UNSIGNED NOT NULL,
+ boosted_upload_bps BIGINT UNSIGNED NOT NULL,
+ started_at DATETIME(6) NOT NULL,
+ expires_at DATETIME(6) NOT NULL,
+ status ENUM('active','reverted') NOT NULL DEFAULT 'active',
+ active_package_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status='active' THEN package_id ELSE NULL END) STORED,
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ reverted_at DATETIME(6) NULL,
+ PRIMARY KEY(id),
+ UNIQUE KEY uq_active_profile_speed_boost(active_package_id),
+ KEY idx_profile_speed_boost_expiry(status,expires_at,id),
+ CONSTRAINT fk_profile_speed_boost_package FOREIGN KEY(package_id) REFERENCES pppoe_packages(id) ON DELETE RESTRICT,
+ CONSTRAINT fk_profile_speed_boost_creator FOREIGN KEY(created_by) REFERENCES managers(id) ON DELETE RESTRICT,
+ CONSTRAINT chk_profile_boost_multiplier CHECK(multiplier BETWEEN 1 AND 5),
+ CONSTRAINT chk_profile_boost_speeds CHECK(original_download_bps>0 AND original_upload_bps>0 AND boosted_download_bps>=original_download_bps AND boosted_upload_bps>=original_upload_bps),
+ CONSTRAINT chk_profile_boost_expiry CHECK(expires_at>started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE pppoe_subscriptions (
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
  account_id BIGINT UNSIGNED NOT NULL,
