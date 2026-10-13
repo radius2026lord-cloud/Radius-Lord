@@ -49,10 +49,10 @@ export async function createHotspotBatch(scope:any,input:any){
    if(!['code','username_password'].includes(loginMode))invalid('loginMode');
    if(typeof input.isGift!=='boolean')invalid('isGift');
    const usernamePrefix=String(input.usernamePrefix??'').trim().toLowerCase();
-   if(!/^[a-z0-9_-]*$/.test(usernamePrefix)||usernamePrefix.length>16)invalid('usernamePrefix');
+   if(!/^[a-z0-9_-]*$/.test(usernamePrefix)||usernamePrefix.length>16||(usernamePrefix.length>0&&usernamePrefix.length<3))invalid('usernamePrefix');
    const usernameLength=integer(input.usernameLength,6,32,'usernameLength');
-   if(usernameLength-usernamePrefix.length<4)invalid('usernamePrefix');
-   const passwordLength=loginMode==='code'?usernameLength:integer(input.passwordLength,6,32,'passwordLength');
+   if(usernameLength-usernamePrefix.length<3)invalid('usernamePrefix');
+   const passwordLength=loginMode==='code'?usernameLength:integer(input.passwordLength,4,32,'passwordLength');
    const alphabetKind=String(input.alphabet??'alphanumeric') as AlphabetKind;
    if(!Object.prototype.hasOwnProperty.call(ALPHABETS,alphabetKind))invalid('alphabet');
    const alphabet=ALPHABETS[alphabetKind];
