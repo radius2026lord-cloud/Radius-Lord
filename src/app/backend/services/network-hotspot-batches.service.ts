@@ -20,7 +20,7 @@ export async function readHotspotBatches(scope:any){
  return withNetwork(scope,async app=>{
   await principalAccess(app,scope);
   const [[items],[packages]]:any=await Promise.all([
-   app.query("SELECT b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.name package_name,v.version_no,COUNT(bc.account_id) card_count,SUM(CASE WHEN a.status='enabled' AND a.archived_at IS NULL THEN 1 ELSE 0 END) enabled_count FROM hotspot_card_batches b JOIN hotspot_package_versions v ON v.id=b.package_version_id JOIN hotspot_packages p ON p.id=v.package_id LEFT JOIN hotspot_batch_cards bc ON bc.batch_id=b.id LEFT JOIN hotspot_accounts a ON a.id=bc.account_id WHERE b.owner_manager_id=? GROUP BY b.id ORDER BY b.id DESC LIMIT 200",[scope.managerId]),
+   app.query("SELECT b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.name package_name,v.version_no,COUNT(bc.account_id) card_count,SUM(CASE WHEN a.status='enabled' AND a.archived_at IS NULL THEN 1 ELSE 0 END) enabled_count FROM hotspot_card_batches b JOIN hotspot_package_versions v ON v.id=b.package_version_id JOIN hotspot_packages p ON p.id=v.package_id LEFT JOIN hotspot_batch_cards bc ON bc.batch_id=b.id LEFT JOIN hotspot_accounts a ON a.id=bc.account_id WHERE b.owner_manager_id=? GROUP BY b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.name,v.version_no ORDER BY b.id DESC LIMIT 200",[scope.managerId]),
    app.query("SELECT p.id package_id,p.name,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_packages p JOIN hotspot_package_versions v ON v.id=(SELECT latest.id FROM hotspot_package_versions latest WHERE latest.package_id=p.id ORDER BY latest.version_no DESC LIMIT 1) JOIN time_units t ON t.id=v.duration_unit_id WHERE p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL ORDER BY p.id DESC",[scope.managerId])
   ]);
   return {items,packages};
@@ -73,7 +73,7 @@ export async function createHotspotBatch(scope:any,input:any){
      }
     }
     if(!identityId)throw new Error('HOTSPOT_BATCH_GENERATION');
-    seen.add(username);identityIds.push(identityId);credentials.push({serial_no:serial,username,password});
+    seen.add(username);identityIds.push(identityId);credentials.push({serial_no:serial,username,password,status:'enabled'});
    }
    await ensureRadiusGroup(app,version);
    const accountIds:number[]=[];
@@ -93,10 +93,11 @@ export async function createHotspotBatch(scope:any,input:any){
    const periodRows=accountIds.map(accountId=>[accountId,versionId,null,'issue',scope.managerId,null,null,null,version.duration_mode,version.duration_value,version.duration_unit_id,seconds?.toString()||null,0,version.quota_bytes,price,version.currency_code,input.isGift?1:0,unitSnapshot,'pending']);
    await app.query("INSERT INTO hotspot_service_periods(account_id,package_version_id,previous_period_id,event_type,created_by,activated_at,ended_at,expires_at,duration_mode,duration_value,duration_unit_id,time_allowance_seconds,carried_seconds,quota_allowance_bytes,price_snapshot,currency_code,is_gift,unit_snapshot,lifecycle) VALUES "+valuesSql(periodRows),periodRows.flat());
    await app.query("INSERT INTO hotspot_period_usage(period_id,upload_bytes,download_bytes,used_seconds) SELECT id,0,0,0 FROM hotspot_service_periods WHERE account_id IN ("+accountIds.map(()=>'?').join(',')+") AND lifecycle='pending'",accountIds);
+   const [batchRows]:any=await app.query("SELECT b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.name package_name,v.version_no,v.duration_value,v.duration_mode,t.name_ar duration_unit_name FROM hotspot_card_batches b JOIN hotspot_package_versions v ON v.id=b.package_version_id JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE b.id=? AND b.owner_manager_id=?",[batchId,scope.managerId]);
    const [actor]:any=await app.query("SELECT id,full_name FROM managers WHERE id=?",[scope.managerId]);
    await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result) VALUES(?,?,'manager','hotspot.batches.create','hotspot_batch',?,NULL,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),batchId,JSON.stringify({name,quantity,packageVersionId:versionId,loginMode,isGift:input.isGift})]);
    await app.commit();
-   return {success:true,id:batchId,cards:credentials};
+   return {success:true,id:batchId,batch:batchRows[0],cards:credentials};
   }catch(error){await app.rollback();throw error;}
  });
 }
