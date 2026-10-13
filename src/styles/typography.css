@@ -61,8 +61,8 @@ body.dashboard-enter label > span:first-child {
 body.dashboard-enter :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea):not(.xterm *),
 .rl-field-value {
   font-family: var(--font-arabic-ui);
-  font-size: var(--rl-type-body);
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   line-height: var(--rl-type-leading);
 }
 body.dashboard-enter :is(button, [role="tab"]),

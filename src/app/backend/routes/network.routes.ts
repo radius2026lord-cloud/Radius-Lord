@@ -68,9 +68,11 @@ const categoryMessage=(error:any)=>{
  if(code==='CATEGORY_INPUT')return 'راجع اسم التصنيف والوصف.';
  if(code==='CATEGORY_MANAGERS_REQUIRED')return 'أسند التصنيف إلى مدير واحد على الأقل.';
  if(code==='CATEGORY_MANAGER_INVALID')return 'يوجد مدير غير متاح للإسناد.';
+ if(code==='CATEGORY_PRINCIPAL_ASSIGNMENT_REQUIRED')return 'يجب إبقاء المدير الرئيسي ضمن إسنادات هذا التصنيف.';
  if(code==='CATEGORY_NAME_CONFLICT'||code==='ER_DUP_ENTRY')return 'اسم التصنيف مستخدم لدى أحد المدراء المحددين.';
  if(code==='CATEGORY_HAS_MEMBERS')return 'لا يمكن إزالة هذا المدير ما دام للتصنيف مشتركون تابعون له.';
- if(code==='CATEGORY_NOT_FOUND')return 'التصنيف غير متاح أو لا تملك صلاحية إدارته.';
+ if(code==='CATEGORY_NOT_FOUND'||code==='CATEGORY_BULK_NOT_FOUND')return 'يوجد تصنيف غير متاح أو لا تملك صلاحية إدارته.';
+ if(code==='CATEGORY_BULK_INPUT')return 'حدد تصنيفًا واحدًا على الأقل لتنفيذ العملية.';
  if(code==='NETWORK_AUTH')return 'لا تملك صلاحية تنفيذ هذه العملية.';
  return 'تعذر حفظ التصنيف.';
 };

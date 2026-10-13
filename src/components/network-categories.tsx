@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect,useMemo,useState} from 'react';
-import {Archive,Building2,Check,Network,Pencil,Plus,RotateCcw,Tags,Users} from 'lucide-react';
+import {Archive,Building2,Check,Network,Pencil,Plus,RotateCcw,Tags,Users,UserRound} from 'lucide-react';
 import {CollectionToolbar,CollectionGrid,CollectionState} from '@/components/ui/collection-display';
 import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card';
 import ProjectInput from '@/components/ui/project-input';
@@ -22,6 +22,7 @@ type Category={
  name:string;
  description:string|null;
  archived_at:string|null;
+ subscriber_count:number|string;
  managers:Manager[];
 };
 type CategoryDraft={id:number;name:string;description:string;managerIds:number[]};
@@ -47,6 +48,9 @@ export default function NetworkCategories({
  const [loading,setLoading]=useState(true);
  const [edit,setEdit]=useState<CategoryDraft|null>(null);
  const [confirm,setConfirm]=useState<Category|null>(null);
+ const [selectedIds,setSelectedIds]=useState<number[]>([]);
+ const [confirmBulk,setConfirmBulk]=useState<'archive'|'restore'|'assign'|null>(null);
+ const [bulkManagerIds,setBulkManagerIds]=useState<number[]>([]);
  const allowed=(action:string)=>principal||permissions.includes('categories.'+action);
 
  useEffect(()=>{
@@ -69,6 +73,10 @@ export default function NetworkCategories({
 
  const visibleItems=useMemo(()=>items.filter(item=>item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())),[items,query]);
  const principalManager=managers.find(manager=>manager.manager_type==='principal');
+ const bulkAllowed=archiveOnly?allowed('restore'):allowed('archive');
+ const allVisibleSelected=visibleItems.length>0&&visibleItems.every(item=>selectedIds.includes(Number(item.id)));
+ const toggleSelected=(id:number,checked:boolean)=>setSelectedIds(current=>checked?Array.from(new Set([...current,id])):current.filter(value=>value!==id));
+ const selectVisible=(checked:boolean)=>setSelectedIds(current=>checked?Array.from(new Set([...current,...visibleItems.map(item=>Number(item.id))])):current.filter(id=>!visibleItems.some(item=>Number(item.id)===id)));
  const startCreate=()=>setEdit({id:0,name:'',description:'',managerIds:principal&&principalManager?[Number(principalManager.id)]:[]});
  const startEdit=(item:Category)=>setEdit({
   id:item.id,name:item.name,description:item.description||'',
@@ -81,6 +89,19 @@ export default function NetworkCategories({
    ?Array.from(new Set([...edit.managerIds,managerId]))
    :edit.managerIds.filter(id=>id!==managerId);
   setEdit({...edit,managerIds});
+ };
+ const applyBulk=async()=>{
+  if(!confirmBulk||!selectedIds.length)return;
+  setBusy(true);
+  try{
+   const action=confirmBulk==='assign'?'bulk_assign':confirmBulk==='archive'?'bulk_archive':'bulk_restore';
+   const payload={action,ids:selectedIds,...(confirmBulk==='assign'?{managerIds:bulkManagerIds}:{})};
+   const response=await fetch(endpoint+'/categories',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+   const body=await response.json();
+   if(!response.ok)throw new Error(body.message);
+   setConfirmBulk(null);setSelectedIds([]);setBulkManagerIds([]);setMessage(confirmBulk==='assign'?'تمت إضافة الإسناد إلى '+Number(body.affected||0).toLocaleString('ar')+' إسنادًا.':confirmBulk==='archive'?'تمت أرشفة '+(body.affected||selectedIds.length)+' تصنيفًا.':'تم استرجاع '+(body.affected||selectedIds.length)+' تصنيفًا.');setRevision(value=>value+1);
+  }catch(e){setError(e instanceof Error?e.message:'تعذر تنفيذ العملية الجماعية.');}
+  finally{setBusy(false);}
  };
  const save=async(action:string,id?:number)=>{
   setBusy(true);
@@ -109,7 +130,25 @@ export default function NetworkCategories({
     :undefined}
   />
   {loading?<CollectionState loading>جارٍ التحميل…</CollectionState>:<>
+   {bulkAllowed&&visibleItems.length>0&&<div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-white/10 dark:bg-white/[.03]">
+    <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+     <input type="checkbox" checked={allVisibleSelected} onChange={event=>selectVisible(event.target.checked)} className="h-4 w-4 rounded accent-blue-600"/>
+     تحديد التصنيفات الظاهرة ({visibleItems.length})
+    </label>
+    <span className="text-xs text-slate-500">المحدد: {selectedIds.length}</span>
+    {selectedIds.length>0&&<div className="mr-auto flex flex-wrap gap-2">
+     <ProjectButton variant="ghost" disabled={busy} onClick={()=>setSelectedIds([])}>إلغاء التحديد</ProjectButton>
+     {principal&&!archiveOnly&&<ProjectButton variant="secondary" disabled={busy} onClick={()=>{setBulkManagerIds([]);setConfirmBulk('assign');}}><Users/>إسناد لمدراء</ProjectButton>}
+     <ProjectButton variant="secondary" disabled={busy} onClick={()=>setConfirmBulk(archiveOnly?'restore':'archive')}>
+      {archiveOnly?<><RotateCcw/>استرجاع المحدد</>:<><Archive/>أرشفة المحدد</>}
+     </ProjectButton>
+    </div>}
+   </div>}
    {visibleItems.length>0&&<CollectionGrid>{visibleItems.map(item=><ProjectInfoCard key={item.id}>
+    {bulkAllowed&&<label className="mb-3 flex w-fit cursor-pointer items-center gap-2 text-[11px] text-slate-500">
+     <input type="checkbox" checked={selectedIds.includes(Number(item.id))} onChange={event=>toggleSelected(Number(item.id),event.target.checked)} className="h-4 w-4 rounded accent-blue-600"/>
+     تحديد التصنيف
+    </label>}
     <div className="flex items-start justify-between gap-3">
      <div className="flex min-w-0 items-start gap-2.5">
       <ProjectCardIcon icon={Tags} tone="warning"/>
@@ -121,6 +160,16 @@ export default function NetworkCategories({
      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-slate-300">
       {item.managers.length} {item.managers.length===1?'مدير':'مدراء'}
      </span>
+    </div>
+    <div className="mt-4 grid grid-cols-2 gap-3">
+     <div className="rounded-xl bg-blue-50/80 p-3 dark:bg-blue-500/[.08]">
+      <div className="flex items-center gap-2 text-[11px] text-slate-500"><UserRound className="h-4 w-4 text-blue-500"/>المشتركون</div>
+      <div className="mt-1 text-base font-bold text-slate-800 dark:text-slate-100">{Number(item.subscriber_count||0).toLocaleString('ar')}</div>
+     </div>
+     <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[.04]">
+      <div className="flex items-center gap-2 text-[11px] text-slate-500"><Users className="h-4 w-4 text-violet-500"/>المدراء والوكلاء</div>
+      <div className="mt-1 text-base font-bold text-slate-800 dark:text-slate-100">{Number(item.managers.length||0).toLocaleString('ar')}</div>
+     </div>
     </div>
     <div className="mt-4 border-t border-slate-200 pt-3 dark:border-white/10">
      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
@@ -177,6 +226,10 @@ export default function NetworkCategories({
      <ProjectButton type="submit" disabled={busy||principal&&edit.managerIds.length===0}>حفظ</ProjectButton>
     </div>
    </form>}
+  </ProjectDialog>
+
+  <ProjectDialog open={Boolean(confirmBulk)} title={confirmBulk==='assign'?'إسناد التصنيفات المحددة':confirmBulk==='restore'?'استرجاع التصنيفات المحددة':'أرشفة التصنيفات المحددة'} onClose={()=>setConfirmBulk(null)} footer={<><ProjectButton variant="ghost" disabled={busy} onClick={()=>setConfirmBulk(null)}>إلغاء</ProjectButton><ProjectButton disabled={busy||confirmBulk==='assign'&&!bulkManagerIds.length} onClick={()=>void applyBulk()}>{confirmBulk==='assign'?'تأكيد الإسناد':confirmBulk==='restore'?'تأكيد الاسترجاع':'تأكيد الأرشفة'}</ProjectButton></>}>
+   {confirmBulk==='assign'?<div className="space-y-3"><p className="text-sm text-slate-500">اختر مدراء أو وكلاء لإضافة إسنادهم إلى التصنيفات المحددة. لا تُحذف الإسنادات الحالية.</p><div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-white/10">{managers.map(manager=>{const checked=bulkManagerIds.includes(Number(manager.id)),unavailable=Boolean(manager.archived_at)||!manager.is_enabled;return <label key={manager.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5"><input type="checkbox" checked={checked} disabled={unavailable} onChange={event=>setBulkManagerIds(current=>event.target.checked?Array.from(new Set([...current,Number(manager.id)])):current.filter(id=>id!==Number(manager.id)))} className="h-4 w-4 rounded accent-blue-600"/><span className="flex-1">{manager.full_name}</span><span className="text-[10px] text-slate-500">{managerLabel(manager)}{unavailable?' · متوقف':''}</span></label>;})}</div></div>:<p>{confirmBulk==='restore'?'سيتم استرجاع':'سيتم نقل'} {selectedIds.length} تصنيفًا {confirmBulk==='restore'?'من الأرشيف إلى القائمة النشطة.':'إلى الأرشيف مع إبقاء سجلات المشتركين محفوظة.'}</p>}
   </ProjectDialog>
 
   <ProjectDialog open={Boolean(confirm)} title="أرشفة التصنيف" onClose={()=>setConfirm(null)} footer={<ProjectButton disabled={busy} onClick={()=>void save('archive',confirm?.id)}>تأكيد الأرشفة</ProjectButton>}>

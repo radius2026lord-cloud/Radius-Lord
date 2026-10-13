@@ -7,9 +7,10 @@ const normalizeIds=(value:any)=>Array.from(new Set((Array.isArray(value)?value:[
 export async function networkCategories(scope:any,input?:any){
  return withNetwork(scope,async app=>{
   const action=input?.action||'view';
-  if(!['view','create','update','archive','restore'].includes(action))throw new Error('CATEGORY_INPUT');
+  if(!['view','create','update','archive','restore','bulk_archive','bulk_restore','bulk_assign'].includes(action))throw new Error('CATEGORY_INPUT');
   const access=await managerAccess(app,scope.managerId,scope.authVersion);
-  if(access.role!=='principal'&&!access.permissions.includes('categories.'+action))throw new Error('NETWORK_AUTH');
+  const permissionAction=action==='bulk_assign'?'update':action.startsWith('bulk_')?action.slice(5):action;
+  if(access.role!=='principal'&&!access.permissions.includes('categories.'+permissionAction))throw new Error('NETWORK_AUTH');
   const principal=access.role==='principal';
   // Agent employees work with the agent's customer and category ownership.
   const ownerManagerId=access.role==='agent_employee'?Number(access.manager.parent_agent_manager_id):Number(access.manager.id);
@@ -17,7 +18,8 @@ export async function networkCategories(scope:any,input?:any){
 
   if(action==='view'){
    const where=principal?'':'WHERE EXISTS(SELECT 1 FROM customer_category_manager_assignments x WHERE x.category_id=c.id AND x.manager_id=?)';
-   const [rows]:any=await app.query(`SELECT c.id,c.name,c.description,c.manager_id,c.created_by_manager_id,c.archived_at
+   const [rows]:any=await app.query(`SELECT c.id,c.name,c.description,c.manager_id,c.created_by_manager_id,c.archived_at,
+      (SELECT COUNT(DISTINCT x.customer_id) FROM customer_category_memberships x WHERE x.category_id=c.id) AS subscriber_count
     FROM customer_categories c ${where} ORDER BY c.id DESC LIMIT 200`,principal?[]:[ownerManagerId]);
    let managers:CategoryManager[]=[];
    if(principal){
@@ -43,6 +45,88 @@ export async function networkCategories(scope:any,input?:any){
    return {items:rows.map((row:any)=>({...row,managers:owners.get(Number(row.id))||[]})),managers,actorOwner};
   }
 
+  if(action==='bulk_assign'){
+   if(!principal)throw new Error('NETWORK_AUTH');
+   const ids=normalizeIds(input.ids),managerIds=normalizeIds(input.managerIds);
+   if(!ids.length||ids.length>200||ids.some(value=>!Number.isSafeInteger(value)||value<1))throw new Error('CATEGORY_BULK_INPUT');
+   if(!managerIds.length||managerIds.some(value=>!Number.isSafeInteger(value)||value<1))throw new Error('CATEGORY_MANAGERS_REQUIRED');
+   await app.beginTransaction();
+   try{
+    const [categories]:any=await app.query(`SELECT id,name,description,manager_id,created_by_manager_id,archived_at FROM customer_categories WHERE id IN (${ids.map(()=>'?').join(',')}) AND archived_at IS NULL FOR UPDATE`,ids);
+    if(categories.length!==ids.length)throw new Error('CATEGORY_BULK_NOT_FOUND');
+    const [validManagers]:any=await app.query(`SELECT id FROM managers WHERE id IN (${managerIds.map(()=>'?').join(',')}) AND (manager_type='principal' OR account_role IN('center_employee','agent')) AND is_enabled=1 AND archived_at IS NULL FOR UPDATE`,managerIds);
+    if(validManagers.length!==managerIds.length)throw new Error('CATEGORY_MANAGER_INVALID');
+    const [currentRows]:any=await app.query(`SELECT category_id,manager_id FROM customer_category_manager_assignments WHERE category_id IN (${ids.map(()=>'?').join(',')}) ORDER BY category_id,manager_id FOR UPDATE`,ids);
+    const currentByCategory=new Map<number,Set<number>>();
+    for(const row of currentRows){const categoryId=Number(row.category_id),set=currentByCategory.get(categoryId)||new Set<number>();set.add(Number(row.manager_id));currentByCategory.set(categoryId,set);}
+    for(const managerId of managerIds){
+     const pending=categories.filter((row:any)=>!currentByCategory.get(Number(row.id))?.has(managerId));
+     if(!pending.length)continue;
+     const pendingIds=pending.map((row:any)=>Number(row.id));
+     const [selectedNameConflicts]:any=await app.query(`SELECT name FROM customer_categories WHERE id IN (${pendingIds.map(()=>'?').join(',')}) GROUP BY name HAVING COUNT(*)>1 LIMIT 1`,pendingIds);
+     if(selectedNameConflicts.length)throw new Error('CATEGORY_NAME_CONFLICT');
+     const names=Array.from(new Set(pending.map((row:any)=>String(row.name))));
+     const [conflicts]:any=await app.query(`SELECT c.id FROM customer_categories c JOIN customer_category_manager_assignments a ON a.category_id=c.id WHERE a.manager_id=? AND c.name IN (${names.map(()=>'?').join(',')}) AND c.id NOT IN (${ids.map(()=>'?').join(',')}) LIMIT 1`,[managerId,...names,...ids]);
+     if(conflicts.length)throw new Error('CATEGORY_NAME_CONFLICT');
+    }
+    const actor=JSON.stringify({id:access.manager.id,full_name:access.manager.full_name,role:access.role});
+    let affected=0;
+    for(const category of categories){
+     const id=Number(category.id);
+     const current=Array.from(currentByCategory.get(id)||new Set<number>());
+     for(const managerId of managerIds)if(!current.includes(managerId)){
+      await app.query('INSERT INTO customer_category_manager_assignments(category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?)',[id,managerId,scope.managerId]);
+      affected++;
+     }
+     const [afterRows]:any=await app.query('SELECT manager_id FROM customer_category_manager_assignments WHERE category_id=? ORDER BY manager_id',[id]);
+     await app.query(`INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result)
+      VALUES(?,?,'manager','categories.assign','customer_category',?,?,?,'success')`,[scope.managerId,actor,id,JSON.stringify({...category,managerIds:current}),JSON.stringify({...category,managerIds:afterRows.map((row:any)=>Number(row.manager_id))})]);
+    }
+    await app.commit();
+    return {success:true,affected};
+   }catch(error){
+    await app.rollback();
+    try{await app.query(`INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,result,failure_code) VALUES(?,'manager','categories.assign','customer_category','failed','CATEGORY_BULK_REJECTED')`,[scope.managerId]);}
+    catch{console.error('[categories] bulk assignment audit unavailable');}
+    throw error;
+   }
+  }
+  if(action==='bulk_archive'||action==='bulk_restore'){
+   const ids=normalizeIds(input.ids);
+   if(!ids.length||ids.length>200||ids.some(value=>!Number.isSafeInteger(value)||value<1))throw new Error('CATEGORY_BULK_INPUT');
+   const archive=action==='bulk_archive';
+   await app.beginTransaction();
+   try{
+    const [rows]:any=await app.query(`SELECT c.id,c.name,c.description,c.manager_id,c.created_by_manager_id,c.archived_at
+      FROM customer_categories c
+      WHERE c.id IN (${ids.map(()=>'?').join(',')})
+       AND c.archived_at ${archive?'IS NULL':'IS NOT NULL'}
+       ${principal?'':'AND EXISTS(SELECT 1 FROM customer_category_manager_assignments a WHERE a.category_id=c.id AND a.manager_id=?)'}
+      FOR UPDATE`,principal?ids:[...ids,ownerManagerId]);
+    if(rows.length!==ids.length)throw new Error('CATEGORY_BULK_NOT_FOUND');
+    const actor=JSON.stringify({id:access.manager.id,full_name:access.manager.full_name,role:access.role});
+    for(const row of rows){
+     const id=Number(row.id);
+     if(archive)await app.query('UPDATE customer_categories SET archived_at=CURRENT_TIMESTAMP,archived_by_manager_id=? WHERE id=?',[scope.managerId,id]);
+     else await app.query('UPDATE customer_categories SET archived_at=NULL,archived_by_manager_id=NULL WHERE id=?',[id]);
+     const [assigned]:any=await app.query('SELECT manager_id FROM customer_category_manager_assignments WHERE category_id=? ORDER BY manager_id',[id]);
+     const [saved]:any=await app.query('SELECT id,name,description,manager_id,created_by_manager_id,archived_at FROM customer_categories WHERE id=?',[id]);
+     await app.query(`INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result)
+      VALUES(?,?,'manager',?,'customer_category',?,?,?,'success')`,[
+       scope.managerId,actor,'categories.'+(archive?'archive':'restore'),id,JSON.stringify(row),
+       JSON.stringify({...saved[0],managerIds:assigned.map((entry:any)=>Number(entry.manager_id))})
+     ]);
+    }
+    await app.commit();
+    return {success:true,affected:rows.length};
+   }catch(error){
+    await app.rollback();
+    try{await app.query(`INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,result,failure_code)
+      VALUES(?,'manager',?,'customer_category','failed','CATEGORY_BULK_REJECTED')`,[scope.managerId,'categories.'+action]);}
+    catch{console.error('[categories] bulk audit unavailable');}
+    throw error;
+   }
+  }
   await app.beginTransaction();
   try{
    const id=Number(input.id);
