@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {PanelsTopLeft,TriangleAlert,X} from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 import "./project-dialog.css";
 
 export default function ProjectDialog({open=true,title,description,onClose,children,footer,maxWidth="max-w-2xl",danger=false,busy=false,headerAccessory,headerDetails,titleClassName=""}:{open?:boolean;title:string;description?:string;onClose:()=>void;children:React.ReactNode;footer?:React.ReactNode;maxWidth?:string;danger?:boolean;busy?:boolean;headerAccessory?:React.ReactNode;headerDetails?:React.ReactNode;titleClassName?:string}){
@@ -13,7 +14,7 @@ export default function ProjectDialog({open=true,title,description,onClose,child
     {!headerAccessory&&<span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] ${danger?"bg-red-50 text-red-500 dark:bg-red-500/15":"bg-blue-100/70 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"}`}>{danger?<TriangleAlert className="h-5 w-5"/>:<PanelsTopLeft className="h-5 w-5"/>}</span>}
     <div className="min-w-0 flex-1"><Dialog.Title className={`text-base font-bold leading-7 ${titleClassName}`}>{title}</Dialog.Title>{description&&<Dialog.Description className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">{description}</Dialog.Description>}{headerDetails}</div>
     {headerAccessory}
-    <ProjectButton variant="ghost" size="icon" disabled={busy} onClick={onClose} aria-label="إغلاق النافذة" className="rounded-full border border-slate-200 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5"><X/></ProjectButton>
+    <ProjectTooltip label="إغلاق النافذة"><ProjectButton variant="ghost" size="icon" disabled={busy} onClick={onClose} aria-label="إغلاق النافذة" className="rounded-full border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"><X/></ProjectButton></ProjectTooltip>
    </div>
    <div className="min-h-0 overflow-y-auto overscroll-contain bg-white p-5 dark:bg-[#17263b] sm:p-6">{children}</div>
    {footer&&<div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 dark:border-white/10 dark:bg-white/[.025] sm:px-6">{footer}</div>}

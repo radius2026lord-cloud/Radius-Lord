@@ -64,6 +64,11 @@ body.dashboard-enter :is(input:not([type="checkbox"]):not([type="radio"]):not([t
   font-size: 15px;
   font-weight: 600;
   line-height: var(--rl-type-leading);
+  color: #17386d;
+}
+:root.dark body.dashboard-enter :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea):not(.xterm *),
+:root.dark .rl-field-value {
+  color: #e2e8f0;
 }
 body.dashboard-enter :is(button, [role="tab"]),
 .rl-action {
