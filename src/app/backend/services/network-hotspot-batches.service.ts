@@ -2,7 +2,7 @@ import {randomInt} from 'crypto';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
 
-const USERNAME_ALPHABETS={letters:'abcdefghjkmnpqrstuvwxyz',alphanumeric:'abcdefghjkmnpqrstuvwxyz23456789'} as const;
+const USERNAME_ALPHABETS={digits:'0123456789',alphanumeric:'abcdefghjkmnpqrstuvwxyz23456789'} as const;
 const PASSWORD_ALPHABETS={digits:'0123456789',alphanumeric:'abcdefghjkmnpqrstuvwxyz23456789'} as const;
 type UsernameAlphabet=keyof typeof USERNAME_ALPHABETS;
 type PasswordAlphabet=keyof typeof PASSWORD_ALPHABETS;
@@ -59,6 +59,7 @@ export async function createHotspotBatch(scope:any,input:any){
    if(!Object.prototype.hasOwnProperty.call(USERNAME_ALPHABETS,usernameAlphabetKind))invalid('usernameAlphabet');
    const passwordAlphabetKind=String(input.passwordAlphabet??'alphanumeric') as PasswordAlphabet;
    if(!Object.prototype.hasOwnProperty.call(PASSWORD_ALPHABETS,passwordAlphabetKind))invalid('passwordAlphabet');
+   if(usernameAlphabetKind==='digits'&&!/^[0-9]*$/.test(usernamePrefix))invalid('usernamePrefix');
    const usernameAlphabet=USERNAME_ALPHABETS[usernameAlphabetKind];
    const passwordAlphabet=PASSWORD_ALPHABETS[passwordAlphabetKind];
    const versionId=integer(input.packageVersionId,1,Number.MAX_SAFE_INTEGER,'packageVersionId');
