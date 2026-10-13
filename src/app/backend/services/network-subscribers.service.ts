@@ -43,7 +43,7 @@ export async function createNetworkSubscriber(scope:any,input:any){
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access);
   if(access.role!=='principal'&&!access.permissions.includes('customers.create'))throw new Error('NETWORK_AUTH');
   const firstName=text(input.firstName,100,'firstName',true)!,lastName=text(input.lastName,100,'lastName',true)!;
-  const phone=text(input.phone,40,'phone'),address=text(input.address,10000,'address'),notes=text(input.notes,10000,'notes');
+  const phone=text(input.phone,40,'phone',true),address=text(input.address,10000,'address',true),notes=text(input.notes,10000,'notes');
   const latitude=coord(input.latitude,-90,90,'latitude'),longitude=coord(input.longitude,-180,180,'longitude');
   if((latitude===null)!==(longitude===null))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{latitude:'أدخل خطي العرض والطول معًا.'}});
   const status=String(input.status??'active');
