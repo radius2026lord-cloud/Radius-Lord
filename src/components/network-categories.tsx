@@ -1,11 +1,184 @@
 "use client";
-import {useEffect,useState} from 'react';
-import {Tags,Plus,Pencil,Archive,RotateCcw} from 'lucide-react';
+
+import {useEffect,useMemo,useState} from 'react';
+import {Archive,Building2,Check,Network,Pencil,Plus,RotateCcw,Tags,Users} from 'lucide-react';
 import {CollectionToolbar,CollectionGrid,CollectionState} from '@/components/ui/collection-display';
 import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card';
 import ProjectInput from '@/components/ui/project-input';
 import ProjectButton from '@/components/ui/project-button';
 import ProjectDialog from '@/components/ui/project-dialog';
 import FloatingNotice from '@/components/ui/floating-notice';
-type Category={id:number;name:string;description:string|null;archived_at:string|null};
-export default function NetworkCategories({endpoint,permissions,principal,archiveOnly=false}:{endpoint:string;permissions:string[];principal:boolean;archiveOnly?:boolean}){const [items,setItems]=useState<Category[]>([]),[query,setQuery]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState(''),[revision,setRevision]=useState(0),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[edit,setEdit]=useState<{id:number;name:string;description:string}|null>(null),[confirm,setConfirm]=useState<Category|null>(null);const allowed=(action:string)=>principal||permissions.includes('categories.'+action);useEffect(()=>{let live=true;setLoading(true);fetch(endpoint+'/categories',{credentials:'include',cache:'no-store'}).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message);if(live)setItems(body.items.filter((item:Category)=>Boolean(item.archived_at)===archiveOnly));}).catch(e=>{if(live)setError(e.message);}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[endpoint,revision,archiveOnly]);const save=async(action:string,id?:number)=>{setBusy(true);try{const r=await fetch(endpoint+'/categories',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({...edit,action,id:id||edit?.id})});const body=await r.json();if(!r.ok)throw new Error(body.message);setEdit(null);setConfirm(null);setMessage('تم حفظ عملية التصنيف.');setRevision(n=>n+1);}catch(e){setError(e instanceof Error?e.message:'تعذر الحفظ.');}finally{setBusy(false);}};return <div className="space-y-4"><FloatingNotice error={error} message={message} onDismiss={()=>{setError('');setMessage('');}}/><CollectionToolbar responsive icon={Tags} title={archiveOnly?'أرشيف التصنيفات':'تصنيفات المشتركين'} description="التصنيفات ضمن نطاق شبكتك والوكلاء" query={query} onQueryChange={setQuery} primaryAction={!archiveOnly&&allowed('create')?<ProjectButton onClick={()=>setEdit({id:0,name:'',description:''})}><Plus/>إضافة تصنيف</ProjectButton>:undefined}/>{loading?<CollectionState loading>جارٍ التحميل…</CollectionState>:<CollectionGrid>{items.filter(item=>item.name.includes(query.trim())).map(item=><ProjectInfoCard key={item.id}><div className="flex items-center gap-2"><ProjectCardIcon icon={Tags} tone="warning"/><h3 className="break-words font-semibold">{item.name}</h3></div><p className="my-3 text-xs text-slate-500">{item.description||'بدون وصف'}</p><div className="flex flex-wrap gap-2">{archiveOnly&&allowed('restore')&&<ProjectButton variant="ghost" disabled={busy} onClick={()=>void save('restore',item.id)}><RotateCcw/>استرجاع</ProjectButton>}{!archiveOnly&&allowed('update')&&<ProjectButton variant="ghost" onClick={()=>setEdit({id:item.id,name:item.name,description:item.description||''})}><Pencil/>تعديل</ProjectButton>}{!archiveOnly&&allowed('archive')&&<ProjectButton variant="ghost" onClick={()=>setConfirm(item)}><Archive/>أرشفة</ProjectButton>}</div></ProjectInfoCard>)}</CollectionGrid>}{!loading&&!items.length&&<CollectionState>لا توجد تصنيفات.</CollectionState>}<ProjectDialog open={Boolean(edit)} title={edit?.id?'تعديل التصنيف':'إضافة تصنيف'} onClose={()=>setEdit(null)}>{edit&&<form className="space-y-4" onSubmit={e=>{e.preventDefault();void save(edit.id?'update':'create');}}><label className="block text-xs">الاسم<ProjectInput required maxLength={100} className="mt-2" value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})}/></label><label className="block text-xs">الوصف<ProjectInput maxLength={5000} className="mt-2" value={edit.description} onChange={e=>setEdit({...edit,description:e.target.value})}/></label><ProjectButton type="submit" disabled={busy}>حفظ</ProjectButton></form>}</ProjectDialog><ProjectDialog open={Boolean(confirm)} title="أرشفة التصنيف" onClose={()=>setConfirm(null)} footer={<ProjectButton disabled={busy} onClick={()=>void save('archive',confirm?.id)}>تأكيد الأرشفة</ProjectButton>}><p>سيُنقل تصنيف {confirm?.name} إلى الأرشيف مع حفظ علاقاته الحالية.</p></ProjectDialog></div>;}
+
+type Manager={
+ id:number;
+ full_name:string;
+ manager_type:string;
+ account_role:string|null;
+ is_enabled:number;
+ archived_at:string|null;
+};
+type Category={
+ id:number;
+ name:string;
+ description:string|null;
+ archived_at:string|null;
+ managers:Manager[];
+};
+type CategoryDraft={id:number;name:string;description:string;managerIds:number[]};
+
+const managerLabel=(manager:Manager)=>{
+ if(manager.account_role==='agent')return 'وكيل';
+ if(manager.account_role==='center_employee')return 'مدير';
+ if(manager.account_role==='agent_employee')return 'موظف وكيل';
+ return manager.manager_type==='principal'?'المدير الرئيسي':'مدير';
+};
+
+export default function NetworkCategories({
+ endpoint,permissions,principal,archiveOnly=false,
+}:{endpoint:string;permissions:string[];principal:boolean;archiveOnly?:boolean}){
+ const [items,setItems]=useState<Category[]>([]);
+ const [managers,setManagers]=useState<Manager[]>([]);
+ const [actorOwner,setActorOwner]=useState<{id:number;full_name:string;role:string}|null>(null);
+ const [query,setQuery]=useState('');
+ const [error,setError]=useState('');
+ const [message,setMessage]=useState('');
+ const [revision,setRevision]=useState(0);
+ const [busy,setBusy]=useState(false);
+ const [loading,setLoading]=useState(true);
+ const [edit,setEdit]=useState<CategoryDraft|null>(null);
+ const [confirm,setConfirm]=useState<Category|null>(null);
+ const allowed=(action:string)=>principal||permissions.includes('categories.'+action);
+
+ useEffect(()=>{
+  let live=true;
+  setLoading(true);
+  fetch(endpoint+'/categories',{credentials:'include',cache:'no-store'})
+   .then(async response=>{
+    const body=await response.json();
+    if(!response.ok)throw new Error(body.message);
+    if(live){
+     setItems((body.items||[]).filter((item:Category)=>Boolean(item.archived_at)===archiveOnly));
+     setManagers(body.managers||[]);
+     setActorOwner(body.actorOwner||null);
+    }
+   })
+   .catch(e=>{if(live)setError(e.message);})
+   .finally(()=>{if(live)setLoading(false);});
+  return()=>{live=false;};
+ },[endpoint,revision,archiveOnly]);
+
+ const visibleItems=useMemo(()=>items.filter(item=>item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())),[items,query]);
+ const startCreate=()=>setEdit({id:0,name:'',description:'',managerIds:[]});
+ const startEdit=(item:Category)=>setEdit({
+  id:item.id,name:item.name,description:item.description||'',
+  managerIds:item.managers.map(manager=>Number(manager.id)),
+ });
+ const toggleManager=(managerId:number,checked:boolean)=>{
+  if(!edit)return;
+  const managerIds=checked
+   ?Array.from(new Set([...edit.managerIds,managerId]))
+   :edit.managerIds.filter(id=>id!==managerId);
+  setEdit({...edit,managerIds});
+ };
+ const save=async(action:string,id?:number)=>{
+  setBusy(true);
+  try{
+   const response=await fetch(endpoint+'/categories',{
+    method:'POST',credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...edit,action,id:id||edit?.id}),
+   });
+   const body=await response.json();
+   if(!response.ok)throw new Error(body.message);
+   setEdit(null);setConfirm(null);setMessage('تم حفظ عملية التصنيف.');setRevision(value=>value+1);
+  }catch(e){setError(e instanceof Error?e.message:'تعذر الحفظ.');}
+  finally{setBusy(false);}
+ };
+
+ return <div className="space-y-4">
+  <FloatingNotice error={error} message={message} onDismiss={()=>{setError('');setMessage('');}}/>
+  <CollectionToolbar
+   responsive icon={Tags}
+   title={archiveOnly?'أرشيف التصنيفات':'تصنيفات المشتركين'}
+   description="أدر التصنيفات وأسندها إلى مدراء أو وكلاء ليستخدموها مع مشتركيهم."
+   query={query} onQueryChange={setQuery}
+   primaryAction={!archiveOnly&&allowed('create')
+    ?<ProjectButton onClick={startCreate}><Plus/>إضافة تصنيف</ProjectButton>
+    :undefined}
+  />
+  {loading?<CollectionState loading>جارٍ التحميل…</CollectionState>:<>
+   {visibleItems.length>0&&<CollectionGrid>{visibleItems.map(item=><ProjectInfoCard key={item.id}>
+    <div className="flex items-start justify-between gap-3">
+     <div className="flex min-w-0 items-start gap-2.5">
+      <ProjectCardIcon icon={Tags} tone="warning"/>
+      <div className="min-w-0">
+       <h3 className="break-words font-semibold">{item.name}</h3>
+       <p className="mt-1 text-xs text-slate-500">{item.description||'بدون وصف'}</p>
+      </div>
+     </div>
+     <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-slate-300">
+      {item.managers.length} {item.managers.length===1?'مدير':'مدراء'}
+     </span>
+    </div>
+    <div className="mt-4 border-t border-slate-200 pt-3 dark:border-white/10">
+     <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+      <Users className="h-4 w-4 text-blue-500"/>المدراء والوكلاء المسند إليهم
+     </div>
+     {item.managers.length
+      ?<div className="flex flex-wrap gap-2">{item.managers.map(manager=><span key={manager.id} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+        {manager.account_role==='agent'?<Network className="h-3.5 w-3.5"/>:<Building2 className="h-3.5 w-3.5"/>}
+        {manager.full_name}<span className="opacity-70">· {managerLabel(manager)}{manager.archived_at||!manager.is_enabled?' · متوقف':''}</span>
+       </span>)}</div>
+      :<p className="text-xs text-slate-500">لم يُسند هذا التصنيف إلى مدير.</p>}
+    </div>
+    <div className="mt-4 flex flex-wrap gap-2">
+     {archiveOnly&&allowed('restore')&&<ProjectButton variant="ghost" disabled={busy} onClick={()=>void save('restore',item.id)}><RotateCcw/>استرجاع</ProjectButton>}
+     {!archiveOnly&&allowed('update')&&<ProjectButton variant="ghost" disabled={busy} onClick={()=>startEdit(item)}><Pencil/>تعديل</ProjectButton>}
+     {!archiveOnly&&allowed('archive')&&<ProjectButton variant="ghost" disabled={busy} onClick={()=>setConfirm(item)}><Archive/>أرشفة</ProjectButton>}
+    </div>
+   </ProjectInfoCard>)}</CollectionGrid>}
+   {!visibleItems.length&&<CollectionState>{query?'لا توجد تصنيفات مطابقة.':'لا توجد تصنيفات.'}</CollectionState>}
+  </>}
+
+  <ProjectDialog open={Boolean(edit)} title={edit?.id?'تعديل التصنيف وإسناده':'إضافة تصنيف وإسناده'} onClose={()=>setEdit(null)}>
+   {edit&&<form className="space-y-4" onSubmit={event=>{event.preventDefault();void save(edit.id?'update':'create');}}>
+    <label className="block text-xs font-medium">اسم التصنيف
+     <ProjectInput required maxLength={100} className="mt-2" value={edit.name} onChange={event=>setEdit({...edit,name:event.target.value})}/>
+    </label>
+    <label className="block text-xs font-medium">الوصف
+     <ProjectInput maxLength={5000} className="mt-2" value={edit.description} onChange={event=>setEdit({...edit,description:event.target.value})}/>
+    </label>
+    {principal
+     ?<fieldset className="space-y-2">
+       <legend className="mb-2 flex items-center gap-2 text-xs font-semibold"><Users className="h-4 w-4 text-blue-500"/>إسناد التصنيف إلى مدير أو أكثر</legend>
+       <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-white/10">
+        {managers.map(manager=>{
+         const checked=edit.managerIds.includes(Number(manager.id));
+         const unavailable=Boolean(manager.archived_at)||!manager.is_enabled;
+         return <label key={manager.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5">
+          <input type="checkbox" checked={checked} onChange={event=>toggleManager(Number(manager.id),event.target.checked)} className="h-4 w-4 rounded accent-blue-600"/>
+          <span className="flex-1">{manager.full_name}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500 dark:bg-white/10">{managerLabel(manager)}{unavailable?' · متوقف':''}</span>
+          {checked&&<Check className="h-4 w-4 text-emerald-600"/>}
+         </label>;
+        })}
+        {!managers.length&&<p className="px-3 py-4 text-xs text-slate-500">لا يوجد مدراء متاحون للإسناد.</p>}
+       </div>
+       <p className="text-[11px] leading-5 text-slate-500">يظهر التصنيف لكل مدير مسند إليه، ويمكن للمشترك التابع لذلك المدير استخدامه. لا يغيّر الإسناد تبعية المشترك.</p>
+      </fieldset>
+     :<div className="flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200">
+       <Building2 className="mt-0.5 h-4 w-4 shrink-0"/>
+       <span>{edit.id?'تبعية التصنيف للمدراء تبقى بإدارة المدير الرئيسي.':'سيُسند التصنيف تلقائيًا إلى حسابك؛ ويستخدمه فريق الوكيل عند العمل ضمن تبعيته.'}{actorOwner?.full_name?' ('+actorOwner.full_name+')':''}</span>
+      </div>}
+    <div className="flex justify-end gap-2 pt-1">
+     <ProjectButton type="button" variant="ghost" disabled={busy} onClick={()=>setEdit(null)}>إلغاء</ProjectButton>
+     <ProjectButton type="submit" disabled={busy||principal&&edit.managerIds.length===0}>حفظ</ProjectButton>
+    </div>
+   </form>}
+  </ProjectDialog>
+
+  <ProjectDialog open={Boolean(confirm)} title="أرشفة التصنيف" onClose={()=>setConfirm(null)} footer={<ProjectButton disabled={busy} onClick={()=>void save('archive',confirm?.id)}>تأكيد الأرشفة</ProjectButton>}>
+   <p>سيُنقل تصنيف {confirm?.name} إلى الأرشيف مع حفظ علاقاته الحالية.</p>
+  </ProjectDialog>
+ </div>;
+}

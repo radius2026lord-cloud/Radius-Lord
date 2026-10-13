@@ -45,7 +45,7 @@ BEGIN
    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Central platform tables detected; tenant foundation refused';
  END IF;
  IF EXISTS (SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME NOT IN
-   ('time_units','network_settings','network_contact_numbers','platform_subscription','permission_groups','permissions','permission_group_permissions','managers','customers','customer_identity_documents','address_keywords','customer_categories','customer_category_memberships','activity_log')) THEN
+   ('time_units','network_settings','network_contact_numbers','platform_subscription','permission_groups','permissions','permission_group_permissions','managers','customers','customer_identity_documents','address_keywords','customer_categories','customer_category_manager_assignments','customer_category_memberships','activity_log')) THEN
    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Existing unrelated tables found; use a new tenant database';
  END IF;
 END$$
@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS address_keywords (
 
 CREATE TABLE IF NOT EXISTS customer_categories (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  manager_id BIGINT UNSIGNED NOT NULL,
+  manager_id BIGINT UNSIGNED NOT NULL COMMENT 'Legacy anchor manager; active visibility is defined by customer_category_manager_assignments',
   name VARCHAR(100) NOT NULL,
   description TEXT NULL,
   created_by_manager_id BIGINT UNSIGNED NOT NULL,
@@ -277,6 +277,19 @@ CREATE TABLE IF NOT EXISTS customer_categories (
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS customer_category_manager_assignments (
+  category_id BIGINT UNSIGNED NOT NULL,
+  manager_id BIGINT UNSIGNED NOT NULL,
+  assigned_by_manager_id BIGINT UNSIGNED NOT NULL,
+  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (category_id,manager_id),
+  KEY idx_category_assignment_manager (manager_id,category_id),
+  CONSTRAINT fk_category_assignment_category FOREIGN KEY (category_id) REFERENCES customer_categories(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_category_assignment_manager FOREIGN KEY (manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_category_assignment_actor FOREIGN KEY (assigned_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS customer_category_memberships (
   customer_id BIGINT UNSIGNED NOT NULL,
   category_id BIGINT UNSIGNED NOT NULL,
@@ -284,8 +297,9 @@ CREATE TABLE IF NOT EXISTS customer_category_memberships (
   assigned_by_manager_id BIGINT UNSIGNED NOT NULL,
   assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (customer_id,category_id),
+  KEY idx_membership_category_manager (category_id,manager_id),
   CONSTRAINT fk_membership_customer_owner FOREIGN KEY (customer_id,manager_id) REFERENCES customers(id,manager_id) ON DELETE RESTRICT,
-  CONSTRAINT fk_membership_category_owner FOREIGN KEY (category_id,manager_id) REFERENCES customer_categories(id,manager_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_membership_category_assignment FOREIGN KEY (category_id,manager_id) REFERENCES customer_category_manager_assignments(category_id,manager_id) ON DELETE RESTRICT,
   CONSTRAINT fk_membership_actor FOREIGN KEY (assigned_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
