@@ -2,10 +2,11 @@ import {randomInt} from 'crypto';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
 
-const ALPHABET='abcdefghjkmnpqrstuvwxyz23456789';
+const ALPHABETS={letters:'abcdefghjkmnpqrstuvwxyz',alphanumeric:'abcdefghjkmnpqrstuvwxyz23456789'} as const;
+type AlphabetKind=keyof typeof ALPHABETS;
 function invalid(field:string):never{const error:any=new Error('HOTSPOT_BATCH_INPUT');error.fields={[field]:'تحقق من القيمة المدخلة.'};throw error;}
 function integer(value:any,min:number,max:number,field:string){const n=Number(value);if(!Number.isSafeInteger(n)||n<min||n>max)invalid(field);return n;}
-function token(length:number){let value='';for(let i=0;i<length;i++)value+=ALPHABET[randomInt(ALPHABET.length)];return value;}
+function token(length:number,alphabet:string){let value='';for(let i=0;i<length;i++)value+=alphabet[randomInt(alphabet.length)];return value;}
 function rate(value:any){const n=BigInt(String(value));if(n%1000000000n===0n)return (n/1000000000n)+'G';if(n%1000000n===0n)return (n/1000000n)+'M';if(n%1000n===0n)return (n/1000n)+'k';return String(n);}
 function valuesSql(rows:any[][]){return rows.map(()=> '('+rows[0].map(()=>'?').join(',')+')').join(',');}
 async function ensureRadiusGroup(app:any,version:any){
@@ -47,11 +48,18 @@ export async function createHotspotBatch(scope:any,input:any){
    const loginMode=String(input.loginMode);
    if(!['code','username_password'].includes(loginMode))invalid('loginMode');
    if(typeof input.isGift!=='boolean')invalid('isGift');
+   const usernamePrefix=String(input.usernamePrefix??'').trim().toLowerCase();
+   if(!/^[a-z0-9_-]*$/.test(usernamePrefix)||usernamePrefix.length>16)invalid('usernamePrefix');
+   const usernameLength=integer(input.usernameLength,6,32,'usernameLength');
+   if(usernameLength-usernamePrefix.length<4)invalid('usernamePrefix');
+   const passwordLength=loginMode==='code'?usernameLength:integer(input.passwordLength,6,32,'passwordLength');
+   const alphabetKind=String(input.alphabet??'alphanumeric') as AlphabetKind;
+   if(!Object.prototype.hasOwnProperty.call(ALPHABETS,alphabetKind))invalid('alphabet');
+   const alphabet=ALPHABETS[alphabetKind];
    const versionId=integer(input.packageVersionId,1,Number.MAX_SAFE_INTEGER,'packageVersionId');
    const [rows]:any=await app.query("SELECT p.id package_id,p.name package_name,p.base_price,p.currency_code,p.owner_manager_id,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_package_versions v JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE v.id=? AND p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL AND v.id=(SELECT latest.id FROM hotspot_package_versions latest WHERE latest.package_id=p.id ORDER BY latest.version_no DESC LIMIT 1) FOR UPDATE",[versionId,scope.managerId]);
    const version=rows[0];if(!version)throw new Error('HOTSPOT_BATCH_PACKAGE_UNAVAILABLE');
-   const length=8,passwordLength=10;
-   const generationOptions={usernameLength:length,passwordLength:loginMode==='code'?length:passwordLength,format:loginMode==='code'?'single-code':'username-password',alphabet:'lowercase-unambiguous-alphanumeric'};
+   const generationOptions={usernamePrefix,usernameLength,passwordLength,format:loginMode==='code'?'single-code':'username-password',alphabet:alphabetKind};
    const price= input.isGift?'0.00':String(version.base_price);
    const [created]:any=await app.query("INSERT INTO hotspot_card_batches(package_version_id,name,quantity,owner_manager_id,created_by,login_mode,generation_options,unit_price,currency_code,is_gift) VALUES(?,?,?,?,?,?,?,?,?,?)",[versionId,name,quantity,scope.managerId,scope.managerId,loginMode,JSON.stringify(generationOptions),price,version.currency_code,input.isGift?1:0]);
    const batchId=Number(created.insertId);
@@ -59,8 +67,8 @@ export async function createHotspotBatch(scope:any,input:any){
    for(let serial=1;serial<=quantity;serial++){
     let username='',password='',identityId=0;
     for(let attempt=0;attempt<12;attempt++){
-     username=token(length);if(seen.has(username))continue;
-     password=loginMode==='code'?username:token(passwordLength);
+     username=usernamePrefix+token(usernameLength-usernamePrefix.length,alphabet);if(seen.has(username))continue;
+     password=loginMode==='code'?username:token(passwordLength,alphabet);
      const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('hotspot')");
      identityId=Number(identity.insertId);
      try{
