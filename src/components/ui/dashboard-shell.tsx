@@ -51,6 +51,15 @@ import {
 type NavItem = { label: string; href: string; icon: any };
 type NavGroup = { label: string; icon: any; items: NavItem[] };
 
+function findNavMatch(groups:NavGroup[],pathname:string):{group:NavGroup;item:NavItem}|undefined {
+  const entries=groups.flatMap(group=>group.items.map(item=>({group,item})));
+  const exact=entries.find(({item})=>item.href===pathname);
+  if(exact)return exact;
+  return entries
+    .filter(({item})=>item.href!=="/Dashboard"&&pathname.startsWith(item.href+"/")&&!(item.href==="/Dashboard/connection-servers"&&pathname.startsWith(item.href+"/add")))
+    .sort((a,b)=>b.item.href.length-a.item.href.length)[0];
+}
+
 const masterAdminHome: NavItem = { label: "الصفحة الرئيسية", href: "/Dashboard", icon: Home };
 
 const masterAdminGroups: NavGroup[] = [
@@ -219,21 +228,15 @@ export default function DashboardShell({ children,network }: { children: React.R
   }, [accountType, customerOnboarding,Boolean(network)]);
 
   const currentTitle = useMemo(() => {
-    if (accountType === "master_admin" && /^\/Dashboard\/connection-servers\/[^/]+$/.test(pathname) && !pathname.endsWith("/add")) return "تفاصيل وإعداد خادم الاتصال";
+    if (accountType === "master_admin" && new RegExp("^/Dashboard/connection-servers/[^/]+$").test(pathname) && !pathname.endsWith("/add")) return "تفاصيل وإعداد خادم الاتصال";
     if (pathname === home.href) return home.label;
-    const groups = navGroups;
-    for (const group of groups) {
-      const match = group.items.find((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
-      if (match) return match.label;
-    }
-    return "الصفحة الرئيسية";
-  }, [pathname, accountType,network?.basePath]);
+    return findNavMatch(navGroups,pathname)?.item.label ?? "الصفحة الرئيسية";
+  }, [pathname,accountType,network?.basePath,navGroups,home.href]);
 
   useEffect(() => {
-    const groups = navGroups;
-    const activeGroup = groups.find((group) => group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")))));
-    if (activeGroup) setOpenNavGroups((current) => ({ ...current, [activeGroup.label]: true }));
-  }, [pathname, accountType,network?.basePath]);
+    const match=findNavMatch(navGroups,pathname);
+    if(match)setOpenNavGroups(current=>current[match.group.label]?current:{...current,[match.group.label]:true});
+  }, [pathname,accountType,network?.basePath]);
 
   const revealNavGroup = (label: string) => {
     if(navRevealTimer.current)clearTimeout(navRevealTimer.current);
@@ -275,7 +278,7 @@ export default function DashboardShell({ children,network }: { children: React.R
           )}
           {(navGroups).map((group) => {
             const GroupIcon = group.icon;
-            const groupActive = group.items.some((item) => (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add"))));
+            const groupActive = findNavMatch(navGroups,pathname)?.group.label===group.label;
             const open = Boolean(openNavGroups[group.label]);
             return <div key={group.label} ref={mobile ? undefined : (el) => { navGroupRefs.current[group.label] = el; }} className="mb-2">
               <button type="button" onClick={() => compact && !mobile ? setCollapsed(false) : toggleNavGroup(group.label, !open, mobile)} title={compact ? group.label : undefined} className={`group flex min-h-12 w-full items-center rounded-[18px] rl-nav-main text-[15px] font-medium ${shellMotion} ${groupActive ? "text-[#0758e9] dark:text-white" : "text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.045] dark:hover:text-white"} ${compact ? "justify-center px-0" : "gap-3 px-2"}`}>
@@ -286,7 +289,7 @@ export default function DashboardShell({ children,network }: { children: React.R
               <div className={`grid transition-[grid-template-rows,opacity] duration-[450ms] ease-[cubic-bezier(.45,0,.25,1)] motion-reduce:transition-none ${!compact && open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                 <div className="min-h-0 overflow-hidden"><div className="space-y-1 py-1 pr-5">
                   {group.items.map((item) => {
-                    const Icon = item.icon; const active = (pathname === item.href || (item.href === "/Dashboard/connection-servers" && pathname.startsWith(item.href+"/") && !pathname.endsWith("/add")));
+                    const Icon = item.icon; const active = findNavMatch(navGroups,pathname)?.item.href===item.href;
                     return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 rl-nav-sub text-[13px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
                   })}
                 </div></div>
@@ -320,15 +323,16 @@ export default function DashboardShell({ children,network }: { children: React.R
           <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة"><Menu className="h-5 w-5" /></button>
           <div className="min-w-0 flex-1 px-1">
             {(() => {
-              const groups = navGroups;
-              const group = groups.find((item) => item.items.some((child) => (child.href === pathname || (child.href === "/Dashboard/connection-servers" && pathname.startsWith(child.href+"/")))));
-              const current = group?.items.find((item) => item.href === pathname);
-              const parent = group?.items[0];
+              const match=findNavMatch(navGroups,pathname);
+              const group=match?.group;
+              const current=match?.item;
+              const parent=group?.items[0];
+              const currentLabel=accountType==="master_admin"&&new RegExp("^/Dashboard/connection-servers/[^/]+$").test(pathname)&&!pathname.endsWith("/add")?"تفاصيل وإعداد خادم الاتصال":current?.label??currentTitle;
               return <div className="min-w-0">
                 {network?.tab!=="profiles"&&<div key={group?.label ?? currentTitle} className="rl-shell-title truncate text-sm font-bold text-[#102a63] transition-all duration-300 dark:text-[#f4f1f5]">{group?.label ?? currentTitle}</div>}
                 <nav aria-label="دليل التنقل" className="rl-breadcrumb mt-1.5 flex min-w-0 items-center gap-1.5 overflow-visible text-[10px] font-medium">
-                  {parent && pathname !== parent.href && <><Link href={parent.href} className="group/crumb relative shrink-0 rounded-[9px] px-2 py-1 text-slate-500 transition-all duration-200 hover:bg-[#edf5ff] hover:text-[#0758e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/35 dark:text-[#b9b3bd] dark:hover:bg-white/[.07] dark:hover:text-white"><span>{parent.label}</span><span className="absolute inset-x-2 -bottom-px h-px origin-right scale-x-0 bg-[#0758e9] transition-transform duration-200 group-hover/crumb:scale-x-100" /></Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 transition-transform duration-200 dark:text-[#77717b]" /></>}
-                  {network&&group&&group.items.length>1?<div ref={sectionMenuRef} className="relative shrink-0"><button type="button" aria-current="page" aria-haspopup="menu" aria-expanded={sectionMenuOpen} onClick={()=>setSectionMenuOpen(value=>!value)} className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/30 bg-emerald-50 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.08)] transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/35 dark:border-emerald-400/45 dark:bg-emerald-400/[.16] dark:text-emerald-100 dark:hover:bg-emerald-400/[.22]"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-45" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/15 dark:bg-emerald-300 dark:ring-emerald-300/25" /></span><span className="truncate">{current?.label ?? currentTitle}</span><ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${sectionMenuOpen?"rotate-180":""}`}/></button>{sectionMenuOpen&&<div role="menu" aria-label={`أقسام ${group.label}`} className="ui-state-enter absolute right-0 top-[calc(100%+8px)] z-[90] w-[230px] overflow-hidden rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] p-1.5 text-right shadow-[0_18px_45px_rgba(44,65,92,.22)] dark:border-white/[.12] dark:bg-[#302e33] dark:shadow-[0_22px_55px_rgba(0,0,0,.38)]">{group.items.map((item)=>{const ItemIcon=item.icon;const active=item.href===pathname;return <Link key={item.href} href={item.href} role="menuitem" aria-current={active?"page":undefined} onClick={()=>setSectionMenuOpen(false)} className={`flex min-h-10 items-center gap-2.5 rounded-[12px] px-2.5 text-xs font-semibold transition ${active?"bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-white":"text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.05] dark:hover:text-white"}`}><ItemIcon className="h-4 w-4 shrink-0 text-[#0758e9] dark:text-[#8ab5ff]"/><span className="min-w-0 flex-1">{item.label}</span>{active&&<span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"/>}</Link>})}</div>}</div>:<span aria-current="page" className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/30 bg-emerald-50 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.08)] dark:border-emerald-400/45 dark:bg-emerald-400/[.16] dark:text-emerald-100"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-45" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/15 dark:bg-emerald-300 dark:ring-emerald-300/25" /></span><span className="truncate">{current?.label ?? currentTitle}</span></span>}
+                  {parent && current?.href!==parent.href && pathname !== parent.href && <><Link href={parent.href} className="group/crumb relative shrink-0 rounded-[9px] px-2 py-1 text-slate-500 transition-all duration-200 hover:bg-[#edf5ff] hover:text-[#0758e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/35 dark:text-[#b9b3bd] dark:hover:bg-white/[.07] dark:hover:text-white"><span>{parent.label}</span><span className="absolute inset-x-2 -bottom-px h-px origin-right scale-x-0 bg-[#0758e9] transition-transform duration-200 group-hover/crumb:scale-x-100" /></Link><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300 transition-transform duration-200 dark:text-[#77717b]" /></>}
+                  {group&&group.items.length>1?<div ref={sectionMenuRef} className="relative shrink-0"><button type="button" aria-current="page" aria-haspopup="menu" aria-expanded={sectionMenuOpen} onClick={()=>setSectionMenuOpen(value=>!value)} className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/30 bg-emerald-50 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.08)] transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/35 dark:border-emerald-400/45 dark:bg-emerald-400/[.16] dark:text-emerald-100 dark:hover:bg-emerald-400/[.22]"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-45" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/15 dark:bg-emerald-300 dark:ring-emerald-300/25" /></span><span className="truncate">{currentLabel}</span><ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${sectionMenuOpen?"rotate-180":""}`}/></button>{sectionMenuOpen&&<div role="menu" aria-label={`أقسام ${group.label}`} className="ui-state-enter absolute right-0 top-[calc(100%+8px)] z-[90] w-[230px] overflow-hidden rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] p-1.5 text-right shadow-[0_18px_45px_rgba(44,65,92,.22)] dark:border-white/[.12] dark:bg-[#302e33] dark:shadow-[0_22px_55px_rgba(0,0,0,.38)]">{group.items.map((item)=>{const ItemIcon=item.icon;const active=item.href===current?.href;return <Link key={item.href} href={item.href} role="menuitem" aria-current={active?"page":undefined} onClick={()=>setSectionMenuOpen(false)} className={`flex min-h-10 items-center gap-2.5 rounded-[12px] px-2.5 text-xs font-semibold transition ${active?"bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-white":"text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.05] dark:hover:text-white"}`}><ItemIcon className="h-4 w-4 shrink-0 text-[#0758e9] dark:text-[#8ab5ff]"/><span className="min-w-0 flex-1">{item.label}</span>{active&&<span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"/>}</Link>})}</div>}</div>:<span aria-current="page" className="relative flex min-w-0 items-center gap-2 rounded-[9px] border border-emerald-500/30 bg-emerald-50 px-2.5 py-1 font-bold text-[#17386d] shadow-[0_2px_8px_rgba(16,185,129,.08)] dark:border-emerald-400/45 dark:bg-emerald-400/[.16] dark:text-emerald-100"><span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-45" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/15 dark:bg-emerald-300 dark:ring-emerald-300/25" /></span><span className="truncate">{currentLabel}</span></span>}
                 </nav>
               </div>;
             })()}
