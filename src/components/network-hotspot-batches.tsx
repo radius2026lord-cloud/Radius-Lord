@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useMemo,useState,type FormEvent} from "react";
-import {ArrowRight,CalendarClock,Check,Clock3,Copy,Database,Download,Eye,FileDown,Hash,KeyRound,PackagePlus,Upload,UserRound,Users,Wifi} from "lucide-react";
+import {ArrowRight,CalendarClock,Check,Clock3,Copy,CreditCard,Database,Download,Eye,FileDown,Hash,KeyRound,PackagePlus,Upload,UserRound,Users,Wifi} from "lucide-react";
 import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
