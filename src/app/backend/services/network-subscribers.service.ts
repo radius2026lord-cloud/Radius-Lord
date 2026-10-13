@@ -38,6 +38,27 @@ export async function readNetworkSubscribers(scope:any){
  });
 }
 
+
+export async function suggestNetworkSubscriberData(scope:any,input:any){
+ return withNetwork(scope,async app=>{
+  const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
+  if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
+  const field=String(input.field||''),column=field==='firstName'?'first_name':field==='lastName'?'last_name':null;
+  if(!column&&field!=='address')throw Object.assign(new Error('SUBSCRIBER_SUGGESTION_INPUT'),{fields:{field:'نوع الاقتراح غير صالح.'}});
+  const query=String(input.q||'').trim().slice(0,120);
+  if(query.length<2)return {items:[]};
+  const escaped=query.replace(/[!%_]/g,char=>'!'+char)+'%';
+  const scopeSql=principal?'':'manager_id=? AND ';
+  const params=principal?[escaped]:[managerId,escaped];
+  if(field==='address'){
+   const [rows]:any=await app.query(`SELECT address AS value FROM customer_address_suggestions WHERE ${scopeSql}address LIKE ? ESCAPE '!' ORDER BY address LIMIT 10`,params);
+   return {items:rows.map((row:any)=>String(row.value))};
+  }
+  const [rows]:any=await app.query(`SELECT DISTINCT ${column} AS value FROM customers WHERE ${scopeSql}archived_at IS NULL AND ${column} LIKE ? ESCAPE '!' ORDER BY ${column} LIMIT 10`,params);
+  return {items:rows.map((row:any)=>String(row.value))};
+ });
+}
+
 export async function createNetworkSubscriber(scope:any,input:any){
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access);
@@ -67,6 +88,9 @@ export async function createNetworkSubscriber(scope:any,input:any){
     }catch(e:any){if(e?.code!=='ER_DUP_ENTRY'||attempt===7)throw e;}
    }
    const id=Number(created.insertId);
+   await app.query(`INSERT INTO customer_address_suggestions(manager_id,address,address_hash)
+    VALUES(?,?,UNHEX(SHA2(LOWER(TRIM(?)),256)))
+    ON DUPLICATE KEY UPDATE address=VALUES(address),last_used_at=CURRENT_TIMESTAMP`,[managerId,address,address]);
    if(categoryId!==null)await app.query('INSERT INTO customer_category_memberships(customer_id,category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?,?)',[id,categoryId,managerId,scope.managerId]);
    const snapshot=JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role});
    const after=JSON.stringify({managerId,firstName,lastName,phone,address,latitude,longitude,notes,status,categoryId,paymentCode:code});
