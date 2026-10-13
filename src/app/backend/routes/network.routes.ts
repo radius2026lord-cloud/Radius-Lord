@@ -1,5 +1,6 @@
 import {profileReferences} from '../services/profile-definition.service';
 import {networkCategories} from '../services/network-categories.service';
+import {readNetworkSubscribers,createNetworkSubscriber,setNetworkSubscriberStatus} from '../services/network-subscribers.service';
 import {readNetworkProfiles,mutateNetworkProfile} from '../services/network-profiles.service';
 import {readHotspotPackages,mutateHotspotPackage} from '../services/network-hotspot-packages.service';
 import {readHotspotBatches,readHotspotBatchCards,createHotspotBatch} from '../services/network-hotspot-batches.service';
@@ -77,6 +78,17 @@ const categoryMessage=(error:any)=>{
  return 'تعذر حفظ التصنيف.';
 };
 router.get('/:slug/categories',async(req,res)=>{try{return res.json(await networkCategories(await categoryScope(req)));}catch(e){return res.status(403).json({message:categoryMessage(e)});}});
+const subscriberMessage=(e:any)=>{
+ const code=e?.message||e?.code;
+ if(code==='NETWORK_AUTH')return 'انتهت الجلسة أو لا تملك صلاحية إدارة المشتركين.';
+ if(code==='SUBSCRIBER_INPUT')return 'راجع البيانات المدخلة.';
+ if(code==='SUBSCRIBER_CATEGORY_UNAVAILABLE')return 'التصنيف غير مسند إلى مدير المشترك.';
+ if(code==='SUBSCRIBER_NOT_FOUND')return 'المشترك غير موجود أو لا تملك صلاحية الوصول إليه.';
+ return 'تعذر حفظ بيانات المشترك.';
+};
+router.get('/:slug/subscribers',async(req,res)=>{try{return res.json(await readNetworkSubscribers(await categoryScope(req)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:subscriberMessage(e)});}});
+router.post('/:slug/subscribers',async(req,res)=>{try{const scope=await categoryScope(req);const action=String(req.body?.action||'create');if(action==='status')return res.json(await setNetworkSubscriberStatus(scope,req.body));return res.status(201).json(await createNetworkSubscriber(scope,req.body));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:code==='SUBSCRIBER_NOT_FOUND'?404:code==='SUBSCRIBER_INPUT'?422:409).json({message:subscriberMessage(e),fields:(e as any).fields||{}});}});
+
 router.post('/:slug/categories',async(req,res)=>{try{return res.json(await networkCategories(await categoryScope(req),req.body));}catch(e){return res.status(409).json({message:categoryMessage(e)});}});
 const settingsError=(e:any)=>{console.error('[network-settings]',{code:e.code||e.message||'SETTINGS_FAILED'});return {message:e.message==='NETWORK_AUTH'?'انتهت الجلسة أو لا تملك صلاحية تعديل بيانات الشبكة.':e.message==='SETTINGS_INPUT'?'راجع الحقول المحددة.':e.message==='SETTINGS_CONFLICT'?'تغيرت البيانات من جلسة أخرى. حدّث الصفحة قبل الحفظ.':e.message==='NETWORK_SETTINGS_MISSING'?'احفظ بيانات الشبكة الأساسية أولًا، ثم أضف اللوغو.':e.code==='ER_BAD_FIELD_ERROR'?'تحتاج قاعدة هذه الشبكة إلى تحديث حقول البيانات العامة.':'تعذر تحميل أو حفظ بيانات الشبكة.',fields:e.fields||{}};};
 router.get('/:slug/logo',async(req,res)=>{try{const bytes=await readNetworkLogo(await principal(req));res.type('image/webp');res.setHeader('X-Content-Type-Options','nosniff');return res.send(bytes);}catch{return res.status(404).json({message:'اللوغو غير متاح.'});}});
