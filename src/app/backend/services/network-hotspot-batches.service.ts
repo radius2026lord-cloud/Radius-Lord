@@ -46,7 +46,7 @@ export async function createHotspotBatch(scope:any,input:any){
    const access=await principalAccess(app,scope);
    const name=String(input.name??'').trim();
    if(!name||name.length>150)invalid('name');
-   const quantity=integer(input.quantity,1,500,'quantity');
+   const quantity=integer(input.quantity,1,1000,'quantity');
    const loginMode=String(input.loginMode);
    if(!['code','username_password'].includes(loginMode))invalid('loginMode');
    if(typeof input.isGift!=='boolean')invalid('isGift');
