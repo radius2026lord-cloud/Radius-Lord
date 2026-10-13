@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS managers (
 CREATE TABLE IF NOT EXISTS customers (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   manager_id BIGINT UNSIGNED NOT NULL,
+  status ENUM('active','suspended') NOT NULL DEFAULT 'active',
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
   phone VARCHAR(40) NULL,
@@ -545,10 +546,14 @@ CREATE TABLE IF NOT EXISTS nasreload (
 CREATE TABLE radius_identities (
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
  service_kind ENUM('pppoe','hotspot') NOT NULL,
+ contract_number VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+ line_payment_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
  current_username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  PRIMARY KEY(id),
  UNIQUE KEY uq_identity_kind(id,service_kind),
+ UNIQUE KEY uq_identity_contract_number(contract_number),
+ UNIQUE KEY uq_identity_line_payment_code(line_payment_code),
  UNIQUE KEY uq_current_username(current_username),
  CONSTRAINT chk_current_username CHECK(current_username IS NULL OR (CHAR_LENGTH(current_username)>0 AND BINARY current_username=BINARY LOWER(current_username)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
