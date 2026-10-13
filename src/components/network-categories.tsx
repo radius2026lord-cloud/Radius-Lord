@@ -68,13 +68,15 @@ export default function NetworkCategories({
  },[endpoint,revision,archiveOnly]);
 
  const visibleItems=useMemo(()=>items.filter(item=>item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())),[items,query]);
- const startCreate=()=>setEdit({id:0,name:'',description:'',managerIds:[]});
+ const principalManager=managers.find(manager=>manager.manager_type==='principal');
+ const startCreate=()=>setEdit({id:0,name:'',description:'',managerIds:principal&&principalManager?[Number(principalManager.id)]:[]});
  const startEdit=(item:Category)=>setEdit({
   id:item.id,name:item.name,description:item.description||'',
   managerIds:item.managers.map(manager=>Number(manager.id)),
  });
  const toggleManager=(managerId:number,checked:boolean)=>{
   if(!edit)return;
+  if(!checked&&managerId===Number(principalManager?.id)&&(edit.id===0||edit.managerIds.includes(managerId)))return;
   const managerIds=checked
    ?Array.from(new Set([...edit.managerIds,managerId]))
    :edit.managerIds.filter(id=>id!==managerId);
@@ -156,7 +158,7 @@ export default function NetworkCategories({
          const checked=edit.managerIds.includes(Number(manager.id));
          const unavailable=Boolean(manager.archived_at)||!manager.is_enabled;
          return <label key={manager.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-white/5">
-          <input type="checkbox" checked={checked} onChange={event=>toggleManager(Number(manager.id),event.target.checked)} className="h-4 w-4 rounded accent-blue-600"/>
+          <input type="checkbox" checked={checked} disabled={manager.manager_type==='principal'&&(edit.id===0||checked)} onChange={event=>toggleManager(Number(manager.id),event.target.checked)} className="h-4 w-4 rounded accent-blue-600 disabled:cursor-not-allowed disabled:opacity-70"/>
           <span className="flex-1">{manager.full_name}</span>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500 dark:bg-white/10">{managerLabel(manager)}{unavailable?' · متوقف':''}</span>
           {checked&&<Check className="h-4 w-4 text-emerald-600"/>}
@@ -164,11 +166,11 @@ export default function NetworkCategories({
         })}
         {!managers.length&&<p className="px-3 py-4 text-xs text-slate-500">لا يوجد مدراء متاحون للإسناد.</p>}
        </div>
-       <p className="text-[11px] leading-5 text-slate-500">يظهر التصنيف لكل مدير مسند إليه، ويمكن للمشترك التابع لذلك المدير استخدامه. لا يغيّر الإسناد تبعية المشترك.</p>
+       <p className="text-[11px] leading-5 text-slate-500">يسند التصنيف تلقائيًا إلى المدير الرئيسي، ويمكن إضافة مدراء أو وكلاء آخرين. يظهر لكل مدير مسند إليه، ولا يغيّر الإسناد تبعية المشترك.</p>
       </fieldset>
      :<div className="flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200">
        <Building2 className="mt-0.5 h-4 w-4 shrink-0"/>
-       <span>{edit.id?'تبعية التصنيف للمدراء تبقى بإدارة المدير الرئيسي.':'سيُسند التصنيف تلقائيًا إلى حسابك؛ ويستخدمه فريق الوكيل عند العمل ضمن تبعيته.'}{actorOwner?.full_name?' ('+actorOwner.full_name+')':''}</span>
+       <span>{edit.id?'تبعية التصنيف للمدراء تبقى بإدارة المدير الرئيسي.':'سيُسند التصنيف تلقائيًا إلى المدير الرئيسي وحسابك؛ ويستخدمه فريق الوكيل ضمن تبعيته.'}{actorOwner?.full_name?' ('+actorOwner.full_name+')':''}</span>
       </div>}
     <div className="flex justify-end gap-2 pt-1">
      <ProjectButton type="button" variant="ghost" disabled={busy} onClick={()=>setEdit(null)}>إلغاء</ProjectButton>

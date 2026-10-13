@@ -47,6 +47,12 @@ export async function networkCategories(scope:any,input?:any){
   try{
    const id=Number(input.id);
    let before:any=null;
+   let principalManagerId:number|null=null;
+   if(action==='create'||action==='update'){
+    const [principalRows]:any=await app.query("SELECT id FROM managers WHERE manager_type='principal' AND is_enabled=1 AND archived_at IS NULL LIMIT 1");
+    principalManagerId=Number(principalRows[0]?.id);
+    if(!Number.isSafeInteger(principalManagerId)||principalManagerId<1)throw new Error('CATEGORY_MANAGER_INVALID');
+   }
    if(action!=='create'){
     if(!Number.isSafeInteger(id)||id<1)throw new Error('CATEGORY_INPUT');
     const [found]:any=await app.query(`SELECT c.id,c.name,c.description,c.manager_id,c.created_by_manager_id,c.archived_at
@@ -63,6 +69,13 @@ export async function networkCategories(scope:any,input?:any){
     const name=String(input.name||'').trim(),description=String(input.description||'').trim();
     if(!name||name.length>100||description.length>5000)throw new Error('CATEGORY_INPUT');
     let managerIds=principal?normalizeIds(input.managerIds):[ownerManagerId];
+    if(action==='create'&&principalManagerId!==null){
+     // Every new category is visible to the principal; other assignments remain optional.
+     managerIds=Array.from(new Set([principalManagerId,...managerIds]));
+    }
+    if(action==='update'&&principalManagerId!==null&&before?.managerIds?.includes(principalManagerId)&&!managerIds.includes(principalManagerId)){
+     throw new Error('CATEGORY_PRINCIPAL_ASSIGNMENT_REQUIRED');
+    }
     if(!managerIds.length||managerIds.some(value=>!Number.isSafeInteger(value)||value<1))throw new Error('CATEGORY_MANAGERS_REQUIRED');
     if(principal){
      const [valid]:any=await app.query(`SELECT id FROM managers
