@@ -145,7 +145,7 @@ const shortcuts = [
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex min-w-0 items-center rl-sidebar-motion ${compact ? "justify-center gap-0" : "gap-3"}`}>
-      <Image src="/images/logo/lord-radius-icon.png" alt="Lord Radius" width={88} height={88} priority className="h-11 w-11 shrink-0 object-contain rl-sidebar-motion" />
+      <Image src="/images/logo/lord-radius-icon-v2.png" alt="Lord Radius" width={88} height={88} priority className="h-11 w-11 shrink-0 object-contain rl-sidebar-motion" />
       <div className={`overflow-hidden whitespace-nowrap leading-tight rl-sidebar-motion ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100"}`}>
         <div className="truncate text-[15px] font-bold text-[#102a63] dark:text-white">اللورد لخدمات الإنترنت</div>
         <div className="mt-1 text-[11px] font-semibold tracking-wide text-[#e99100]">Lord Radius</div>
