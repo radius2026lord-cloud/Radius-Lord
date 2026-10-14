@@ -8,6 +8,7 @@ import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ProjectInput from "@/components/ui/project-input";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 
 type Category = { id:number; name:string };
 type Subscriber = {
@@ -55,17 +56,34 @@ export default function NetworkSubscribers({endpoint,tab="list",onTabChange,canC
  const [detailTab,setDetailTab]=useState<"profile"|"lines">("profile");
  const lastOpenedId=useRef<number|null>(null);
  useEffect(()=>{if(!detailId){setDetail(null);setDetailLines([]);setDetailError("");return;}let live=true;setDetailLoading(true);setDetailError("");setDetailTab("profile");fetch(`${endpoint}/subscribers/${detailId}`,{credentials:"include",cache:"no-store"}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحميل ملف المشترك.");if(live){setDetail(data.item||null);setDetailLines(Array.isArray(data.accounts)?data.accounts:[]);}}).catch(error=>{if(live)setDetailError(error instanceof Error?error.message:"تعذر تحميل ملف المشترك.");}).finally(()=>{if(live)setDetailLoading(false);});return()=>{live=false;};},[endpoint,detailId]);
- useEffect(()=>{if(detailId!==null||lastOpenedId.current===null)return;const id=lastOpenedId.current;requestAnimationFrame(()=>{const target=document.querySelector<HTMLElement>(`[data-focus-target-id="${id}"]`);target?.scrollIntoView({block:"center",behavior:"smooth"});target?.focus({preventScroll:true});});lastOpenedId.current=null;},[detailId]);
+ useEffect(()=>{
+  if(detailId!==null||loading)return;
+  const storageKey="rl:network-subscribers:return-focus:"+endpoint;
+  let id=lastOpenedId.current;
+  if(id===null){try{const saved=Number(sessionStorage.getItem(storageKey));if(Number.isSafeInteger(saved)&&saved>0)id=saved;}catch{}}
+  if(id===null)return;
+  let frame=0,attempts=0,cancelled=false;
+  const restoreFocus=()=>{
+   if(cancelled)return;
+   const targets=Array.from(document.querySelectorAll<HTMLElement>("[data-focus-target-id=\""+id+"\"]"));
+   const target=targets.find(element=>element.getClientRects().length>0&&window.getComputedStyle(element).visibility!=="hidden");
+   if(target){target.scrollIntoView({block:"center",behavior:"smooth"});target.focus({preventScroll:true});lastOpenedId.current=null;try{sessionStorage.removeItem(storageKey);}catch{};return;}
+   if(++attempts<8)frame=requestAnimationFrame(restoreFocus);
+  };
+  frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(restoreFocus);});
+  return()=>{cancelled=true;cancelAnimationFrame(frame);};
+ },[detailId,loading,endpoint]);
 
- const load=async()=>{
-  setLoading(true);setError("");
+ const load=async({silent=false}:{silent?:boolean}={})=>{
+  if(!silent)setLoading(true);
+  setError("");
   try{
-   const response=await fetch(`${endpoint}/subscribers`,{credentials:"include",cache:"no-store"});
+   const response=await fetch(endpoint+"/subscribers",{credentials:"include",cache:"no-store"});
    const data=await response.json();
    if(!response.ok)throw new Error(data.message||"تعذر تحميل المشتركين.");
    setItems(data.items||[]);setCategories(data.categories||[]);
   }catch(e){setError(e instanceof Error?e.message:"تعذر تحميل المشتركين.");}
-  finally{setLoading(false);}
+  finally{if(!silent)setLoading(false);}
  };
  useEffect(()=>{void load();},[endpoint]);
 
@@ -85,7 +103,18 @@ export default function NetworkSubscribers({endpoint,tab="list",onTabChange,canC
  const allSelected=filtered.length>0&&filtered.every(item=>selected.includes(item.id));
  const toggleSelected=(id:number)=>setSelected(old=>old.includes(id)?old.filter(value=>value!==id):[...old,id]);
  const toggleAll=()=>setSelected(old=>allSelected?old.filter(id=>!filtered.some(item=>item.id===id)):Array.from(new Set([...old,...filtered.map(item=>item.id)])));
- const bulkStatus=async(status:"active"|"suspended")=>{setBusy(true);setError("");try{for(const id of selected){const response=await fetch(`${endpoint}/subscribers`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",id,status})});const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحديث حالة أحد المشتركين.");}setSelected([]);setSelectionMode(false);await load();}catch(e){setError(e instanceof Error?e.message:"تعذر تنفيذ العملية الجماعية.");}finally{setBusy(false);}};
+ const bulkStatus=async(status:"active"|"suspended")=>{
+  const ids=[...selected];setBusy(true);setError("");
+  try{
+   for(const id of ids){
+    const response=await fetch(endpoint+"/subscribers",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",id,status})});
+    const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحديث حالة أحد المشتركين.");
+    setItems(current=>current.map(row=>row.id===id?{...row,status}:row));
+   }
+   setSelected([]);setSelectionMode(false);
+  }catch(e){setError(e instanceof Error?e.message:"تعذر تنفيذ العملية الجماعية.");}
+  finally{await load({silent:true});setBusy(false);}
+ };
  const startCreate=()=>{setDraft({...blank,categoryId:categories.length===1?String(categories[0].id):""});setFieldError("");setStage("form");onTabChange("create");};
  const review=()=>{
   if(!draft.firstName.trim()||!draft.lastName.trim()||!draft.phone.trim()||!draft.address.trim()){setFieldError("الاسم والكنية ورقم الهاتف والعنوان حقول مطلوبة.");return;}
@@ -105,16 +134,17 @@ export default function NetworkSubscribers({endpoint,tab="list",onTabChange,canC
   finally{setBusy(false);}
  };
  const changeStatus=async(item:Subscriber)=>{
+  const nextStatus=item.status==="active"?"suspended":"active";
   setBusy(true);setError("");
   try{
-   const response=await fetch(`${endpoint}/subscribers`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",id:item.id,status:item.status==="active"?"suspended":"active"})});
+   const response=await fetch(endpoint+"/subscribers",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",id:item.id,status:nextStatus})});
    const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحديث حالة المشترك.");
-   await load();
+   setItems(current=>current.map(row=>row.id===item.id?{...row,status:nextStatus}:row));
+   await load({silent:true});
   }catch(e){setError(e instanceof Error?e.message:"تعذر تحديث حالة المشترك.");}
   finally{setBusy(false);}
  };
-
- const openSubscriber=(id:number)=>{if(selectionMode){toggleSelected(id);return;}lastOpenedId.current=id;onOpenSubscriber(id);};
+ const openSubscriber=(id:number)=>{if(selectionMode){toggleSelected(id);return;}lastOpenedId.current=id;try{sessionStorage.setItem("rl:network-subscribers:return-focus:"+endpoint,String(id));}catch{}onOpenSubscriber(id);};
  const bytesLabel=(value:string|number)=>{let n=Number(value||0);if(!Number.isFinite(n)||n<0)n=0;const units=["بايت","KB","MB","GB","TB"];let u=0;while(n>=1024&&u<units.length-1){n/=1024;u++;}return n.toLocaleString("ar",{maximumFractionDigits:2})+" "+units[u];};
  const detailDate=(value:string|null)=>{if(!value)return "—";const date=new Date(value);return Number.isNaN(date.getTime())?"—":date.toLocaleString("ar",{dateStyle:"medium",timeStyle:"short"});};
  const subscriberIdBadge=(id:number)=><span dir="ltr" aria-label={`معرّف المشترك ${id}`} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-[#0758e9] dark:border-blue-300/15 dark:bg-blue-500/[.08] dark:text-blue-200"><Hash className="h-3 w-3"/><span>ID {id}</span></span>;
@@ -123,7 +153,7 @@ export default function NetworkSubscribers({endpoint,tab="list",onTabChange,canC
   <span className="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-2.5 py-1.5 text-[11px] text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"><Users className="h-3.5 w-3.5"/>{Number(item.pppoe_count||0).toLocaleString("ar")} PPPoE</span>
   <span className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-50 px-2.5 py-1.5 text-[11px] text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300"><Wifi className="h-3.5 w-3.5"/>{Number(item.hotspot_count||0).toLocaleString("ar")} Hotspot</span>
  </div>;
- const actions=(item:Subscriber)=>{if(!canChangeStatus)return null;const enabled=item.status==="active";return <button type="button" role="switch" aria-checked={enabled} aria-label={`ملف ${item.first_name} ${item.last_name}: ${enabled?"مفعّل":"غير مفعّل"}، اضغط لتبديل الحالة`} title={enabled?"تعطيل حساب المشترك":"تفعيل حساب المشترك"} disabled={busy} onClick={event=>{event.stopPropagation();void changeStatus(item)}} className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow] duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none ${enabled?"border-emerald-200 bg-emerald-50 text-emerald-700 shadow-emerald-600/10 hover:bg-emerald-100 focus-visible:ring-emerald-400 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200":"border-rose-200 bg-rose-50 text-rose-700 shadow-rose-600/10 hover:bg-rose-100 focus-visible:ring-rose-400 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-200"}`}><span className="min-w-[3.35rem] text-center">{enabled?"مفعّل":"غير مفعّل"}</span><span className={`relative h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors duration-300 ease-out motion-reduce:transition-none ${enabled?"bg-emerald-500":"bg-rose-500"}`}><i className={`block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-300 ease-out motion-reduce:transition-none ${enabled?"translate-x-0":"-translate-x-3"}`}/></span></button>};
+ const actions=(item:Subscriber)=>{if(!canChangeStatus)return null;const enabled=item.status==="active";return <ProjectTooltip label={enabled?"إيقاف حساب المشترك":"تفعيل حساب المشترك"} disabled={busy}><button type="button" role="switch" aria-checked={enabled} aria-label={"ملف "+item.first_name+" "+item.last_name+": "+(enabled?"مفعّل":"غير مفعّل")+"، اضغط لتبديل الحالة"} disabled={busy} onClick={event=>{event.stopPropagation();void changeStatus(item)}} className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow] duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none ${enabled?"border-emerald-200 bg-emerald-50 text-emerald-700 shadow-emerald-600/10 hover:bg-emerald-100 focus-visible:ring-emerald-400 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200":"border-rose-200 bg-rose-50 text-rose-700 shadow-rose-600/10 hover:bg-rose-100 focus-visible:ring-rose-400 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-200"}`}><span className="min-w-[3.35rem] text-center">{enabled?"مفعّل":"غير مفعّل"}</span><span className={`relative h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors duration-300 ease-out motion-reduce:transition-none ${enabled?"bg-emerald-500":"bg-rose-500"}`}><i className={`block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-300 ease-out motion-reduce:transition-none ${enabled?"translate-x-0":"-translate-x-3"}`}/></span></button></ProjectTooltip>};
 
  return <div className="space-y-3 sm:space-y-4 text-[13px]">
 {detailId?(detailLoading?<CollectionState loading>جارٍ تحميل ملف المشترك وخطوطه...</CollectionState>:detailError?<CollectionState>{detailError}<div className="mt-3"><ProjectButton variant="secondary" onClick={onBackToSubscribers}><ArrowLeft/>العودة للقائمة</ProjectButton></div></CollectionState>:detail?<section className="space-y-4">
