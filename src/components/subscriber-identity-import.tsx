@@ -165,9 +165,10 @@ export default function SubscriberIdentityImport({
     setMessage(source);
   };
 
-  const readBarcode = () => {
+  const readBarcode = (source = barcodeText) => {
     setError("");
-    const found = parseIdentityText(barcodeText);
+    setBarcodeText(source);
+    const found = parseIdentityText(source);
     if (!hasValue(found)) {
       setMessage("وصل النص، لكن تنسيقه غير معروف. راجع القيم يدويًا قبل تطبيقها.");
       setSuggestions((old) => ({ ...old }));
@@ -175,7 +176,19 @@ export default function SubscriberIdentityImport({
     } else {
       mergeSuggestions(found, "تم تحليل النص الممسوح. راجع الحقول قبل تطبيقها.");
     }
-    setRawOcrText(barcodeText);
+    setRawOcrText(source);
+  };
+
+  const clearTemporaryData = () => {
+    stopVideo();
+    setFront(null);
+    setBack(null);
+    setBarcodeText("");
+    setRawOcrText("");
+    setSuggestions({});
+    setSelected([]);
+    setMessage("مُسحت الصور والنص والنتائج المؤقتة من هذه الصفحة.");
+    setError("");
   };
 
   const readImages = async () => {
@@ -342,8 +355,8 @@ export default function SubscriberIdentityImport({
     <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <h4 className="flex items-center gap-2 text-[11px] font-semibold"><ScanLine className="h-4 w-4 text-violet-600"/>قراءة PDF417 من الصورة أو القارئ</h4>
       <p className="mt-1 text-[10px] leading-5 text-slate-500">يمكنك أيضًا التركيز في المربع ومسح الرمز إذا كان القارئ يرسل النص كلوحة مفاتيح.</p>
-      <textarea value={barcodeText} onChange={(event)=>setBarcodeText(event.target.value)} rows={3} maxLength={30000} placeholder="امسح الرمز هنا أو الصق النص بعد إخفاء البيانات الحساسة…" className={`mt-2 min-h-20 w-full rounded-xl border p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass}`} dir="auto"/>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[9px] text-slate-400">لا ترسل بيانات هوية حقيقية إلى أي شخص.</p><ProjectButton type="button" variant="secondary" onClick={readBarcode} disabled={!barcodeText.trim()}><ScanLine/>تحليل النص</ProjectButton></div>
+      <textarea value={barcodeText} onChange={(event)=>setBarcodeText(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();readBarcode(event.currentTarget.value.replace(/[\r\n]+$/,""));}}} rows={3} maxLength={30000} placeholder="ضع المؤشر هنا ثم امسح الرمز؛ يُحلّل النص عند ضغط القارئ على Enter…" className={`mt-2 min-h-20 w-full rounded-xl border p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass}`} dir="auto"/>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[9px] text-slate-400">يُحتفظ بالنص والصور والنتائج في ذاكرة الصفحة فقط حتى مسحها أو مغادرتها.</p><div className="flex flex-wrap gap-2"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح المؤقت</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>readBarcode()} disabled={!barcodeText.trim()}><ScanLine/>تحليل النص</ProjectButton></div></div>
     </div>
 
     <div className="mt-3 flex flex-wrap justify-end gap-2">
