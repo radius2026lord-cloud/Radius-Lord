@@ -191,7 +191,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const sidebarHoverTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const navRevealTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const cancelSidebarHover = () => { if(sidebarHoverTimer.current) clearTimeout(sidebarHoverTimer.current); sidebarHoverTimer.current=null; };
-  const scheduleSidebar = (closed:boolean) => { cancelSidebarHover(); sidebarHoverTimer.current=setTimeout(()=>{setCollapsed(closed);sidebarHoverTimer.current=null;},closed?120:60); };
+  const scheduleSidebar = (closed:boolean) => { cancelSidebarHover(); sidebarHoverTimer.current=setTimeout(()=>{setCollapsed(closed);sidebarHoverTimer.current=null;},closed?500:180); };
   useEffect(()=>()=>{if(sidebarHoverTimer.current)clearTimeout(sidebarHoverTimer.current);if(navRevealTimer.current)clearTimeout(navRevealTimer.current);},[]);
   const navGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
   useEffect(()=>{if(collapsed&&navRevealTimer.current){clearTimeout(navRevealTimer.current);navRevealTimer.current=null;}},[collapsed]);
