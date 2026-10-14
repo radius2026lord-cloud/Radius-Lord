@@ -102,7 +102,7 @@ function CustomerWelcome() {
     </svg>
     <div className="relative z-10 flex h-full min-h-0 w-full items-stretch justify-center px-[clamp(18px,4vw,70px)] py-[clamp(12px,2vh,24px)]">
       <section className="flex h-full min-h-0 w-full max-w-[1320px] flex-col items-center justify-evenly text-center">
-        <div className="welcome-reveal flex shrink-0 items-center justify-center" dir="ltr"><Image src="/images/logo/lord-radius-logo-v2.png" alt="Lord Radius" width={286} height={202} priority className="h-auto w-[168px] object-contain sm:w-[190px]"/></div>
+        <div className="welcome-reveal flex shrink-0 items-center justify-center" dir="ltr"><Image src="/images/logo/lord-radius-logo-v3.png" alt="Lord Radius" width={286} height={202} priority className="h-auto w-[168px] object-contain sm:w-[190px]"/></div>
         <div className="welcome-reveal d2 mt-3 inline-flex items-center gap-2 rounded-full border border-[#9fc4ec]/70 bg-white/90 px-4 py-2 text-xs font-semibold text-[#0758e9] shadow-sm dark:border-[#426181] dark:bg-[#13273d] dark:text-[#8ab5ff]"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>مرحباً بك في LORD RADIUS</div>
         <h2 className="welcome-reveal d2 mt-3 text-3xl font-bold text-[#102a63] dark:text-white sm:text-[42px]">أهلاً بك، <span className="text-[#0758e9]">{fullName}</span></h2>
         <p className="welcome-reveal d3 mx-auto mt-2 max-w-[680px] text-sm leading-6 text-slate-500 dark:text-slate-300 sm:text-base">منصة متكاملة لإدارة RADIUS والشبكات والمشتركين. اختر خطتك وابدأ بناء شبكتك داخل منظومة LORD RADIUS.</p>
