@@ -1,6 +1,6 @@
 import {profileReferences} from '../services/profile-definition.service';
 import {networkCategories} from '../services/network-categories.service';
-import {readNetworkSubscribers,suggestNetworkSubscriberData,createNetworkSubscriber,setNetworkSubscriberStatus} from '../services/network-subscribers.service';
+import {readNetworkSubscribers,readNetworkSubscriberDetail,suggestNetworkSubscriberData,createNetworkSubscriber,setNetworkSubscriberStatus} from '../services/network-subscribers.service';
 import {readNetworkProfiles,mutateNetworkProfile} from '../services/network-profiles.service';
 import {readHotspotPackages,mutateHotspotPackage} from '../services/network-hotspot-packages.service';
 import {readHotspotBatches,readHotspotBatchCards,createHotspotBatch} from '../services/network-hotspot-batches.service';
@@ -87,6 +87,7 @@ const subscriberMessage=(e:any)=>{
  return 'تعذر حفظ بيانات المشترك.';
 };
 router.get('/:slug/subscribers/suggestions',async(req,res)=>{try{return res.json(await suggestNetworkSubscriberData(await categoryScope(req),req.query));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:code==='SUBSCRIBER_SUGGESTION_INPUT'?422:503).json({message:code==='NETWORK_AUTH'?'لا تملك صلاحية عرض اقتراحات المشتركين.':'تعذر تحميل الاقتراحات. تحقق من تطبيق ترقية عناوين المشتركين.'});}});
+router.get('/:slug/subscribers/:id',async(req,res)=>{try{return res.json(await readNetworkSubscriberDetail(await categoryScope(req),req.params.id));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:code==='SUBSCRIBER_NOT_FOUND'?404:code==='SUBSCRIBER_INPUT'?422:503).json({message:code==='SUBSCRIBER_NOT_FOUND'?'ملف المشترك غير موجود أو لا تملك صلاحية عرضه.':code==='NETWORK_AUTH'?'لا تملك صلاحية عرض بيانات المشترك.':'تعذر تحميل ملف المشترك وخطوطه.'});}});
 router.get('/:slug/subscribers',async(req,res)=>{try{return res.json(await readNetworkSubscribers(await categoryScope(req)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:subscriberMessage(e)});}});
 router.post('/:slug/subscribers',async(req,res)=>{try{const scope=await categoryScope(req);const action=String(req.body?.action||'create');if(action==='status')return res.json(await setNetworkSubscriberStatus(scope,req.body));return res.status(201).json(await createNetworkSubscriber(scope,req.body));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:code==='SUBSCRIBER_NOT_FOUND'?404:code==='SUBSCRIBER_INPUT'?422:409).json({message:subscriberMessage(e),fields:(e as any).fields||{}});}});
 

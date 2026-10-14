@@ -126,3 +126,47 @@ export async function setNetworkSubscriberStatus(scope:any,input:any){
   }catch(error){await app.rollback();throw error;}
  });
 }
+
+
+export async function readNetworkSubscriberDetail(scope:any,value:any){
+ return withNetwork(scope,async app=>{
+  const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
+  if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
+  const id=Number(value);
+  if(!Number.isSafeInteger(id)||id<1)throw new Error('SUBSCRIBER_INPUT');
+  const [customers]:any=await app.query(`SELECT c.id,c.manager_id,c.first_name,c.last_name,c.phone,c.address,c.notes,c.payment_code,c.status,c.created_at,m.full_name manager_name,
+    (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships x JOIN customer_categories cat ON cat.id=x.category_id WHERE x.customer_id=c.id AND cat.archived_at IS NULL) categories
+   FROM customers c LEFT JOIN managers m ON m.id=c.manager_id
+   WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
+  const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
+  const [[pppoe],[hotspot]]:any=await Promise.all([
+   app.query(`SELECT p.id,r.current_username username,p.line_name,COALESCE(p.admin_status,'enabled') status,
+    (SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1) service_name,
+    COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
+    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
+    (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
+    (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
+    (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
+    FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
+    LEFT JOIN (SELECT username,SUM(acctinputoctets) upload_bytes,SUM(acctoutputoctets) download_bytes FROM radacct GROUP BY username) u ON u.username=r.current_username
+    WHERE p.customer_id=? AND p.archived_at IS NULL AND p.admin_status='enabled' ORDER BY p.id DESC`,[id]),
+   app.query(`SELECT a.id,r.current_username username,a.status status,p.name service_name,sp.lifecycle,
+    COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
+    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
+    (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
+    (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
+    (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
+    FROM hotspot_accounts a JOIN hotspot_standalone_cards sc ON sc.account_id=a.id
+    JOIN radius_identities r ON r.id=a.radius_identity_id
+    LEFT JOIN hotspot_service_periods sp ON sp.live_account_id=a.id
+    LEFT JOIN hotspot_package_versions v ON v.id=sp.package_version_id
+    LEFT JOIN hotspot_packages p ON p.id=v.package_id
+    LEFT JOIN hotspot_period_usage u ON u.period_id=sp.id
+    WHERE sc.customer_id=? AND a.archived_at IS NULL AND a.status='enabled' ORDER BY a.id DESC`,[id])
+  ]);
+  const accounts=[...pppoe.map((x:any)=>({...x,kind:'pppoe'})),...hotspot.map((x:any)=>({...x,kind:'hotspot'}))];
+  return {item:customer,accounts};
+ });
+}
