@@ -69,7 +69,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center justify-center" dir="ltr">
       <Image
-        src={compact ? "/images/logo/lord-radius-icon-v3.png" : "/images/logo/lord-radius-logo-v3.png"}
+        src={compact ? "/images/logo/lord-radius-icon-v4.png" : "/images/logo/lord-radius-logo-v4.png"}
         alt="Lord Radius"
         width={size}
         height={size}
