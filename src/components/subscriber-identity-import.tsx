@@ -26,6 +26,18 @@ function cleanValue(value: string) {
     .replace(/\s+/g, " ").trim();
 }
 
+function decodeLegacyArabicMojibake(value: string) {
+  const characters = Array.from(value);
+  if (!characters.length || characters.some((character) => /[\u0600-\u06ff]/.test(character))) return value;
+
+  const codePoints = characters.map((character) => character.codePointAt(0)!);
+  if (codePoints.some((codePoint) => codePoint > 0xff) || !codePoints.some((codePoint) => codePoint >= 0xc0)) return value;
+
+  const decoded = new TextDecoder("windows-1256").decode(new Uint8Array(codePoints));
+  const arabicCount = (decoded.match(/[\u0600-\u06ff]/g) || []).length;
+  return arabicCount >= Math.max(2, Math.floor(characters.length * 0.3)) ? decoded : value;
+}
+
 function matchLine(text: string, expressions: RegExp[]) {
   for (const expression of expressions) {
     const match = text.match(expression);
@@ -50,7 +62,7 @@ function parseIdentityText(source: string): IdentityValues {
   // AAMVA tags or printed labels. The observed card format starts with the
   // subscriber's given and family names; later fields are intentionally left
   // for manual review because their order and character encoding vary.
-  const delimited = text.split("#").map(cleanValue);
+  const delimited = text.split("#").map((value) => decodeLegacyArabicMojibake(cleanValue(value)));
   const looksLikeName = (value: string) => value.length > 1 && value.length <= 80
     && /[A-Za-z\u0600-\u06ff]/.test(value)
     && !/[\u0000-\u001f]/.test(value);
