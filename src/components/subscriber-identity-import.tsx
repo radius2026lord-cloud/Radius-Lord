@@ -19,6 +19,7 @@ const FIELD_LABELS: Record<IdentityField, string> = {
 const FIELD_ORDER: IdentityField[] = ["firstName", "lastName", "phone", "address"];
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
+const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 
 function cleanValue(value: string) {
   return value.replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
@@ -81,30 +82,24 @@ function hasValue(values: IdentityValues) {
   return FIELD_ORDER.some((field) => Boolean(values[field]?.trim()));
 }
 
-let zxingModuleReady: Promise<unknown> | null = null;
-const locateZXingFile = (path: string) => path.endsWith(".wasm") ? "/zxing_reader.wasm" : path;
-
 async function decodePdf417(file: File) {
-  if (typeof window === "undefined") return "";
-  const { prepareZXingModule, readBarcodes } = await import("zxing-wasm/reader");
-  if (!zxingModuleReady) {
-    zxingModuleReady = Promise.resolve(prepareZXingModule({
-      overrides: { locateFile: locateZXingFile },
-      fireImmediately: true,
-    }));
-  }
+  const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+  if (!BarcodeDetectorCtor) return "";
   try {
-    await zxingModuleReady;
-    const results = await readBarcodes(file, { formats: ["PDF417"], tryHarder: true, textMode: "Plain" });
-    return results.map((result) => {
-      if (result.bytes?.length && !result.hasECI) {
-        return new TextDecoder("windows-1256").decode(result.bytes);
-      }
-      return result.text || (result.bytes?.length ? new TextDecoder("windows-1256").decode(result.bytes) : "");
-    }).filter(Boolean).join("\n");
-  } catch (error) {
-    zxingModuleReady = null;
-    throw error;
+    const supported = typeof BarcodeDetectorCtor.getSupportedFormats === "function"
+      ? await BarcodeDetectorCtor.getSupportedFormats() as string[]
+      : [];
+    if (supported.length && !supported.includes("pdf417")) return "";
+    const detector = new BarcodeDetectorCtor({ formats: ["pdf417"] });
+    const bitmap = await createImageBitmap(file);
+    try {
+      const results = await detector.detect(bitmap);
+      return results.map((result: { rawValue?: string }) => result.rawValue || "").filter(Boolean).join("\n");
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    return "";
   }
 }
 
@@ -133,6 +128,7 @@ export default function SubscriberIdentityImport({
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [pythonStatus, setPythonStatus] = useState("لم يُختبر اتصال Python بعد.");
   const [videoInputs, setVideoInputs] = useState<MediaDeviceInfo[]>([]);
   const [videoInputId, setVideoInputId] = useState("");
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
@@ -171,18 +167,55 @@ export default function SubscriberIdentityImport({
     setMessage(source);
   };
 
-  const readBarcode = (source = barcodeText) => {
+  const testPythonProcessor = async () => {
+    setWorking(true);
+    setError("");
+    setPythonStatus("جارٍ الاتصال...");
+    try {
+      const response = await fetch(PYTHON_PROCESSOR_URL, { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error("لم يستجب معالج Python داخل المشروع.");
+      setPythonStatus("جاهز داخل المشروع. النص يُعالج مؤقتًا في الذاكرة.");
+      setMessage("المعالج جاهز. امسح الباركود في مربع النص.");
+    } catch {
+      setPythonStatus("غير متاح.");
+      setError("تعذر تشغيل Python من المشروع. تحقق من تثبيت Python وأن الأمر python أو python3 متاح، ثم أعد الاختبار.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const readBarcode = async (source = barcodeText) => {
     setError("");
     setBarcodeText(source);
-    const found = parseIdentityText(source);
-    if (!hasValue(found)) {
-      setMessage("وصل النص، لكن تنسيقه غير معروف. راجع القيم يدويًا قبل تطبيقها.");
-      setSuggestions((old) => ({ ...old }));
-      setSelected([]);
-    } else {
-      mergeSuggestions(found, "تم تحليل النص الممسوح. راجع الحقول قبل تطبيقها.");
+    setWorking(true);
+    setMessage("جارٍ تمرير نص القارئ إلى معالج Python داخل المشروع...");
+    try {
+      const response = await fetch(PYTHON_PROCESSOR_URL, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: source }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "تعذرت معالجة النص في Python.");
+      const decoded = typeof result.decodedText === "string" ? result.decodedText : source;
+      const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
+      setPythonStatus("عولج النص داخل المشروع.");
+      setRawOcrText(decoded);
+      if (hasValue(found)) mergeSuggestions(found, "عالج Python نص الباركود باستخدام Windows-1256. راجع الحقول قبل تطبيقها.");
+      else {
+        setSuggestions((old) => ({ ...old }));
+        setSelected([]);
+        setMessage("عالج Python النص كاملًا، لكن تنسيقه لا يطابق الحقول المعروفة. راجع النص المفكوك أدناه.");
+      }
+    } catch {
+      setPythonStatus("تعذرت المعالجة.");
+      setError("تعذرت معالجة النص بواسطة Python داخل المشروع. تحقق من تشغيل التطبيق في وضع التطوير وتوفر Python.");
+      setMessage("");
+    } finally {
+      setWorking(false);
     }
-    setRawOcrText(source);
   };
 
   const clearTemporaryData = () => {
@@ -210,10 +243,8 @@ export default function SubscriberIdentityImport({
     const extracted: string[] = [];
     try {
       for (const file of files) {
-        try {
-          const barcode = await decodePdf417(file);
-          if (barcode) extracted.push(barcode);
-        } catch { /* OCR below remains available if the local PDF417 engine cannot start. */ }
+        const barcode = await decodePdf417(file);
+        if (barcode) extracted.push(barcode);
       }
       const library = await import("tesseract.js");
       worker = await library.createWorker("ara+eng");
@@ -250,8 +281,8 @@ export default function SubscriberIdentityImport({
     if (usb) {
       try {
         const remembered = await usb.getDevices();
-        usbDevice = remembered.find((device) => device.vendorId === 0x05e0 && (!device.productId || device.productId === 0x1900));
-        if (!usbDevice) usbDevice = await usb.requestDevice({ filters: [{ vendorId: 0x05e0 }] });
+        usbDevice = remembered.find((device) => /zebex|z-3052|snapi/i.test(`${device.productName || ""} ${device.manufacturerName || ""}`));
+        if (!usbDevice) usbDevice = await usb.requestDevice({ filters: [{}] });
       } catch { /* Device not selected or not available through WebUSB. */ }
     }
     if (navigator.mediaDevices?.getUserMedia && navigator.mediaDevices?.enumerateDevices) {
@@ -272,12 +303,12 @@ export default function SubscriberIdentityImport({
       setMessage("تم العثور على مصدر تصوير مناسب. ابدأ المعاينة لالتقاط وجهي الهوية.");
     } else if (usbDevice) {
       setSnapiStatus(`ظهر جهاز USB باسم «${usbDevice.productName || "Zebra / SNAPI"}»، لكن المتصفح لا يعرضه كمصدر صورة.`);
-      setMessage("نجح فحص USB فقط. تصوير SNAPI يحتاج أن يظهر الجهاز كمصدر فيديو أو أن يعمل جسر محلي خاص بالشركة.");
+      setMessage("نجح فحص USB فقط. لا يمكن التقاط صورة حتى يظهر القارئ في النظام كمصدر فيديو.");
     } else {
       setSnapiStatus("لم يظهر مصدر تصوير باسم SNAPI أو ZEBEX أو ZEBRA.");
       setMessage(cameraDevices.length
         ? "لم يظهر القارئ كمصدر تصوير. يمكنك اختيار كاميرا متاحة للالتقاط، أو رفع صور الوجهين."
-        : "لم يظهر مصدر فيديو أو جهاز USB متوافق. يمكنك رفع صور الوجهين لمتابعة التجربة.");
+        : "لم يظهر مصدر فيديو أو جهاز USB. يمكنك رفع صور الوجهين لمتابعة التجربة.");
     }
     setWorking(false);
   };
@@ -336,14 +367,14 @@ export default function SubscriberIdentityImport({
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><Fingerprint className="h-4 w-4"/></span>
         <div className="min-w-0">
           <h3 id="subscriber-identity-title" className="text-xs font-bold text-[#17386d] dark:text-slate-100">استيراد بيانات الهوية <span className="mr-1 rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">تجريبي</span></h3>
-          <p className="mt-1 text-[10px] leading-5 text-slate-500">ارفع الوجهين اختياريًا، أو التقطهما بعد فحص مصدر التصوير. القراءة والمعاينة محليتان في المتصفح.</p>
+          <p className="mt-1 text-[10px] leading-5 text-slate-500">ارفع الوجهين اختياريًا، أو التقطهما بعد فحص مصدر التصوير. مسح الباركود يمر إلى معالج Python المضمّن في المشروع.</p>
         </div>
       </div>
       <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void testSnapi()}><Usb/>{working ? "جارٍ الفحص…" : "اختبار اتصال SNAPI"}</ProjectButton>
     </div>
 
     <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-[10px] leading-5 text-blue-900 dark:border-blue-300/10 dark:bg-blue-500/[.06] dark:text-blue-100">
-      <div className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-4 w-4 shrink-0"/>الصور والبيانات المستخرجة لا تُرسل ولا تُحفظ في قاعدة البيانات.</div>
+      <div className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-4 w-4 shrink-0"/>تُعالج الصور والبيانات داخل التطبيق في وضع التطوير ولا تُحفظ في قاعدة البيانات.</div>
       <p className="mt-1 break-words">حالة الاتصال: {snapiStatus}</p>
     </div>
 
@@ -362,9 +393,10 @@ export default function SubscriberIdentityImport({
 
     <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <h4 className="flex items-center gap-2 text-[11px] font-semibold"><ScanLine className="h-4 w-4 text-violet-600"/>قراءة PDF417 من الصورة أو القارئ</h4>
-      <p className="mt-1 text-[10px] leading-5 text-slate-500">يمكنك أيضًا التركيز في المربع ومسح الرمز إذا كان القارئ يرسل النص كلوحة مفاتيح.</p>
-      <textarea value={barcodeText} onChange={(event)=>setBarcodeText(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();readBarcode(event.currentTarget.value.replace(/[\r\n]+$/,""));}}} rows={3} maxLength={30000} placeholder="ضع المؤشر هنا ثم امسح الرمز؛ يُحلّل النص عند ضغط القارئ على Enter…" className={`mt-2 min-h-20 w-full rounded-xl border p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass}`} dir="auto"/>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[9px] text-slate-400">يُحتفظ بالنص والصور والنتائج في ذاكرة الصفحة فقط حتى مسحها أو مغادرتها.</p><div className="flex flex-wrap gap-2"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح المؤقت</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>readBarcode()} disabled={!barcodeText.trim()}><ScanLine/>تحليل النص</ProjectButton></div></div>
+      <p className="mt-1 text-[10px] leading-5 text-slate-500">اختبر معالج Python المضمّن في المشروع، ثم امسح الرمز في المربع. عند إرسال القارئ Enter ينتقل النص إلى ملف Python لمراجعته وتحليله.</p>
+      <textarea value={barcodeText} onChange={(event)=>setBarcodeText(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void readBarcode(event.currentTarget.value.replace(/[\r\n]+$/,""));}}} rows={3} maxLength={30000} placeholder="امسح الرمز هنا؛ سيعالجه Python المحلي عند Enter…" className={`mt-2 min-h-20 w-full rounded-xl border p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass}`} dir="auto"/>
+      <p className="mt-2 text-[9px] text-slate-500">حالة Python: {pythonStatus}</p>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[9px] text-slate-400">يعالج مسار التطوير البيانات داخل المشروع مؤقتًا؛ لا تُحفظ في قاعدة البيانات.</p><div className="flex flex-wrap gap-2"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح المؤقت</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void testPythonProcessor()} disabled={working}><Usb/>{working ? "جارٍ الاختبار…" : "اختبار Python"}</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void readBarcode()} disabled={working || !barcodeText.trim()}><ScanLine/>تحليل عبر Python</ProjectButton></div></div>
     </div>
 
     <div className="mt-3 flex flex-wrap justify-end gap-2">
