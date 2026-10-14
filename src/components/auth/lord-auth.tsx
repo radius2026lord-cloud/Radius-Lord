@@ -1,17 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   Activity,
-  Crown,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
   Moon,
-  Radio,
   Server,
   ShieldCheck,
   Sun,
@@ -66,14 +65,17 @@ const networkDots = [
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
+  const size = compact ? 112 : 176;
   return (
-    <div className="flex flex-col items-center text-center" dir="ltr">
-      <div className={`auth-brand-icon relative grid place-items-center rounded-[19px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] shadow-[0_12px_30px_rgba(20,121,255,.24)] ${compact ? "h-12 w-12" : "h-[68px] w-[68px]"}`}>
-        <Crown className={`${compact ? "h-6 w-6" : "h-9 w-9"} text-[#ffad16]`} strokeWidth={2.2} />
-        <Radio className={`absolute bottom-1.5 text-white ${compact ? "h-3.5 w-3.5" : "h-[17px] w-[17px]"}`} strokeWidth={2.5} />
-      </div>
-      <div className={`${compact ? "mt-2 text-[20px]" : "mt-3 text-[30px]"} font-black leading-none tracking-tight text-[#102a63] dark:text-white`}>LORD</div>
-      <div className={`${compact ? "text-[9px]" : "text-[12px]"} mt-1 font-extrabold tracking-[.08em] text-[#e99100] dark:text-[#ffad16]`}>RADIUS LORD</div>
+    <div className="flex items-center justify-center" dir="ltr">
+      <Image
+        src={compact ? "/images/logo/lord-radius-icon.png" : "/images/logo/lord-radius-logo.png"}
+        alt="Lord Radius"
+        width={size}
+        height={size}
+        priority
+        className={compact ? "h-[76px] w-[76px] object-contain" : "h-[132px] w-[132px] object-contain"}
+      />
     </div>
   );
 }

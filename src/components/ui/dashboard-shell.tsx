@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -144,12 +145,10 @@ const shortcuts = [
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex min-w-0 items-center rl-sidebar-motion ${compact ? "justify-center gap-0" : "gap-3"}`}>
-      <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#0a70ff] to-[#063bbd] text-white shadow-[0_10px_25px_rgba(26,111,255,.28)] rl-sidebar-motion">
-        <Crown className="h-6 w-6 text-[#ffad16]" strokeWidth={2.2} /><Radio className="absolute bottom-1.5 h-3.5 w-3.5" strokeWidth={2.5} />
-      </div>
+      <Image src="/images/logo/lord-radius-icon.png" alt="Lord Radius" width={88} height={88} priority className="h-11 w-11 shrink-0 object-contain rl-sidebar-motion" />
       <div className={`overflow-hidden whitespace-nowrap leading-tight rl-sidebar-motion ${compact ? "max-w-0 -translate-x-2 opacity-0" : "max-w-[160px] translate-x-0 opacity-100"}`}>
         <div className="truncate text-[15px] font-bold text-[#102a63] dark:text-white">اللورد لخدمات الإنترنت</div>
-        <div className="mt-1 text-[11px] font-semibold tracking-wide text-[#e99100]">LORD RADIUS</div>
+        <div className="mt-1 text-[11px] font-semibold tracking-wide text-[#e99100]">Lord Radius</div>
       </div>
     </div>
   );
