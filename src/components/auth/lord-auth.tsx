@@ -65,16 +65,16 @@ const networkDots = [
 ];
 
 function Brand({ compact = false }: { compact?: boolean }) {
-  const size = compact ? 112 : 176;
+  const size = compact ? 150 : 200;
   return (
     <div className="flex items-center justify-center" dir="ltr">
       <Image
-        src={compact ? "/images/logo/lord-radius-icon-v4.png" : "/images/logo/lord-radius-logo-v4.png"}
+        src="/images/logo/lord-radius-logo-v5.png"
         alt="Lord Radius"
         width={size}
         height={size}
         priority
-        className={compact ? "h-[76px] w-[76px] object-contain" : "h-[132px] w-[132px] object-contain"}
+        className={compact ? "h-[118px] w-[118px] object-contain" : "h-[156px] w-[156px] object-contain"}
       />
     </div>
   );
