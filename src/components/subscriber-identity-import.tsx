@@ -81,24 +81,30 @@ function hasValue(values: IdentityValues) {
   return FIELD_ORDER.some((field) => Boolean(values[field]?.trim()));
 }
 
+let zxingModuleReady: Promise<unknown> | null = null;
+const locateZXingFile = (path: string) => path.endsWith(".wasm") ? "/zxing_reader.wasm" : path;
+
 async function decodePdf417(file: File) {
-  const BarcodeDetectorCtor = (window as any).BarcodeDetector;
-  if (!BarcodeDetectorCtor) return "";
+  if (typeof window === "undefined") return "";
+  const { prepareZXingModule, readBarcodes } = await import("zxing-wasm/reader");
+  if (!zxingModuleReady) {
+    zxingModuleReady = Promise.resolve(prepareZXingModule({
+      overrides: { locateFile: locateZXingFile },
+      fireImmediately: true,
+    }));
+  }
   try {
-    const supported = typeof BarcodeDetectorCtor.getSupportedFormats === "function"
-      ? await BarcodeDetectorCtor.getSupportedFormats() as string[]
-      : [];
-    if (supported.length && !supported.includes("pdf417")) return "";
-    const detector = new BarcodeDetectorCtor({ formats: ["pdf417"] });
-    const bitmap = await createImageBitmap(file);
-    try {
-      const results = await detector.detect(bitmap);
-      return results.map((result: { rawValue?: string }) => result.rawValue || "").filter(Boolean).join("\n");
-    } finally {
-      bitmap.close();
-    }
-  } catch {
-    return "";
+    await zxingModuleReady;
+    const results = await readBarcodes(file, { formats: ["PDF417"], tryHarder: true, textMode: "Plain" });
+    return results.map((result) => {
+      if (result.bytes?.length && !result.hasECI) {
+        return new TextDecoder("windows-1256").decode(result.bytes);
+      }
+      return result.text || (result.bytes?.length ? new TextDecoder("windows-1256").decode(result.bytes) : "");
+    }).filter(Boolean).join("\n");
+  } catch (error) {
+    zxingModuleReady = null;
+    throw error;
   }
 }
 
@@ -204,8 +210,10 @@ export default function SubscriberIdentityImport({
     const extracted: string[] = [];
     try {
       for (const file of files) {
-        const barcode = await decodePdf417(file);
-        if (barcode) extracted.push(barcode);
+        try {
+          const barcode = await decodePdf417(file);
+          if (barcode) extracted.push(barcode);
+        } catch { /* OCR below remains available if the local PDF417 engine cannot start. */ }
       }
       const library = await import("tesseract.js");
       worker = await library.createWorker("ara+eng");
