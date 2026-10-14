@@ -6,6 +6,8 @@ from io import BytesIO
 import json
 import re
 import sys
+import time
+import xml.etree.ElementTree as ET
 
 
 ARABIC_RE = re.compile(r"[\u0600-\u06ff]")
@@ -141,6 +143,156 @@ def process_text(text):
     }
 
 
+def scanner_result_payload(xml_text):
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return b""
+
+    for name in ("rawdata", "datalabel"):
+        value = root.findtext(f".//{name}", default="")
+        octets = re.findall(r"0x([0-9a-fA-F]{2})", value)
+        if octets:
+            return bytes(int(octet, 16) for octet in octets)
+    return b""
+
+
+def scanner_ids_and_models(xml_text):
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    return [
+        {
+            "scannerId": node.findtext("scannerID", default=""),
+            "model": node.findtext("modelnumber", default="قارئ باركود"),
+            "type": node.attrib.get("type", ""),
+        }
+        for node in root.findall(".//scanner")
+    ]
+
+
+def scanner_status_value(result):
+    if isinstance(result, (tuple, list)) and result:
+        candidate = result[-1]
+    else:
+        candidate = result
+    try:
+        return int(candidate)
+    except (TypeError, ValueError):
+        return 0
+
+
+def open_scanner_sdk(with_events=False):
+    if sys.platform != "win32":
+        raise RuntimeError("scanner_windows_only")
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError as exc:
+        raise RuntimeError("scanner_sdk_python_missing") from exc
+
+    pythoncom.CoInitialize()
+    if with_events:
+        class BarcodeEvents:
+            scan_xml = ""
+
+            def OnBarcodeEvent(self, event_type, scan_xml):
+                if int(event_type) == 1:
+                    self.scan_xml = str(scan_xml)
+
+        scanner = win32com.client.DispatchWithEvents("CoreScanner.CoreScanner", BarcodeEvents)
+        return pythoncom, scanner, scanner
+
+    scanner = win32com.client.Dispatch("CoreScanner.CoreScanner")
+    return pythoncom, scanner, None
+
+
+def scanner_connection():
+    pythoncom = None
+    scanner = None
+    try:
+        pythoncom, scanner, _ = open_scanner_sdk()
+        open_result = scanner.Open(0, [1], 1)
+        if scanner_status_value(open_result) != 0:
+            return {"ok": False, "error": "scanner_sdk_open_failed"}
+        scanner_ids = [0] * 255
+        result = scanner.GetScanners(0, scanner_ids)
+        xml_text = next((item for item in result if isinstance(item, str) and "<scanners" in item), "") if isinstance(result, (tuple, list)) else str(result)
+        devices = scanner_ids_and_models(xml_text)
+        if not devices:
+            return {"ok": False, "error": "scanner_not_found"}
+        return {"ok": True, "scannerCount": len(devices), "scannerModels": [item["model"] for item in devices]}
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception:
+        return {"ok": False, "error": "scanner_sdk_unavailable"}
+    finally:
+        if scanner is not None:
+            try:
+                scanner.Close(0)
+            except Exception:
+                pass
+        if pythoncom is not None:
+            pythoncom.CoUninitialize()
+
+
+def read_from_scanner(timeout_seconds=60):
+    pythoncom = None
+    scanner = None
+    try:
+        pythoncom, scanner, events = open_scanner_sdk(with_events=True)
+        open_result = scanner.Open(0, [1], 1)
+        if scanner_status_value(open_result) != 0:
+            return {"ok": False, "error": "scanner_sdk_open_failed"}
+
+        scanner_ids = [0] * 255
+        result = scanner.GetScanners(0, scanner_ids)
+        xml_text = next((item for item in result if isinstance(item, str) and "<scanners" in item), "") if isinstance(result, (tuple, list)) else str(result)
+        devices = scanner_ids_and_models(xml_text)
+        if not devices:
+            return {"ok": False, "error": "scanner_not_found"}
+
+        subscribe_xml = "<inArgs><cmdArgs><arg-int>1</arg-int><arg-int>1</arg-int></cmdArgs></inArgs>"
+        subscribe_result = scanner.ExecCommand(1001, subscribe_xml)
+        if scanner_status_value(subscribe_result) != 0:
+            return {"ok": False, "error": "scanner_event_registration_failed"}
+
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline and not events.scan_xml:
+            pythoncom.PumpWaitingMessages()
+            time.sleep(0.05)
+        if not events.scan_xml:
+            return {"ok": False, "error": "scanner_read_timeout"}
+
+        raw = scanner_result_payload(events.scan_xml)
+        if not raw:
+            return {"ok": False, "error": "scanner_raw_data_missing"}
+        decoded, identity_fields, fields, byte_count = decode_bytes(raw)
+        return {
+            "ok": True,
+            "found": True,
+            "format": "PDF417 / SNAPI",
+            "byteCount": byte_count,
+            "decodedText": decoded,
+            "identityFields": identity_fields,
+            "fields": fields,
+            "storage": "memory-only",
+        }
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception:
+        return {"ok": False, "error": "scanner_sdk_unavailable"}
+    finally:
+        if scanner is not None:
+            try:
+                scanner.Close(0)
+            except Exception:
+                pass
+        if pythoncom is not None:
+            pythoncom.CoUninitialize()
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -151,6 +303,14 @@ def main():
             print(json.dumps({"ok": True, "engine": "python-zxing-cpp-pdf417", "storage": "memory-only"}, ensure_ascii=False))
         except ImportError:
             print(json.dumps({"ok": False, "error": "python_dependencies_missing"}, ensure_ascii=False))
+        return
+
+    if "--scanner-status" in sys.argv[1:]:
+        print(json.dumps(scanner_connection(), ensure_ascii=False))
+        return
+
+    if "--scanner-scan" in sys.argv[1:]:
+        print(json.dumps(read_from_scanner(), ensure_ascii=False))
         return
 
     try:

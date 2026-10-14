@@ -14,15 +14,23 @@ function pythonCommand() {
   return process.env.PYTHON_EXECUTABLE || (process.platform === "win32" ? "python" : "python3");
 }
 
-function runPython(input: string, health = false) {
+type ProcessorMode = "request" | "health" | "scanner-status" | "scanner-scan";
+
+function runPython(input: string, mode: ProcessorMode = "request") {
   return new Promise<Record<string, unknown>>((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), "tools", "identity_barcode_processor.py");
-    const args = health ? [scriptPath, "--health"] : [scriptPath];
+    const modeArguments: Record<ProcessorMode, string[]> = {
+      request: [],
+      health: ["--health"],
+      "scanner-status": ["--scanner-status"],
+      "scanner-scan": ["--scanner-scan"],
+    };
+    const args = [scriptPath, ...modeArguments[mode]];
     const child = spawn(pythonCommand(), args, { cwd: process.cwd(), stdio: ["pipe", "pipe", "ignore"] });
     const output: Buffer[] = [];
     let outputBytes = 0;
     let settled = false;
-    const timeout = setTimeout(() => child.kill(), 30_000);
+    const timeout = setTimeout(() => child.kill(), mode === "scanner-scan" ? 70_000 : 30_000);
 
     const fail = (error: Error) => {
       if (settled) return;
@@ -57,7 +65,7 @@ function runPython(input: string, health = false) {
       }
     });
 
-    if (!health) child.stdin.end(input);
+    if (mode === "request") child.stdin.end(input);
     else child.stdin.end();
   });
 }
@@ -68,7 +76,7 @@ export async function GET() {
   }
 
   try {
-    const result = await runPython("", true);
+    const result = await runPython("", "health");
     return NextResponse.json(result, { headers: NO_STORE_HEADERS });
   } catch {
     return NextResponse.json({ ok: false, error: "python_unavailable" }, { status: 503, headers: NO_STORE_HEADERS });
@@ -80,7 +88,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "development_only" }, { status: 404, headers: NO_STORE_HEADERS });
   }
 
-  let input: { text?: string; images?: string[] };
+  let input: { action?: string; text?: string; images?: string[] };
+  let scannerAction: "scanner-status" | "scanner-scan" | undefined;
   try {
     if (request.headers.get("content-type")?.includes("multipart/form-data")) {
       const form = await request.formData();
@@ -111,15 +120,29 @@ export async function POST(request: Request) {
       }
       input = { text: typeof text === "string" ? text : "", images };
     } else {
-      const body = await request.json() as { text?: unknown };
-      const textTooLong = typeof body.text === "string" && body.text.length > MAX_INPUT_LENGTH;
-      if (typeof body.text !== "string" || textTooLong) {
-        return NextResponse.json({ error: textTooLong ? "text_too_long" : "invalid_text" }, { status: textTooLong ? 413 : 400, headers: NO_STORE_HEADERS });
+      const body = await request.json() as { action?: unknown; text?: unknown };
+      if (body.action === "scanner-status" || body.action === "scanner-scan") {
+        scannerAction = body.action;
+        input = {};
+      } else {
+        const textTooLong = typeof body.text === "string" && body.text.length > MAX_INPUT_LENGTH;
+        if (typeof body.text !== "string" || textTooLong) {
+          return NextResponse.json({ error: textTooLong ? "text_too_long" : "invalid_text" }, { status: textTooLong ? 413 : 400, headers: NO_STORE_HEADERS });
+        }
+        input = { text: body.text };
       }
-      input = { text: body.text };
     }
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400, headers: NO_STORE_HEADERS });
+  }
+
+  if (scannerAction) {
+    try {
+      const result = await runPython("", scannerAction);
+      return NextResponse.json(result, { status: result.ok === false ? 503 : 200, headers: NO_STORE_HEADERS });
+    } catch {
+      return NextResponse.json({ error: "scanner_processor_unavailable" }, { status: 503, headers: NO_STORE_HEADERS });
+    }
   }
 
   if (!input.images?.length && !input.text?.trim()) {
