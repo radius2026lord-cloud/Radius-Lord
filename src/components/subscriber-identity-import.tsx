@@ -46,6 +46,18 @@ function parseIdentityText(source: string): IdentityValues {
   };
   if (aamva.firstName || aamva.lastName || aamva.address) return aamva;
 
+  // Some national PDF417 payloads expose a hash-delimited record instead of
+  // AAMVA tags or printed labels. The observed card format starts with the
+  // subscriber's given and family names; later fields are intentionally left
+  // for manual review because their order and character encoding vary.
+  const delimited = text.split("#").map(cleanValue);
+  const looksLikeName = (value: string) => value.length > 1 && value.length <= 80
+    && /[A-Za-z\u0600-\u06ff]/.test(value)
+    && !/[\u0000-\u001f]/.test(value);
+  if (delimited.length >= 5 && looksLikeName(delimited[0]) && looksLikeName(delimited[1])) {
+    return { firstName: delimited[0], lastName: delimited[1] };
+  }
+
   values.firstName = matchLine(text, [/(?:الاسم الأول|الاسم|first\s*name|given\s*name)\s*[:：=\-]\s*([^\n,;|]+)/i]);
   values.lastName = matchLine(text, [/(?:الكنية|اسم العائلة|last\s*name|surname|family\s*name)\s*[:：=\-]\s*([^\n,;|]+)/i]);
   values.phone = matchLine(text, [/(?:رقم الهاتف|الهاتف|الجوال|الموبايل|phone|mobile)\s*[:：=\-]\s*([+\d٠-٩۰-۹()\- ]{5,24})/i]);
