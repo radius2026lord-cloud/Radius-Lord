@@ -197,7 +197,7 @@ export default function SubscriberIdentityImport({
       setRawOcrText("");
       setIdentityFields([]);
       setReadSummary("");
-      setMessage("لم يعثر قارئ PDF417 في Python على باركود في الصور. جرّب صورة أوضح للوجه الخلفي أو امسح الباركود في المربع.");
+      setMessage("لم يعثر قارئ PDF417 على باركود في الصور. تحقق من اختيار صورة الوجه الخلفي التي يظهر فيها الرمز، ثم جرّب صورة أوضح.");
     } catch (caught) {
       setError(caught instanceof Error ? `تعذر إكمال القراءة: ${caught.message}` : "تعذر إكمال القراءة.");
       setMessage("");
@@ -219,7 +219,7 @@ export default function SubscriberIdentityImport({
     let cameraDevices: MediaDeviceInfo[] = [];
     let scannerCamera: MediaDeviceInfo | undefined;
     let usbDevice: any = null;
-    const usb = (navigator as Navigator & { usb?: { getDevices: () => Promise<any[]>; requestDevice: (options: { filters: { vendorId: number }[] }) => Promise<any> } }).usb;
+    const usb = (navigator as Navigator & { usb?: { getDevices: () => Promise<any[]>; requestDevice: (options: { filters: { vendorId?: number; productId?: number; classCode?: number; subclassCode?: number; protocolCode?: number }[] }) => Promise<any> } }).usb;
     if (usb) {
       try {
         const remembered = await usb.getDevices();
@@ -309,7 +309,7 @@ export default function SubscriberIdentityImport({
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><Fingerprint className="h-4 w-4"/></span>
         <div className="min-w-0">
           <h3 id="subscriber-identity-title" className="text-xs font-bold text-[#17386d] dark:text-slate-100">استيراد بيانات الهوية <span className="mr-1 rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">تجريبي</span></h3>
-          <p className="mt-1 text-[10px] leading-5 text-slate-500">ارفع الوجهين اختياريًا، أو التقطهما بعد فحص مصدر التصوير. مسح الباركود يمر إلى معالج Python المضمّن في المشروع.</p>
+          <p className="mt-1 text-[10px] leading-5 text-slate-500">الطريقة المطابقة للقارئ الخارجي: ارفع صورة الوجه الخلفي ثم اقرأ PDF417 بواسطة Python داخل المشروع. الوجه الأمامي اختياري.</p>
         </div>
       </div>
       <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void testSnapi()}><Usb/>{working ? "جارٍ الفحص…" : "اختبار اتصال SNAPI"}</ProjectButton>
@@ -320,6 +320,12 @@ export default function SubscriberIdentityImport({
       <p className="mt-1 break-words">حالة الاتصال: {snapiStatus}</p>
     </div>
 
+    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-300/10 dark:bg-blue-500/[.035]">
+      <div className="flex items-start gap-2 text-[10px] leading-5 text-blue-900 dark:text-blue-100">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-600 text-[9px] font-bold text-white">1</span>
+        <p><strong>ارفع صورة الوجه الخلفي</strong> التي يظهر فيها باركود PDF417. صورة الوجه الأمامي اختيارية.</p>
+      </div>
+    </div>
     <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {([{ side: "front" as const, title: "الوجه الأمامي", file: front, url: frontUrl }, { side: "back" as const, title: "الوجه الخلفي", file: back, url: backUrl }]).map(({ side, title, file, url }) => <div key={side} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-white/10">
         <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span>{file&&<button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button>}</div>
@@ -333,22 +339,28 @@ export default function SubscriberIdentityImport({
     </div>}
     {videoStream&&<div className="mt-3 rounded-xl border border-blue-200 p-3 dark:border-blue-300/15"><video ref={videoRef} autoPlay playsInline muted className="max-h-64 w-full rounded-lg bg-slate-900 object-contain"/><div className="mt-2 flex flex-wrap justify-end gap-2"><ProjectButton type="button" variant="secondary" onClick={()=>void capture("front")}><Camera/>التقاط الوجه الأمامي</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void capture("back")}><Camera/>التقاط الوجه الخلفي</ProjectButton><ProjectButton type="button" variant="secondary" onClick={stopVideo}><X/>إيقاف</ProjectButton></div></div>}
 
-    <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
-      <h4 className="flex items-center gap-2 text-[11px] font-semibold"><ScanLine className="h-4 w-4 text-violet-600"/>قراءة PDF417 من الصورة أو القارئ</h4>
-      <p className="mt-1 text-[10px] leading-5 text-slate-500">اختبر معالج Python المضمّن في المشروع، ثم امسح الرمز في المربع. عند إرسال القارئ Enter ينتقل النص إلى ملف Python لمراجعته وتحليله.</p>
+    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-300/10 dark:bg-blue-500/[.05]">
+      <div className="flex items-start gap-2 text-[10px] leading-5 text-blue-900 dark:text-blue-100">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-600 text-[9px] font-bold text-white">2</span>
+        <p><strong>اقرأ الباركود من الصورة.</strong> يقرأ Python بايتات PDF417 مباشرة، ثم يفك الحقول بترميز Windows-1256 مثل التطبيق الخارجي.</p>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[9px] text-slate-500">تظهر النتيجة للمراجعة فقط ولا تُحفظ في قاعدة البيانات.</p>
+        <ProjectButton type="button" disabled={working || (!front && !back)} onClick={()=>void readImages()}><FileImage/>{working ? "جارٍ قراءة PDF417 عبر Python…" : "قراءة باركود الصورة عبر Python"}</ProjectButton>
+      </div>
+    </div>
+    <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
+      <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">طريقة بديلة: إدخال نص القارئ (keyboard-wedge)</summary>
+      <p className="mt-2 text-[10px] leading-5 text-slate-500">استخدمها فقط إذا كان القارئ يرسل النص بترميز سليم. بعض الأجهزة تغيّر ترميز النص؛ عندها ارفع صورة الباركود واستخدم الطريقة الأساسية أعلاه للحصول على نتيجة مطابقة للتطبيق الخارجي.</p>
       <textarea value={barcodeText} onChange={(event)=>setBarcodeText(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void readBarcode(event.currentTarget.value.replace(/[\r\n]+$/,""));}}} rows={3} maxLength={30000} placeholder="امسح الرمز هنا؛ سيعالجه Python المحلي عند Enter…" className={`mt-2 min-h-20 w-full rounded-xl border p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass}`} dir="auto"/>
       <p className="mt-2 text-[9px] text-slate-500">حالة Python: {pythonStatus}</p>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[9px] text-slate-400">يعالج مسار التطوير البيانات داخل المشروع مؤقتًا؛ لا تُحفظ في قاعدة البيانات.</p><div className="flex flex-wrap gap-2"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح المؤقت</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void testPythonProcessor()} disabled={working}><Usb/>{working ? "جارٍ الاختبار…" : "اختبار Python"}</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void readBarcode()} disabled={working || !barcodeText.trim()}><ScanLine/>تحليل عبر Python</ProjectButton></div></div>
-    </div>
-
-    <div className="mt-3 flex flex-wrap justify-end gap-2">
-      <ProjectButton type="button" variant="secondary" disabled={working || (!front && !back)} onClick={()=>void readImages()}><FileImage/>{working ? "جارٍ الاستخراج عبر Python…" : "قراءة PDF417 عبر Python"}</ProjectButton>
-    </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[9px] text-slate-400">يعالج مسار التطوير البيانات داخل المشروع مؤقتًا.</p><div className="flex flex-wrap gap-2"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح المؤقت</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void testPythonProcessor()} disabled={working}><Usb/>{working ? "جارٍ الاختبار…" : "اختبار Python"}</ProjectButton><ProjectButton type="button" variant="secondary" onClick={()=>void readBarcode()} disabled={working || !barcodeText.trim()}><ScanLine/>تحليل عبر Python</ProjectButton></div></div>
+    </details>
     {message&&<p role="status" className="mt-2 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-[10px] leading-5 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200"><BadgeCheck className="mt-0.5 h-4 w-4 shrink-0"/>{message}</p>}
     {error&&<p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</p>}
 
     {(hasValue(suggestions) || rawOcrText || identityFields.length > 0) && <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-300/10 dark:bg-violet-500/[.04]">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-[11px] font-bold text-violet-900 dark:text-violet-100">مراجعة المعلومات المستخرجة</h4><p className="mt-1 text-[9px] text-slate-500">عدّل القيم وحدد ما تريد تطبيقه. الحقول المعبأة يدويًا لن تُستبدل.</p></div><ProjectButton type="button" disabled={!selected.some((field)=>Boolean(suggestions[field]?.trim())&&!currentValues[field]?.trim())} onClick={applySelected}><Check/>تطبيق المحدد على الحقول الفارغة</ProjectButton></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-[11px] font-bold text-violet-900 dark:text-violet-100">مراجعة المعلومات المستخرجة <span className="mr-1 text-[9px] font-normal text-slate-500">(الخطوة 3)</span></h4><p className="mt-1 text-[9px] text-slate-500">تحقق من الحقول وعدّلها، ثم اختر ما تريد تطبيقه. لن تُستبدل الحقول المعبأة يدويًا.</p></div><ProjectButton type="button" disabled={!selected.some((field)=>Boolean(suggestions[field]?.trim())&&!currentValues[field]?.trim())} onClick={applySelected}><Check/>تطبيق المحدد على الحقول الفارغة</ProjectButton></div>
       {readSummary&&<p className="mt-3 text-[10px] font-semibold text-violet-800 dark:text-violet-200">{readSummary}</p>}
       {identityFields.length>0&&<div className="mt-2 grid gap-2 sm:grid-cols-2">{identityFields.map((field,index)=><div key={`${field.label}-${index}`} className="min-w-0 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><div className="text-[9px] font-semibold text-slate-500">{field.label}</div><div className="mt-1 break-words text-xs" dir="auto">{field.value}</div></div>)}</div>}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">{FIELD_ORDER.map((field)=><label key={field} className="flex min-w-0 items-start gap-2 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><input type="checkbox" checked={selected.includes(field)} onChange={()=>toggleField(field)} disabled={Boolean(currentValues[field]?.trim())} className="mt-1 accent-blue-600"/><span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-[10px] font-semibold">{FIELD_LABELS[field]}{currentValues[field]?.trim()&&<span className="font-normal text-amber-600">· الحقل ممتلئ</span>}</span><ProjectInput value={suggestions[field]||""} onChange={(event)=>updateSuggestion(field,event.target.value)} className={`mt-1 !h-9 !text-xs ${inputClass}`} maxLength={field === "address" ? 500 : 100}/></span></label>)}</div>
