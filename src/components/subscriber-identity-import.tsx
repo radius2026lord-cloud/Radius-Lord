@@ -8,6 +8,7 @@ import ProjectInput from "@/components/ui/project-input";
 
 type IdentityField = "firstName" | "lastName" | "phone" | "address";
 type IdentityValues = Partial<Record<IdentityField, string>>;
+type ExtractedIdentityField = { label: string; value: string };
 type Side = "front" | "back";
 
 const FIELD_LABELS: Record<IdentityField, string> = {
@@ -21,86 +22,8 @@ const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 
-function cleanValue(value: string) {
-  return value.replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
-    .replace(/[\u06f0-\u06f9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
-    .replace(/\s+/g, " ").trim();
-}
-
-function decodeLegacyArabicMojibake(value: string) {
-  const characters = Array.from(value);
-  if (!characters.length || characters.some((character) => /[\u0600-\u06ff]/.test(character))) return value;
-
-  const codePoints = characters.map((character) => character.codePointAt(0)!);
-  if (codePoints.some((codePoint) => codePoint > 0xff) || !codePoints.some((codePoint) => codePoint >= 0xc0)) return value;
-
-  const decoded = new TextDecoder("windows-1256").decode(new Uint8Array(codePoints));
-  const arabicCount = (decoded.match(/[\u0600-\u06ff]/g) || []).length;
-  return arabicCount >= Math.max(2, Math.floor(characters.length * 0.3)) ? decoded : value;
-}
-
-function matchLine(text: string, expressions: RegExp[]) {
-  for (const expression of expressions) {
-    const match = text.match(expression);
-    if (match?.[1]) return cleanValue(match[1].replace(/[|;]+$/, ""));
-  }
-  return "";
-}
-
-function parseIdentityText(source: string): IdentityValues {
-  const text = source.replace(/\r/g, "\n").replace(/\n{2,}/g, "\n");
-  const values: IdentityValues = {};
-
-  // Common AAMVA PDF417 fields. Unknown national formats stay editable in the review panel.
-  const aamva = {
-    firstName: matchLine(text, [/^DAC([^\n]+)/m]),
-    lastName: matchLine(text, [/^DCS([^\n]+)/m]),
-    address: [matchLine(text, [/^DAG([^\n]+)/m]), matchLine(text, [/^DAH([^\n]+)/m]), matchLine(text, [/^DAI([^\n]+)/m])].filter(Boolean).join("، "),
-  };
-  if (aamva.firstName || aamva.lastName || aamva.address) return aamva;
-
-  // Some national PDF417 payloads expose a hash-delimited record instead of
-  // AAMVA tags or printed labels. The observed card format starts with the
-  // subscriber's given and family names; later fields are intentionally left
-  // for manual review because their order and character encoding vary.
-  const delimited = text.split("#").map((value) => decodeLegacyArabicMojibake(cleanValue(value)));
-  const looksLikeName = (value: string) => value.length > 1 && value.length <= 80
-    && /[A-Za-z\u0600-\u06ff]/.test(value)
-    && !/[\u0000-\u001f]/.test(value);
-  if (delimited.length >= 5 && looksLikeName(delimited[0]) && looksLikeName(delimited[1])) {
-    return { firstName: delimited[0], lastName: delimited[1] };
-  }
-
-  values.firstName = matchLine(text, [/(?:الاسم الأول|الاسم|first\s*name|given\s*name)\s*[:：=\-]\s*([^\n,;|]+)/i]);
-  values.lastName = matchLine(text, [/(?:الكنية|اسم العائلة|last\s*name|surname|family\s*name)\s*[:：=\-]\s*([^\n,;|]+)/i]);
-  values.phone = matchLine(text, [/(?:رقم الهاتف|الهاتف|الجوال|الموبايل|phone|mobile)\s*[:：=\-]\s*([+\d٠-٩۰-۹()\- ]{5,24})/i]);
-  values.address = matchLine(text, [/(?:العنوان|address)\s*[:：=\-]\s*([^\n;|]+)/i]);
-  return values;
-}
-
 function hasValue(values: IdentityValues) {
   return FIELD_ORDER.some((field) => Boolean(values[field]?.trim()));
-}
-
-async function decodePdf417(file: File) {
-  const BarcodeDetectorCtor = (window as any).BarcodeDetector;
-  if (!BarcodeDetectorCtor) return "";
-  try {
-    const supported = typeof BarcodeDetectorCtor.getSupportedFormats === "function"
-      ? await BarcodeDetectorCtor.getSupportedFormats() as string[]
-      : [];
-    if (supported.length && !supported.includes("pdf417")) return "";
-    const detector = new BarcodeDetectorCtor({ formats: ["pdf417"] });
-    const bitmap = await createImageBitmap(file);
-    try {
-      const results = await detector.detect(bitmap);
-      return results.map((result: { rawValue?: string }) => result.rawValue || "").filter(Boolean).join("\n");
-    } finally {
-      bitmap.close();
-    }
-  } catch {
-    return "";
-  }
 }
 
 function fileFromCanvas(canvas: HTMLCanvasElement, name: string) {
@@ -123,6 +46,8 @@ export default function SubscriberIdentityImport({
   const [back, setBack] = useState<File | null>(null);
   const [barcodeText, setBarcodeText] = useState("");
   const [rawOcrText, setRawOcrText] = useState("");
+  const [identityFields, setIdentityFields] = useState<ExtractedIdentityField[]>([]);
+  const [readSummary, setReadSummary] = useState("");
   const [suggestions, setSuggestions] = useState<IdentityValues>({});
   const [selected, setSelected] = useState<IdentityField[]>([]);
   const [working, setWorking] = useState(false);
@@ -179,7 +104,7 @@ export default function SubscriberIdentityImport({
       setMessage("المعالج جاهز. امسح الباركود في مربع النص.");
     } catch {
       setPythonStatus("غير متاح.");
-      setError("تعذر تشغيل Python من المشروع. تحقق من تثبيت Python وأن الأمر python أو python3 متاح، ثم أعد الاختبار.");
+      setError("تعذر تشغيل قارئ PDF417 في Python. تأكد من تثبيت متطلبات tools/requirements-identity.txt وأن الأمر python أو python3 متاح.");
     } finally {
       setWorking(false);
     }
@@ -188,6 +113,8 @@ export default function SubscriberIdentityImport({
   const readBarcode = async (source = barcodeText) => {
     setError("");
     setBarcodeText(source);
+    setIdentityFields([]);
+    setReadSummary("");
     setWorking(true);
     setMessage("جارٍ تمرير نص القارئ إلى معالج Python داخل المشروع...");
     try {
@@ -203,6 +130,8 @@ export default function SubscriberIdentityImport({
       const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
       setPythonStatus("عولج النص داخل المشروع.");
       setRawOcrText(decoded);
+      setIdentityFields(Array.isArray(result.identityFields) ? result.identityFields : []);
+      setReadSummary(result.byteCount ? `${result.format || "PDF417"} · ${result.byteCount} بايت` : "");
       if (hasValue(found)) mergeSuggestions(found, "عالج Python نص الباركود باستخدام Windows-1256. راجع الحقول قبل تطبيقها.");
       else {
         setSuggestions((old) => ({ ...old }));
@@ -224,6 +153,8 @@ export default function SubscriberIdentityImport({
     setBack(null);
     setBarcodeText("");
     setRawOcrText("");
+    setIdentityFields([]);
+    setReadSummary("");
     setSuggestions({});
     setSelected([]);
     setMessage("مُسحت الصور والنص والنتائج المؤقتة من هذه الصفحة.");
@@ -238,28 +169,39 @@ export default function SubscriberIdentityImport({
     }
     setWorking(true);
     setError("");
-    setMessage("جارٍ فحص PDF417 ثم تشغيل OCR محليًا في المتصفح...");
-    let worker: { recognize: (input: File) => Promise<{ data: { text: string } }>; terminate: () => Promise<unknown> } | null = null;
-    const extracted: string[] = [];
+    setIdentityFields([]);
+    setReadSummary("");
+    setMessage("جارٍ قراءة صورة الهوية باستخدام قارئ PDF417 في ملف Python...");
     try {
-      for (const file of files) {
-        const barcode = await decodePdf417(file);
-        if (barcode) extracted.push(barcode);
+      const form = new FormData();
+      for (const file of files) form.append("images", file, file.name);
+      const response = await fetch(PYTHON_PROCESSOR_URL, { method: "POST", body: form, cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) {
+        if (result.error === "python_dependencies_missing") {
+          throw new Error("متطلبات Python غير مكتملة. ثبّتها من tools/requirements-identity.txt ثم أعد المحاولة.");
+        }
+        throw new Error("تعذرت قراءة صورة الهوية في Python.");
       }
-      const library = await import("tesseract.js");
-      worker = await library.createWorker("ara+eng");
-      for (const file of files) {
-        const result = await worker.recognize(file);
-        if (result.data.text.trim()) extracted.push(result.data.text.trim());
+      if (result.found) {
+        const decoded = typeof result.decodedText === "string" ? result.decodedText : "";
+        const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
+        setRawOcrText(decoded);
+        setIdentityFields(Array.isArray(result.identityFields) ? result.identityFields : []);
+        setReadSummary(`${result.format || "PDF417"} · ${result.byteCount || 0} بايت`);
+        if (hasValue(found)) mergeSuggestions(found, "قرأ Python رمز PDF417 من الصورة. راجع الحقول الستة قبل تطبيق الاسم والكنية.");
+        else setMessage("قرأ Python الباركود، لكن تعذر تحديد الاسم والكنية تلقائيًا. راجع الحقول الستة وأدخل القيم المناسبة يدويًا.");
+        return;
       }
-      const combined = Array.from(new Set(extracted)).join("\n");
-      setRawOcrText(combined);
-      mergeSuggestions(parseIdentityText(combined), "اكتمل الفحص. تحقق من كل قيمة؛ قد يخطئ OCR في قراءة الأسماء والأرقام.");
+
+      setRawOcrText("");
+      setIdentityFields([]);
+      setReadSummary("");
+      setMessage("لم يعثر قارئ PDF417 في Python على باركود في الصور. جرّب صورة أوضح للوجه الخلفي أو امسح الباركود في المربع.");
     } catch (caught) {
       setError(caught instanceof Error ? `تعذر إكمال القراءة: ${caught.message}` : "تعذر إكمال القراءة.");
       setMessage("");
     } finally {
-      if (worker) await worker.terminate().catch(() => undefined);
       setWorking(false);
     }
   };
@@ -400,13 +342,15 @@ export default function SubscriberIdentityImport({
     </div>
 
     <div className="mt-3 flex flex-wrap justify-end gap-2">
-      <ProjectButton type="button" variant="secondary" disabled={working || (!front && !back)} onClick={()=>void readImages()}><FileImage/>{working ? "جارٍ الاستخراج…" : "استخراج من الصور"}</ProjectButton>
+      <ProjectButton type="button" variant="secondary" disabled={working || (!front && !back)} onClick={()=>void readImages()}><FileImage/>{working ? "جارٍ الاستخراج عبر Python…" : "قراءة PDF417 عبر Python"}</ProjectButton>
     </div>
     {message&&<p role="status" className="mt-2 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-[10px] leading-5 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200"><BadgeCheck className="mt-0.5 h-4 w-4 shrink-0"/>{message}</p>}
     {error&&<p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</p>}
 
-    {(hasValue(suggestions) || rawOcrText) && <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-300/10 dark:bg-violet-500/[.04]">
+    {(hasValue(suggestions) || rawOcrText || identityFields.length > 0) && <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-300/10 dark:bg-violet-500/[.04]">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-[11px] font-bold text-violet-900 dark:text-violet-100">مراجعة المعلومات المستخرجة</h4><p className="mt-1 text-[9px] text-slate-500">عدّل القيم وحدد ما تريد تطبيقه. الحقول المعبأة يدويًا لن تُستبدل.</p></div><ProjectButton type="button" disabled={!selected.some((field)=>Boolean(suggestions[field]?.trim())&&!currentValues[field]?.trim())} onClick={applySelected}><Check/>تطبيق المحدد على الحقول الفارغة</ProjectButton></div>
+      {readSummary&&<p className="mt-3 text-[10px] font-semibold text-violet-800 dark:text-violet-200">{readSummary}</p>}
+      {identityFields.length>0&&<div className="mt-2 grid gap-2 sm:grid-cols-2">{identityFields.map((field,index)=><div key={`${field.label}-${index}`} className="min-w-0 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><div className="text-[9px] font-semibold text-slate-500">{field.label}</div><div className="mt-1 break-words text-xs" dir="auto">{field.value}</div></div>)}</div>}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">{FIELD_ORDER.map((field)=><label key={field} className="flex min-w-0 items-start gap-2 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><input type="checkbox" checked={selected.includes(field)} onChange={()=>toggleField(field)} disabled={Boolean(currentValues[field]?.trim())} className="mt-1 accent-blue-600"/><span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-[10px] font-semibold">{FIELD_LABELS[field]}{currentValues[field]?.trim()&&<span className="font-normal text-amber-600">· الحقل ممتلئ</span>}</span><ProjectInput value={suggestions[field]||""} onChange={(event)=>updateSuggestion(field,event.target.value)} className={`mt-1 !h-9 !text-xs ${inputClass}`} maxLength={field === "address" ? 500 : 100}/></span></label>)}</div>
       {rawOcrText&&<details className="mt-3 rounded-lg border border-slate-200 bg-white/70 p-2 text-[10px] dark:border-white/10 dark:bg-white/[.025]"><summary className="cursor-pointer font-semibold text-slate-600">عرض النص الخام للمراجعة</summary><textarea readOnly value={rawOcrText} rows={5} className={`mt-2 w-full rounded-lg border p-2 text-[10px] ${inputClass}`} dir="auto"/></details>}
       <p className="mt-2 text-[9px] leading-5 text-slate-500">المرحلة التجريبية لا تحفظ صور الهوية ولا البيانات المستخرجة في قاعدة البيانات. زر الحفظ الحالي سيحفظ حقول المشترك المعتادة فقط.</p>
