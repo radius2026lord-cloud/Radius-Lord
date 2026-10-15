@@ -6,6 +6,7 @@ import Image from "next/image";
 import { AlertCircle, ArrowLeft, BadgeCheck, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectInput from "@/components/ui/project-input";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
@@ -37,7 +38,6 @@ export default function SubscriberIdentityImport({
   })));
   const [working, setWorking] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [processingComplete, setProcessingComplete] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
@@ -66,7 +66,6 @@ export default function SubscriberIdentityImport({
     requestController.current = null;
     setWorking(false);
     setProcessing(false);
-    setProcessingComplete(false);
     setSnapiStatus(scannerModels.length ? "القارئ جاهز." : "أُوقفت العملية؛ أعد فحص القارئ.");
     setMessage("");
     setError("");
@@ -97,13 +96,11 @@ export default function SubscriberIdentityImport({
     requestController.current = controller;
     setWorking(true);
     setProcessing(false);
-    setProcessingComplete(false);
     statusPollController.current?.abort();
     if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
     setMessage("");
     let retryAfterTimeout = false;
-    let scanSucceeded = false;
     try {
       const response = await fetch(PYTHON_PROCESSOR_URL, {
         method: "POST",
@@ -190,8 +187,6 @@ export default function SubscriberIdentityImport({
       if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
-      scanSucceeded = true;
-      setProcessingComplete(true);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       autoListenRef.current = false;
@@ -204,7 +199,7 @@ export default function SubscriberIdentityImport({
           window.setTimeout(() => { if (autoListenRef.current) void readBarcodeRef.current(); }, 150);
         } else {
           setWorking(false);
-          if (!scanSucceeded) setProcessing(false);
+          setProcessing(false);
         }
       }
     }
@@ -333,8 +328,8 @@ export default function SubscriberIdentityImport({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <ProjectButton type="button" variant="secondary" onClick={onBackToList}><ArrowLeft/>العودة للقائمة</ProjectButton>
-        <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void verifyAndListen()}><Usb/>إعادة الفحص</ProjectButton>
+        <ProjectTooltip label="إعادة فحص اتصال قارئ الهوية"><ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void verifyAndListen()}><Usb/>إعادة الفحص</ProjectButton></ProjectTooltip>
+        <ProjectTooltip label="العودة إلى قائمة المشتركين"><ProjectButton type="button" variant="secondary" onClick={onBackToList}><ArrowLeft/>العودة للقائمة</ProjectButton></ProjectTooltip>
         {working&&<ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ وإعادة الضبط</ProjectButton>}
       </div>
     </div>
@@ -365,27 +360,24 @@ export default function SubscriberIdentityImport({
           <ProjectInput required={index < 2} readOnly={field.locked} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={`${inputClass} ${field.locked ? "cursor-not-allowed bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-300" : ""}`} maxLength={index === 5 ? 24 : index === 4 ? 120 : 100} dir="auto"/>
         </label>)}
       </div>
-      {message&&<p role="status" className="mt-2 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{message}</p>}
+      {message&&<div role="status" aria-live="polite" className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] font-medium text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200"><BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300"/>{message}</div>}
       <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
     </section>
 
     {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
       <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#142338]">
         <div className="flex items-center gap-3">
-          <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
-            {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <><ScanLine className="h-5 w-5"/><span className="absolute -bottom-1 -left-1 h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-300/30 dark:border-t-blue-300"/></>}
+          <span className="relative grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+            <ScanLine className="h-5 w-5"/><span className="absolute -bottom-1 -left-1 h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-300/30 dark:border-t-blue-300"/>
           </span>
           <div className="min-w-0">
-            <h3 id="identity-processing-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">{processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"}</h3>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-300">{processingComplete ? "تم فك البيانات وتعبئة الحقول بنجاح." : "وصلت قراءة الباركود؛ يرجى الانتظار حتى تظهر البيانات في الحقول."}</p>
+            <h3 id="identity-processing-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">جارٍ معالجة بيانات الهوية</h3>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-300">وصلت قراءة الباركود؛ يرجى الانتظار حتى تظهر البيانات في الحقول.</p>
           </div>
         </div>
-        {!processingComplete&&<><p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p><div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10"><span className="block h-full w-2/5 animate-pulse rounded-full bg-blue-500"/></div></>}
-        <div className="mt-4 flex justify-end">
-          {processingComplete
-            ? <ProjectButton type="button" onClick={() => { setProcessing(false); setProcessingComplete(false); }}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
-            : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
-        </div>
+        <p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10"><span className="block h-full w-2/5 animate-pulse rounded-full bg-blue-500"/></div>
+        <div className="mt-4 flex justify-end"><ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton></div>
       </section>
     </div>, document.body)}
   </section>;
