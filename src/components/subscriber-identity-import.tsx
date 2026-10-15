@@ -37,6 +37,7 @@ export default function SubscriberIdentityImport({
   const [back, setBack] = useState<File | null>(null);
   const [rawOcrText, setRawOcrText] = useState("");
   const [identityFields, setIdentityFields] = useState<ExtractedIdentityField[]>([]);
+  const [segmentTargets, setSegmentTargets] = useState<Record<number, IdentityField | "">>({});
   const [readSummary, setReadSummary] = useState("");
   const [suggestions, setSuggestions] = useState<IdentityValues>({});
   const [selected, setSelected] = useState<IdentityField[]>([]);
@@ -79,6 +80,7 @@ export default function SubscriberIdentityImport({
     setBack(null);
     setRawOcrText("");
     setIdentityFields([]);
+    setSegmentTargets({});
     setReadSummary("");
     setSuggestions({});
     setSelected([]);
@@ -90,7 +92,10 @@ export default function SubscriberIdentityImport({
     setWorking(true);
     setError("");
     setIdentityFields([]);
+    setSegmentTargets({});
     setReadSummary("");
+    setSuggestions({});
+    setSelected([]);
     setMessage("القارئ جاهز للاستقبال. وجّه ZBEX إلى باركود PDF417 الآن...");
     try {
       const response = await fetch(PYTHON_PROCESSOR_URL, {
@@ -166,6 +171,15 @@ export default function SubscriberIdentityImport({
   };
 
   const updateSuggestion = (field: IdentityField, value: string) => setSuggestions((old) => ({ ...old, [field]: value }));
+  const assignSegment = (index: number) => {
+    const target = segmentTargets[index];
+    const field = identityFields[index];
+    const value = field?.value?.trim();
+    if (!target || !field || !value) return;
+    setSuggestions((old) => ({ ...old, [target]: value }));
+    setSelected((old) => old.includes(target) ? old : [...old, target]);
+    setMessage(`تم نسخ ${field.label} إلى حقل ${FIELD_LABELS[target]} للمراجعة. لم يُطبّق على النموذج بعد.`);
+  };
   const toggleField = (field: IdentityField) => setSelected((old) => old.includes(field) ? old.filter((item) => item !== field) : [...old, field]);
   const applySelected = () => {
     const values: IdentityValues = {};
@@ -229,7 +243,7 @@ export default function SubscriberIdentityImport({
     {(hasValue(suggestions) || rawOcrText || identityFields.length > 0) && <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-300/10 dark:bg-violet-500/[.04]">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-[11px] font-bold text-violet-900 dark:text-violet-100">مراجعة المعلومات المستخرجة <span className="mr-1 text-[9px] font-normal text-slate-500">(الخطوة 3)</span></h4><p className="mt-1 text-[9px] text-slate-500">تحقق من الحقول وعدّلها، ثم اختر ما تريد تطبيقه. لن تُستبدل الحقول المعبأة يدويًا.</p></div><ProjectButton type="button" disabled={!selected.some((field)=>Boolean(suggestions[field]?.trim())&&!currentValues[field]?.trim())} onClick={applySelected}><Check/>تطبيق المحدد على الحقول الفارغة</ProjectButton></div>
       {readSummary&&<p className="mt-3 text-[10px] font-semibold text-violet-800 dark:text-violet-200">{readSummary}</p>}
-      {identityFields.length>0&&<div className="mt-2 grid gap-2 sm:grid-cols-2">{identityFields.map((field,index)=><div key={`${field.label}-${index}`} className="min-w-0 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><div className="text-[9px] font-semibold text-slate-500">{field.label}</div><div className="mt-1 break-words text-xs" dir="auto">{field.value}</div></div>)}</div>}
+      {identityFields.length>0&&<div className="mt-2 grid gap-2 sm:grid-cols-2">{identityFields.map((field,index)=><div key={`${field.label}-${index}`} className="min-w-0 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><div className="text-[9px] font-semibold text-slate-500">{field.label}</div><div className="mt-1 break-words text-xs" dir="auto">{field.value}</div><div className="mt-2 flex flex-wrap items-center gap-2"><select aria-label={`تعيين ${field.label} إلى حقل`} value={segmentTargets[index]||""} onChange={(event)=>setSegmentTargets((old)=>({...old,[index]:event.target.value as IdentityField|""}))} className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[10px] text-slate-700 dark:border-white/10 dark:bg-[#17263b] dark:text-slate-200"><option value="">اختر حقل المشترك…</option>{FIELD_ORDER.map((target)=><option key={target} value={target}>{FIELD_LABELS[target]}</option>)}</select><ProjectButton type="button" variant="secondary" disabled={!segmentTargets[index]} className="!px-3 !py-1.5 !text-[10px]" onClick={()=>assignSegment(index)}>تعيين للمراجعة</ProjectButton></div></div>)}</div>}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">{FIELD_ORDER.map((field)=><label key={field} className="flex min-w-0 items-start gap-2 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><input type="checkbox" checked={selected.includes(field)} onChange={()=>toggleField(field)} disabled={Boolean(currentValues[field]?.trim())} className="mt-1 accent-blue-600"/><span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-[10px] font-semibold">{FIELD_LABELS[field]}{currentValues[field]?.trim()&&<span className="font-normal text-amber-600">· الحقل ممتلئ</span>}</span><ProjectInput value={suggestions[field]||""} onChange={(event)=>updateSuggestion(field,event.target.value)} className={`mt-1 !h-9 !text-xs ${inputClass}`} maxLength={field === "address" ? 500 : 100}/></span></label>)}</div>
       {rawOcrText&&<details className="mt-3 rounded-lg border border-slate-200 bg-white/70 p-2 text-[10px] dark:border-white/10 dark:bg-white/[.025]"><summary className="cursor-pointer font-semibold text-slate-600">عرض النص الخام للمراجعة</summary><textarea readOnly value={rawOcrText} rows={5} className={`mt-2 w-full rounded-lg border p-2 text-[10px] ${inputClass}`} dir="auto"/></details>}
       <p className="mt-2 text-[9px] leading-5 text-slate-500">المرحلة التجريبية لا تحفظ صور الهوية ولا البيانات المستخرجة في قاعدة البيانات. زر الحفظ الحالي سيحفظ حقول المشترك المعتادة فقط.</p>
