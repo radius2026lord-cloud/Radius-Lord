@@ -573,7 +573,7 @@ export default function SubscriberIdentityImport({
           : "تم اكتشاف إضافة المتصفح، لكن برنامج الربط المحلي لا يستجيب. أعد تشغيل المثبّت من الحزمة ثم أعد تحميل صفحة الموقع."}
       </p>
       <ol className="mt-4 space-y-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-[11px] leading-6 text-blue-950 dark:border-blue-300/10 dark:bg-blue-500/[.06] dark:text-blue-100">
-        <li>١. نزّل الحزمة وفك ضغطها بالكامل على لابتوب Windows.</li>
+        <li>١. نزّل الحزمة واختر «استخراج الكل» على لابتوب Windows؛ لا تشغّل ملف BAT من داخل عارض ZIP أو RAR.</li>
         <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
         <li>٣. في Chrome فعّل <bdi dir="ltr">Developer mode</bdi> ثم اختر <bdi dir="ltr">Load unpacked</bdi> وحدد مجلد الإضافة الذي يطبعه المثبّت.</li>
         <li>٤. أعد تحميل صفحة الموقع، ثم اضغط «أعد التحقق».</li>

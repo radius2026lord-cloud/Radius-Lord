@@ -10,7 +10,7 @@
 
 ## التثبيت
 
-1. على Windows، نزّل حزمة التثبيت من نافذة الميزة داخل الموقع أو من `public/downloads/lord-radius-identity-scanner-setup.zip`، ثم فك ضغطها بالكامل. انقر مرتين على `tools/install-identity-scanner.bat` وأدخل أصل الموقع كاملًا، مثل `https://radius.example.com`. للتطوير المحلي استخدم `http://localhost:3000`. يتطلب المثبّت وجود Python 3 وChrome مسبقًا، ثم يثبت متطلبات جسر الالتقاط ويسجل Native Messaging للمستخدم الحالي.
+1. على Windows، نزّل حزمة التثبيت من نافذة الميزة داخل الموقع أو من `public/downloads/lord-radius-identity-scanner-setup.zip`، ثم اختر **Extract All / استخراج الكل**. لا تشغّل ملف BAT من داخل عارض ZIP أو RAR. بعد فك الحزمة كاملة، انقر مرتين على `tools/install-identity-scanner.bat` وأدخل أصل الموقع كاملًا، مثل `https://radius.example.com`. للتطوير المحلي استخدم `http://localhost:3000`. يتطلب المثبّت وجود Python 3 وChrome مسبقًا، ثم يثبت متطلبات جسر الالتقاط ويسجل Native Messaging للمستخدم الحالي.
 
 2. في صفحة Chrome التي يفتحها المثبّت، فعّل **Developer mode** واختر **Load unpacked** وحدد:
 
