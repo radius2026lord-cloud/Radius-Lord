@@ -17,7 +17,7 @@ const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", 
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
-const PROCESSING_CARD_MINIMUM_MS = 1200;
+const PROCESSING_CARD_DURATION_MS = 8000;
 
 export default function SubscriberIdentityImport({
   currentValues,
@@ -148,12 +148,6 @@ export default function SubscriberIdentityImport({
       }
       if (pending.trim()) handleEvent(pending);
       if (!resultHolder.value) throw new Error("لم تصل نتيجة المعالجة من القارئ.");
-      if (processingStartedAt !== null) {
-        const visibleFor = Date.now() - processingStartedAt;
-        if (visibleFor < PROCESSING_CARD_MINIMUM_MS) {
-          await new Promise((resolve) => window.setTimeout(resolve, PROCESSING_CARD_MINIMUM_MS - visibleFor));
-        }
-      }
       const scanResult = resultHolder.value;
       if (scanResult.ok !== true) {
         if (scanResult.error === "scanner_read_timeout" && autoListenRef.current) {
@@ -191,6 +185,10 @@ export default function SubscriberIdentityImport({
       if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
+      if (processingStartedAt !== null) {
+        const remaining = PROCESSING_CARD_DURATION_MS - (Date.now() - processingStartedAt);
+        await new Promise((resolve) => window.setTimeout(resolve, Math.max(remaining, 0)));
+      }
       scanSucceeded = true;
       setProcessingComplete(true);
     } catch (caught) {
@@ -381,14 +379,17 @@ export default function SubscriberIdentityImport({
             <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-300">{processingComplete ? "تم استخراج البيانات وتعبئة الحقول بنجاح." : "وصلت قراءة الباركود؛ جارٍ فك البيانات وتعبئة الحقول."}</p>
           </div>
         </div>
-        {!processingComplete&&<><p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p><div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label="جارٍ معالجة بيانات الهوية"><span className="identity-processing-progress block h-full w-2/5 rounded-full bg-gradient-to-r from-sky-500 to-blue-700"/></div></>}
+        {!processingComplete&&<p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>}
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingComplete ? 100 : undefined}>
+          <span className={processingComplete ? "block h-full w-full rounded-full bg-emerald-500 transition-colors" : "identity-processing-progress block h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-700"} style={!processingComplete ? { animationDuration: `${PROCESSING_CARD_DURATION_MS}ms` } : undefined}/>
+        </div>
         <div className="mt-4 flex justify-end">
           {processingComplete
             ? <ProjectButton type="button" onClick={() => { setProcessing(false); setProcessingComplete(false); setMessage(""); }}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
             : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
         </div>
       </section>
-      <style jsx global>{`@keyframes identityProcessingProgress { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } } .identity-processing-progress { animation: identityProcessingProgress 1.4s ease-in-out infinite; } @media (prefers-reduced-motion: reduce) { .identity-processing-progress { animation: none; width: 100%; } }`}</style>
+      <style jsx global>{`@keyframes identityProcessingProgress { 0% { width: 0%; } 92% { width: 92%; } 100% { width: 92%; } } .identity-processing-progress { animation: identityProcessingProgress ${PROCESSING_CARD_DURATION_MS}ms linear forwards; } @media (prefers-reduced-motion: reduce) { .identity-processing-progress { animation: none; width: 92%; } }`}</style>
     </div>, document.body)}
   </section>;
 }
