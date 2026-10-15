@@ -15,7 +15,7 @@
 2. في صفحة Chrome التي يفتحها المثبّت، فعّل **Developer mode** واختر **Load unpacked** وحدد:
 
    ```text
-   %LOCALAPPDATA%\\LordRadius\\IdentityCapture\\extension
+   %LOCALAPPDATA%\LordRadius\IdentityCapture\extension
    ```
 
 3. أعد تحميل صفحة Lord Radius. تظهر أزرار التقاط الوجه الأمامي والخلفي عند توفر الإضافة والقارئ.
@@ -23,9 +23,9 @@
 يمكن تشغيل المثبّت مباشرة من PowerShell بدلًا من ملف BAT:
 
    ```powershell
-   .\\tools\\identity-scanner-extension\\install.ps1 -AppOrigin "https://عنوان-الموقع"
+   .\tools\identity-scanner-extension\install.ps1 -AppOrigin "https://عنوان-الموقع"
    ```
 
 يقيد المثبّت الإضافة بأصل الموقع الذي أدخلته، ويسجل Native Messaging للمستخدم الحالي فقط. لا يحتاج التطبيق المنشور إلى الوصول المباشر إلى USB. تعالج عملية Python المحلية التقاط صورة القارئ فقط؛ الصور تبقى في الصفحة مؤقتًا، بينما تبقى معالجة بيانات الهوية الحالية منفصلة.
 
-لإزالة الربط، احذف قيمة التسجيل `HKCU:\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.radiuslord.identity_capture` واحذف مجلد `%LOCALAPPDATA%\\LordRadius\\IdentityCapture`، ثم أزل الإضافة من Chrome.
+لإزالة الربط، احذف قيمة التسجيل `HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.radiuslord.identity_capture` واحذف مجلد `%LOCALAPPDATA%\LordRadius\IdentityCapture`، ثم أزل الإضافة من Chrome.
