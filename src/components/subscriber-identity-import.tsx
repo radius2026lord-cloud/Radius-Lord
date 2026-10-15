@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, BadgeCheck, Fingerprint, ScanLine, Upload, Usb,
 import ProjectButton from "@/components/ui/project-button";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectTooltip from "@/components/ui/project-tooltip";
+import { requestIdentityScanner } from "@/lib/identity-scanner-extension";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
@@ -45,6 +46,8 @@ export default function SubscriberIdentityImport({
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
   const [scannerModels, setScannerModels] = useState<string[]>([]);
+  const [capturingSide, setCapturingSide] = useState<Side | null>(null);
+  const [captureExtensionReady, setCaptureExtensionReady] = useState(false);
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
   const processingStartedAtRef = useRef<number | null>(null);
@@ -86,6 +89,7 @@ export default function SubscriberIdentityImport({
     closeProcessingTimerRef.current = null;
     setClosingProcessing(false);
     setWorking(false);
+    setCapturingSide(null);
     setProcessing(false);
     setProcessingComplete(false);
     setProcessingProgress(0);
@@ -102,6 +106,64 @@ export default function SubscriberIdentityImport({
       return;
     }
     (side === "front" ? setFront : setBack)(file);
+  };
+
+  const captureScannerSide = async (side: Side) => {
+    if (!captureExtensionReady || capturingSide || processing) return;
+    const controller = new AbortController();
+    autoListenRef.current = false;
+    statusPollController.current?.abort();
+    requestController.current?.abort();
+    requestController.current = controller;
+    setCapturingSide(side);
+    setWorking(true);
+    setSnapiStatus("جارٍ التقاط صورة الهوية…");
+    setError("");
+    setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} تحت القارئ واضغط زر الالتقاط.`);
+
+    try {
+      // Allow the active barcode-listener process to close its SNAPI handle before opening image mode.
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      const result = await requestIdentityScanner("scanner-capture-image", 65000, controller.signal);
+      if (controller.signal.aborted) return;
+      if (result.ok !== true || !result.imageBase64) {
+        throw new Error(result.error === "scanner_image_capture_timeout"
+          ? "انتهت مهلة الالتقاط. ضع الهوية أمام القارئ واضغط زر الالتقاط ثم أعد المحاولة."
+          : result.error === "identity_native_host_disconnected"
+            ? "تعذر الاتصال ببرنامج الربط المحلي. أعد تثبيت إضافة التقاط الهوية وافحص اتصال القارئ."
+            : "تعذر التقاط الصورة من القارئ. تحقق من وضع SNAPI مع واجهة التصوير.");
+      }
+
+      const binary = window.atob(result.imageBase64);
+      const imageBytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) imageBytes[index] = binary.charCodeAt(index);
+      const capturedFile = new File([imageBytes], `identity-${side}.${result.format || "jpg"}`, {
+        type: result.mimeType || "image/jpeg",
+      });
+      setSideFile(side, capturedFile);
+      setSnapiStatus("القارئ جاهز.");
+      setMessage(`تم التقاط ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا.`);
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setSnapiStatus(captureExtensionReady ? "القارئ جاهز." : "القارئ غير جاهز.");
+      const errorCode = caught instanceof Error ? caught.message : "";
+      setError(errorCode === "identity_extension_unavailable"
+        ? "تعذر الاتصال بإضافة الالتقاط. أعد تحميل الصفحة وتحقق من تشغيل برنامج الربط المحلي."
+        : errorCode === "scanner_image_transport_too_large"
+          ? "تعذر ضغط صورة القارئ إلى حجم النقل الآمن؛ أعد الالتقاط أو تحقق من إعدادات صورة الجهاز."
+          : caught instanceof Error ? caught.message : "تعذر التقاط الصورة من القارئ.");
+      setMessage("");
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setCapturingSide(null);
+        setWorking(false);
+        if (scannerModels.length && !hasIdentityBeenReadRef.current && !autoStartSuppressedRef.current) {
+          autoListenRef.current = true;
+          window.setTimeout(() => { if (autoListenRef.current) void readBarcodeRef.current(); }, 200);
+        }
+      }
+    }
   };
 
   const clearTemporaryData = () => {
@@ -256,6 +318,18 @@ export default function SubscriberIdentityImport({
 
   useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
+  const checkCaptureExtension = async () => {
+    try {
+      const result = await requestIdentityScanner("scanner-status", 3000);
+      const ready = result.ok === true && Boolean(result.scannerCount);
+      setCaptureExtensionReady(ready);
+      return ready;
+    } catch {
+      setCaptureExtensionReady(false);
+      return false;
+    }
+  };
+
   const testSnapi = async () => {
     const controller = new AbortController();
     statusPollController.current?.abort();
@@ -280,9 +354,16 @@ export default function SubscriberIdentityImport({
       const models = Array.isArray(result.scannerModels) ? result.scannerModels as string[] : [];
       setScannerModels(models);
       setSnapiStatus(models.length ? "القارئ جاهز." : "القارئ غير جاهز.");
+      await checkCaptureExtension();
       return models.length > 0;
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return false;
+      if (await checkCaptureExtension()) {
+        setSnapiStatus("القارئ جاهز.");
+        setError("");
+        setMessage("");
+        return false;
+      }
       setSnapiStatus("القارئ غير جاهز.");
       setError(caught instanceof Error ? caught.message : "تعذر فحص جاهزية القارئ.");
       setMessage("");
@@ -356,7 +437,8 @@ export default function SubscriberIdentityImport({
           if (!disposed && !controller.signal.aborted) {
             const models = response.ok && result.ok && Array.isArray(result.scannerModels) ? result.scannerModels as string[] : [];
             setScannerModels(models);
-            setSnapiStatus(models.length ? "القارئ جاهز." : "القارئ غير جاهز.");
+            const captureReady = models.length ? false : await checkCaptureExtension();
+            setSnapiStatus(models.length || captureReady ? "القارئ جاهز." : "القارئ غير جاهز.");
             if (models.length && !hasIdentityBeenReadRef.current && !autoStartSuppressedRef.current) {
               autoListenRef.current = true;
               void readBarcodeRef.current();
@@ -365,7 +447,8 @@ export default function SubscriberIdentityImport({
         } catch {
           if (!disposed && !controller.signal.aborted) {
             setScannerModels([]);
-            setSnapiStatus("القارئ غير جاهز.");
+            const captureReady = await checkCaptureExtension();
+            if (!disposed) setSnapiStatus(captureReady ? "القارئ جاهز." : "القارئ غير جاهز.");
           }
         } finally {
           if (statusPollController.current === controller) statusPollController.current = null;
@@ -402,14 +485,15 @@ export default function SubscriberIdentityImport({
         {snapiStatus==="القارئ جاهز."?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
         <span>{snapiStatus}</span>
       </div>
-      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
+      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `ضع ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} تحت القارئ واضغط زر الالتقاط.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
     </div>
     <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">صور وجهي الهوية (اختياري)</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {([{ side: "front" as const, title: "الوجه الأمامي", file: front, url: frontUrl }, { side: "back" as const, title: "الوجه الخلفي", file: back, url: backUrl }]).map(({ side, title, file, url }) => <div key={side} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-white/10">
         <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span>{file&&<button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button>}</div>
-        {url ? <Image src={url} alt={`معاينة ${title}`} width={320} height={128} unoptimized className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-contain dark:border-white/10"/> : <label className="mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-center text-[10px] text-slate-500 hover:border-blue-300 dark:border-white/15 dark:bg-white/[.02]"><Upload className="h-4 w-4 text-blue-600"/>تصوير أو رفع صورة {title}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event)=>setSideFile(side,event.target.files?.[0]||null)}/></label>}
+        {url ? <Image src={url} alt={`معاينة ${title}`} width={320} height={128} unoptimized className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-contain dark:border-white/10"/> : <label className="mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-center text-[10px] text-slate-500 hover:border-blue-300 dark:border-white/15 dark:bg-white/[.02]"><Upload className="h-4 w-4 text-blue-600"/>اختيار صورة {title}<input type="file" accept="image/*" className="sr-only" onChange={(event)=>setSideFile(side,event.target.files?.[0]||null)}/></label>}
+        <ProjectTooltip label={captureExtensionReady ? `التقاط ${title} مؤقتًا من قارئ الهوية المتصل باللابتوب` : "يلزم تثبيت إضافة التقاط الهوية على متصفح اللابتوب وتوصيل القارئ"}><span className="mt-2 block"><ProjectButton type="button" variant="secondary" className="w-full" disabled={!captureExtensionReady||Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(side)}><ScanLine/>{capturingSide===side?"بانتظار التقاط القارئ…":`التقاط ${title} بالقارئ`}</ProjectButton></span></ProjectTooltip>
       </div>)}
       </div>
       <div className="mt-2 flex justify-end"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح الصور والنتيجة المؤقتة</ProjectButton></div>
