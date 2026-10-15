@@ -389,7 +389,7 @@ export default function SubscriberIdentityImport({
             : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
         </div>
       </section>
-      <style jsx global>{`@keyframes identityProcessingProgress { 0% { width: 0%; } 92% { width: 92%; } 100% { width: 92%; } } .identity-processing-progress { animation: identityProcessingProgress ${PROCESSING_CARD_DURATION_MS}ms linear forwards; } @media (prefers-reduced-motion: reduce) { .identity-processing-progress { animation: none; width: 92%; } }`}</style>
+      <style jsx global>{`@keyframes identityProcessingProgress { 0% { width: 0%; } 100% { width: 92%; } } .identity-processing-progress { animation: identityProcessingProgress ${PROCESSING_CARD_DURATION_MS}ms linear forwards; } @media (prefers-reduced-motion: reduce) { .identity-processing-progress { animation: none; width: 92%; } }`}</style>
     </div>, document.body)}
   </section>;
 }
