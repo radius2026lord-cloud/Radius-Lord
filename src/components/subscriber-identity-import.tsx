@@ -51,6 +51,13 @@ export default function SubscriberIdentityImport({
   const backUrl = useMemo(() => back ? URL.createObjectURL(back) : "", [back]);
   useEffect(() => () => { if (frontUrl) URL.revokeObjectURL(frontUrl); }, [frontUrl]);
   useEffect(() => () => { if (backUrl) URL.revokeObjectURL(backUrl); }, [backUrl]);
+  useEffect(() => {
+    if (!processing) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [processing]);
+
   const emergencyReset = () => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = true;
@@ -346,12 +353,17 @@ export default function SubscriberIdentityImport({
       <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
     </section>
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className="pointer-events-none fixed inset-x-0 top-4 z-[10000] flex justify-center px-4">
-      <section className="pointer-events-auto w-full max-w-sm rounded-2xl border border-blue-100 bg-white p-5 text-center shadow-2xl dark:border-white/10 dark:bg-[#142338]" role="status" aria-live="polite" aria-labelledby="identity-processing-title">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-50 dark:bg-blue-500/10"><span className="h-6 w-6 animate-spin rounded-full border-[3px] border-blue-200 border-t-blue-600"/></span>
-        <h3 id="identity-processing-title" className="mt-3 text-sm font-bold text-[#17386d] dark:text-slate-100">معالجة بيانات الهوية</h3>
-        <p className="mt-1 text-[11px] text-slate-500">وصلت قراءة الباركود، جارٍ فك البيانات وتعبئة الحقول.</p>
-        <ProjectButton type="button" variant="secondary" className="mt-4" onClick={emergencyReset}><RotateCcw/>إيقاف القراءة</ProjectButton>
+    {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
+      <section className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white p-6 text-center shadow-[0_24px_80px_-20px_rgba(15,23,42,.65)] dark:border-white/10 dark:bg-[#142338]">
+        <span className="relative mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-gradient-to-br from-sky-500 via-indigo-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/30">
+          <span className="absolute inset-0 animate-ping rounded-[22px] bg-indigo-400/30"/>
+          <ScanLine className="relative h-8 w-8 animate-pulse" strokeWidth={2.2}/>
+        </span>
+        <h3 id="identity-processing-title" className="mt-5 text-base font-bold text-[#17386d] dark:text-slate-100">جارٍ معالجة بيانات الهوية</h3>
+        <p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">تمت قراءة الباركود. يرجى الانتظار حتى تظهر البيانات في الحقول.</p>
+        <p className="mt-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-300">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>
+        <div className="mx-auto mt-5 h-1.5 w-full max-w-[220px] overflow-hidden rounded-full bg-indigo-100 dark:bg-white/10"><span className="block h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500"/></div>
+        <ProjectButton type="button" variant="secondary" className="mt-5" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>
       </section>
     </div>, document.body)}
   </section>;
