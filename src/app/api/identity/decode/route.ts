@@ -16,8 +16,12 @@ function pythonCommand() {
 
 type ProcessorMode = "request" | "health" | "scanner-status" | "scanner-scan";
 
-function runPython(input: string, mode: ProcessorMode = "request") {
+function runPython(input: string, mode: ProcessorMode = "request", signal?: AbortSignal) {
   return new Promise<Record<string, unknown>>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("request_aborted"));
+      return;
+    }
     const scriptPath = path.join(process.cwd(), "tools", "identity_barcode_processor.py");
     const modeArguments: Record<ProcessorMode, string[]> = {
       request: [],
@@ -36,8 +40,14 @@ function runPython(input: string, mode: ProcessorMode = "request") {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortChild);
       reject(error);
     };
+    const abortChild = () => {
+      child.kill();
+      fail(new Error("request_aborted"));
+    };
+    signal?.addEventListener("abort", abortChild, { once: true });
 
     child.stdout.on("data", (chunk: Buffer) => {
       outputBytes += chunk.length;
@@ -52,6 +62,7 @@ function runPython(input: string, mode: ProcessorMode = "request") {
     child.on("close", (code) => {
       if (settled) return;
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortChild);
       if (code !== 0) {
         fail(new Error("processor_failed"));
         return;
@@ -138,9 +149,10 @@ export async function POST(request: Request) {
 
   if (scannerAction) {
     try {
-      const result = await runPython("", scannerAction);
+      const result = await runPython("", scannerAction, request.signal);
       return NextResponse.json(result, { status: result.ok === false ? 503 : 200, headers: NO_STORE_HEADERS });
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === "request_aborted") return new NextResponse(null, { status: 499, headers: NO_STORE_HEADERS });
       return NextResponse.json({ error: "scanner_processor_unavailable" }, { status: 503, headers: NO_STORE_HEADERS });
     }
   }
@@ -150,12 +162,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runPython(JSON.stringify(input));
+    const result = await runPython(JSON.stringify(input), "request", request.signal);
     if (result.ok === false) {
       return NextResponse.json(result, { status: 503, headers: NO_STORE_HEADERS });
     }
     return NextResponse.json(result, { headers: NO_STORE_HEADERS });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "request_aborted") return new NextResponse(null, { status: 499, headers: NO_STORE_HEADERS });
     return NextResponse.json({ error: "python_processing_failed" }, { status: 503, headers: NO_STORE_HEADERS });
   }
 }

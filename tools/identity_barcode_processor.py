@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 
 ARABIC_RE = re.compile(r"[\u0600-\u06ff]")
-FIELD_LABELS = ["الحقل 1", "الحقل 2", "الحقل 3", "الحقل 4", "الحقل 5", "الحقل 6"]
+FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", "اسم الأم", "محل وتاريخ الولادة", "الرقم الوطني"]
 FIELD_PATTERNS = {
     "firstName": [r"^DAC([^\r\n]+)", r"(?:الاسم الأول|الاسم|given\s*name|first\s*name)\s*[:：=\-]\s*([^\r\n,;|]+)"],
     "lastName": [r"^DCS([^\r\n]+)", r"(?:الكنية|اسم العائلة|surname|family\s*name|last\s*name)\s*[:：=\-]\s*([^\r\n,;|]+)"],
@@ -34,7 +34,7 @@ def import_image_dependencies():
 
 def decode_bytes(raw):
     segments = [part.decode("cp1256", errors="replace").strip("\x00\r\n\t ") for part in raw.split(b"#")]
-    fields = [{"label": label, "value": value} for label, value in zip(FIELD_LABELS, segments[:6]) if value]
+    fields = [{"label": label, "value": segments[index] if index < len(segments) else ""} for index, label in enumerate(FIELD_LABELS)]
     values = {}
     if len(segments) >= 2:
         if is_name(segments[0]):
@@ -269,7 +269,7 @@ def read_from_scanner(timeout_seconds=60):
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline and not events.scan_xml:
             pythoncom.PumpWaitingMessages()
-            time.sleep(0.05)
+            time.sleep(0.01)
         if not events.scan_xml:
             return {"ok": False, "error": "scanner_read_timeout"}
 
