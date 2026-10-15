@@ -37,7 +37,7 @@ export default function SubscriberIdentityImport({
   })));
   const [working, setWorking] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [focusContactAfterScan, setFocusContactAfterScan] = useState(false);
+  const [processingComplete, setProcessingComplete] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
@@ -59,19 +59,6 @@ export default function SubscriberIdentityImport({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [processing]);
-  useEffect(() => {
-    if (!focusContactAfterScan || processing) return;
-    const frame = window.requestAnimationFrame(() => {
-      const phoneInput = document.querySelector<HTMLInputElement>('input[autocomplete="tel"]');
-      if (phoneInput) {
-        phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
-        phoneInput.focus({ preventScroll: true });
-      }
-      setFocusContactAfterScan(false);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [focusContactAfterScan, processing]);
-
   const emergencyReset = () => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = true;
@@ -79,6 +66,7 @@ export default function SubscriberIdentityImport({
     requestController.current = null;
     setWorking(false);
     setProcessing(false);
+    setProcessingComplete(false);
     setSnapiStatus(scannerModels.length ? "القارئ جاهز." : "أُوقفت العملية؛ أعد فحص القارئ.");
     setMessage("");
     setError("");
@@ -109,11 +97,13 @@ export default function SubscriberIdentityImport({
     requestController.current = controller;
     setWorking(true);
     setProcessing(false);
+    setProcessingComplete(false);
     statusPollController.current?.abort();
     if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
     setMessage("");
     let retryAfterTimeout = false;
+    let scanSucceeded = false;
     try {
       const response = await fetch(PYTHON_PROCESSOR_URL, {
         method: "POST",
@@ -200,7 +190,8 @@ export default function SubscriberIdentityImport({
       if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
-      setFocusContactAfterScan(true);
+      scanSucceeded = true;
+      setProcessingComplete(true);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       autoListenRef.current = false;
@@ -213,7 +204,7 @@ export default function SubscriberIdentityImport({
           window.setTimeout(() => { if (autoListenRef.current) void readBarcodeRef.current(); }, 150);
         } else {
           setWorking(false);
-          setProcessing(false);
+          if (!scanSucceeded) setProcessing(false);
         }
       }
     }
@@ -378,17 +369,23 @@ export default function SubscriberIdentityImport({
       <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
     </section>
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
-      <section className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white p-6 text-center shadow-[0_24px_80px_-20px_rgba(15,23,42,.65)] dark:border-white/10 dark:bg-[#142338]">
-        <span className="relative mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-gradient-to-br from-sky-500 via-indigo-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/30">
-          <span className="absolute inset-0 animate-ping rounded-[22px] bg-indigo-400/30"/>
-          <ScanLine className="relative h-8 w-8 animate-pulse" strokeWidth={2.2}/>
-        </span>
-        <h3 id="identity-processing-title" className="mt-5 text-base font-bold text-[#17386d] dark:text-slate-100">جارٍ معالجة بيانات الهوية</h3>
-        <p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">تمت قراءة الباركود. يرجى الانتظار حتى تظهر البيانات في الحقول.</p>
-        <p className="mt-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-300">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>
-        <div className="mx-auto mt-5 h-1.5 w-full max-w-[220px] overflow-hidden rounded-full bg-indigo-100 dark:bg-white/10"><span className="block h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500"/></div>
-        <ProjectButton type="button" variant="secondary" className="mt-5" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>
+    {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
+      <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#142338]">
+        <div className="flex items-center gap-3">
+          <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
+            {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <><ScanLine className="h-5 w-5"/><span className="absolute -bottom-1 -left-1 h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-300/30 dark:border-t-blue-300"/></>}
+          </span>
+          <div className="min-w-0">
+            <h3 id="identity-processing-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">{processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"}</h3>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-300">{processingComplete ? "تم فك البيانات وتعبئة الحقول بنجاح." : "وصلت قراءة الباركود؛ يرجى الانتظار حتى تظهر البيانات في الحقول."}</p>
+          </div>
+        </div>
+        {!processingComplete&&<><p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p><div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10"><span className="block h-full w-2/5 animate-pulse rounded-full bg-blue-500"/></div></>}
+        <div className="mt-4 flex justify-end">
+          {processingComplete
+            ? <ProjectButton type="button" onClick={() => { setProcessing(false); setProcessingComplete(false); }}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
+            : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
+        </div>
       </section>
     </div>, document.body)}
   </section>;
