@@ -7,6 +7,11 @@ window.addEventListener("message", (event) => {
   const request = event.data;
   if (request?.source !== PAGE_SOURCE || typeof request.requestId !== "string") return;
 
+  if (request.type === "presence") {
+    window.postMessage({ source: EXTENSION_SOURCE, type: "presence-response", requestId: request.requestId }, window.location.origin);
+    return;
+  }
+
   if (request.type === "cancel") {
     chrome.runtime.sendMessage({ type: "identity-native-cancel", requestId: request.requestId });
     return;

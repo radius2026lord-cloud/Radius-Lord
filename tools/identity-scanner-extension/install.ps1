@@ -4,9 +4,9 @@
 )
 
 $ErrorActionPreference = "Stop"
-$ExtensionSource = Join-Path $PSScriptRoot "identity-scanner-extension"
+$ExtensionSource = $PSScriptRoot
 $NativeHostSource = Join-Path $ExtensionSource "native_host.py"
-$ProcessorSource = Join-Path $PSScriptRoot "identity_barcode_processor.py"
+$ProcessorSource = Join-Path (Split-Path $PSScriptRoot -Parent) "identity_barcode_processor.py"
 $InstallRoot = Join-Path $env:LOCALAPPDATA "LordRadius\IdentityCapture"
 $ExtensionInstall = Join-Path $InstallRoot "extension"
 $HostExe = Join-Path $InstallRoot "RadiusLordIdentityHost.exe"

@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { AlertCircle, ArrowLeft, BadgeCheck, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
+import { AlertCircle, ArrowLeft, BadgeCheck, Download, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
+import ProjectDialog from "@/components/ui/project-dialog";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectTooltip from "@/components/ui/project-tooltip";
-import { requestIdentityScanner } from "@/lib/identity-scanner-extension";
+import { detectIdentityScannerExtension, requestIdentityScanner } from "@/lib/identity-scanner-extension";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
@@ -48,6 +49,9 @@ export default function SubscriberIdentityImport({
   const [scannerModels, setScannerModels] = useState<string[]>([]);
   const [capturingSide, setCapturingSide] = useState<Side | null>(null);
   const [captureExtensionReady, setCaptureExtensionReady] = useState(false);
+  const [setupDialogOpen, setSetupDialogOpen] = useState(false);
+  const [setupIssue, setSetupIssue] = useState<"extension" | "bridge">("extension");
+  const [checkingSetup, setCheckingSetup] = useState(false);
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
   const processingStartedAtRef = useRef<number | null>(null);
@@ -55,6 +59,7 @@ export default function SubscriberIdentityImport({
   const autoListenRef = useRef(false);
   const autoStartSuppressedRef = useRef(false);
   const hasIdentityBeenReadRef = useRef(false);
+  const setupPromptedRef = useRef(false);
   const readBarcodeRef = useRef<() => Promise<void>>(async () => {});
 
   const frontUrl = useMemo(() => front ? URL.createObjectURL(front) : "", [front]);
@@ -318,17 +323,78 @@ export default function SubscriberIdentityImport({
 
   useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
-  const checkCaptureExtension = async () => {
+  const checkCaptureExtension = async (forcePrompt = false) => {
+    const extensionDetected = await detectIdentityScannerExtension();
+    if (!extensionDetected) {
+      setCaptureExtensionReady(false);
+      setSetupIssue("extension");
+      if (forcePrompt || !setupPromptedRef.current) {
+        setupPromptedRef.current = true;
+        setSetupDialogOpen(true);
+      }
+      return false;
+    }
+
     try {
       const result = await requestIdentityScanner("scanner-status", 3000);
       const ready = result.ok === true && Boolean(result.scannerCount);
       setCaptureExtensionReady(ready);
+      const bridgeUnavailable = result.ok !== true && result.error !== "scanner_not_found";
+      if (bridgeUnavailable) {
+        setSetupIssue("bridge");
+        if (forcePrompt || !setupPromptedRef.current) {
+          setupPromptedRef.current = true;
+          setSetupDialogOpen(true);
+        }
+      } else {
+        setSetupDialogOpen(false);
+      }
       return ready;
     } catch {
       setCaptureExtensionReady(false);
+      setSetupIssue("bridge");
+      if (forcePrompt || !setupPromptedRef.current) {
+        setupPromptedRef.current = true;
+        setSetupDialogOpen(true);
+      }
       return false;
     }
   };
+
+  const recheckInstallation = async () => {
+    setCheckingSetup(true);
+    try {
+      const extensionDetected = await detectIdentityScannerExtension();
+      if (!extensionDetected) {
+        await checkCaptureExtension(true);
+        return;
+      }
+      const result = await requestIdentityScanner("scanner-status", 3000);
+      const bridgeInstalled = result.ok === true || result.error === "scanner_not_found";
+      if (!bridgeInstalled) {
+        await checkCaptureExtension(true);
+        return;
+      }
+      setCaptureExtensionReady(result.ok === true && Boolean(result.scannerCount));
+      setSetupDialogOpen(false);
+      setMessage(result.ok ? "تم العثور على إضافة الالتقاط والقارئ." : "تم العثور على الإضافة؛ تحقق من توصيل القارئ وضبطه على SNAPI.");
+    } catch {
+      await checkCaptureExtension(true);
+    } finally {
+      setCheckingSetup(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    void detectIdentityScannerExtension().then((installed) => {
+      if (!active || installed) return;
+      setupPromptedRef.current = true;
+      setSetupIssue("extension");
+      setSetupDialogOpen(true);
+    });
+    return () => { active = false; };
+  }, []);
 
   const testSnapi = async () => {
     const controller = new AbortController();
@@ -466,6 +532,30 @@ export default function SubscriberIdentityImport({
   }, []);
 
   return <section className={panelClass} aria-labelledby="subscriber-identity-title">
+    <ProjectDialog
+      open={setupDialogOpen}
+      onClose={() => setSetupDialogOpen(false)}
+      title={setupIssue === "extension" ? "إضافة التقاط الهوية غير مثبتة" : "برنامج ربط القارئ غير جاهز"}
+      description="يحتاج التقاط صور الهوية إلى إضافة Chrome وبرنامج الربط المحلي على لابتوب يعمل بنظام Windows."
+      maxWidth="max-w-xl"
+      footer={<><ProjectButton type="button" variant="secondary" onClick={() => setSetupDialogOpen(false)}>المتابعة بدون تثبيت</ProjectButton><ProjectButton type="button" disabled={checkingSetup} onClick={() => void recheckInstallation()}><Usb/>{checkingSetup ? "جارٍ التحقق…" : "أعد التحقق"}</ProjectButton></>}
+    >
+      <p className="text-xs leading-6 text-slate-600 dark:text-slate-300">
+        {setupIssue === "extension"
+          ? "لم يتمكن الموقع من اكتشاف إضافة Lord Radius في هذا المتصفح. نزّل حزمة التثبيت واتبع الخطوات أدناه."
+          : "تم اكتشاف إضافة المتصفح، لكن برنامج الربط المحلي لا يستجيب. أعد تشغيل المثبّت من الحزمة ثم أعد تحميل صفحة الموقع."}
+      </p>
+      <ol className="mt-4 space-y-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-[11px] leading-6 text-blue-950 dark:border-blue-300/10 dark:bg-blue-500/[.06] dark:text-blue-100">
+        <li>١. نزّل الحزمة وفك ضغطها بالكامل على لابتوب Windows.</li>
+        <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
+        <li>٣. في Chrome فعّل <bdi dir="ltr">Developer mode</bdi> ثم اختر <bdi dir="ltr">Load unpacked</bdi> وحدد مجلد الإضافة الذي يطبعه المثبّت.</li>
+        <li>٤. أعد تحميل صفحة الموقع، ثم اضغط «أعد التحقق».</li>
+      </ol>
+      <p className="mt-3 text-[10px] leading-5 text-slate-500">تأكد كذلك من تثبيت تعريف قارئ Z‑3052 وضبطه على SNAPI مع Imaging Interface. يبقى الإدخال اليدوي متاحًا دون تثبيت.</p>
+      <a href="/downloads/lord-radius-identity-scanner-setup.zip" download className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-[14px] bg-[#0758e9] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#064fd1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/40">
+        <Download className="h-4 w-4"/>تنزيل حزمة التثبيت
+      </a>
+    </ProjectDialog>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2.5">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><Fingerprint className="h-4 w-4"/></span>
