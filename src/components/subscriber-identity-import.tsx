@@ -122,9 +122,15 @@ export default function SubscriberIdentityImport({
       const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
       setRawOcrText(decoded);
       setIdentityFields(Array.isArray(result.identityFields) ? result.identityFields : []);
-      setReadSummary(`${result.format || "PDF417"} · ${result.byteCount || 0} بايت`);
+      const payloadSource = result.payloadSource === "datalabel" ? "datalabel" : "rawdata";
+      const dataLabelBytes = Number(result.dataLabelByteCount) || 0;
+      const rawDataBytes = Number(result.rawDataByteCount) || 0;
+      const byteComparison = dataLabelBytes && rawDataBytes && dataLabelBytes !== rawDataBytes
+        ? ` · datalabel ${dataLabelBytes} / rawdata ${rawDataBytes} بايت`
+        : "";
+      setReadSummary(`${result.format || "PDF417"} · ${result.byteCount || 0} بايت من ${payloadSource}${byteComparison}`);
       setScannerModels(Array.isArray(result.scannerModels) ? result.scannerModels : scannerModels);
-      if (hasValue(found)) mergeSuggestions(found, "استقبل Python بايتات rawdata من قارئ SNAPI وفكّها بـ Windows-1256. راجع الحقول قبل تطبيق الاسم والكنية.");
+      if (hasValue(found)) mergeSuggestions(found, `استقبل Python بيانات ${payloadSource} من قارئ SNAPI وفكّها بـ Windows-1256. راجع الحقول قبل تطبيقها.`);
       else setMessage("استقبل Python البايتات وفكّ نص PDF417، لكن لم يحدد الاسم والكنية تلقائيًا. راجع الحقول الستة أدناه.");
     } catch (caught) {
       setError(caught instanceof Error ? `تعذر إكمال القراءة: ${caught.message}` : "تعذر إكمال القراءة.");
