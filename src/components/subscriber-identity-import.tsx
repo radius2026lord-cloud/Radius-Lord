@@ -58,6 +58,8 @@ export default function SubscriberIdentityImport({
   const closeProcessingTimerRef = useRef<number | null>(null);
   const autoListenRef = useRef(false);
   const autoStartSuppressedRef = useRef(false);
+  const scannerCaptureInProgressRef = useRef(false);
+  const activeBarcodeReadRef = useRef<{ done: Promise<void> } | null>(null);
   const hasIdentityBeenReadRef = useRef(false);
   const setupPromptedRef = useRef(false);
   const readBarcodeRef = useRef<() => Promise<void>>(async () => {});
@@ -88,6 +90,7 @@ export default function SubscriberIdentityImport({
   const emergencyReset = () => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = true;
+    scannerCaptureInProgressRef.current = false;
     requestController.current?.abort();
     requestController.current = null;
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
@@ -114,10 +117,12 @@ export default function SubscriberIdentityImport({
   };
 
   const captureScannerSide = async (side: Side) => {
-    if (!captureExtensionReady || capturingSide || processing) return;
+    if (!captureExtensionReady || capturingSide || processing || scannerCaptureInProgressRef.current) return;
+    scannerCaptureInProgressRef.current = true;
     const controller = new AbortController();
     autoListenRef.current = false;
     statusPollController.current?.abort();
+    const activeBarcodeRead = activeBarcodeReadRef.current;
     requestController.current?.abort();
     requestController.current = controller;
     setCapturingSide(side);
@@ -127,7 +132,18 @@ export default function SubscriberIdentityImport({
     setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} تحت القارئ واضغط زر الالتقاط.`);
 
     try {
-      // Allow the active barcode-listener process to close its SNAPI handle before opening image mode.
+      // Stop PDF417 listening before switching the same SNAPI reader into image mode.
+      if (activeBarcodeRead) {
+        const barcodeStopped = await new Promise<boolean>((resolve) => {
+          const timeout = window.setTimeout(() => resolve(false), 3000);
+          activeBarcodeRead.done.then(() => {
+            window.clearTimeout(timeout);
+            resolve(true);
+          });
+        });
+        if (!barcodeStopped) throw new Error("barcode_listener_stop_timeout");
+      }
+      // Give the scanner SDK a short settle window after the barcode process closes.
       await new Promise((resolve) => window.setTimeout(resolve, 250));
       const result = await requestIdentityScanner("scanner-capture-image", 65000, controller.signal);
       if (controller.signal.aborted) return;
@@ -154,11 +170,14 @@ export default function SubscriberIdentityImport({
       const errorCode = caught instanceof Error ? caught.message : "";
       setError(errorCode === "identity_extension_unavailable"
         ? "تعذر الاتصال بإضافة الالتقاط. أعد تحميل الصفحة وتحقق من تشغيل برنامج الربط المحلي."
+        : errorCode === "barcode_listener_stop_timeout"
+          ? "تعذر إيقاف استماع باركود PDF417 بأمان. أعد فحص القارئ ثم حاول التقاط الصورة مجددًا."
         : errorCode === "scanner_image_transport_too_large"
           ? "تعذر ضغط صورة القارئ إلى حجم النقل الآمن؛ أعد الالتقاط أو تحقق من إعدادات صورة الجهاز."
           : caught instanceof Error ? caught.message : "تعذر التقاط الصورة من القارئ.");
       setMessage("");
     } finally {
+      scannerCaptureInProgressRef.current = false;
       if (requestController.current === controller) {
         requestController.current = null;
         setCapturingSide(null);
@@ -183,6 +202,10 @@ export default function SubscriberIdentityImport({
   };
 
   const readBarcode = useCallback(async () => {
+    if (scannerCaptureInProgressRef.current || activeBarcodeReadRef.current) return;
+    let finishBarcodeRead = () => {};
+    const done = new Promise<void>((resolve) => { finishBarcodeRead = resolve; });
+    activeBarcodeReadRef.current = { done };
     const controller = new AbortController();
     requestController.current = controller;
     setWorking(true);
@@ -305,6 +328,10 @@ export default function SubscriberIdentityImport({
       setError(caught instanceof Error ? `تعذر إكمال القراءة: ${caught.message}` : "تعذر إكمال القراءة.");
       setMessage("");
     } finally {
+      if (activeBarcodeReadRef.current?.done === done) {
+        activeBarcodeReadRef.current = null;
+        finishBarcodeRead();
+      }
       if (requestController.current === controller) {
         requestController.current = null;
         if (retryAfterTimeout && autoListenRef.current) {
