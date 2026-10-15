@@ -59,12 +59,21 @@ if (-not (Test-Path (Join-Path $venv "Scripts\python.exe"))) {
 $venvPython = Join-Path $venv "Scripts\python.exe"
 & $venvPython -m pip install --disable-pip-version-check pyinstaller pywin32 pillow
 if ($LASTEXITCODE -ne 0) { throw "تعذر تثبيت متطلبات جسر SNAPI." }
-& $venvPython -m PyInstaller --noconfirm --clean --onefile --name RadiusLordIdentityHost --collect-all PIL `
-  --hidden-import pythoncom --hidden-import pywintypes --hidden-import win32timezone `
-  --hidden-import win32com.client `
-  --distpath $InstallRoot --workpath (Join-Path $InstallRoot "build") --specpath (Join-Path $InstallRoot "build") `
-  (Join-Path $InstallRoot "native_host.py")
-if ($LASTEXITCODE -ne 0) { throw "تعذر بناء برنامج الربط المحلي." }
+$buildDirectory = Join-Path $InstallRoot "build"
+New-Item -ItemType Directory -Path $buildDirectory -Force | Out-Null
+$buildExitCode = 1
+Push-Location $InstallRoot
+try {
+  & $venvPython -m PyInstaller --noconfirm --clean --onefile --name RadiusLordIdentityHost --collect-all PIL `
+    --hidden-import pythoncom --hidden-import pywintypes --hidden-import win32timezone `
+    --hidden-import win32com.client `
+    --distpath $InstallRoot --workpath $buildDirectory --specpath $buildDirectory `
+    (Join-Path $InstallRoot "native_host.py")
+  $buildExitCode = $LASTEXITCODE
+} finally {
+  Pop-Location
+}
+if ($buildExitCode -ne 0) { throw "تعذر بناء برنامج الربط المحلي." }
 
 $hostManifest = @{
   name = $HostName
