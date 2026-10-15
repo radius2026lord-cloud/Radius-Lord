@@ -16,6 +16,7 @@ const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", 
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
+const PROCESSING_CARD_MINIMUM_MS = 1200;
 
 export default function SubscriberIdentityImport({
   currentValues,
@@ -36,6 +37,7 @@ export default function SubscriberIdentityImport({
   })));
   const [working, setWorking] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [focusContactAfterScan, setFocusContactAfterScan] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
@@ -57,6 +59,18 @@ export default function SubscriberIdentityImport({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [processing]);
+  useEffect(() => {
+    if (!focusContactAfterScan || processing) return;
+    const frame = window.requestAnimationFrame(() => {
+      const phoneInput = document.querySelector<HTMLInputElement>('input[autocomplete="tel"]');
+      if (phoneInput) {
+        phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        phoneInput.focus({ preventScroll: true });
+      }
+      setFocusContactAfterScan(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusContactAfterScan, processing]);
 
   const emergencyReset = () => {
     autoListenRef.current = false;
@@ -122,11 +136,15 @@ export default function SubscriberIdentityImport({
       if (!reader) throw new Error("تعذر استقبال نتيجة القارئ.");
       const decoder = new TextDecoder();
       let pending = "";
+      let processingStartedAt: number | null = null;
       const resultHolder: { value: Record<string, unknown> | null } = { value: null };
       const handleEvent = (line: string) => {
         if (!line.trim()) return;
         const event = JSON.parse(line) as { type?: string; stage?: string; result?: Record<string, unknown> };
-        if (event.type === "progress" && event.stage === "processing") setProcessing(true);
+        if (event.type === "progress" && event.stage === "processing") {
+          if (processingStartedAt === null) processingStartedAt = Date.now();
+          setProcessing(true);
+        }
         if (event.type === "result" && event.result) resultHolder.value = event.result;
       };
       while (true) {
@@ -139,6 +157,12 @@ export default function SubscriberIdentityImport({
       }
       if (pending.trim()) handleEvent(pending);
       if (!resultHolder.value) throw new Error("لم تصل نتيجة المعالجة من القارئ.");
+      if (processingStartedAt !== null) {
+        const visibleFor = Date.now() - processingStartedAt;
+        if (visibleFor < PROCESSING_CARD_MINIMUM_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, PROCESSING_CARD_MINIMUM_MS - visibleFor));
+        }
+      }
       const scanResult = resultHolder.value;
       if (scanResult.ok !== true) {
         if (scanResult.error === "scanner_read_timeout" && autoListenRef.current) {
@@ -176,6 +200,7 @@ export default function SubscriberIdentityImport({
       if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
+      setFocusContactAfterScan(true);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       autoListenRef.current = false;
