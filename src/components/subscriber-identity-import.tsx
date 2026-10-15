@@ -17,7 +17,7 @@ const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", 
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
-const PROCESSING_CARD_DURATION_MS = 8000;
+const PROCESSING_CARD_DURATION_MS = 4000;
 
 export default function SubscriberIdentityImport({
   currentValues,
