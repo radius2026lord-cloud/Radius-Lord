@@ -147,14 +147,22 @@ def scanner_result_payload(xml_text):
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError:
-        return b""
+        return b"", "", 0, 0
 
-    for name in ("rawdata", "datalabel"):
+    payloads = {}
+    for name in ("datalabel", "rawdata"):
         value = root.findtext(f".//{name}", default="")
         octets = re.findall(r"0x([0-9a-fA-F]{2})", value)
         if octets:
-            return bytes(int(octet, 16) for octet in octets)
-    return b""
+            payloads[name] = bytes(int(octet, 16) for octet in octets)
+
+    label_payload = payloads.get("datalabel", b"")
+    raw_payload = payloads.get("rawdata", b"")
+    if label_payload:
+        return label_payload, "datalabel", len(label_payload), len(raw_payload)
+    if raw_payload:
+        return raw_payload, "rawdata", 0, len(raw_payload)
+    return b"", "", 0, 0
 
 
 def scanner_ids_and_models(xml_text):
@@ -265,7 +273,7 @@ def read_from_scanner(timeout_seconds=60):
         if not events.scan_xml:
             return {"ok": False, "error": "scanner_read_timeout"}
 
-        raw = scanner_result_payload(events.scan_xml)
+        raw, payload_source, data_label_byte_count, raw_data_byte_count = scanner_result_payload(events.scan_xml)
         if not raw:
             return {"ok": False, "error": "scanner_raw_data_missing"}
         decoded, identity_fields, fields, byte_count = decode_bytes(raw)
@@ -273,7 +281,10 @@ def read_from_scanner(timeout_seconds=60):
             "ok": True,
             "found": True,
             "format": "PDF417 / SNAPI",
+            "payloadSource": payload_source,
             "byteCount": byte_count,
+            "dataLabelByteCount": data_label_byte_count,
+            "rawDataByteCount": raw_data_byte_count,
             "decodedText": decoded,
             "identityFields": identity_fields,
             "fields": fields,
