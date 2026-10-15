@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { AlertCircle, ArrowLeft, BadgeCheck, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
@@ -9,7 +9,7 @@ import ProjectInput from "@/components/ui/project-input";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
-type IdentityFormField = { label: string; value: string };
+type IdentityFormField = { label: string; value: string; locked?: boolean };
 type Side = "front" | "back";
 
 const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", "اسم الأم", "محل وتاريخ الولادة", "الرقم الوطني"];
@@ -42,6 +42,10 @@ export default function SubscriberIdentityImport({
   const [scannerModels, setScannerModels] = useState<string[]>([]);
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
+  const autoListenRef = useRef(false);
+  const autoStartSuppressedRef = useRef(false);
+  const hasIdentityBeenReadRef = useRef(false);
+  const readBarcodeRef = useRef<() => Promise<void>>(async () => {});
 
   const frontUrl = useMemo(() => front ? URL.createObjectURL(front) : "", [front]);
   const backUrl = useMemo(() => back ? URL.createObjectURL(back) : "", [back]);
@@ -55,6 +59,8 @@ export default function SubscriberIdentityImport({
   }, [processing]);
 
   const emergencyReset = () => {
+    autoListenRef.current = false;
+    autoStartSuppressedRef.current = true;
     requestController.current?.abort();
     requestController.current = null;
     setWorking(false);
@@ -84,7 +90,7 @@ export default function SubscriberIdentityImport({
     setError("");
   };
 
-  const readBarcode = async () => {
+  const readBarcode = useCallback(async () => {
     const controller = new AbortController();
     requestController.current = controller;
     setWorking(true);
@@ -93,6 +99,7 @@ export default function SubscriberIdentityImport({
     if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
     setMessage("");
+    let retryAfterTimeout = false;
     try {
       const response = await fetch(PYTHON_PROCESSOR_URL, {
         method: "POST",
@@ -103,8 +110,20 @@ export default function SubscriberIdentityImport({
       });
       const result = await response.json();
       if (!response.ok) {
+        if (result.error === "scanner_read_timeout" && autoListenRef.current) {
+          retryAfterTimeout = true;
+          setMessage("القارئ جاهز؛ امسح باركود الهوية مباشرة.");
+          return;
+        }
+        if (["scanner_not_found", "scanner_sdk_open_failed", "scanner_sdk_unavailable"].includes(String(result.error))) {
+          autoListenRef.current = false;
+          setScannerModels([]);
+          setSnapiStatus("القارئ غير جاهز.");
+        }
         throw new Error("تعذرت قراءة الهوية. أعد المحاولة.");
       }
+      autoListenRef.current = false;
+      hasIdentityBeenReadRef.current = true;
       const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
       setSnapiStatus("القارئ جاهز.");
       const extracted = Array.isArray(result.identityFields) ? result.identityFields as IdentityFormField[] : [];
@@ -115,6 +134,9 @@ export default function SubscriberIdentityImport({
           : index === 1
             ? currentValues.lastName?.trim() || found.lastName?.trim() || extracted[index]?.value || ""
             : extracted[index]?.value || "",
+        locked: index < 2
+          ? !currentValues[index === 0 ? "firstName" : "lastName"]?.trim() && Boolean(found[index === 0 ? "firstName" : "lastName"]?.trim() || extracted[index]?.value?.trim())
+          : Boolean(extracted[index]?.value?.trim()),
       }));
       setIdentityFields(nextFields);
       setScannerModels(Array.isArray(result.scannerModels) ? result.scannerModels : scannerModels);
@@ -125,16 +147,23 @@ export default function SubscriberIdentityImport({
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
+      autoListenRef.current = false;
       setError(caught instanceof Error ? `تعذر إكمال القراءة: ${caught.message}` : "تعذر إكمال القراءة.");
       setMessage("");
     } finally {
       if (requestController.current === controller) {
         requestController.current = null;
-        setWorking(false);
-        setProcessing(false);
+        if (retryAfterTimeout && autoListenRef.current) {
+          window.setTimeout(() => { if (autoListenRef.current) void readBarcodeRef.current(); }, 150);
+        } else {
+          setWorking(false);
+          setProcessing(false);
+        }
       }
     }
-  };
+  }, [currentValues, onApply, scannerModels]);
+
+  useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
   const testSnapi = async () => {
     const controller = new AbortController();
@@ -160,16 +189,29 @@ export default function SubscriberIdentityImport({
       const models = Array.isArray(result.scannerModels) ? result.scannerModels as string[] : [];
       setScannerModels(models);
       setSnapiStatus(models.length ? "القارئ جاهز." : "القارئ غير جاهز.");
+      return models.length > 0;
     } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (caught instanceof DOMException && caught.name === "AbortError") return false;
       setSnapiStatus("القارئ غير جاهز.");
       setError(caught instanceof Error ? caught.message : "تعذر فحص جاهزية القارئ.");
       setMessage("");
+      return false;
     } finally {
       if (requestController.current === controller) {
         requestController.current = null;
         setWorking(false);
       }
+    }
+  };
+
+  const verifyAndListen = async () => {
+    autoListenRef.current = false;
+    autoStartSuppressedRef.current = false;
+    hasIdentityBeenReadRef.current = false;
+    const ready = await testSnapi();
+    if (ready) {
+      autoListenRef.current = true;
+      void readBarcode();
     }
   };
 
@@ -180,18 +222,21 @@ export default function SubscriberIdentityImport({
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void testSnapi(), 0);
+    const timer = window.setTimeout(() => void verifyAndListen(), 0);
     return () => {
       window.clearTimeout(timer);
+      autoListenRef.current = false;
       requestController.current?.abort();
     };
+    // Start the initial reader check once when the identity tab mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     let timer: number | undefined;
     let disposed = false;
     const refreshStatus = async () => {
-      if (document.visibilityState === "visible" && !requestController.current) {
+      if (document.visibilityState === "visible" && !requestController.current && !autoListenRef.current) {
         const controller = new AbortController();
         statusPollController.current = controller;
         try {
@@ -207,6 +252,10 @@ export default function SubscriberIdentityImport({
             const models = response.ok && result.ok && Array.isArray(result.scannerModels) ? result.scannerModels as string[] : [];
             setScannerModels(models);
             setSnapiStatus(models.length ? "القارئ جاهز." : "القارئ غير جاهز.");
+            if (models.length && !hasIdentityBeenReadRef.current && !autoStartSuppressedRef.current) {
+              autoListenRef.current = true;
+              void readBarcodeRef.current();
+            }
           }
         } catch {
           if (!disposed && !controller.signal.aborted) {
@@ -238,17 +287,17 @@ export default function SubscriberIdentityImport({
       </div>
       <div className="flex flex-wrap gap-2">
         <ProjectButton type="button" variant="secondary" onClick={onBackToList}><ArrowLeft/>العودة للقائمة</ProjectButton>
-        <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void testSnapi()}><Usb/>إعادة الفحص</ProjectButton>
+        <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void verifyAndListen()}><Usb/>إعادة الفحص</ProjectButton>
         {working&&<ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ وإعادة الضبط</ProjectButton>}
       </div>
     </div>
 
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-300/10 dark:bg-blue-500/[.06]">
       <div role="status" aria-live="polite" className="flex min-h-9 items-center gap-2 text-[11px] font-semibold text-blue-900 dark:text-blue-100">
-        {scannerModels.length>0?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
+        {snapiStatus==="القارئ جاهز."?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
         <span>{snapiStatus}</span>
       </div>
-      <ProjectButton disabled={working || scannerModels.length === 0} onClick={()=>void readBarcode()}><ScanLine/>بدء قراءة الهوية</ProjectButton>
+      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
     </div>
     <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">صور وجهي الهوية (اختياري)</summary>
@@ -266,7 +315,7 @@ export default function SubscriberIdentityImport({
       <div className="grid gap-3 sm:grid-cols-2">
         {identityFields.map((field, index) => <label key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
           {field.label}{index < 2 && " *"}
-          <ProjectInput required={index < 2} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={inputClass} maxLength={index === 5 ? 24 : index === 4 ? 120 : 100} dir="auto"/>
+          <ProjectInput required={index < 2} readOnly={field.locked} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={`${inputClass} ${field.locked ? "cursor-not-allowed bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-300" : ""}`} maxLength={index === 5 ? 24 : index === 4 ? 120 : 100} dir="auto"/>
         </label>)}
       </div>
       {message&&<p role="status" className="mt-2 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{message}</p>}
