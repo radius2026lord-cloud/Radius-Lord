@@ -37,7 +37,16 @@ echo.
 echo Setup completed. In Chrome, enable Developer mode and choose "Load unpacked".
 echo Select: %LOCALAPPDATA%\LordRadius\IdentityCapture\extension
 echo This Chrome step is required once for an unpacked extension.
-start "" "chrome://extensions"
+set "CHROME_EXE="
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME_EXE if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME_EXE if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME_EXE for /f "delims=" %%C in ('where chrome.exe 2^>nul') do if not defined CHROME_EXE set "CHROME_EXE=%%C"
+if defined CHROME_EXE (
+  start "" "%CHROME_EXE%" "chrome://extensions"
+) else (
+  echo Chrome was not found. Open Google Chrome manually and enter chrome://extensions
+)
 pause
 endlocal
 exit /b 0
