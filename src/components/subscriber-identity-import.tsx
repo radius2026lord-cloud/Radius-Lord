@@ -71,7 +71,7 @@ export default function SubscriberIdentityImport({
       setProcessingProgress(Math.min(92, Math.floor((elapsed / PROCESSING_CARD_DURATION_MS) * 92)));
     };
     updateProgress();
-    const timer = window.setInterval(updateProgress, 100);
+    const timer = window.setInterval(updateProgress, 250);
     return () => window.clearInterval(timer);
   }, [processing, processingComplete]);
   useEffect(() => () => {
@@ -439,8 +439,11 @@ export default function SubscriberIdentityImport({
           </div>
         </div>
         {!processingComplete&&<p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>}
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingProgress}>
-          <span className={`block h-full rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none ${processingComplete ? "bg-emerald-500" : "bg-gradient-to-r from-sky-500 to-blue-700"}`} style={{ width: `${processingProgress}%` }}/>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingProgress}>
+            <span className={`block h-full rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none ${processingComplete ? "bg-emerald-500" : "bg-gradient-to-r from-sky-500 to-blue-700"}`} style={{ width: `${processingProgress}%` }}/>
+          </div>
+          <span className={`w-10 text-left text-[10px] font-bold tabular-nums ${processingComplete ? "text-emerald-600 dark:text-emerald-300" : "text-blue-700 dark:text-blue-200"}`} dir="ltr">{processingProgress}%</span>
         </div>
         <div className="mt-4 flex justify-end">
           {processingComplete
