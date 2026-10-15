@@ -39,12 +39,16 @@ export default function SubscriberIdentityImport({
   const [working, setWorking] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [processingComplete, setProcessingComplete] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [closingProcessing, setClosingProcessing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
   const [scannerModels, setScannerModels] = useState<string[]>([]);
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
+  const processingStartedAtRef = useRef<number | null>(null);
+  const closeProcessingTimerRef = useRef<number | null>(null);
   const autoListenRef = useRef(false);
   const autoStartSuppressedRef = useRef(false);
   const hasIdentityBeenReadRef = useRef(false);
@@ -60,14 +64,32 @@ export default function SubscriberIdentityImport({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [processing]);
+  useEffect(() => {
+    if (!processing || processingComplete || processingStartedAtRef.current === null) return;
+    const updateProgress = () => {
+      const elapsed = Date.now() - (processingStartedAtRef.current || Date.now());
+      setProcessingProgress(Math.min(92, Math.floor((elapsed / PROCESSING_CARD_DURATION_MS) * 92)));
+    };
+    updateProgress();
+    const timer = window.setInterval(updateProgress, 100);
+    return () => window.clearInterval(timer);
+  }, [processing, processingComplete]);
+  useEffect(() => () => {
+    if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
+  }, []);
   const emergencyReset = () => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = true;
     requestController.current?.abort();
     requestController.current = null;
+    if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
+    closeProcessingTimerRef.current = null;
+    setClosingProcessing(false);
     setWorking(false);
     setProcessing(false);
     setProcessingComplete(false);
+    setProcessingProgress(0);
+    processingStartedAtRef.current = null;
     setSnapiStatus(scannerModels.length ? "القارئ جاهز." : "أُوقفت العملية؛ أعد فحص القارئ.");
     setMessage("");
     setError("");
@@ -99,6 +121,9 @@ export default function SubscriberIdentityImport({
     setWorking(true);
     setProcessing(false);
     setProcessingComplete(false);
+    setProcessingProgress(0);
+    setClosingProcessing(false);
+    processingStartedAtRef.current = null;
     statusPollController.current?.abort();
     if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
@@ -133,7 +158,10 @@ export default function SubscriberIdentityImport({
         if (!line.trim()) return;
         const event = JSON.parse(line) as { type?: string; stage?: string; result?: Record<string, unknown> };
         if (event.type === "progress" && event.stage === "processing") {
-          if (processingStartedAt === null) processingStartedAt = Date.now();
+          if (processingStartedAt === null) {
+            processingStartedAt = Date.now();
+            processingStartedAtRef.current = processingStartedAt;
+          }
           setProcessing(true);
         }
         if (event.type === "result" && event.result) resultHolder.value = event.result;
@@ -187,9 +215,22 @@ export default function SubscriberIdentityImport({
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
       if (processingStartedAt !== null) {
         const remaining = PROCESSING_CARD_DURATION_MS - (Date.now() - processingStartedAt);
-        await new Promise((resolve) => window.setTimeout(resolve, Math.max(remaining, 0)));
+        if (remaining > 0) {
+          await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => {
+              controller.signal.removeEventListener("abort", abortWait);
+              resolve();
+            }, remaining);
+            const abortWait = () => {
+              window.clearTimeout(timer);
+              reject(new DOMException("Aborted", "AbortError"));
+            };
+            controller.signal.addEventListener("abort", abortWait, { once: true });
+          });
+        }
       }
       scanSucceeded = true;
+      setProcessingProgress(100);
       setProcessingComplete(true);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -203,7 +244,11 @@ export default function SubscriberIdentityImport({
           window.setTimeout(() => { if (autoListenRef.current) void readBarcodeRef.current(); }, 150);
         } else {
           setWorking(false);
-          if (!scanSucceeded) setProcessing(false);
+          if (!scanSucceeded) {
+            setProcessing(false);
+            setProcessingProgress(0);
+            processingStartedAtRef.current = null;
+          }
         }
       }
     }
@@ -265,6 +310,20 @@ export default function SubscriberIdentityImport({
     setIdentityFields((old) => old.map((field, fieldIndex) => fieldIndex === index ? { ...field, value } : field));
     if (index === 0) onNameChange("firstName", value);
     if (index === 1) onNameChange("lastName", value);
+  };
+
+  const continueAfterProcessing = () => {
+    if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
+    setClosingProcessing(true);
+    closeProcessingTimerRef.current = window.setTimeout(() => {
+      setProcessing(false);
+      setProcessingComplete(false);
+      setProcessingProgress(0);
+      setClosingProcessing(false);
+      processingStartedAtRef.current = null;
+      setMessage("");
+      closeProcessingTimerRef.current = null;
+    }, 180);
   };
 
   useEffect(() => {
@@ -368,8 +427,8 @@ export default function SubscriberIdentityImport({
       <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
     </section>
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
-      <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#142338]">
+    {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10000] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px] transition-opacity duration-200 ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
+      <section className={`w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
         <div className="flex items-center gap-3">
           <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
             {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <><ScanLine className="h-5 w-5"/><span className="absolute -bottom-1 -left-1 h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-300/30 dark:border-t-blue-300"/></>}
@@ -380,16 +439,15 @@ export default function SubscriberIdentityImport({
           </div>
         </div>
         {!processingComplete&&<p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>}
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingComplete ? 100 : undefined}>
-          <span className={processingComplete ? "block h-full w-full rounded-full bg-emerald-500 transition-colors" : "identity-processing-progress block h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-700"} style={!processingComplete ? { animationDuration: `${PROCESSING_CARD_DURATION_MS}ms` } : undefined}/>
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingProgress}>
+          <span className={`block h-full rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none ${processingComplete ? "bg-emerald-500" : "bg-gradient-to-r from-sky-500 to-blue-700"}`} style={{ width: `${processingProgress}%` }}/>
         </div>
         <div className="mt-4 flex justify-end">
           {processingComplete
-            ? <ProjectButton type="button" onClick={() => { setProcessing(false); setProcessingComplete(false); setMessage(""); }}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
+            ? <ProjectButton type="button" disabled={closingProcessing} onClick={continueAfterProcessing}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
             : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
         </div>
       </section>
-      <style jsx global>{`@keyframes identityProcessingProgress { 0% { width: 0%; } 100% { width: 92%; } } .identity-processing-progress { animation: identityProcessingProgress ${PROCESSING_CARD_DURATION_MS}ms linear forwards; } @media (prefers-reduced-motion: reduce) { .identity-processing-progress { animation: none; width: 92%; } }`}</style>
     </div>, document.body)}
   </section>;
 }
