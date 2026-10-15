@@ -51,13 +51,6 @@ export default function SubscriberIdentityImport({
   const backUrl = useMemo(() => back ? URL.createObjectURL(back) : "", [back]);
   useEffect(() => () => { if (frontUrl) URL.revokeObjectURL(frontUrl); }, [frontUrl]);
   useEffect(() => () => { if (backUrl) URL.revokeObjectURL(backUrl); }, [backUrl]);
-  useEffect(() => {
-    if (!processing) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [processing]);
-
   const emergencyReset = () => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = true;
@@ -94,7 +87,7 @@ export default function SubscriberIdentityImport({
     const controller = new AbortController();
     requestController.current = controller;
     setWorking(true);
-    setProcessing(true);
+    setProcessing(false);
     statusPollController.current?.abort();
     if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
@@ -108,14 +101,45 @@ export default function SubscriberIdentityImport({
         body: JSON.stringify({ action: "scanner-scan" }),
         signal: controller.signal,
       });
-      const result = await response.json();
       if (!response.ok) {
-        if (result.error === "scanner_read_timeout" && autoListenRef.current) {
+        const failure = await response.json().catch(() => ({})) as { error?: string };
+        if (failure.error === "scanner_read_timeout" && autoListenRef.current) {
           retryAfterTimeout = true;
           setMessage("القارئ جاهز؛ امسح باركود الهوية مباشرة.");
           return;
         }
-        if (["scanner_not_found", "scanner_sdk_open_failed", "scanner_sdk_unavailable"].includes(String(result.error))) {
+        throw new Error("تعذرت قراءة الهوية. أعد المحاولة.");
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("تعذر استقبال نتيجة القارئ.");
+      const decoder = new TextDecoder();
+      let pending = "";
+      const resultHolder: { value: Record<string, unknown> | null } = { value: null };
+      const handleEvent = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as { type?: string; stage?: string; result?: Record<string, unknown> };
+        if (event.type === "progress" && event.stage === "processing") setProcessing(true);
+        if (event.type === "result" && event.result) resultHolder.value = event.result;
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        pending += decoder.decode(value, { stream: !done });
+        const lines = pending.split("\n");
+        pending = lines.pop() || "";
+        lines.forEach(handleEvent);
+        if (done) break;
+      }
+      if (pending.trim()) handleEvent(pending);
+      if (!resultHolder.value) throw new Error("لم تصل نتيجة المعالجة من القارئ.");
+      const scanResult = resultHolder.value;
+      if (scanResult.ok !== true) {
+        if (scanResult.error === "scanner_read_timeout" && autoListenRef.current) {
+          retryAfterTimeout = true;
+          setMessage("القارئ جاهز؛ امسح باركود الهوية مباشرة.");
+          return;
+        }
+        if (["scanner_not_found", "scanner_sdk_open_failed", "scanner_sdk_unavailable"].includes(String(scanResult.error))) {
           autoListenRef.current = false;
           setScannerModels([]);
           setSnapiStatus("القارئ غير جاهز.");
@@ -124,9 +148,9 @@ export default function SubscriberIdentityImport({
       }
       autoListenRef.current = false;
       hasIdentityBeenReadRef.current = true;
-      const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
+      const found = scanResult.fields && typeof scanResult.fields === "object" ? scanResult.fields as IdentityValues : {};
       setSnapiStatus("القارئ جاهز.");
-      const extracted = Array.isArray(result.identityFields) ? result.identityFields as IdentityFormField[] : [];
+      const extracted = Array.isArray(scanResult.identityFields) ? scanResult.identityFields as IdentityFormField[] : [];
       const nextFields = IDENTITY_FIELD_LABELS.map((label, index) => ({
         label,
         value: index === 0
@@ -139,7 +163,7 @@ export default function SubscriberIdentityImport({
           : Boolean(extracted[index]?.value?.trim()),
       }));
       setIdentityFields(nextFields);
-      setScannerModels(Array.isArray(result.scannerModels) ? result.scannerModels : scannerModels);
+      setScannerModels(Array.isArray(scanResult.scannerModels) ? scanResult.scannerModels as string[] : scannerModels);
       const names: IdentityValues = {};
       if (!currentValues.firstName?.trim() && found.firstName?.trim()) names.firstName = found.firstName.trim();
       if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
@@ -322,11 +346,11 @@ export default function SubscriberIdentityImport({
       <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
     </section>
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
-      <section className="w-full max-w-sm rounded-2xl border border-blue-100 bg-white p-5 text-center shadow-2xl dark:border-white/10 dark:bg-[#142338]">
+    {processing&&typeof document!=="undefined"&&createPortal(<div className="pointer-events-none fixed inset-x-0 top-4 z-[10000] flex justify-center px-4">
+      <section className="pointer-events-auto w-full max-w-sm rounded-2xl border border-blue-100 bg-white p-5 text-center shadow-2xl dark:border-white/10 dark:bg-[#142338]" role="status" aria-live="polite" aria-labelledby="identity-processing-title">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-50 dark:bg-blue-500/10"><span className="h-6 w-6 animate-spin rounded-full border-[3px] border-blue-200 border-t-blue-600"/></span>
-        <h3 id="identity-processing-title" className="mt-3 text-sm font-bold text-[#17386d] dark:text-slate-100">قراءة ومعالجة الهوية</h3>
-        <p className="mt-1 text-[11px] text-slate-500">وجّه القارئ إلى باركود الهوية؛ ستظهر البيانات مباشرة في الحقول.</p>
+        <h3 id="identity-processing-title" className="mt-3 text-sm font-bold text-[#17386d] dark:text-slate-100">معالجة بيانات الهوية</h3>
+        <p className="mt-1 text-[11px] text-slate-500">وصلت قراءة الباركود، جارٍ فك البيانات وتعبئة الحقول.</p>
         <ProjectButton type="button" variant="secondary" className="mt-4" onClick={emergencyReset}><RotateCcw/>إيقاف القراءة</ProjectButton>
       </section>
     </div>, document.body)}

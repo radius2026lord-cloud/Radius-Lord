@@ -81,6 +81,90 @@ function runPython(input: string, mode: ProcessorMode = "request", signal?: Abor
   });
 }
 
+function streamScannerScan(signal?: AbortSignal) {
+  const encoder = new TextEncoder();
+  let child: ReturnType<typeof spawn> | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let outputBytes = 0;
+  let lineBuffer = "";
+  let settled = false;
+  let abortHandler: (() => void) | undefined;
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        if (settled) return;
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      const finish = (event?: Record<string, unknown>) => {
+        if (settled) return;
+        if (event) send(event);
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        if (abortHandler) signal?.removeEventListener("abort", abortHandler);
+        try { controller.close(); } catch { /* stream already canceled */ }
+      };
+      const fail = (error: string) => finish({ type: "result", result: { ok: false, error } });
+      abortHandler = () => {
+        child?.kill();
+        finish({ type: "result", result: { ok: false, error: "request_aborted" } });
+      };
+      const handleLine = (line: string) => {
+        if (!line.trim()) return;
+        try {
+          const event = JSON.parse(line) as Record<string, unknown>;
+          if (event.type === "progress") send(event);
+          else finish({ type: "result", result: event });
+        } catch {
+          fail("processor_invalid_response");
+        }
+      };
+
+      if (signal?.aborted) {
+        fail("request_aborted");
+        return;
+      }
+
+      const scriptPath = path.join(process.cwd(), "tools", "identity_barcode_processor.py");
+      child = spawn(pythonCommand(), [scriptPath, "--scanner-scan"], { cwd: process.cwd(), stdio: ["pipe", "pipe", "ignore"] });
+      const scannerProcess = child;
+      timeout = setTimeout(() => {
+        child?.kill();
+        fail("scanner_read_timeout");
+      }, 70_000);
+      if (abortHandler) signal?.addEventListener("abort", abortHandler, { once: true });
+
+      scannerProcess.stdout?.on("data", (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputBytes > MAX_OUTPUT_BYTES) {
+          child?.kill();
+          fail("processor_output_too_large");
+          return;
+        }
+        lineBuffer += chunk.toString("utf8");
+        const lines = lineBuffer.split("\n");
+        lineBuffer = lines.pop() || "";
+        lines.forEach(handleLine);
+      });
+      scannerProcess.on("error", () => fail("python_unavailable"));
+      scannerProcess.on("close", (code) => {
+        if (settled) return;
+        if (lineBuffer.trim()) handleLine(lineBuffer);
+        if (!settled) fail(code === 0 ? "processor_invalid_response" : "processor_failed");
+      });
+      scannerProcess.stdin?.end();
+    },
+    cancel() {
+      if (timeout) clearTimeout(timeout);
+      if (abortHandler) signal?.removeEventListener("abort", abortHandler);
+      child?.kill();
+      settled = true;
+    },
+  });
+
+  return new Response(body, { headers: { ...NO_STORE_HEADERS, "Content-Type": "application/x-ndjson; charset=utf-8", "X-Content-Type-Options": "nosniff" } });
+}
+
 export async function GET() {
   if (process.env.NODE_ENV !== "development") {
     return NextResponse.json({ ok: false, error: "development_only" }, { status: 404, headers: NO_STORE_HEADERS });
@@ -148,6 +232,7 @@ export async function POST(request: Request) {
   }
 
   if (scannerAction) {
+    if (scannerAction === "scanner-scan") return streamScannerScan(request.signal);
     try {
       const result = await runPython("", scannerAction, request.signal);
       return NextResponse.json(result, { status: result.ok === false ? 503 : 200, headers: NO_STORE_HEADERS });

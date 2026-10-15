@@ -276,6 +276,9 @@ def read_from_scanner(timeout_seconds=60):
         raw, payload_source, data_label_byte_count, raw_data_byte_count = scanner_result_payload(events.scan_xml)
         if not raw:
             return {"ok": False, "error": "scanner_raw_data_missing"}
+        # Tell the UI that an actual barcode arrived and decoding is starting.
+        # This is separate from the long period spent waiting for the scanner.
+        print(json.dumps({"type": "progress", "stage": "processing"}), flush=True)
         decoded, identity_fields, fields, byte_count = decode_bytes(raw)
         return {
             "ok": True,
@@ -321,7 +324,7 @@ def main():
         return
 
     if "--scanner-scan" in sys.argv[1:]:
-        print(json.dumps(read_from_scanner(), ensure_ascii=False))
+        print(json.dumps(read_from_scanner(), ensure_ascii=False), flush=True)
         return
 
     try:
