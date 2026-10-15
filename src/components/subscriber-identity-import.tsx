@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
-import { AlertCircle, BadgeCheck, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
+import { AlertCircle, ArrowLeft, BadgeCheck, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectInput from "@/components/ui/project-input";
 
@@ -20,10 +21,12 @@ export default function SubscriberIdentityImport({
   currentValues,
   onApply,
   onNameChange,
+  onBackToList,
 }: {
   currentValues: IdentityValues;
   onApply: (values: IdentityValues) => void;
   onNameChange: (field: IdentityField, value: string) => void;
+  onBackToList: () => void;
 }) {
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
@@ -38,19 +41,25 @@ export default function SubscriberIdentityImport({
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
   const [scannerModels, setScannerModels] = useState<string[]>([]);
   const requestController = useRef<AbortController | null>(null);
+  const statusPollController = useRef<AbortController | null>(null);
 
   const frontUrl = useMemo(() => front ? URL.createObjectURL(front) : "", [front]);
   const backUrl = useMemo(() => back ? URL.createObjectURL(back) : "", [back]);
   useEffect(() => () => { if (frontUrl) URL.revokeObjectURL(frontUrl); }, [frontUrl]);
   useEffect(() => () => { if (backUrl) URL.revokeObjectURL(backUrl); }, [backUrl]);
+  useEffect(() => {
+    if (!processing) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [processing]);
 
   const emergencyReset = () => {
     requestController.current?.abort();
     requestController.current = null;
     setWorking(false);
     setProcessing(false);
-    setSnapiStatus("أُوقفت العملية؛ أعد فحص القارئ.");
-    setScannerModels([]);
+    setSnapiStatus(scannerModels.length ? "القارئ جاهز." : "أُوقفت العملية؛ أعد فحص القارئ.");
     setMessage("");
     setError("");
   };
@@ -80,7 +89,8 @@ export default function SubscriberIdentityImport({
     requestController.current = controller;
     setWorking(true);
     setProcessing(true);
-    setSnapiStatus("القارئ جاهز؛ بانتظار القراءة…");
+    statusPollController.current?.abort();
+    if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
     setMessage("");
     try {
@@ -128,6 +138,7 @@ export default function SubscriberIdentityImport({
 
   const testSnapi = async () => {
     const controller = new AbortController();
+    statusPollController.current?.abort();
     requestController.current?.abort();
     requestController.current = controller;
     setWorking(true);
@@ -176,6 +187,47 @@ export default function SubscriberIdentityImport({
     };
   }, []);
 
+  useEffect(() => {
+    let timer: number | undefined;
+    let disposed = false;
+    const refreshStatus = async () => {
+      if (document.visibilityState === "visible" && !requestController.current) {
+        const controller = new AbortController();
+        statusPollController.current = controller;
+        try {
+          const response = await fetch(PYTHON_PROCESSOR_URL, {
+            method: "POST",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "scanner-status" }),
+            signal: controller.signal,
+          });
+          const result = await response.json();
+          if (!disposed && !controller.signal.aborted) {
+            const models = response.ok && result.ok && Array.isArray(result.scannerModels) ? result.scannerModels as string[] : [];
+            setScannerModels(models);
+            setSnapiStatus(models.length ? "القارئ جاهز." : "القارئ غير جاهز.");
+          }
+        } catch {
+          if (!disposed && !controller.signal.aborted) {
+            setScannerModels([]);
+            setSnapiStatus("القارئ غير جاهز.");
+          }
+        } finally {
+          if (statusPollController.current === controller) statusPollController.current = null;
+        }
+      }
+      if (!disposed) timer = window.setTimeout(() => void refreshStatus(), 8000);
+    };
+    timer = window.setTimeout(() => void refreshStatus(), 8000);
+    return () => {
+      disposed = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+      statusPollController.current?.abort();
+      statusPollController.current = null;
+    };
+  }, []);
+
   return <section className={panelClass} aria-labelledby="subscriber-identity-title">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2.5">
@@ -185,6 +237,7 @@ export default function SubscriberIdentityImport({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
+        <ProjectButton type="button" variant="secondary" onClick={onBackToList}><ArrowLeft/>العودة للقائمة</ProjectButton>
         <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void testSnapi()}><Usb/>إعادة الفحص</ProjectButton>
         {working&&<ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ وإعادة الضبط</ProjectButton>}
       </div>
@@ -192,7 +245,7 @@ export default function SubscriberIdentityImport({
 
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-300/10 dark:bg-blue-500/[.06]">
       <div role="status" aria-live="polite" className="flex min-h-9 items-center gap-2 text-[11px] font-semibold text-blue-900 dark:text-blue-100">
-        {working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:snapiStatus==="القارئ جاهز."?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
+        {scannerModels.length>0?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
         <span>{snapiStatus}</span>
       </div>
       <ProjectButton disabled={working || scannerModels.length === 0} onClick={()=>void readBarcode()}><ScanLine/>بدء قراءة الهوية</ProjectButton>
@@ -220,13 +273,13 @@ export default function SubscriberIdentityImport({
       <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
     </section>
 
-    {processing&&<div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
+    {processing&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
       <section className="w-full max-w-sm rounded-2xl border border-blue-100 bg-white p-5 text-center shadow-2xl dark:border-white/10 dark:bg-[#142338]">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-50 dark:bg-blue-500/10"><span className="h-6 w-6 animate-spin rounded-full border-[3px] border-blue-200 border-t-blue-600"/></span>
-        <h3 id="identity-processing-title" className="mt-3 text-sm font-bold text-[#17386d] dark:text-slate-100">جارٍ معالجة الهوية</h3>
-        <p className="mt-1 text-[11px] text-slate-500">ستظهر البيانات مباشرة في الحقول.</p>
+        <h3 id="identity-processing-title" className="mt-3 text-sm font-bold text-[#17386d] dark:text-slate-100">قراءة ومعالجة الهوية</h3>
+        <p className="mt-1 text-[11px] text-slate-500">وجّه القارئ إلى باركود الهوية؛ ستظهر البيانات مباشرة في الحقول.</p>
         <ProjectButton type="button" variant="secondary" className="mt-4" onClick={emergencyReset}><RotateCcw/>إيقاف القراءة</ProjectButton>
       </section>
-    </div>}
+    </div>, document.body)}
   </section>;
 }
