@@ -2,41 +2,37 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AlertCircle, BadgeCheck, Check, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
+import { AlertCircle, BadgeCheck, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectInput from "@/components/ui/project-input";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
-type ExtractedIdentityField = { label: string; value: string };
+type IdentityFormField = { label: string; value: string };
 type Side = "front" | "back";
 
-const FIELD_LABELS: Record<IdentityField, string> = {
-  firstName: "الاسم",
-  lastName: "الكنية",
-};
-const FIELD_ORDER: IdentityField[] = ["firstName", "lastName"];
+const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", "اسم الأم", "محل وتاريخ الولادة", "الرقم الوطني"];
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 
-function hasValue(values: IdentityValues) {
-  return FIELD_ORDER.some((field) => Boolean(values[field]?.trim()));
-}
-
 export default function SubscriberIdentityImport({
   currentValues,
   onApply,
+  onNameChange,
 }: {
   currentValues: IdentityValues;
   onApply: (values: IdentityValues) => void;
+  onNameChange: (field: IdentityField, value: string) => void;
 }) {
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
-  const [identityFields, setIdentityFields] = useState<ExtractedIdentityField[]>([]);
-  const [suggestions, setSuggestions] = useState<IdentityValues>({});
-  const [selected, setSelected] = useState<IdentityField[]>([]);
+  const [identityFields, setIdentityFields] = useState<IdentityFormField[]>(() => IDENTITY_FIELD_LABELS.map((label, index) => ({
+    label,
+    value: index === 0 ? currentValues.firstName || "" : index === 1 ? currentValues.lastName || "" : "",
+  })));
   const [working, setWorking] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
@@ -52,6 +48,7 @@ export default function SubscriberIdentityImport({
     requestController.current?.abort();
     requestController.current = null;
     setWorking(false);
+    setProcessing(false);
     setSnapiStatus("أُوقفت العملية؛ أعد فحص القارئ.");
     setScannerModels([]);
     setMessage("");
@@ -67,26 +64,13 @@ export default function SubscriberIdentityImport({
     (side === "front" ? setFront : setBack)(file);
   };
 
-  const mergeSuggestions = (found: IdentityValues) => {
-    if (!hasValue(found)) {
-      setMessage("لم يُتعرّف على الاسم والكنية؛ راجع الحقول المستخرجة.");
-      return;
-    }
-    setSuggestions((old) => {
-      const next = { ...old };
-      for (const field of FIELD_ORDER) if (found[field]?.trim()) next[field] = found[field]!.trim();
-      return next;
-    });
-    setSelected((old) => Array.from(new Set([...old, ...FIELD_ORDER.filter((field) => Boolean(found[field]?.trim()))])));
-    setMessage("تم استخراج البيانات؛ راجعها قبل التطبيق.");
-  };
-
   const clearTemporaryData = () => {
     setFront(null);
     setBack(null);
-    setIdentityFields([]);
-    setSuggestions({});
-    setSelected([]);
+    setIdentityFields(IDENTITY_FIELD_LABELS.map((label, index) => ({
+      label,
+      value: index === 0 ? currentValues.firstName || "" : index === 1 ? currentValues.lastName || "" : "",
+    })));
     setMessage("");
     setError("");
   };
@@ -95,11 +79,9 @@ export default function SubscriberIdentityImport({
     const controller = new AbortController();
     requestController.current = controller;
     setWorking(true);
+    setProcessing(true);
     setSnapiStatus("القارئ جاهز؛ بانتظار القراءة…");
     setError("");
-    setIdentityFields([]);
-    setSuggestions({});
-    setSelected([]);
     setMessage("");
     try {
       const response = await fetch(PYTHON_PROCESSOR_URL, {
@@ -115,9 +97,22 @@ export default function SubscriberIdentityImport({
       }
       const found = result.fields && typeof result.fields === "object" ? result.fields as IdentityValues : {};
       setSnapiStatus("القارئ جاهز.");
-      setIdentityFields(Array.isArray(result.identityFields) ? result.identityFields : []);
+      const extracted = Array.isArray(result.identityFields) ? result.identityFields as IdentityFormField[] : [];
+      const nextFields = IDENTITY_FIELD_LABELS.map((label, index) => ({
+        label,
+        value: index === 0
+          ? currentValues.firstName?.trim() || found.firstName?.trim() || extracted[index]?.value || ""
+          : index === 1
+            ? currentValues.lastName?.trim() || found.lastName?.trim() || extracted[index]?.value || ""
+            : extracted[index]?.value || "",
+      }));
+      setIdentityFields(nextFields);
       setScannerModels(Array.isArray(result.scannerModels) ? result.scannerModels : scannerModels);
-      mergeSuggestions(found);
+      const names: IdentityValues = {};
+      if (!currentValues.firstName?.trim() && found.firstName?.trim()) names.firstName = found.firstName.trim();
+      if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
+      if (Object.keys(names).length) onApply(names);
+      setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? `تعذر إكمال القراءة: ${caught.message}` : "تعذر إكمال القراءة.");
@@ -126,6 +121,7 @@ export default function SubscriberIdentityImport({
       if (requestController.current === controller) {
         requestController.current = null;
         setWorking(false);
+        setProcessing(false);
       }
     }
   };
@@ -166,20 +162,10 @@ export default function SubscriberIdentityImport({
     }
   };
 
-  const updateSuggestion = (field: IdentityField, value: string) => setSuggestions((old) => ({ ...old, [field]: value }));
-  const toggleField = (field: IdentityField) => setSelected((old) => old.includes(field) ? old.filter((item) => item !== field) : [...old, field]);
-  const applySelected = () => {
-    const values: IdentityValues = {};
-    for (const field of selected) {
-      const value = suggestions[field]?.trim();
-      if (value && !currentValues[field]?.trim()) values[field] = value;
-    }
-    if (!Object.keys(values).length) {
-      setMessage("لم تُطبّق أي قيمة: الحقول المحددة إما فارغة أو تحتوي بيانات أدخلتها مسبقًا.");
-      return;
-    }
-    onApply(values);
-    setMessage("طُبّقت القيم المحددة في الحقول الفارغة. الصور لا تُحفظ مع المشترك في هذه التجربة.");
+  const updateIdentityField = (index: number, value: string) => {
+    setIdentityFields((old) => old.map((field, fieldIndex) => fieldIndex === index ? { ...field, value } : field));
+    if (index === 0) onNameChange("firstName", value);
+    if (index === 1) onNameChange("lastName", value);
   };
 
   useEffect(() => {
@@ -199,7 +185,7 @@ export default function SubscriberIdentityImport({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void testSnapi()}><Usb/>{working ? "جارٍ الفحص…" : "إعادة الفحص"}</ProjectButton>
+        <ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void testSnapi()}><Usb/>إعادة الفحص</ProjectButton>
         {working&&<ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ وإعادة الضبط</ProjectButton>}
       </div>
     </div>
@@ -209,7 +195,7 @@ export default function SubscriberIdentityImport({
         {working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:snapiStatus==="القارئ جاهز."?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
         <span>{snapiStatus}</span>
       </div>
-      <ProjectButton disabled={working || scannerModels.length === 0} onClick={()=>void readBarcode()}><ScanLine/>{working ? "جارٍ الانتظار…" : "بدء قراءة الهوية"}</ProjectButton>
+      <ProjectButton disabled={working || scannerModels.length === 0} onClick={()=>void readBarcode()}><ScanLine/>بدء قراءة الهوية</ProjectButton>
     </div>
     <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">صور وجهي الهوية (اختياري)</summary>
@@ -223,11 +209,24 @@ export default function SubscriberIdentityImport({
     </details>
     {error&&<p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</p>}
 
-    {(hasValue(suggestions) || identityFields.length > 0) && <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-300/10 dark:bg-violet-500/[.04]">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-[11px] font-bold text-violet-900 dark:text-violet-100">مراجعة المعلومات المستخرجة <span className="mr-1 text-[9px] font-normal text-slate-500">(الخطوة 3)</span></h4><p className="mt-1 text-[9px] text-slate-500">تحقق من الحقول وعدّلها، ثم اختر ما تريد تطبيقه. لن تُستبدل الحقول المعبأة يدويًا.</p></div><ProjectButton type="button" disabled={!selected.some((field)=>Boolean(suggestions[field]?.trim())&&!currentValues[field]?.trim())} onClick={applySelected}><Check/>تطبيق المحدد على الحقول الفارغة</ProjectButton></div>
+    <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]" aria-label="بيانات الهوية">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {identityFields.map((field, index) => <label key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
+          {field.label}{index < 2 && " *"}
+          <ProjectInput required={index < 2} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={inputClass} maxLength={index === 5 ? 24 : index === 4 ? 120 : 100} dir="auto"/>
+        </label>)}
+      </div>
       {message&&<p role="status" className="mt-2 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{message}</p>}
-      {identityFields.length>0&&<div className="mt-2 grid gap-2 sm:grid-cols-2">{identityFields.map((field,index)=><div key={`${field.label}-${index}`} className={`min-w-0 rounded-lg border p-2 ${index<2?"border-emerald-200 bg-emerald-50/70 dark:border-emerald-300/10 dark:bg-emerald-500/[.06]":"border-violet-100 bg-white/70 dark:border-violet-300/10 dark:bg-white/[.025]"}`}><div className="text-[9px] font-semibold text-slate-500">{index+1}. {field.label}{index<2&&<span className="mr-1 text-emerald-700 dark:text-emerald-300">· سيُنقل للاسم/الكنية</span>}</div><div className="mt-1 break-words text-xs" dir="auto">{field.value||"—"}</div></div>)}</div>}
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">{FIELD_ORDER.map((field)=><label key={field} className="flex min-w-0 items-start gap-2 rounded-lg border border-violet-100 bg-white/70 p-2 dark:border-violet-300/10 dark:bg-white/[.025]"><input type="checkbox" checked={selected.includes(field)} onChange={()=>toggleField(field)} disabled={Boolean(currentValues[field]?.trim())} className="mt-1 accent-blue-600"/><span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-[10px] font-semibold">{FIELD_LABELS[field]}{currentValues[field]?.trim()&&<span className="font-normal text-amber-600">· الحقل ممتلئ</span>}</span><ProjectInput value={suggestions[field]||""} onChange={(event)=>updateSuggestion(field,event.target.value)} className={`mt-1 !h-9 !text-xs ${inputClass}`} maxLength={100}/></span></label>)}</div>
+      <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
+    </section>
+
+    {processing&&<div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
+      <section className="w-full max-w-sm rounded-2xl border border-blue-100 bg-white p-5 text-center shadow-2xl dark:border-white/10 dark:bg-[#142338]">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-50 dark:bg-blue-500/10"><span className="h-6 w-6 animate-spin rounded-full border-[3px] border-blue-200 border-t-blue-600"/></span>
+        <h3 id="identity-processing-title" className="mt-3 text-sm font-bold text-[#17386d] dark:text-slate-100">جارٍ معالجة الهوية</h3>
+        <p className="mt-1 text-[11px] text-slate-500">ستظهر البيانات مباشرة في الحقول.</p>
+        <ProjectButton type="button" variant="secondary" className="mt-4" onClick={emergencyReset}><RotateCcw/>إيقاف القراءة</ProjectButton>
+      </section>
     </div>}
   </section>;
 }
