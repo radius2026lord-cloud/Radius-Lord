@@ -41,6 +41,7 @@ export default function SubscriberIdentityImport({
   const [processingComplete, setProcessingComplete] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [closingProcessing, setClosingProcessing] = useState(false);
+  const [continueReady, setContinueReady] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
@@ -77,6 +78,12 @@ export default function SubscriberIdentityImport({
   useEffect(() => () => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
   }, []);
+  useEffect(() => {
+    if (!processingComplete) return;
+    setContinueReady(false);
+    const timer = window.setTimeout(() => setContinueReady(true), 2000);
+    return () => window.clearTimeout(timer);
+  }, [processingComplete]);
   const emergencyReset = () => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = true;
@@ -89,6 +96,7 @@ export default function SubscriberIdentityImport({
     setProcessing(false);
     setProcessingComplete(false);
     setProcessingProgress(0);
+    setContinueReady(false);
     processingStartedAtRef.current = null;
     setSnapiStatus(scannerModels.length ? "القارئ جاهز." : "أُوقفت العملية؛ أعد فحص القارئ.");
     setMessage("");
@@ -122,6 +130,7 @@ export default function SubscriberIdentityImport({
     setProcessing(false);
     setProcessingComplete(false);
     setProcessingProgress(0);
+    setContinueReady(false);
     setClosingProcessing(false);
     processingStartedAtRef.current = null;
     statusPollController.current?.abort();
@@ -313,12 +322,14 @@ export default function SubscriberIdentityImport({
   };
 
   const continueAfterProcessing = () => {
+    if (!continueReady) return;
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
     setClosingProcessing(true);
     closeProcessingTimerRef.current = window.setTimeout(() => {
       setProcessing(false);
       setProcessingComplete(false);
       setProcessingProgress(0);
+      setContinueReady(false);
       setClosingProcessing(false);
       processingStartedAtRef.current = null;
       setMessage("");
@@ -431,7 +442,7 @@ export default function SubscriberIdentityImport({
       <section className={`w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
         <div className="flex items-center gap-3">
           <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
-            {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <><ScanLine className="h-5 w-5"/><span className="absolute -bottom-1 -left-1 h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-blue-300/30 dark:border-t-blue-300"/></>}
+            {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <ScanLine className="h-5 w-5"/>}
           </span>
           <div className="min-w-0">
             <h3 id="identity-processing-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">{processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"}</h3>
@@ -447,7 +458,10 @@ export default function SubscriberIdentityImport({
         </div>
         <div className="mt-4 flex justify-end">
           {processingComplete
-            ? <ProjectButton type="button" disabled={closingProcessing} onClick={continueAfterProcessing}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
+            ? <div className="flex flex-col items-end gap-1.5">
+                {!continueReady&&<span role="status" className="text-[10px] text-slate-500">جارٍ تهيئة الصفحة للمتابعة…</span>}
+                <ProjectButton type="button" disabled={closingProcessing||!continueReady} onClick={continueAfterProcessing}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
+              </div>
             : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
         </div>
       </section>
