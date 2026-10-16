@@ -31,6 +31,7 @@ export default function SubscriberIdentityImport({
   onIdentityDocumentChange,
   onIdentityImagesChange,
   onBackToList,
+  onCaptureDialogChange,
   renderBeforeCapture,
   autoDismissProcessing = false,
 }: {
@@ -40,6 +41,7 @@ export default function SubscriberIdentityImport({
   onIdentityDocumentChange: (value: IdentityDocumentDraft | null) => void;
   onIdentityImagesChange: (value: (current: IdentityImagesDraft) => IdentityImagesDraft) => void;
   onBackToList: () => void;
+  onCaptureDialogChange?: (open: boolean) => void;
   renderBeforeCapture?: ReactNode;
   autoDismissProcessing?: boolean;
 }) {
@@ -65,6 +67,10 @@ export default function SubscriberIdentityImport({
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const [setupIssue, setSetupIssue] = useState<"extension" | "bridge" | "update">("extension");
   const [checkingSetup, setCheckingSetup] = useState(false);
+  const showCaptureDialog = (side: Side | null) => {
+    setPositioningSide(side);
+    onCaptureDialogChange?.(side !== null);
+  };
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
   const closeProcessingTimerRef = useRef<number | null>(null);
@@ -111,7 +117,7 @@ export default function SubscriberIdentityImport({
     scannerCaptureInProgressRef.current = false;
     requestController.current?.abort();
     requestController.current = null;
-    setPositioningSide(null);
+    showCaptureDialog(null);
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
     closeProcessingTimerRef.current = null;
     setClosingProcessing(false);
@@ -170,7 +176,7 @@ export default function SubscriberIdentityImport({
       void checkCaptureExtension(true);
       return;
     }
-    setPositioningSide(side);
+    showCaptureDialog(side);
     setError("");
     setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار التوجيه، ثم اضغط زر الالتقاط.`);
   };
@@ -227,7 +233,7 @@ export default function SubscriberIdentityImport({
         type: result.mimeType || "image/jpeg",
       });
       await setSideFile(side, capturedFile);
-      setPositioningSide(side === "front" && !back ? "back" : null);
+      showCaptureDialog(side === "front" && !back ? "back" : null);
       setSnapiStatus("القارئ جاهز.");
       setMessage(side === "front" && !back
         ? "تم التقاط الوجه الأمامي. انتقل الآن إلى تصوير الوجه الخلفي."
@@ -731,7 +737,7 @@ export default function SubscriberIdentityImport({
               <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><Camera className="h-4 w-4 identity-camera-icon"/></span>
               <div className="min-w-0"><h3 id="identity-capture-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">تصوير وجهي الهوية</h3><p className="mt-0.5 text-[10px] text-slate-500">الخطوة {positioningSide === "front" ? "١ من ٢" : "٢ من ٢"}</p></div>
             </div>
-            <button type="button" disabled={working} onClick={()=>setPositioningSide(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-white/10" aria-label="إغلاق التصوير"><X className="h-4 w-4"/></button>
+            <button type="button" disabled={working} onClick={()=>showCaptureDialog(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-white/10" aria-label="إغلاق التصوير"><X className="h-4 w-4"/></button>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {([{ side: "front" as const, label: "١. الوجه الأمامي", file: front }, { side: "back" as const, label: "٢. الوجه الخلفي", file: back }]).map(step=><div key={step.side} className={`flex min-h-9 items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-semibold ${step.file ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200" : positioningSide === step.side ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-300/20 dark:bg-blue-500/10 dark:text-blue-100" : "border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/[.02]"}`}><span>{step.file?<BadgeCheck className="h-3.5 w-3.5"/>:step.label}</span>{step.file&&<span>{step.label.split(". ")[1]} — تم</span>}</div>)}
