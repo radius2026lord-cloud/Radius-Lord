@@ -72,12 +72,29 @@ export async function readNetworkSubscribers(scope:any){
     EXISTS(SELECT 1 FROM customer_identity_documents d WHERE d.customer_id=c.id AND d.capture_method='qr') identity_verified,
     (SELECT COUNT(*) FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.archived_at IS NULL) pppoe_count,
     (SELECT COUNT(*) FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL) hotspot_count,
-    (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships m JOIN customer_categories cat ON cat.id=m.category_id WHERE m.customer_id=c.id AND cat.archived_at IS NULL) categories
+    (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships m JOIN customer_categories cat ON cat.id=m.category_id WHERE m.customer_id=c.id AND cat.archived_at IS NULL) categories,
+    (SELECT GROUP_CONCAT(DISTINCT m.category_id ORDER BY m.category_id SEPARATOR ',') FROM customer_category_memberships m JOIN customer_categories cat ON cat.id=m.category_id WHERE m.customer_id=c.id AND cat.archived_at IS NULL) category_ids,
+    EXISTS(SELECT 1 FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ra.acctstoptime IS NULL AND ((EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL))) is_online,
+    (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.archived_at IS NULL AND EXISTS(SELECT 1 FROM pppoe_subscriptions ended WHERE ended.account_id=p.id AND ended.lifecycle='ended') AND NOT EXISTS(SELECT 1 FROM pppoe_subscriptions live WHERE live.account_id=p.id AND live.lifecycle IN('pending','active')))
+      OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL AND EXISTS(SELECT 1 FROM hotspot_service_periods ended WHERE ended.account_id=h.id AND ended.lifecycle='ended') AND NOT EXISTS(SELECT 1 FROM hotspot_service_periods live WHERE live.account_id=h.id AND live.lifecycle IN('pending','active')))) has_expired_subscription,
+    (SELECT GROUP_CONCAT(DISTINCT ra.nasipaddress ORDER BY ra.nasipaddress SEPARATOR ',') FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ra.nasipaddress<>'' AND (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL))) server_addresses
    FROM customers c ${where} ORDER BY c.id DESC LIMIT 500`,params);
   const [categories]:any=await app.query(`SELECT c.id,c.name FROM customer_categories c JOIN customer_category_manager_assignments a ON a.category_id=c.id
    WHERE a.manager_id=? AND c.archived_at IS NULL ORDER BY c.name,c.id`,[managerId]);
+  const linkedCustomerScope=principal?'':'AND c.manager_id=?';
+  const [servers]:any=await app.query(`SELECT DISTINCT ra.nasipaddress address,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),NULLIF(n.nasname,''),ra.nasipaddress) name
+   FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username
+   LEFT JOIN nas n ON n.nasname=ra.nasipaddress
+   LEFT JOIN lord_nas l ON l.radius_nas_id=n.id AND l.archived_at IS NULL
+   WHERE ra.nasipaddress<>'' AND EXISTS(
+    SELECT 1 FROM (
+     SELECT p.radius_identity_id,p.customer_id FROM pppoe_accounts p WHERE p.archived_at IS NULL
+     UNION ALL
+     SELECT h.radius_identity_id,sc.customer_id FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE h.archived_at IS NULL
+    ) linked JOIN customers c ON c.id=linked.customer_id WHERE linked.radius_identity_id=r.id AND c.archived_at IS NULL ${linkedCustomerScope}
+   ) ORDER BY name,address`,principal?[]:[managerId]);
   const [owners]:any=await app.query('SELECT full_name FROM managers WHERE id=?',[managerId]);
-  return {items,categories,owner:{id:managerId,name:owners[0]?.full_name||access.manager.full_name,role:access.role}};
+  return {items,categories,servers,owner:{id:managerId,name:owners[0]?.full_name||access.manager.full_name,role:access.role}};
  });
 }
 
