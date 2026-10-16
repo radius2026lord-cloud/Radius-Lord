@@ -245,6 +245,14 @@ a {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035) !important;
 }
 
+/* Subscriber list: keep one continuous page canvas behind the Hostinger-style white surfaces. */
+.dark .rl-hostinger-subscribers .workspace-frame,
+.dark .rl-hostinger-subscribers .workspace-scroll {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 .dark [class*="dark:bg-[#0d243b]"],
 .dark [class*="dark:bg-[#0d243c]"],
 .dark [class*="dark:bg-[#0b2036]"],
