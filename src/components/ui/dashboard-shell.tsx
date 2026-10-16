@@ -160,6 +160,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const auth = useOptionalAuth();
   const account=network?{fullName:network.fullName}:auth?.account;
   const accountType=network?'customer':auth?.accountType;
+  const subscribersWorkspace=network?.tab==="subscribers";
   const pathname=network?(network.tab==='overview'?network.basePath:network.tab==='profiles'?`${network.basePath}?tab=profiles&profileTab=${network.profileTab||'list'}`:network.tab==='hotspot'?`${network.basePath}?tab=hotspot&hotspotTab=${network.hotspotTab||'packages'}`:network.tab==='subscribers'?`${network.basePath}?tab=subscribers${network.subscriberTab==='create'?'&subscriberTab=create':''}`:`${network.basePath}?tab=${network.tab}`):actualPathname;
   const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};
   const networkGroups:NavGroup[]=network?[
@@ -311,7 +312,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   return (
     <>
     
-    <div ref={shellRootRef} dir="rtl" className={`dashboard-shell-root relative h-screen overflow-hidden ${network?.tab === "subscribers" ? "bg-[#eef2f6] dark:bg-[#0b1b2a]" : "bg-[#dce5ef] dark:bg-[#1d1721]"} text-[#102a63] transition-colors dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
+    <div ref={shellRootRef} dir="rtl" className={`dashboard-shell-root ${subscribersWorkspace?"rl-hostinger-subscribers":""} relative h-screen overflow-hidden ${subscribersWorkspace ? "bg-[#f1f3f5] dark:bg-[#0b1b2a]" : "bg-[#dce5ef] dark:bg-[#1d1721]"} text-[#102a63] transition-colors dark:text-[#f4f1f5] ${loggingOut ? "dashboard-logout-active" : ""}`}>
       <aside onPointerEnter={event => { if (event.pointerType !== "touch") scheduleSidebar(false); }} onPointerLeave={event => { if (event.pointerType !== "touch") scheduleSidebar(true); }} className={`dashboard-logout-surface fixed bottom-3 right-3 top-3 z-40 hidden ${sidebarWidth} overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe]/95 shadow-[0_16px_44px_rgba(46,75,107,.12)] backdrop-blur-xl ${shellMotion} dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_18px_50px_rgba(0,0,0,.22)] lg:block`}>
         {renderSidebarContent()}
       </aside>
@@ -352,7 +353,7 @@ export default function DashboardShell({ children,network }: { children: React.R
             </div>
           </div>
         </div></header>
-        <main style={accountType === "master_admin" || network ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-frame ${accountType === "master_admin" || network ? "rl-workspace-separated" : ""} h-full rounded-[22px] border ${network?.tab === "subscribers" ? "border-[#d8e0e8] bg-[#eef2f6] dark:border-white/[.08] dark:bg-[#0b1b2a]" : "border-[#a9c8e8] bg-[#edf3f8]/80 dark:border-white/[.08] dark:bg-[#211a25]"} shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:shadow-none ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-hidden pb-[18px]"}`}>
+        <main style={accountType === "master_admin" || network ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-frame ${accountType === "master_admin" || (network && !subscribersWorkspace) ? "rl-workspace-separated" : ""} h-full ${subscribersWorkspace?"rounded-none border-0 bg-transparent shadow-none dark:bg-transparent":"rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none"} ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-hidden pb-[18px]"}`}>
 
           <div className={customerOnboarding ? "min-w-0" : "workspace-scroll rl-workspace-inset-scroll h-full min-w-0 overflow-y-auto p-3 sm:p-4"}><div className={customerOnboarding ? "" : "rl-workspace-content-end"}>{children}</div></div>
         </div></main>
