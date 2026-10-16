@@ -58,8 +58,10 @@ export function CollectionToolbar({icon:Icon,title,description,view,onViewChange
   {title&&<div className="min-w-0 w-full shrink-0 text-right sm:w-auto sm:max-w-sm"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-[#ece8ee]"><Icon className="h-5 w-5 shrink-0 text-[#0758e9]"/><span className="min-w-0 break-words leading-6">{title}</span></h2>{description&&<p className="mt-1 whitespace-normal break-words text-[11px] leading-5 text-slate-500 dark:text-[#9f98a5]">{description}</p>}</div>}
    {filters&&<div className={`min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${responsive?"order-4 basis-full 2xl:order-none 2xl:basis-auto":""}`}>{filters}</div>}
    <div className={`relative shrink-0 ${responsive?"order-3 w-full sm:w-[280px] 2xl:order-none":searchAction?"w-[clamp(230px,22vw,290px)]":"w-[clamp(140px,16vw,205px)]"}`} dir="rtl"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>onQueryChange(e.target.value)} placeholder={searchPlaceholder} className={`h-10 w-full rounded-[14px] border border-[#d7e3ef] bg-[#f9fbfe] pr-9 ${searchAction?"pl-[90px]":"pl-2"} text-xs text-slate-700 placeholder:text-[10px] dark:placeholder:text-[10px] outline-none focus:border-[#6aaeff] dark:border-white/[.10] dark:bg-[#38363c] dark:text-[#e3dfe6]`}/>{searchAction&&<div className="absolute left-1 top-1/2 -translate-y-1/2">{searchAction}</div>}</div>
-  {view&&onViewChange&&onSelectionModeChange&&<div className="shrink-0"><CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode??false} onSelectionModeChange={onSelectionModeChange} showSelectionControl={showSelectionControl} selectionAcrossViews={selectionAcrossViews} allSelected={allSelected} onToggleAll={onToggleAll}/></div>}
-  {primaryAction&&<div className="shrink-0">{primaryAction}</div>}
+  {(view&&onViewChange&&onSelectionModeChange||primaryAction)&&<div className={`ml-auto flex shrink-0 items-center gap-2 ${responsive?"order-5 2xl:order-none 2xl:ml-auto":""}`}>
+   {view&&onViewChange&&onSelectionModeChange&&<CollectionDisplayControls view={view} onViewChange={onViewChange} selectionMode={selectionMode??false} onSelectionModeChange={onSelectionModeChange} showSelectionControl={showSelectionControl} selectionAcrossViews={selectionAcrossViews} allSelected={allSelected} onToggleAll={onToggleAll}/>}
+   {primaryAction&&<div className="shrink-0">{primaryAction}</div>}
+  </div>}
  </div></section>
 }
 
