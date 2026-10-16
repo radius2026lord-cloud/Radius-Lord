@@ -6,19 +6,19 @@ import Image from "next/image";
 import { AlertCircle, ArrowLeft, BadgeCheck, Camera, Download, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDialog from "@/components/ui/project-dialog";
-import ProjectInput from "@/components/ui/project-input";
 import ProjectTooltip from "@/components/ui/project-tooltip";
 import { detectIdentityScannerExtension, requestIdentityScanner } from "@/lib/identity-scanner-extension";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
 export type IdentityDocumentDraft = { fatherName: string; motherName: string; birthPlaceDate: string; nationalNumber: string; captureMethod: "qr" };
+export type IdentityImagesDraft = { front: string | null; back: string | null };
 type IdentityFormField = { label: string; value: string };
 type Side = "front" | "back";
 
 const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", "اسم الأم", "محل وتاريخ الولادة", "الرقم الوطني"];
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
-const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
+const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 const PROCESSING_CARD_DURATION_MS = 5000;
 const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.0";
@@ -29,6 +29,7 @@ export default function SubscriberIdentityImport({
   onApply,
   onNameChange,
   onIdentityDocumentChange,
+  onIdentityImagesChange,
   onBackToList,
   renderBeforeCapture,
 }: {
@@ -36,6 +37,7 @@ export default function SubscriberIdentityImport({
   onApply: (values: IdentityValues) => void;
   onNameChange: (field: IdentityField, value: string) => void;
   onIdentityDocumentChange: (value: IdentityDocumentDraft | null) => void;
+  onIdentityImagesChange: (value: (current: IdentityImagesDraft) => IdentityImagesDraft) => void;
   onBackToList: () => void;
   renderBeforeCapture?: ReactNode;
 }) {
@@ -133,13 +135,39 @@ export default function SubscriberIdentityImport({
     setError("");
   };
 
-  const setSideFile = (side: Side, file: File | null) => {
+  const setSideFile = async (side: Side, file: File | null) => {
     setError("");
     if (file && (!file.type.startsWith("image/") || file.size > 12 * 1024 * 1024)) {
       setError("اختر صورة بصيغة مدعومة لا يتجاوز حجمها 12 ميغابايت.");
       return;
     }
     (side === "front" ? setFront : setBack)(file);
+    try {
+      let encoded: string | null = null;
+      if (file) {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("تعذر تجهيز صورة الهوية.");
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error("تعذر ضغط صورة الهوية.")), "image/jpeg", 0.78));
+        if (blob.size > 1_500_000) throw new Error("حجم الصورة بعد تجهيزها يتجاوز 1.5 ميغابايت.");
+        encoded = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("تعذر تجهيز صورة الهوية."));
+          reader.onerror = () => reject(new Error("تعذر قراءة صورة الهوية."));
+          reader.readAsDataURL(blob);
+        });
+      }
+      onIdentityImagesChange(current => ({ ...current, [side]: encoded }));
+    } catch (caught) {
+      (side === "front" ? setFront : setBack)(null);
+      setError(caught instanceof Error ? caught.message : "تعذر تجهيز صورة الهوية.");
+    }
   };
 
   const prepareScannerSide = (side: Side) => {
@@ -196,7 +224,7 @@ export default function SubscriberIdentityImport({
       const capturedFile = new File([imageBytes], `identity-${side}.${result.format || "jpg"}`, {
         type: result.mimeType || "image/jpeg",
       });
-      setSideFile(side, capturedFile);
+      await setSideFile(side, capturedFile);
       setPositioningSide(side === "front" && !back ? "back" : null);
       setSnapiStatus("القارئ جاهز.");
       setMessage(side === "front" && !back
@@ -531,20 +559,6 @@ export default function SubscriberIdentityImport({
     }
   };
 
-  const updateIdentityField = (index: number, value: string) => {
-    const nextFields = identityFields.map((field, fieldIndex) => fieldIndex === index ? { ...field, value } : field);
-    setIdentityFields(nextFields);
-    onIdentityDocumentChange(hasIdentityBeenReadRef.current ? {
-      fatherName: nextFields[2]?.value || "",
-      motherName: nextFields[3]?.value || "",
-      birthPlaceDate: nextFields[4]?.value || "",
-      nationalNumber: nextFields[5]?.value || "",
-      captureMethod: "qr",
-    } : null);
-    if (index === 0) onNameChange("firstName", value);
-    if (index === 1) onNameChange("lastName", value);
-  };
-
   const continueAfterProcessing = () => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
     setClosingProcessing(true);
@@ -678,13 +692,13 @@ export default function SubscriberIdentityImport({
 
     <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]" aria-label="بيانات الهوية">
       <div className="grid gap-3 sm:grid-cols-2">
-        {identityFields.map((field, index) => <label key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
-          {field.label}{index < 2 && " *"}
-          <ProjectInput required={index < 2 || (index === 5 && barcodeRead)} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={inputClass} maxLength={index === 5 ? 50 : index === 4 ? 160 : 100} dir="auto"/>
-        </label>)}
+        {identityFields.map((field) => <div key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
+          <span>{field.label}</span>
+          <div dir="auto" className={`flex min-h-10 w-full items-center rounded-xl border px-3 py-2 text-xs font-semibold ${inputClass} ${field.value ? "" : "text-slate-400"}`}>{field.value || "بانتظار قراءة باركود الهوية"}</div>
+        </div>)}
       </div>
       {message&&<div role="status" aria-live="polite" className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] font-medium text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200"><BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300"/>{message}</div>}
-      <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
+      <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الهوية المستخرجة للعرض فقط، وتُحفظ مع ملف المشترك بعد تأكيده.</p>
     </section>
     {renderBeforeCapture&&<div className="mt-3 ui-state-enter">{renderBeforeCapture}</div>}
 
