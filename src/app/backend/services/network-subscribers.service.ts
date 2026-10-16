@@ -44,6 +44,10 @@ async function ensureNationalNumberAvailable(app:any,nationalNumber:string,excep
  const [rows]:any=await app.query(`SELECT customer_id FROM customer_identity_documents WHERE national_number=? ${exceptCustomerId?'AND customer_id<>?':''} LIMIT 1 FOR UPDATE`,exceptCustomerId?[nationalNumber,exceptCustomerId]:[nationalNumber]);
  if(rows[0])throw new Error('SUBSCRIBER_NATIONAL_NUMBER_EXISTS');
 }
+async function ensureCustomerPhoneAvailable(app:any,phone:string){
+ const [rows]:any=await app.query('SELECT id FROM customers WHERE phone=? LIMIT 1 FOR UPDATE',[phone]);
+ if(rows[0])throw new Error('SUBSCRIBER_PHONE_EXISTS');
+}
 function splitBirthPlaceDate(value:any){
  const raw=String(value??'').trim();
  const normalized=latinDigits(raw);
@@ -136,6 +140,7 @@ export async function createNetworkSubscriber(scope:any,input:any){
      WHERE c.id=? AND c.archived_at IS NULL AND a.manager_id=? FOR UPDATE`,[categoryId,managerId]);
     if(!allowed[0])throw new Error('SUBSCRIBER_CATEGORY_UNAVAILABLE');
    }
+   if(phone)await ensureCustomerPhoneAvailable(app,phone);
    let created:any=null,code='';
    for(let attempt=0;attempt<8;attempt++){
     code=paymentCode();
@@ -143,7 +148,10 @@ export async function createNetworkSubscriber(scope:any,input:any){
      [created]=await app.query(`INSERT INTO customers(manager_id,first_name,last_name,phone,address,latitude,longitude,notes,payment_code,created_by_manager_id,status)
       VALUES(?,?,?,?,?,?,?,?,?,?,?)`,[managerId,firstName,lastName,phone,address,latitude,longitude,notes,code,scope.managerId,status]);
      break;
-    }catch(e:any){if(e?.code!=='ER_DUP_ENTRY'||attempt===7)throw e;}
+    }catch(e:any){
+     if(e?.code==='ER_DUP_ENTRY'&&String(e?.message||'').includes('uq_customer_phone'))throw new Error('SUBSCRIBER_PHONE_EXISTS');
+     if(e?.code!=='ER_DUP_ENTRY'||attempt===7)throw e;
+    }
    }
    const id=Number(created.insertId);
    if(identityDocument){

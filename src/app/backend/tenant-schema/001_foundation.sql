@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS customers (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_customer_payment_code (payment_code),
+  UNIQUE KEY uq_customer_phone (phone),
   UNIQUE KEY uq_customer_id_manager (id,manager_id),
   KEY idx_customer_owner_archive (manager_id,archived_at,id),
   KEY idx_customer_name (last_name,first_name),

@@ -87,6 +87,7 @@ const subscriberMessage=(e:any)=>{
  if(code==='SUBSCRIBER_NOT_FOUND')return 'المشترك غير موجود أو لا تملك صلاحية الوصول إليه.';
  if(code==='SUBSCRIBER_NATIONAL_NUMBER_EXISTS')return 'الرقم الوطني مسجل مسبقًا على ملف مشترك آخر.';
  if(code==='SUBSCRIBER_NATIONAL_NUMBER_INVALID')return 'الرقم الوطني السوري يجب أن يتكوّن من 11 رقمًا. أعد قراءة الهوية وتحقق من الرقم.';
+ if(code==='SUBSCRIBER_PHONE_EXISTS')return 'رقم الهاتف مسجل مسبقًا على ملف مشترك آخر.';
  if(e?.code==='ER_DUP_ENTRY')return 'الرقم الوطني مسجل مسبقًا على ملف مشترك آخر.';
  return 'تعذر حفظ بيانات المشترك.';
 };
