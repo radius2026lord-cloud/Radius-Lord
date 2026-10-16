@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import Image from "next/image";
 import { AlertCircle, ArrowLeft, BadgeCheck, Camera, Download, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
@@ -744,30 +743,14 @@ export default function SubscriberIdentityImport({
       <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @media (prefers-reduced-motion: reduce) { .identity-laser { animation: none !important; } }`}</style>
     </ProjectDialog>
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10004] grid place-items-center p-4 transition-[opacity,background-color,backdrop-filter] duration-200 ${processingComplete ? "pointer-events-none bg-transparent backdrop-blur-0" : "bg-slate-950/45 backdrop-blur-[2px]"} ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal={!processingComplete} aria-labelledby="identity-processing-title">
-      <section className={`pointer-events-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
-        <div className="flex items-center gap-3">
-          <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
-            {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <ScanLine className="h-5 w-5"/>}
-          </span>
-          <div className="min-w-0">
-            <h3 id="identity-processing-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">{processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"}</h3>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-300">{processingComplete ? "تم استخراج البيانات وتعبئة الحقول بنجاح." : "وصلت قراءة الباركود؛ جارٍ فك البيانات وتعبئة الحقول."}</p>
-          </div>
+    <ProjectDialog open={processing} title={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} description={processingComplete ? "تم استخراج البيانات وتعبئة الحقول بنجاح." : "وصلت قراءة الباركود؛ جارٍ فك البيانات وتعبئة الحقول."} onClose={continueAfterProcessing} busy={!processingComplete} maxWidth="max-w-md" headerAccessory={<span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>{processingComplete ? <BadgeCheck className="h-6 w-6"/> : <ScanLine className="h-5 w-5"/>}</span>} footer={processingComplete ? <ProjectButton type="button" disabled={closingProcessing} onClick={continueAfterProcessing}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton> : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}>
+      {!processingComplete&&<p className="mb-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>}
+      <div className="flex items-center gap-3">
+        <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} {...(processingComplete ? {"aria-valuenow": processingProgress} : {})}>
+          <span className={`block h-full rounded-full ${processingComplete ? "bg-emerald-500" : "identity-progress-indeterminate bg-gradient-to-r from-sky-500 to-blue-700"}`} style={processingComplete ? { width: `${processingProgress}%` } : undefined}/>
         </div>
-        {!processingComplete&&<p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>}
-        <div className="mt-3 flex items-center gap-3">
-          <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} {...(processingComplete ? {"aria-valuenow": processingProgress} : {})}>
-            <span className={`block h-full rounded-full ${processingComplete ? "bg-emerald-500" : "identity-progress-indeterminate bg-gradient-to-r from-sky-500 to-blue-700"}`} style={processingComplete ? { width: `${processingProgress}%` } : undefined}/>
-          </div>
-          <span className={`w-10 text-left text-[10px] font-bold tabular-nums ${processingComplete ? "text-emerald-600 dark:text-emerald-300" : "text-blue-700 dark:text-blue-200"}`} dir="ltr">{processingComplete ? "100%" : "جارٍ"}</span>
-        </div>
-        <div className="mt-4 flex justify-end">
-          {processingComplete
-            ? <ProjectButton type="button" disabled={closingProcessing} onClick={continueAfterProcessing}><BadgeCheck/>متابعة لإكمال البيانات</ProjectButton>
-            : <ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
-        </div>
-      </section>
-    </div>, document.body)}
+        <span className={`w-10 text-left text-[10px] font-bold tabular-nums ${processingComplete ? "text-emerald-600 dark:text-emerald-300" : "text-blue-700 dark:text-blue-200"}`} dir="ltr">{processingComplete ? "100%" : "جارٍ"}</span>
+      </div>
+    </ProjectDialog>
   </section>;
 }
