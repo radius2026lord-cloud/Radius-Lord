@@ -37,7 +37,7 @@ const latinDigits=(value:string)=>value.replace(/[٠-٩۰-۹]/g,digit=>String("�
 function normalizeNationalNumber(value:any){
  const raw=text(value,50,'identityDocument',true)!;
  const normalized=latinDigits(raw).replace(/[\s-]/g,'');
- if(!/^\d{1,50}$/.test(normalized))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityDocument:'الرقم الوطني يجب أن يحتوي على أرقام فقط.'}});
+ if(!/^\d{11}$/.test(normalized))throw new Error('SUBSCRIBER_NATIONAL_NUMBER_INVALID');
  return normalized;
 }
 async function ensureNationalNumberAvailable(app:any,nationalNumber:string,exceptCustomerId?:number){
