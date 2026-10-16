@@ -179,6 +179,43 @@ export async function setNetworkSubscriberStatus(scope:any,input:any){
  });
 }
 
+export async function verifyNetworkSubscriberIdentity(scope:any,input:any){
+ return withNetwork(scope,async app=>{
+  const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access);
+  if(access.role!=='principal'&&!access.permissions.includes('customers.update'))throw new Error('NETWORK_AUTH');
+  const id=Number(input.id);
+  if(!Number.isSafeInteger(id)||id<1)throw new Error('SUBSCRIBER_INPUT');
+  const raw=input.identityDocument&&typeof input.identityDocument==='object'?input.identityDocument:null;
+  if(raw?.captureMethod!=='qr')throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityDocument:'اقرأ باركود الهوية قبل تأكيد التوثيق.'}});
+  const firstName=text(input.firstName,100,'firstName',true)!,lastName=text(input.lastName,100,'lastName',true)!;
+  const identityDocument={
+   fatherName:text(raw.fatherName,100,'fatherName'),
+   motherName:text(raw.motherName,100,'motherName'),
+   birthPlaceDate:text(raw.birthPlaceDate,160,'birthPlaceDate'),
+   nationalNumber:text(raw.nationalNumber,50,'nationalNumber',true)!,
+  };
+  const uploadedIdentityImages={
+   front:await decodeIdentityImage(input.identityImages?.front),
+   back:await decodeIdentityImage(input.identityImages?.back),
+  };
+  await app.beginTransaction();
+  try{
+   const [customers]:any=await app.query(`SELECT id,manager_id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL ${access.role==='principal'?'':'AND manager_id=?'} FOR UPDATE`,access.role==='principal'?[id]:[id,managerId]);
+   const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
+   const {birthPlace,birthDate}=splitBirthPlaceDate(identityDocument.birthPlaceDate);
+   await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,front_image_data,back_image_data,capture_method,updated_by_manager_id)
+    VALUES(?,?,?,?,?,?,?,?,?,?,'qr',?)
+    ON DUPLICATE KEY UPDATE first_name=VALUES(first_name),last_name=VALUES(last_name),father_name=VALUES(father_name),mother_name=VALUES(mother_name),birth_place=VALUES(birth_place),birth_date=VALUES(birth_date),national_number=VALUES(national_number),front_image_data=COALESCE(VALUES(front_image_data),front_image_data),back_image_data=COALESCE(VALUES(back_image_data),back_image_data),capture_method='qr',updated_by_manager_id=VALUES(updated_by_manager_id)`,
+    [id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,uploadedIdentityImages.front,uploadedIdentityImages.back,scope.managerId]);
+   const snapshot=JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role});
+   const after=JSON.stringify({identityVerified:true,nationalNumber:identityDocument.nationalNumber,frontImage:Boolean(uploadedIdentityImages.front),backImage:Boolean(uploadedIdentityImages.back)});
+   await app.query(`INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,after_data,result)
+    VALUES(?,?,'manager','subscribers.identity.verify','customer',?,?,?,'success')`,[scope.managerId,snapshot,id,id,after]);
+   await app.commit();return {success:true};
+  }catch(error){await app.rollback();throw error;}
+ });
+}
+
 
 export async function readNetworkSubscriberDetail(scope:any,value:any){
  return withNetwork(scope,async app=>{
