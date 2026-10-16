@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_barcode_processor import scanner_connection, scanner_ids_and_models, scanner_status_value
 
-BRIDGE_VERSION = "0.3.0"
+BRIDGE_VERSION = "0.3.1"
 
 
 def scanner_image_data_bytes(image_data, size):
@@ -66,11 +66,14 @@ def capture_scanner_image(timeout_seconds=55):
         class ImageEvents:
             image_bytes = b""
             image_format = 1
+            image_error = ""
 
             def OnImageEvent(self, event_type, size, image_format, image_data, scanner_data):
                 if int(event_type) == 1:
                     self.image_bytes = scanner_image_data_bytes(image_data, int(size))
                     self.image_format = int(image_format)
+                elif int(event_type) == 2:
+                    self.image_error = "scanner_image_transfer_failed"
 
         scanner = win32com.client.DispatchWithEvents("CoreScanner.CoreScanner", ImageEvents)
         events = scanner
@@ -83,7 +86,10 @@ def capture_scanner_image(timeout_seconds=55):
         devices = scanner_ids_and_models(xml_text)
         if not devices:
             return {"ok": False, "error": "scanner_not_found"}
-        scanner_id = devices[0]["scannerId"] or "1"
+        snapi_devices = [item for item in devices if "SNAPI" in item.get("type", "").upper()]
+        if not snapi_devices:
+            return {"ok": False, "error": "scanner_snapi_imaging_required"}
+        scanner_id = snapi_devices[0]["scannerId"] or "1"
 
         subscribe_xml = "<inArgs><cmdArgs><arg-int>1</arg-int><arg-int>2</arg-int></cmdArgs></inArgs>"
         if scanner_status_value(scanner.ExecCommand(1001, subscribe_xml)) != 0:
@@ -94,11 +100,20 @@ def capture_scanner_image(timeout_seconds=55):
         if scanner_status_value(scanner.ExecCommand(2011, capture_xml)) != 0:
             return {"ok": False, "error": "scanner_image_trigger_failed"}
         trigger_pulled = True
+        # DEVICE_CAPTURE_IMAGE waits for a trigger. Send a short software-trigger
+        # pulse so the scanner completes a still capture instead of remaining
+        # pressed while the host waits for ImageEvent.
+        time.sleep(0.15)
+        release_status = scanner_status_value(scanner.ExecCommand(2012, capture_xml))
+        if release_status == 0:
+            trigger_pulled = False
 
         deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline and not events.image_bytes:
+        while time.monotonic() < deadline and not events.image_bytes and not events.image_error:
             pythoncom.PumpWaitingMessages()
             time.sleep(0.01)
+        if events.image_error:
+            return {"ok": False, "error": events.image_error}
         if not events.image_bytes:
             return {"ok": False, "error": "scanner_image_capture_timeout"}
 
@@ -109,7 +124,7 @@ def capture_scanner_image(timeout_seconds=55):
             "mimeType": "image/jpeg",
             "imageBase64": base64.b64encode(image_bytes).decode("ascii"),
             "byteCount": len(image_bytes),
-            "scannerModels": [item["model"] for item in devices],
+            "scannerModels": [item["model"] for item in snapi_devices],
             "storage": "memory-only",
         }
     except RuntimeError as exc:

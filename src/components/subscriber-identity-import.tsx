@@ -21,7 +21,7 @@ const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 // Show progress while decoding, but never hold the completed form for an artificial delay.
-const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.0";
+const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.1";
 const SETUP_PROMPT_STORAGE_KEY = "rl:identity-scanner-setup-prompted-v1";
 
 export default function SubscriberIdentityImport({
@@ -219,6 +219,10 @@ export default function SubscriberIdentityImport({
       if (result.ok !== true || !result.imageBase64) {
         throw new Error(result.error === "scanner_image_capture_timeout"
           ? "انتهت مهلة التصوير؛ تعرّف النظام على القارئ لكنه لم يستقبل صورة. تحقق من وضع SNAPI مع واجهة التصوير وتعريفه."
+          : result.error === "scanner_snapi_imaging_required"
+            ? "ظهر القارئ، لكن اتصال التصوير SNAPI غير متاح. أعد ضبطه على SNAPI مع Imaging Interface ثم أعد فحصه."
+          : result.error === "scanner_image_transfer_failed"
+            ? "بدأ القارئ التصوير، لكن تعذر نقل الصورة. أعد توصيله وتحقق من تعريف SNAPI Imaging."
           : result.error === "scanner_image_trigger_failed"
             ? "وصل طلب التصوير، لكن القارئ لم يبدأ الالتقاط. تحقق من تعريف SNAPI وأعد توصيل القارئ."
           : result.error === "identity_native_host_disconnected"
