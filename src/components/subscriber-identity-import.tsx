@@ -52,6 +52,7 @@ export default function SubscriberIdentityImport({
   const [capturingSide, setCapturingSide] = useState<Side | null>(null);
   const [positioningSide, setPositioningSide] = useState<Side | null>(null);
   const [captureExtensionReady, setCaptureExtensionReady] = useState(false);
+  const [barcodeRead, setBarcodeRead] = useState(false);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const [setupIssue, setSetupIssue] = useState<"extension" | "bridge" | "update">("extension");
   const [checkingSetup, setCheckingSetup] = useState(false);
@@ -314,6 +315,7 @@ export default function SubscriberIdentityImport({
       }
       autoListenRef.current = false;
       hasIdentityBeenReadRef.current = true;
+      setBarcodeRead(true);
       const found = scanResult.fields && typeof scanResult.fields === "object" ? scanResult.fields as IdentityValues : {};
       setSnapiStatus("القارئ جاهز.");
       const extracted = Array.isArray(scanResult.identityFields) ? scanResult.identityFields as IdentityFormField[] : [];
@@ -499,6 +501,7 @@ export default function SubscriberIdentityImport({
     autoListenRef.current = false;
     autoStartSuppressedRef.current = false;
     hasIdentityBeenReadRef.current = false;
+    setBarcodeRead(false);
     const ready = await testSnapi();
     if (forceSetupPrompt) await checkCaptureExtension(true);
     if (ready) {
@@ -652,11 +655,14 @@ export default function SubscriberIdentityImport({
           <div className="min-w-0">
             <p className="text-[11px] font-bold text-blue-950 dark:text-blue-100">تصوير وجهي الهوية</p>
             <p className="mt-1 text-[10px] leading-5 text-slate-600 dark:text-slate-300">خطوتان سهلتان: الوجه الأمامي ثم الوجه الخلفي. الصور تبقى مؤقتة.</p>
+            <p role="status" className={`mt-1 text-[10px] font-semibold ${barcodeRead||(front&&back) ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+              {front&&back ? "اكتمل تصوير الوجهين." : barcodeRead ? "تمت قراءة الباركود؛ تصوير الهوية متاح الآن." : "يتاح التصوير بالقارئ بعد قراءة باركود الهوية."}
+            </p>
           </div>
         </div>
-        <ProjectButton type="button" disabled={!captureExtensionReady||working||processing} onClick={()=>prepareScannerSide(front ? "back" : "front")}>
+        {!(front&&back)&&<ProjectButton type="button" disabled={!captureExtensionReady||!barcodeRead||working||processing} onClick={()=>prepareScannerSide(front ? "back" : "front")}>
           <Camera className="identity-camera-icon"/>{front ? "متابعة تصوير الوجه الخلفي" : "ابدأ تصوير الهوية"}
-        </ProjectButton>
+        </ProjectButton>}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2" aria-label="خطوات تصوير الهوية">
         {([{ side: "front" as const, label: "الوجه الأمامي", file: front }, { side: "back" as const, label: "الوجه الخلفي", file: back }]).map((step, index) => <div key={step.side} className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-semibold ${step.file ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200" : positioningSide === step.side ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-300/20 dark:bg-blue-500/10 dark:text-blue-100" : "border-slate-200 bg-white/70 text-slate-500 dark:border-white/10 dark:bg-white/[.02]"}`}>
