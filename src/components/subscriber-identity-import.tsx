@@ -498,11 +498,10 @@ export default function SubscriberIdentityImport({
     autoStartSuppressedRef.current = false;
     hasIdentityBeenReadRef.current = false;
     const ready = await testSnapi();
+    if (forceSetupPrompt) await checkCaptureExtension(true);
     if (ready) {
       autoListenRef.current = true;
       void readBarcode();
-    } else if (forceSetupPrompt && !captureExtensionReady) {
-      await checkCaptureExtension(true);
     }
   };
 
