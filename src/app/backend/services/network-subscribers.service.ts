@@ -80,16 +80,20 @@ export async function createNetworkSubscriber(scope:any,input:any){
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access);
   if(access.role!=='principal'&&!access.permissions.includes('customers.create'))throw new Error('NETWORK_AUTH');
   const firstName=text(input.firstName,100,'firstName',true)!,lastName=text(input.lastName,100,'lastName',true)!;
-  const phone=text(input.phone,15,'phone',true);
-  if(!/^[0-9]{1,15}$/.test(phone||''))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{phone:'أدخل أرقام الهاتف فقط وبحد أقصى 15 رقمًا.'}});
-  const address=text(input.address,10000,'address',true),notes=text(input.notes,10000,'notes');
-  const identityInput=input.identityDocument&&typeof input.identityDocument==='object'?input.identityDocument:null;
+  const entryMode=String(input.entryMode??'manual');
+  if(!['manual','identity'].includes(entryMode))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{entryMode:'اختر طريقة إدخال صالحة.'}});
+  const isIdentityEntry=entryMode==='identity';
+  const phone=isIdentityEntry?text(input.phone,15,'phone',true):null;
+  if(phone&&!/^[0-9]{1,15}$/.test(phone))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{phone:'أدخل أرقام الهاتف فقط وبحد أقصى 15 رقمًا.'}});
+  const address=isIdentityEntry?text(input.address,10000,'address',true):null,notes=text(input.notes,10000,'notes');
+  const identityInput=isIdentityEntry&&input.identityDocument&&typeof input.identityDocument==='object'?input.identityDocument:null;
   const identityDocument=identityInput?.captureMethod==='qr'?{
    fatherName:text(identityInput.fatherName,100,'fatherName'),
    motherName:text(identityInput.motherName,100,'motherName'),
    birthPlaceDate:text(identityInput.birthPlaceDate,160,'birthPlaceDate'),
    nationalNumber:text(identityInput.nationalNumber,50,'nationalNumber',true)!,
   }:null;
+  if(isIdentityEntry&&!identityDocument)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityDocument:'اقرأ باركود الهوية قبل حفظ الملف.'}});
   const latitude=coord(input.latitude,-90,90,'latitude'),longitude=coord(input.longitude,-180,180,'longitude');
   if((latitude===null)!==(longitude===null))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{latitude:'أدخل خطي العرض والطول معًا.'}});
   const status=String(input.status??'active');
@@ -118,7 +122,7 @@ export async function createNetworkSubscriber(scope:any,input:any){
     await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,capture_method,updated_by_manager_id)
      VALUES(?,?,?,?,?,?,?,?,'qr',?)`,[id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,scope.managerId]);
    }
-   await app.query(`INSERT INTO customer_address_suggestions(manager_id,address,address_hash)
+   if(address)await app.query(`INSERT INTO customer_address_suggestions(manager_id,address,address_hash)
     VALUES(?,?,UNHEX(SHA2(LOWER(TRIM(?)),256)))
     ON DUPLICATE KEY UPDATE address=VALUES(address),last_used_at=CURRENT_TIMESTAMP`,[managerId,address,address]);
    if(categoryId!==null)await app.query('INSERT INTO customer_category_memberships(customer_id,category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?,?)',[id,categoryId,managerId,scope.managerId]);
