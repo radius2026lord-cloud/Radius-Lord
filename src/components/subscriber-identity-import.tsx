@@ -20,7 +20,7 @@ const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", 
 const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]";
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
-const PROCESSING_CARD_DURATION_MS = 5000;
+// Show progress while decoding, but never hold the completed form for an artificial delay.
 const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.0";
 const SETUP_PROMPT_STORAGE_KEY = "rl:identity-scanner-setup-prompted-v1";
 
@@ -32,7 +32,6 @@ export default function SubscriberIdentityImport({
   onIdentityImagesChange,
   onBackToList,
   renderBeforeCapture,
-  processingMinDurationMs = PROCESSING_CARD_DURATION_MS,
   autoDismissProcessing = false,
 }: {
   currentValues: IdentityValues;
@@ -42,7 +41,6 @@ export default function SubscriberIdentityImport({
   onIdentityImagesChange: (value: (current: IdentityImagesDraft) => IdentityImagesDraft) => void;
   onBackToList: () => void;
   renderBeforeCapture?: ReactNode;
-  processingMinDurationMs?: number;
   autoDismissProcessing?: boolean;
 }) {
   const [front, setFront] = useState<File | null>(null);
@@ -69,7 +67,6 @@ export default function SubscriberIdentityImport({
   const [checkingSetup, setCheckingSetup] = useState(false);
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
-  const processingStartedAtRef = useRef<number | null>(null);
   const closeProcessingTimerRef = useRef<number | null>(null);
   const autoListenRef = useRef(false);
   const autoStartSuppressedRef = useRef(false);
@@ -105,16 +102,6 @@ export default function SubscriberIdentityImport({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [processing, positioningSide]);
-  useEffect(() => {
-    if (!processing || processingComplete || processingStartedAtRef.current === null) return;
-    const updateProgress = () => {
-      const elapsed = Date.now() - (processingStartedAtRef.current || Date.now());
-      setProcessingProgress(processingMinDurationMs > 0 ? Math.min(92, Math.floor((elapsed / processingMinDurationMs) * 92)) : 92);
-    };
-    updateProgress();
-    const timer = window.setInterval(updateProgress, 250);
-    return () => window.clearInterval(timer);
-  }, [processing, processingComplete, processingMinDurationMs]);
   useEffect(() => () => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
   }, []);
@@ -133,7 +120,6 @@ export default function SubscriberIdentityImport({
     setProcessing(false);
     setProcessingComplete(false);
     setProcessingProgress(0);
-    processingStartedAtRef.current = null;
     setSnapiStatus(scannerModels.length ? "القارئ جاهز." : "أُوقفت العملية؛ أعد فحص القارئ.");
     setMessage("");
     setError("");
@@ -295,7 +281,6 @@ export default function SubscriberIdentityImport({
     setProcessingComplete(false);
     setProcessingProgress(0);
     setClosingProcessing(false);
-    processingStartedAtRef.current = null;
     statusPollController.current?.abort();
     if (scannerModels.length) setSnapiStatus("القارئ جاهز.");
     setError("");
@@ -324,16 +309,11 @@ export default function SubscriberIdentityImport({
       if (!reader) throw new Error("تعذر استقبال نتيجة القارئ.");
       const decoder = new TextDecoder();
       let pending = "";
-      let processingStartedAt: number | null = null;
       const resultHolder: { value: Record<string, unknown> | null } = { value: null };
       const handleEvent = (line: string) => {
         if (!line.trim()) return;
         const event = JSON.parse(line) as { type?: string; stage?: string; result?: Record<string, unknown> };
         if (event.type === "progress" && event.stage === "processing") {
-          if (processingStartedAt === null) {
-            processingStartedAt = Date.now();
-            processingStartedAtRef.current = processingStartedAt;
-          }
           setProcessing(true);
         }
         if (event.type === "result" && event.result) resultHolder.value = event.result;
@@ -401,22 +381,6 @@ export default function SubscriberIdentityImport({
       }
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
-      if (processingStartedAt !== null) {
-        const remaining = processingMinDurationMs - (Date.now() - processingStartedAt);
-        if (remaining > 0) {
-          await new Promise<void>((resolve, reject) => {
-            const timer = window.setTimeout(() => {
-              controller.signal.removeEventListener("abort", abortWait);
-              resolve();
-            }, remaining);
-            const abortWait = () => {
-              window.clearTimeout(timer);
-              reject(new DOMException("Aborted", "AbortError"));
-            };
-            controller.signal.addEventListener("abort", abortWait, { once: true });
-          });
-        }
-      }
       scanSucceeded = true;
       setProcessingProgress(100);
       setProcessingComplete(true);
@@ -439,12 +403,11 @@ export default function SubscriberIdentityImport({
           if (!scanSucceeded) {
             setProcessing(false);
             setProcessingProgress(0);
-            processingStartedAtRef.current = null;
           }
         }
       }
     }
-  }, [currentValues, onApply, onNameChange, onIdentityDocumentChange, processingMinDurationMs, scannerModels]);
+  }, [currentValues, onApply, onNameChange, onIdentityDocumentChange, scannerModels]);
 
   useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
@@ -583,7 +546,6 @@ export default function SubscriberIdentityImport({
       setProcessingComplete(false);
       setProcessingProgress(0);
       setClosingProcessing(false);
-      processingStartedAtRef.current = null;
       setMessage("");
       closeProcessingTimerRef.current = null;
     }, 180);
@@ -749,7 +711,7 @@ export default function SubscriberIdentityImport({
           <span>{step.label}</span>{step.file&&<span className="mr-auto">تم</span>}
         </div>)}
       </div>
-      <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @keyframes identityCameraPulse { 0%,100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.08); opacity: .18; } } .identity-camera-pulse { animation: identityCameraPulse 1.8s ease-in-out infinite; } .identity-camera-icon { animation: identityCameraPulse 1.8s ease-in-out infinite; } @media (prefers-reduced-motion: reduce) { .identity-laser,.identity-camera-pulse,.identity-camera-icon { animation: none !important; } }`}</style>
+      <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @keyframes identityCameraPulse { 0%,100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.08); opacity: .18; } } @keyframes identityProgressSweep { 0% { transform: translateX(260%); } 100% { transform: translateX(-260%); } } .identity-camera-pulse { animation: identityCameraPulse 1.8s ease-in-out infinite; } .identity-camera-icon { animation: identityCameraPulse 1.8s ease-in-out infinite; } .identity-progress-indeterminate { width: 38%; animation: identityProgressSweep 1.25s ease-in-out infinite; } @media (prefers-reduced-motion: reduce) { .identity-laser,.identity-camera-pulse,.identity-camera-icon,.identity-progress-indeterminate { animation: none !important; } }`}</style>
     </section>
     <section className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10" aria-label="صور الهوية الاختيارية">
       <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">معاينة أو اختيار صور الوجهين</p>
@@ -813,10 +775,10 @@ export default function SubscriberIdentityImport({
         </div>
         {!processingComplete&&<p className="mt-3 text-[10px] font-medium text-blue-700 dark:text-blue-200">لا تغلق الصفحة ولا تعِد تحميلها أثناء المعالجة.</p>}
         <div className="mt-3 flex items-center gap-3">
-          <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={processingProgress}>
-            <span className={`block h-full rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none ${processingComplete ? "bg-emerald-500" : "bg-gradient-to-r from-sky-500 to-blue-700"}`} style={{ width: `${processingProgress}%` }}/>
+          <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10" role="progressbar" aria-label={processingComplete ? "اكتملت معالجة بيانات الهوية" : "جارٍ معالجة بيانات الهوية"} aria-valuemin={0} aria-valuemax={100} {...(processingComplete ? {"aria-valuenow": processingProgress} : {})}>
+            <span className={`block h-full rounded-full ${processingComplete ? "bg-emerald-500" : "identity-progress-indeterminate bg-gradient-to-r from-sky-500 to-blue-700"}`} style={processingComplete ? { width: `${processingProgress}%` } : undefined}/>
           </div>
-          <span className={`w-10 text-left text-[10px] font-bold tabular-nums ${processingComplete ? "text-emerald-600 dark:text-emerald-300" : "text-blue-700 dark:text-blue-200"}`} dir="ltr">{processingProgress}%</span>
+          <span className={`w-10 text-left text-[10px] font-bold tabular-nums ${processingComplete ? "text-emerald-600 dark:text-emerald-300" : "text-blue-700 dark:text-blue-200"}`} dir="ltr">{processingComplete ? "100%" : "جارٍ"}</span>
         </div>
         <div className="mt-4 flex justify-end">
           {processingComplete
