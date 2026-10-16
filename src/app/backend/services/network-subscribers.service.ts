@@ -34,6 +34,16 @@ async function decodeIdentityImage(value:any){
  catch{throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityImages:'تعذر قراءة صورة الهوية. اختر صورة واضحة بصيغة JPG أو PNG أو WebP.'}});}
 }
 const latinDigits=(value:string)=>value.replace(/[٠-٩۰-۹]/g,digit=>String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".indexOf(digit)%10));
+function normalizeNationalNumber(value:any){
+ const raw=text(value,50,'identityDocument',true)!;
+ const normalized=latinDigits(raw).replace(/[\s-]/g,'');
+ if(!/^\d{1,50}$/.test(normalized))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityDocument:'الرقم الوطني يجب أن يحتوي على أرقام فقط.'}});
+ return normalized;
+}
+async function ensureNationalNumberAvailable(app:any,nationalNumber:string,exceptCustomerId?:number){
+ const [rows]:any=await app.query(`SELECT customer_id FROM customer_identity_documents WHERE national_number=? ${exceptCustomerId?'AND customer_id<>?':''} LIMIT 1 FOR UPDATE`,exceptCustomerId?[nationalNumber,exceptCustomerId]:[nationalNumber]);
+ if(rows[0])throw new Error('SUBSCRIBER_NATIONAL_NUMBER_EXISTS');
+}
 function splitBirthPlaceDate(value:any){
  const raw=String(value??'').trim();
  const normalized=latinDigits(raw);
@@ -104,7 +114,7 @@ export async function createNetworkSubscriber(scope:any,input:any){
    fatherName:text(identityInput.fatherName,100,'fatherName'),
    motherName:text(identityInput.motherName,100,'motherName'),
    birthPlaceDate:text(identityInput.birthPlaceDate,160,'birthPlaceDate'),
-   nationalNumber:text(identityInput.nationalNumber,50,'nationalNumber',true)!,
+   nationalNumber:normalizeNationalNumber(identityInput.nationalNumber),
   }:null;
   if(isIdentityEntry&&!identityDocument)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityDocument:'اقرأ باركود الهوية قبل حفظ الملف.'}});
   const latitude=coord(input.latitude,-90,90,'latitude'),longitude=coord(input.longitude,-180,180,'longitude');
@@ -120,6 +130,7 @@ export async function createNetworkSubscriber(scope:any,input:any){
   }:null;
   await app.beginTransaction();
   try{
+   if(identityDocument)await ensureNationalNumberAvailable(app,identityDocument.nationalNumber);
    if(categoryId!==null){
     const [allowed]:any=await app.query(`SELECT c.id FROM customer_categories c JOIN customer_category_manager_assignments a ON a.category_id=c.id
      WHERE c.id=? AND c.archived_at IS NULL AND a.manager_id=? FOR UPDATE`,[categoryId,managerId]);
@@ -192,7 +203,7 @@ export async function verifyNetworkSubscriberIdentity(scope:any,input:any){
    fatherName:text(raw.fatherName,100,'fatherName'),
    motherName:text(raw.motherName,100,'motherName'),
    birthPlaceDate:text(raw.birthPlaceDate,160,'birthPlaceDate'),
-   nationalNumber:text(raw.nationalNumber,50,'nationalNumber',true)!,
+   nationalNumber:normalizeNationalNumber(raw.nationalNumber),
   };
   const uploadedIdentityImages={
    front:await decodeIdentityImage(input.identityImages?.front),
@@ -202,11 +213,16 @@ export async function verifyNetworkSubscriberIdentity(scope:any,input:any){
   try{
    const [customers]:any=await app.query(`SELECT id,manager_id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL ${access.role==='principal'?'':'AND manager_id=?'} FOR UPDATE`,access.role==='principal'?[id]:[id,managerId]);
    const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
+   await ensureNationalNumberAvailable(app,identityDocument.nationalNumber,id);
    const {birthPlace,birthDate}=splitBirthPlaceDate(identityDocument.birthPlaceDate);
-   await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,front_image_data,back_image_data,capture_method,updated_by_manager_id)
-    VALUES(?,?,?,?,?,?,?,?,?,?,'qr',?)
-    ON DUPLICATE KEY UPDATE first_name=VALUES(first_name),last_name=VALUES(last_name),father_name=VALUES(father_name),mother_name=VALUES(mother_name),birth_place=VALUES(birth_place),birth_date=VALUES(birth_date),national_number=VALUES(national_number),front_image_data=COALESCE(VALUES(front_image_data),front_image_data),back_image_data=COALESCE(VALUES(back_image_data),back_image_data),capture_method='qr',updated_by_manager_id=VALUES(updated_by_manager_id)`,
-    [id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,uploadedIdentityImages.front,uploadedIdentityImages.back,scope.managerId]);
+   const [existingIdentity]:any=await app.query('SELECT customer_id FROM customer_identity_documents WHERE customer_id=? FOR UPDATE',[id]);
+   if(existingIdentity[0]){
+    await app.query(`UPDATE customer_identity_documents SET first_name=?,last_name=?,father_name=?,mother_name=?,birth_place=?,birth_date=?,national_number=?,front_image_data=COALESCE(?,front_image_data),back_image_data=COALESCE(?,back_image_data),capture_method='qr',updated_by_manager_id=? WHERE customer_id=?`,
+     [firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,uploadedIdentityImages.front,uploadedIdentityImages.back,scope.managerId,id]);
+   }else{
+    await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,front_image_data,back_image_data,capture_method,updated_by_manager_id)
+     VALUES(?,?,?,?,?,?,?,?,?,?,'qr',?)`,[id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,uploadedIdentityImages.front,uploadedIdentityImages.back,scope.managerId]);
+   }
    const snapshot=JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role});
    const after=JSON.stringify({identityVerified:true,nationalNumber:identityDocument.nationalNumber,frontImage:Boolean(uploadedIdentityImages.front),backImage:Boolean(uploadedIdentityImages.back)});
    await app.query(`INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,after_data,result)

@@ -85,6 +85,7 @@ const subscriberMessage=(e:any)=>{
  if(code==='SUBSCRIBER_INPUT')return 'راجع البيانات المدخلة.';
  if(code==='SUBSCRIBER_CATEGORY_UNAVAILABLE')return 'التصنيف غير مسند إلى مدير المشترك.';
  if(code==='SUBSCRIBER_NOT_FOUND')return 'المشترك غير موجود أو لا تملك صلاحية الوصول إليه.';
+ if(code==='SUBSCRIBER_NATIONAL_NUMBER_EXISTS')return 'الرقم الوطني مسجل مسبقًا على ملف مشترك آخر.';
  if(e?.code==='ER_DUP_ENTRY')return 'الرقم الوطني مسجل مسبقًا على ملف مشترك آخر.';
  return 'تعذر حفظ بيانات المشترك.';
 };
