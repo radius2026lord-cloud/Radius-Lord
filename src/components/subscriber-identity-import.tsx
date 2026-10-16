@@ -347,8 +347,14 @@ export default function SubscriberIdentityImport({
       const names: IdentityValues = {};
       const firstName = nextFields[0]?.value?.trim() || found.firstName?.trim() || "";
       const lastName = nextFields[1]?.value?.trim() || found.lastName?.trim() || "";
-      if (!currentValues.firstName?.trim() && firstName) names.firstName = firstName;
-      if (!currentValues.lastName?.trim() && lastName) names.lastName = lastName;
+      if (!currentValues.firstName?.trim() && firstName) {
+        names.firstName = firstName;
+        onNameChange("firstName", firstName);
+      }
+      if (!currentValues.lastName?.trim() && lastName) {
+        names.lastName = lastName;
+        onNameChange("lastName", lastName);
+      }
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
       if (processingStartedAt !== null) {
@@ -394,7 +400,7 @@ export default function SubscriberIdentityImport({
         }
       }
     }
-  }, [currentValues, onApply, onIdentityDocumentChange, scannerModels]);
+  }, [currentValues, onApply, onNameChange, onIdentityDocumentChange, scannerModels]);
 
   useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
