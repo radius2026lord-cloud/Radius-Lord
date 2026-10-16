@@ -12,6 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_barcode_processor import scanner_connection, scanner_ids_and_models, scanner_status_value
 
+BRIDGE_VERSION = "0.2.0"
+
 
 def scanner_image_data_bytes(image_data, size):
     if isinstance(image_data, bytes):
@@ -157,7 +159,9 @@ def handle(message):
         return {"ok": False, "error": "native_message_invalid"}
     action = message.get("action")
     if action == "scanner-status":
-        return scanner_connection()
+        result = scanner_connection()
+        result["bridgeVersion"] = BRIDGE_VERSION
+        return result
     if action == "scanner-capture-image":
         return capture_scanner_image(timeout_seconds=55)
     return {"ok": False, "error": "native_action_unsupported"}

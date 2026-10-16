@@ -5,6 +5,7 @@ type IdentityScannerResult = {
   error?: string;
   scannerCount?: number;
   scannerModels?: string[];
+  bridgeVersion?: string;
   imageBase64?: string;
   mimeType?: string;
   format?: string;

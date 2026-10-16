@@ -20,6 +20,7 @@ const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-slate-400 focus:border-[#0758e9] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 const PROCESSING_CARD_DURATION_MS = 5000;
+const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.2.0";
 
 export default function SubscriberIdentityImport({
   currentValues,
@@ -50,7 +51,7 @@ export default function SubscriberIdentityImport({
   const [capturingSide, setCapturingSide] = useState<Side | null>(null);
   const [captureExtensionReady, setCaptureExtensionReady] = useState(false);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
-  const [setupIssue, setSetupIssue] = useState<"extension" | "bridge">("extension");
+  const [setupIssue, setSetupIssue] = useState<"extension" | "bridge" | "update">("extension");
   const [checkingSetup, setCheckingSetup] = useState(false);
   const requestController = useRef<AbortController | null>(null);
   const statusPollController = useRef<AbortController | null>(null);
@@ -366,6 +367,15 @@ export default function SubscriberIdentityImport({
 
     try {
       const result = await requestIdentityScanner("scanner-status", 3000);
+      if (result.bridgeVersion !== REQUIRED_IDENTITY_BRIDGE_VERSION) {
+        setCaptureExtensionReady(false);
+        setSetupIssue("update");
+        if (forcePrompt || !setupPromptedRef.current) {
+          setupPromptedRef.current = true;
+          setSetupDialogOpen(true);
+        }
+        return false;
+      }
       const ready = result.ok === true && Boolean(result.scannerCount);
       setCaptureExtensionReady(ready);
       const bridgeUnavailable = result.ok !== true && result.error !== "scanner_not_found";
@@ -399,12 +409,20 @@ export default function SubscriberIdentityImport({
         return;
       }
       const result = await requestIdentityScanner("scanner-status", 3000);
+      if (result.bridgeVersion !== REQUIRED_IDENTITY_BRIDGE_VERSION) {
+        setCaptureExtensionReady(false);
+        setSetupIssue("update");
+        setupPromptedRef.current = true;
+        setSetupDialogOpen(true);
+        return;
+      }
       const bridgeInstalled = result.ok === true || result.error === "scanner_not_found";
       if (!bridgeInstalled) {
         await checkCaptureExtension(true);
         return;
       }
       setCaptureExtensionReady(result.ok === true && Boolean(result.scannerCount));
+      setupPromptedRef.current = false;
       setSetupDialogOpen(false);
       setMessage(result.ok ? "تم العثور على إضافة الالتقاط والقارئ." : "تم العثور على الإضافة؛ تحقق من توصيل القارئ وضبطه على SNAPI.");
     } catch {
@@ -564,25 +582,33 @@ export default function SubscriberIdentityImport({
     <ProjectDialog
       open={setupDialogOpen}
       onClose={() => setSetupDialogOpen(false)}
-      title={setupIssue === "extension" ? "إضافة التقاط الهوية غير مثبتة" : "برنامج ربط القارئ غير جاهز"}
-      description="يحتاج التقاط صور الهوية إلى إضافة Chrome وبرنامج الربط المحلي على لابتوب يعمل بنظام Windows."
+      title={setupIssue === "extension" ? "إضافة التقاط الهوية غير مثبتة" : setupIssue === "update" ? "يتوفر تحديث لجسر قارئ الهوية" : "برنامج ربط القارئ غير جاهز"}
+      description={setupIssue === "update" ? "نسخة برنامج الربط المحلية أقدم من المطلوبة لالتقاط صور الهوية. نزّل التحديث وشغّل المثبّت على هذا اللابتوب." : "يحتاج التقاط صور الهوية إلى إضافة Chrome وبرنامج الربط المحلي على لابتوب يعمل بنظام Windows."}
       maxWidth="max-w-xl"
       footer={<><ProjectButton type="button" variant="secondary" onClick={() => setSetupDialogOpen(false)}>المتابعة بدون تثبيت</ProjectButton><ProjectButton type="button" disabled={checkingSetup} onClick={() => void recheckInstallation()}><Usb/>{checkingSetup ? "جارٍ التحقق…" : "أعد التحقق"}</ProjectButton></>}
     >
       <p className="text-xs leading-6 text-slate-600 dark:text-slate-300">
         {setupIssue === "extension"
           ? "لم يتمكن الموقع من اكتشاف إضافة Lord Radius في هذا المتصفح. نزّل حزمة التثبيت واتبع الخطوات أدناه."
-          : "تم اكتشاف إضافة المتصفح، لكن برنامج الربط المحلي لا يستجيب. أعد تشغيل المثبّت من الحزمة ثم أعد تحميل صفحة الموقع."}
+          : setupIssue === "update"
+            ? "اكتشف الموقع أن برنامج الربط المحلي يحتاج تحديثًا. نزّل الحزمة الجديدة وشغّل المثبّت؛ ستبقى صور الهوية مؤقتة داخل الصفحة."
+            : "تم اكتشاف إضافة المتصفح، لكن برنامج الربط المحلي لا يستجيب. أعد تشغيل المثبّت من الحزمة ثم أعد تحميل صفحة الموقع."}
       </p>
       <ol className="mt-4 space-y-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-[11px] leading-6 text-blue-950 dark:border-blue-300/10 dark:bg-blue-500/[.06] dark:text-blue-100">
-        <li>١. نزّل الحزمة واختر «استخراج الكل» على لابتوب Windows؛ لا تشغّل ملف BAT من داخل عارض ZIP أو RAR.</li>
-        <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
-        <li>٣. في Chrome فعّل <bdi dir="ltr">Developer mode</bdi> ثم اختر <bdi dir="ltr">Load unpacked</bdi> وحدد مجلد الإضافة الذي يطبعه المثبّت.</li>
-        <li>٤. أعد تحميل صفحة الموقع، ثم اضغط «أعد التحقق».</li>
+        {setupIssue === "update" ? <>
+          <li>١. نزّل الحزمة الجديدة واختر «استخراج الكل»؛ لا تشغّل ملف BAT من داخل ZIP أو RAR.</li>
+          <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
+          <li>٣. بعد اكتمال التثبيت أعد تحميل هذه الصفحة واضغط «أعد التحقق»؛ لا حاجة لإعادة إضافة مجلد Chrome إذا كانت الإضافة مثبتة.</li>
+        </> : <>
+          <li>١. نزّل الحزمة واختر «استخراج الكل» على لابتوب Windows؛ لا تشغّل ملف BAT من داخل عارض ZIP أو RAR.</li>
+          <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
+          <li>٣. في Chrome فعّل <bdi dir="ltr">Developer mode</bdi> ثم اختر <bdi dir="ltr">Load unpacked</bdi> وحدد مجلد الإضافة الذي يطبعه المثبّت.</li>
+          <li>٤. أعد تحميل صفحة الموقع، ثم اضغط «أعد التحقق».</li>
+        </>}
       </ol>
       <p className="mt-3 text-[10px] leading-5 text-slate-500">تأكد كذلك من تثبيت تعريف قارئ Z‑3052 وضبطه على SNAPI مع Imaging Interface. يبقى الإدخال اليدوي متاحًا دون تثبيت.</p>
       <a href="/downloads/lord-radius-identity-scanner-setup.zip" download className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-[14px] bg-[#0758e9] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#064fd1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/40">
-        <Download className="h-4 w-4"/>تنزيل حزمة التثبيت
+        <Download className="h-4 w-4"/>{setupIssue === "update" ? "تنزيل تحديث الجسر" : "تنزيل حزمة التثبيت"}
       </a>
     </ProjectDialog>
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -606,7 +632,7 @@ export default function SubscriberIdentityImport({
       </div>
       <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `ضع ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} أمام القارئ؛ سيبدأ الالتقاط تلقائيًا.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
     </div>
-    <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
+    <details open={Boolean(front || back)} className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">صور وجهي الهوية (اختياري)</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {([{ side: "front" as const, title: "الوجه الأمامي", file: front, url: frontUrl }, { side: "back" as const, title: "الوجه الخلفي", file: back, url: backUrl }]).map(({ side, title, file, url }) => <div key={side} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-white/10">
