@@ -162,8 +162,17 @@ export default function NetworkSubscribers({endpoint,tab="list",onTabChange,canC
   setDraft(current=>mode==="identity"?{...current,firstName:"",lastName:"",phone:"",address:""}:{...current,phone:"",address:""});
  };
  const review=()=>{
-  if(!draft.firstName.trim()||!draft.lastName.trim()){setFieldError("أدخل الاسم والكنية للمتابعة.");return;}
+  // In identity mode the scanner owns the visible first/last-name inputs.
+  // Read those displayed values at the review boundary so a stale parent draft
+  // can never reject names that have already been filled by barcode decoding.
+  const identityNameInputs=entryMode==="identity"
+   ? document.querySelector('[aria-label="بيانات الهوية"]')?.querySelectorAll<HTMLInputElement>("input")
+   : undefined;
+  const firstName=(identityNameInputs?.[0]?.value||draft.firstName).trim();
+  const lastName=(identityNameInputs?.[1]?.value||draft.lastName).trim();
+  if(!firstName||!lastName){setFieldError("تحقق من حقلي الاسم والكنية في بيانات الهوية.");return;}
   if(entryMode==="identity"){
+   setDraft(current=>({...current,firstName,lastName}));
    if(identityDocument?.captureMethod!=="qr"){setFieldError("اقرأ باركود الهوية قبل متابعة الحفظ.");return;}
    if(!identityDocument.nationalNumber.trim()){setFieldError("أكمل الرقم الوطني المستخرج من الهوية قبل الحفظ.");return;}
    if(!draft.phone.trim()||!draft.address.trim()){setFieldError("في إدخال الهوية، أكمل رقم الهاتف والعنوان يدويًا.");return;}
