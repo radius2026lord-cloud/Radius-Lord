@@ -21,7 +21,7 @@ const panelClass = "rounded-2xl border border-slate-200 bg-white p-4 dark:border
 const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] dark:border-white/15 dark:bg-[#17263b] dark:text-[#dce8fa]";
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 // Show progress while decoding, but never hold the completed form for an artificial delay.
-const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.1";
+const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.0";
 const SETUP_PROMPT_STORAGE_KEY = "rl:identity-scanner-setup-prompted-v1";
 
 export default function SubscriberIdentityImport({
@@ -219,10 +219,6 @@ export default function SubscriberIdentityImport({
       if (result.ok !== true || !result.imageBase64) {
         throw new Error(result.error === "scanner_image_capture_timeout"
           ? "انتهت مهلة التصوير؛ تعرّف النظام على القارئ لكنه لم يستقبل صورة. تحقق من وضع SNAPI مع واجهة التصوير وتعريفه."
-          : result.error === "scanner_snapi_imaging_required"
-            ? "ظهر القارئ، لكن اتصال التصوير SNAPI غير متاح. أعد ضبطه على SNAPI مع Imaging Interface ثم أعد فحصه."
-          : result.error === "scanner_image_transfer_failed"
-            ? "بدأ القارئ التصوير، لكن تعذر نقل الصورة. أعد توصيله وتحقق من تعريف SNAPI Imaging."
           : result.error === "scanner_image_trigger_failed"
             ? "وصل طلب التصوير، لكن القارئ لم يبدأ الالتقاط. تحقق من تعريف SNAPI وأعد توصيل القارئ."
           : result.error === "identity_native_host_disconnected"
@@ -727,44 +723,26 @@ export default function SubscriberIdentityImport({
       </div>
       <div className="mt-2 flex justify-end"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح الصور والنتيجة المؤقتة</ProjectButton></div>
     </section>
-    {positioningSide&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10002] grid place-items-center bg-slate-950/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="identity-capture-title">
-      <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#142338]">
-        <header className="shrink-0 border-b border-slate-200 p-4 dark:border-white/10">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><Camera className="h-4 w-4 identity-camera-icon"/></span>
-              <div className="min-w-0"><h3 id="identity-capture-title" className="text-sm font-bold text-[#17386d] dark:text-slate-100">تصوير وجهي الهوية</h3><p className="mt-0.5 text-[10px] text-slate-500">الخطوة {positioningSide === "front" ? "١ من ٢" : "٢ من ٢"}</p></div>
+    <ProjectDialog open={Boolean(positioningSide)} title="تصوير وجهي الهوية" description={`الخطوة ${positioningSide === "front" ? "١ من ٢ — الوجه الأمامي" : "٢ من ٢ — الوجه الخلفي"}`} onClose={()=>showCaptureDialog(null)} busy={working} maxWidth="max-w-xl" headerDetails={<div className="mt-3 grid grid-cols-2 gap-2">{([{ side: "front" as const, label: "١. الوجه الأمامي", file: front }, { side: "back" as const, label: "٢. الوجه الخلفي", file: back }]).map(step=><div key={step.side} className={`flex min-h-9 items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-semibold ${step.file ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200" : positioningSide === step.side ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-300/20 dark:bg-blue-500/10 dark:text-blue-100" : "border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/[.02]"}`}><span>{step.file?<BadgeCheck className="h-3.5 w-3.5"/>:step.label}</span>{step.file&&<span>{step.label.split(". ")[1]} — تم</span>}</div>)}</div>} footer={positioningSide?<><ProjectTooltip label={`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا من القارئ`}><span className="block"><ProjectButton type="button" className="w-full" disabled={Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(positioningSide)}><Camera/>{capturingSide===positioningSide?"جارٍ التقاط الصورة…":`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"}`}</ProjectButton></span></ProjectTooltip>{working&&<ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}</>:null}>
+      {positioningSide&&<div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200"><span>وجّه {positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار القارئ</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[9px] text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">{positioningSide === "back" ? "الخطوة الثانية" : "الخطوة الأولى"}</span></div>
+        <div className="relative mx-auto grid aspect-[1.65/1] w-full max-w-sm place-items-center overflow-hidden rounded-xl border-2 border-dashed border-blue-400 bg-slate-950 px-8 shadow-inner dark:border-blue-300/70">
+          <div className="relative grid aspect-[1.6/1] w-full place-items-center overflow-hidden rounded-lg border border-white/30 bg-gradient-to-br from-slate-700 to-slate-900 shadow-xl">
+            <span className="text-center text-[10px] font-semibold tracking-wide text-white/80">{positioningSide === "back" ? "وجّه منطقة الباركود نحو القارئ" : "وجّه بيانات الهوية نحو القارئ"}</span>
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+              <span className="identity-laser absolute inset-x-0 top-1/2 h-px bg-red-300/70 shadow-[0_0_8px_2px_rgba(248,113,113,.6)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out infinite" }}/>
+              <span className="identity-laser absolute inset-x-0 top-1/2 h-0.5 bg-red-400 shadow-[0_0_12px_4px_rgba(248,113,113,.85)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out -0.7s infinite" }}/>
+              <span className="identity-laser absolute inset-x-0 top-1/2 h-px bg-rose-200/70 shadow-[0_0_8px_2px_rgba(251,113,133,.65)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out -1.4s infinite" }}/>
             </div>
-            <button type="button" disabled={working} onClick={()=>showCaptureDialog(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-white/10" aria-label="إغلاق التصوير"><X className="h-4 w-4"/></button>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {([{ side: "front" as const, label: "١. الوجه الأمامي", file: front }, { side: "back" as const, label: "٢. الوجه الخلفي", file: back }]).map(step=><div key={step.side} className={`flex min-h-9 items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-semibold ${step.file ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200" : positioningSide === step.side ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-300/20 dark:bg-blue-500/10 dark:text-blue-100" : "border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/[.02]"}`}><span>{step.file?<BadgeCheck className="h-3.5 w-3.5"/>:step.label}</span>{step.file&&<span>{step.label.split(". ")[1]} — تم</span>}</div>)}
-          </div>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200"><span>وجّه {positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار القارئ</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[9px] text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">{positioningSide === "back" ? "الخطوة الثانية" : "الخطوة الأولى"}</span></div>
-          <div className="relative mx-auto mt-3 grid aspect-[1.65/1] w-full max-w-sm place-items-center overflow-hidden rounded-xl border-2 border-dashed border-blue-400 bg-slate-950 px-8 shadow-inner dark:border-blue-300/70">
-            <div className="relative grid aspect-[1.6/1] w-full place-items-center overflow-hidden rounded-lg border border-white/30 bg-gradient-to-br from-slate-700 to-slate-900 shadow-xl">
-              <span className="text-center text-[10px] font-semibold tracking-wide text-white/80">{positioningSide === "back" ? "وجّه منطقة الباركود نحو القارئ" : "وجّه بيانات الهوية نحو القارئ"}</span>
-              <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-                <span className="identity-laser absolute inset-x-0 top-1/2 h-px bg-red-300/70 shadow-[0_0_8px_2px_rgba(248,113,113,.6)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out infinite" }}/>
-                <span className="identity-laser absolute inset-x-0 top-1/2 h-0.5 bg-red-400 shadow-[0_0_12px_4px_rgba(248,113,113,.85)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out -0.7s infinite" }}/>
-                <span className="identity-laser absolute inset-x-0 top-1/2 h-px bg-rose-200/70 shadow-[0_0_8px_2px_rgba(251,113,133,.65)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out -1.4s infinite" }}/>
-              </div>
-            </div>
-            <span className="pointer-events-none absolute inset-2 rounded-lg border border-blue-300/30"/>
-          </div>
-          {positioningSide === "back"&&frontUrl&&<div className="mx-auto mt-3 flex max-w-sm items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-2 dark:border-emerald-300/10 dark:bg-emerald-500/[.06]"><Image src={frontUrl} alt="معاينة الوجه الأمامي الملتقط" width={88} height={56} unoptimized className="h-14 w-20 rounded-lg border border-emerald-200 object-contain dark:border-white/10"/><span className="text-[10px] font-medium text-emerald-800 dark:text-emerald-200">تم حفظ معاينة الوجه الأمامي مؤقتًا. اقلب الهوية لتصوير الجهة الخلفية.</span></div>}
-          <p className="mt-2 text-center text-[10px] leading-5 text-slate-500 dark:text-slate-400">حرّك الهوية حتى تستقر كاملة داخل الحدود تحت خطوط المسح.</p>
-          {error&&<p role="alert" className="mt-2 rounded-xl bg-red-50 p-2.5 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200">{error}</p>}
+          <span className="pointer-events-none absolute inset-2 rounded-lg border border-blue-300/30"/>
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-[#142338]">
-          <ProjectTooltip label={`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا من القارئ`}><span className="block"><ProjectButton type="button" className="w-full" disabled={Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(positioningSide)}><Camera/>{capturingSide===positioningSide?"جارٍ التقاط الصورة…":`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"}`}</ProjectButton></span></ProjectTooltip>
-          {working&&<ProjectButton type="button" variant="secondary" className="mt-2 w-full" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
-        </footer>
-        <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @media (prefers-reduced-motion: reduce) { .identity-laser { animation: none !important; } }`}</style>
-      </section>
-    </div>, document.body)}
+        {positioningSide === "back"&&frontUrl&&<div className="mx-auto flex max-w-sm items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-2 dark:border-emerald-300/10 dark:bg-emerald-500/[.06]"><Image src={frontUrl} alt="معاينة الوجه الأمامي الملتقط" width={88} height={56} unoptimized className="h-14 w-20 rounded-lg border border-emerald-200 object-contain dark:border-white/10"/><span className="text-[10px] font-medium text-emerald-800 dark:text-emerald-200">تم حفظ معاينة الوجه الأمامي مؤقتًا. اقلب الهوية لتصوير الجهة الخلفية.</span></div>}
+        <p className="text-center text-[10px] leading-5 text-slate-500 dark:text-slate-400">حرّك الهوية حتى تستقر كاملة داخل الحدود تحت خطوط المسح.</p>
+        {error&&<p role="alert" className="rounded-xl bg-red-50 p-2.5 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200">{error}</p>}
+      </div>}
+      <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @media (prefers-reduced-motion: reduce) { .identity-laser { animation: none !important; } }`}</style>
+    </ProjectDialog>
 
     {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10004] grid place-items-center p-4 transition-[opacity,background-color,backdrop-filter] duration-200 ${processingComplete ? "pointer-events-none bg-transparent backdrop-blur-0" : "bg-slate-950/45 backdrop-blur-[2px]"} ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal={!processingComplete} aria-labelledby="identity-processing-title">
       <section className={`pointer-events-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
