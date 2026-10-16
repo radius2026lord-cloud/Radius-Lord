@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import Image from "next/image";
 import { Activity, ArrowLeft, BadgeCheck, CalendarDays, Check, CheckCircle2, ChevronDown, CircleX, Clock3, CreditCard, FileText, Hash, Images, Laptop, MapPin, Phone, Plus, Radio, Router, ScanLine, Server, ShieldAlert, ShieldCheck, SlidersHorizontal, Tags, UserRound, Users, Wifi, WifiOff, X } from "lucide-react";
-import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionSelectionBox, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, CollectionSelectionBox, useCollectionDisplay } from "@/components/ui/collection-display";
 import { ProjectCardIcon, ProjectInfoCard } from "@/components/ui/project-info-card";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
