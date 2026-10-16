@@ -20,6 +20,21 @@ const coord=(value:any,low:number,high:number,field:string)=>{
  return n;
 };
 function paymentCode(){return 'C'+String(randomInt(0,10000000000)).padStart(10,'0');}
+const latinDigits=(value:string)=>value.replace(/[٠-٩۰-۹]/g,digit=>String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".indexOf(digit)%10));
+function splitBirthPlaceDate(value:any){
+ const raw=String(value??'').trim();
+ const normalized=latinDigits(raw);
+ const match=/(\d{1,4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,4})/.exec(normalized);
+ if(!match)return {birthPlace:raw||null,birthDate:null};
+ const parts=match.slice(1).map(Number);
+ const year=match[1].length===4?parts[0]:parts[2];
+ const month=parts[1];
+ const day=match[1].length===4?parts[2]:parts[0];
+ const date=new Date(Date.UTC(year,month-1,day));
+ const valid=year>=1900&&year<=new Date().getUTCFullYear()&&date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
+ const birthPlace=raw.replace(match[0],'').replace(/^[\s#,:;،.\-/]+|[\s#,:;،.\-/]+$/g,'').trim();
+ return {birthPlace:birthPlace||null,birthDate:valid?`${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`:null};
+}
 
 export async function readNetworkSubscribers(scope:any){
  return withNetwork(scope,async app=>{
@@ -27,6 +42,7 @@ export async function readNetworkSubscribers(scope:any){
   if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
   const where=principal?'':'WHERE c.manager_id=?',params=principal?[]:[managerId];
   const [items]:any=await app.query(`SELECT c.id,c.manager_id,c.first_name,c.last_name,c.phone,c.address,c.latitude,c.longitude,c.notes,c.status,c.created_at,
+    EXISTS(SELECT 1 FROM customer_identity_documents d WHERE d.customer_id=c.id AND d.capture_method='qr') identity_verified,
     (SELECT COUNT(*) FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.archived_at IS NULL) pppoe_count,
     (SELECT COUNT(*) FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL) hotspot_count,
     (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships m JOIN customer_categories cat ON cat.id=m.category_id WHERE m.customer_id=c.id AND cat.archived_at IS NULL) categories
@@ -67,6 +83,13 @@ export async function createNetworkSubscriber(scope:any,input:any){
   const phone=text(input.phone,15,'phone',true);
   if(!/^[0-9]{1,15}$/.test(phone||''))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{phone:'أدخل أرقام الهاتف فقط وبحد أقصى 15 رقمًا.'}});
   const address=text(input.address,10000,'address',true),notes=text(input.notes,10000,'notes');
+  const identityInput=input.identityDocument&&typeof input.identityDocument==='object'?input.identityDocument:null;
+  const identityDocument=identityInput?.captureMethod==='qr'?{
+   fatherName:text(identityInput.fatherName,100,'fatherName'),
+   motherName:text(identityInput.motherName,100,'motherName'),
+   birthPlaceDate:text(identityInput.birthPlaceDate,160,'birthPlaceDate'),
+   nationalNumber:text(identityInput.nationalNumber,50,'nationalNumber',true)!,
+  }:null;
   const latitude=coord(input.latitude,-90,90,'latitude'),longitude=coord(input.longitude,-180,180,'longitude');
   if((latitude===null)!==(longitude===null))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{latitude:'أدخل خطي العرض والطول معًا.'}});
   const status=String(input.status??'active');
@@ -90,16 +113,21 @@ export async function createNetworkSubscriber(scope:any,input:any){
     }catch(e:any){if(e?.code!=='ER_DUP_ENTRY'||attempt===7)throw e;}
    }
    const id=Number(created.insertId);
+   if(identityDocument){
+    const {birthPlace,birthDate}=splitBirthPlaceDate(identityDocument.birthPlaceDate);
+    await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,capture_method,updated_by_manager_id)
+     VALUES(?,?,?,?,?,?,?,?,'qr',?)`,[id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,scope.managerId]);
+   }
    await app.query(`INSERT INTO customer_address_suggestions(manager_id,address,address_hash)
     VALUES(?,?,UNHEX(SHA2(LOWER(TRIM(?)),256)))
     ON DUPLICATE KEY UPDATE address=VALUES(address),last_used_at=CURRENT_TIMESTAMP`,[managerId,address,address]);
    if(categoryId!==null)await app.query('INSERT INTO customer_category_memberships(customer_id,category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?,?)',[id,categoryId,managerId,scope.managerId]);
    const snapshot=JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role});
-   const after=JSON.stringify({managerId,firstName,lastName,phone,address,latitude,longitude,notes,status,categoryId,paymentCode:code});
+   const after=JSON.stringify({managerId,firstName,lastName,phone,address,latitude,longitude,notes,status,categoryId,paymentCode:code,identityVerified:Boolean(identityDocument)});
    await app.query(`INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,after_data,result)
     VALUES(?,?,'manager','subscribers.create','customer',?,?,?,'success')`,[scope.managerId,snapshot,id,id,after]);
    await app.commit();
-   return {success:true,item:{id,manager_id:managerId,first_name:firstName,last_name:lastName,phone,address,latitude,longitude,notes,status,created_at:new Date().toISOString(),pppoe_count:0,hotspot_count:0,categories:categoryId?null:null,payment_code:code}};
+   return {success:true,item:{id,manager_id:managerId,first_name:firstName,last_name:lastName,phone,address,latitude,longitude,notes,status,created_at:new Date().toISOString(),pppoe_count:0,hotspot_count:0,categories:categoryId?null:null,payment_code:code,identity_verified:Boolean(identityDocument)}};
   }catch(error){
    await app.rollback();
    try{await app.query(`INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,result,failure_code)
@@ -137,6 +165,7 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
   const id=Number(value);
   if(!Number.isSafeInteger(id)||id<1)throw new Error('SUBSCRIBER_INPUT');
   const [customers]:any=await app.query(`SELECT c.id,c.manager_id,c.first_name,c.last_name,c.phone,c.address,c.notes,c.payment_code,c.status,c.created_at,m.full_name manager_name,
+    EXISTS(SELECT 1 FROM customer_identity_documents d WHERE d.customer_id=c.id AND d.capture_method='qr') identity_verified,
     (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships x JOIN customer_categories cat ON cat.id=x.category_id WHERE x.customer_id=c.id AND cat.archived_at IS NULL) categories
    FROM customers c LEFT JOIN managers m ON m.id=c.manager_id
    WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);

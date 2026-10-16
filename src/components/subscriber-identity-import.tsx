@@ -12,7 +12,8 @@ import { detectIdentityScannerExtension, requestIdentityScanner } from "@/lib/id
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
-type IdentityFormField = { label: string; value: string; locked?: boolean };
+export type IdentityDocumentDraft = { fatherName: string; motherName: string; birthPlaceDate: string; nationalNumber: string; captureMethod: "qr" };
+type IdentityFormField = { label: string; value: string };
 type Side = "front" | "back";
 
 const IDENTITY_FIELD_LABELS = ["الاسم", "الكنية", "اسم الأب", "اسم الأم", "محل وتاريخ الولادة", "الرقم الوطني"];
@@ -27,11 +28,13 @@ export default function SubscriberIdentityImport({
   currentValues,
   onApply,
   onNameChange,
+  onIdentityDocumentChange,
   onBackToList,
 }: {
   currentValues: IdentityValues;
   onApply: (values: IdentityValues) => void;
   onNameChange: (field: IdentityField, value: string) => void;
+  onIdentityDocumentChange: (value: IdentityDocumentDraft | null) => void;
   onBackToList: () => void;
 }) {
   const [front, setFront] = useState<File | null>(null);
@@ -192,11 +195,11 @@ export default function SubscriberIdentityImport({
         type: result.mimeType || "image/jpeg",
       });
       setSideFile(side, capturedFile);
-      setPositioningSide(side === "front" ? "back" : null);
+      setPositioningSide(side === "front" && !back ? "back" : null);
       setSnapiStatus("القارئ جاهز.");
-      setMessage(side === "front"
+      setMessage(side === "front" && !back
         ? "تم التقاط الوجه الأمامي. انتقل الآن إلى تصوير الوجه الخلفي."
-        : "تم التقاط وجهي الهوية مؤقتًا.");
+        : front || side === "front" ? "تم التقاط وجهي الهوية مؤقتًا. يمكنك مراجعة المعاينتين أو إعادة تصوير أي وجه." : "تم التقاط الوجه الخلفي مؤقتًا.");
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       setSnapiStatus(captureExtensionReady ? "القارئ جاهز." : "القارئ غير جاهز.");
@@ -326,11 +329,15 @@ export default function SubscriberIdentityImport({
           : index === 1
             ? currentValues.lastName?.trim() || found.lastName?.trim() || extracted[index]?.value || ""
             : extracted[index]?.value || "",
-        locked: index < 2
-          ? !currentValues[index === 0 ? "firstName" : "lastName"]?.trim() && Boolean(found[index === 0 ? "firstName" : "lastName"]?.trim() || extracted[index]?.value?.trim())
-          : Boolean(extracted[index]?.value?.trim()),
       }));
       setIdentityFields(nextFields);
+      onIdentityDocumentChange({
+        fatherName: nextFields[2]?.value || "",
+        motherName: nextFields[3]?.value || "",
+        birthPlaceDate: nextFields[4]?.value || "",
+        nationalNumber: nextFields[5]?.value || "",
+        captureMethod: "qr",
+      });
       setScannerModels(Array.isArray(scanResult.scannerModels) ? scanResult.scannerModels as string[] : scannerModels);
       const names: IdentityValues = {};
       if (!currentValues.firstName?.trim() && found.firstName?.trim()) names.firstName = found.firstName.trim();
@@ -380,7 +387,7 @@ export default function SubscriberIdentityImport({
         }
       }
     }
-  }, [currentValues, onApply, scannerModels]);
+  }, [currentValues, onApply, onIdentityDocumentChange, scannerModels]);
 
   useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
@@ -502,6 +509,7 @@ export default function SubscriberIdentityImport({
     autoStartSuppressedRef.current = false;
     hasIdentityBeenReadRef.current = false;
     setBarcodeRead(false);
+    onIdentityDocumentChange(null);
     const ready = await testSnapi();
     if (forceSetupPrompt) await checkCaptureExtension(true);
     if (ready) {
@@ -511,7 +519,15 @@ export default function SubscriberIdentityImport({
   };
 
   const updateIdentityField = (index: number, value: string) => {
-    setIdentityFields((old) => old.map((field, fieldIndex) => fieldIndex === index ? { ...field, value } : field));
+    const nextFields = identityFields.map((field, fieldIndex) => fieldIndex === index ? { ...field, value } : field);
+    setIdentityFields(nextFields);
+    onIdentityDocumentChange(hasIdentityBeenReadRef.current ? {
+      fatherName: nextFields[2]?.value || "",
+      motherName: nextFields[3]?.value || "",
+      birthPlaceDate: nextFields[4]?.value || "",
+      nationalNumber: nextFields[5]?.value || "",
+      captureMethod: "qr",
+    } : null);
     if (index === 0) onNameChange("firstName", value);
     if (index === 1) onNameChange("lastName", value);
   };
@@ -676,7 +692,7 @@ export default function SubscriberIdentityImport({
       <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">معاينة أو اختيار صور الوجهين</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {([{ side: "front" as const, title: "الوجه الأمامي", file: front, url: frontUrl }, { side: "back" as const, title: "الوجه الخلفي", file: back, url: backUrl }]).map(({ side, title, file, url }) => <div key={side} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-white/10">
-        <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span>{file&&<button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button>}</div>
+        <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span><span className="flex items-center gap-1">{file&&<><ProjectTooltip label={`إعادة تصوير ${title}`}><button type="button" disabled={!captureExtensionReady||!barcodeRead||working||processing} className="grid h-7 w-7 place-items-center rounded-lg text-blue-600 hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-500/10" onClick={()=>prepareScannerSide(side)} aria-label={`إعادة تصوير ${title}`}><Camera className="h-4 w-4"/></button></ProjectTooltip><button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button></>}</span></div>
         {url ? <Image src={url} alt={`الصورة الملتقطة: ${title}`} width={320} height={128} unoptimized className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-contain dark:border-white/10"/> : <label className="mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-center text-[10px] text-slate-500 hover:border-blue-300 dark:border-white/15 dark:bg-white/[.02]"><Upload className="h-4 w-4 text-blue-600"/>اختيار صورة {title}<input type="file" accept="image/*" className="sr-only" onChange={(event)=>setSideFile(side,event.target.files?.[0]||null)}/></label>}
       </div>)}
       </div>
@@ -688,7 +704,7 @@ export default function SubscriberIdentityImport({
       <div className="grid gap-3 sm:grid-cols-2">
         {identityFields.map((field, index) => <label key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
           {field.label}{index < 2 && " *"}
-          <ProjectInput required={index < 2} readOnly={field.locked} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={`${inputClass} ${field.locked ? "cursor-not-allowed bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-300" : ""}`} maxLength={index === 5 ? 24 : index === 4 ? 120 : 100} dir="auto"/>
+          <ProjectInput required={index < 2 || (index === 5 && barcodeRead)} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={inputClass} maxLength={index === 5 ? 50 : index === 4 ? 160 : 100} dir="auto"/>
         </label>)}
       </div>
       {message&&<div role="status" aria-live="polite" className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] font-medium text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200"><BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300"/>{message}</div>}

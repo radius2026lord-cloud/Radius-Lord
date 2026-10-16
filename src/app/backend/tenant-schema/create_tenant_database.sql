@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS customer_identity_documents (
   last_name VARCHAR(100) NULL,
   father_name VARCHAR(100) NULL,
   mother_name VARCHAR(100) NULL,
+  birth_place VARCHAR(150) NULL,
   birth_date DATE NULL,
   national_number VARCHAR(50) NULL,
   identity_number VARCHAR(50) NULL,
