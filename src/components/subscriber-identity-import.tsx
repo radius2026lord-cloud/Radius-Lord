@@ -129,7 +129,7 @@ export default function SubscriberIdentityImport({
     setWorking(true);
     setSnapiStatus("جارٍ التقاط صورة الهوية…");
     setError("");
-    setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} تحت القارئ واضغط زر الالتقاط.`);
+    setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} أمام القارئ؛ سيبدأ الالتقاط تلقائيًا.`);
 
     try {
       // Stop PDF417 listening before switching the same SNAPI reader into image mode.
@@ -149,7 +149,9 @@ export default function SubscriberIdentityImport({
       if (controller.signal.aborted) return;
       if (result.ok !== true || !result.imageBase64) {
         throw new Error(result.error === "scanner_image_capture_timeout"
-          ? "انتهت مهلة الالتقاط. ضع الهوية أمام القارئ واضغط زر الالتقاط ثم أعد المحاولة."
+          ? "انتهت مهلة التصوير؛ تعرّف النظام على القارئ لكنه لم يستقبل صورة. تحقق من وضع SNAPI مع واجهة التصوير وتعريفه."
+          : result.error === "scanner_image_trigger_failed"
+            ? "وصل طلب التصوير، لكن القارئ لم يبدأ الالتقاط. تحقق من تعريف SNAPI وأعد توصيل القارئ."
           : result.error === "identity_native_host_disconnected"
             ? "تعذر الاتصال ببرنامج الربط المحلي. أعد تثبيت إضافة التقاط الهوية وافحص اتصال القارئ."
             : "تعذر التقاط الصورة من القارئ. تحقق من وضع SNAPI مع واجهة التصوير.");
@@ -602,7 +604,7 @@ export default function SubscriberIdentityImport({
         {snapiStatus==="القارئ جاهز."?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
         <span>{snapiStatus}</span>
       </div>
-      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `ضع ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} تحت القارئ واضغط زر الالتقاط.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
+      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `ضع ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} أمام القارئ؛ سيبدأ الالتقاط تلقائيًا.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
     </div>
     <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">صور وجهي الهوية (اختياري)</summary>

@@ -49,6 +49,8 @@ def prepare_transport_image(image_bytes):
 def capture_scanner_image(timeout_seconds=55):
     pythoncom = None
     scanner = None
+    scanner_id = None
+    trigger_pulled = False
     try:
         if sys.platform != "win32":
             raise RuntimeError("scanner_windows_only")
@@ -87,6 +89,9 @@ def capture_scanner_image(timeout_seconds=55):
         capture_xml = f"<inArgs><scannerID>{scanner_id}</scannerID></inArgs>"
         if scanner_status_value(scanner.ExecCommand(3000, capture_xml)) != 0:
             return {"ok": False, "error": "scanner_image_capture_failed"}
+        if scanner_status_value(scanner.ExecCommand(2011, capture_xml)) != 0:
+            return {"ok": False, "error": "scanner_image_trigger_failed"}
+        trigger_pulled = True
 
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline and not events.image_bytes:
@@ -111,6 +116,12 @@ def capture_scanner_image(timeout_seconds=55):
         return {"ok": False, "error": "scanner_sdk_unavailable"}
     finally:
         if scanner is not None:
+            if trigger_pulled and scanner_id:
+                try:
+                    release_xml = f"<inArgs><scannerID>{scanner_id}</scannerID></inArgs>"
+                    scanner.ExecCommand(2012, release_xml)
+                except Exception:
+                    pass
             try:
                 scanner.Close(0)
             except Exception:
