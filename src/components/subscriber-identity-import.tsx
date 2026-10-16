@@ -33,7 +33,6 @@ export default function SubscriberIdentityImport({
   onBackToList,
   onCaptureDialogChange,
   renderBeforeCapture,
-  autoDismissProcessing = false,
 }: {
   currentValues: IdentityValues;
   onApply: (values: IdentityValues) => void;
@@ -43,7 +42,6 @@ export default function SubscriberIdentityImport({
   onBackToList: () => void;
   onCaptureDialogChange?: (open: boolean) => void;
   renderBeforeCapture?: ReactNode;
-  autoDismissProcessing?: boolean;
 }) {
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
@@ -105,11 +103,11 @@ export default function SubscriberIdentityImport({
   useEffect(() => () => { if (frontUrl) URL.revokeObjectURL(frontUrl); }, [frontUrl]);
   useEffect(() => () => { if (backUrl) URL.revokeObjectURL(backUrl); }, [backUrl]);
   useEffect(() => {
-    if (!processing && !positioningSide) return;
+    if (!positioningSide) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [processing, positioningSide]);
+  }, [positioningSide]);
   useEffect(() => () => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
   }, []);
@@ -560,12 +558,6 @@ export default function SubscriberIdentityImport({
   }, []);
 
   useEffect(() => {
-    if (!autoDismissProcessing || !processingComplete) return;
-    const timer = window.setTimeout(() => continueAfterProcessing(), 500);
-    return () => window.clearTimeout(timer);
-  }, [autoDismissProcessing, continueAfterProcessing, processingComplete]);
-
-  useEffect(() => {
     const timer = window.setTimeout(() => void verifyAndListen(), 0);
     return () => {
       window.clearTimeout(timer);
@@ -770,8 +762,8 @@ export default function SubscriberIdentityImport({
       </section>
     </div>, document.body)}
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10004] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px] transition-opacity duration-200 ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
-      <section className={`w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
+    {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10004] grid place-items-center p-4 transition-[opacity,background-color,backdrop-filter] duration-200 ${processingComplete ? "pointer-events-none bg-transparent backdrop-blur-0" : "bg-slate-950/45 backdrop-blur-[2px]"} ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal={!processingComplete} aria-labelledby="identity-processing-title">
+      <section className={`pointer-events-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
         <div className="flex items-center gap-3">
           <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
             {processingComplete ? <BadgeCheck className="h-6 w-6"/> : <ScanLine className="h-5 w-5"/>}
