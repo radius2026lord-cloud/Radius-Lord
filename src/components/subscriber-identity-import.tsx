@@ -32,6 +32,8 @@ export default function SubscriberIdentityImport({
   onIdentityImagesChange,
   onBackToList,
   renderBeforeCapture,
+  processingMinDurationMs = PROCESSING_CARD_DURATION_MS,
+  autoDismissProcessing = false,
 }: {
   currentValues: IdentityValues;
   onApply: (values: IdentityValues) => void;
@@ -40,6 +42,8 @@ export default function SubscriberIdentityImport({
   onIdentityImagesChange: (value: (current: IdentityImagesDraft) => IdentityImagesDraft) => void;
   onBackToList: () => void;
   renderBeforeCapture?: ReactNode;
+  processingMinDurationMs?: number;
+  autoDismissProcessing?: boolean;
 }) {
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
@@ -105,12 +109,12 @@ export default function SubscriberIdentityImport({
     if (!processing || processingComplete || processingStartedAtRef.current === null) return;
     const updateProgress = () => {
       const elapsed = Date.now() - (processingStartedAtRef.current || Date.now());
-      setProcessingProgress(Math.min(92, Math.floor((elapsed / PROCESSING_CARD_DURATION_MS) * 92)));
+      setProcessingProgress(processingMinDurationMs > 0 ? Math.min(92, Math.floor((elapsed / processingMinDurationMs) * 92)) : 92);
     };
     updateProgress();
     const timer = window.setInterval(updateProgress, 250);
     return () => window.clearInterval(timer);
-  }, [processing, processingComplete]);
+  }, [processing, processingComplete, processingMinDurationMs]);
   useEffect(() => () => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
   }, []);
@@ -171,14 +175,26 @@ export default function SubscriberIdentityImport({
   };
 
   const prepareScannerSide = (side: Side) => {
-    if (!captureExtensionReady || working || capturingSide) return;
+    if (working || capturingSide) return;
+    if (!barcodeRead) {
+      setError("اقرأ باركود الهوية أولًا، ثم ابدأ تصوير الوجهين.");
+      return;
+    }
+    if (!captureExtensionReady) {
+      void checkCaptureExtension(true);
+      return;
+    }
     setPositioningSide(side);
     setError("");
     setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار التوجيه، ثم اضغط زر الالتقاط.`);
   };
 
   const captureScannerSide = async (side: Side) => {
-    if (!captureExtensionReady || capturingSide || processing || scannerCaptureInProgressRef.current) return;
+    if (capturingSide || processing || scannerCaptureInProgressRef.current) return;
+    if (!captureExtensionReady) {
+      void checkCaptureExtension(true);
+      return;
+    }
     scannerCaptureInProgressRef.current = true;
     const controller = new AbortController();
     autoListenRef.current = false;
@@ -386,7 +402,7 @@ export default function SubscriberIdentityImport({
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
       if (processingStartedAt !== null) {
-        const remaining = PROCESSING_CARD_DURATION_MS - (Date.now() - processingStartedAt);
+        const remaining = processingMinDurationMs - (Date.now() - processingStartedAt);
         if (remaining > 0) {
           await new Promise<void>((resolve, reject) => {
             const timer = window.setTimeout(() => {
@@ -428,7 +444,7 @@ export default function SubscriberIdentityImport({
         }
       }
     }
-  }, [currentValues, onApply, onNameChange, onIdentityDocumentChange, scannerModels]);
+  }, [currentValues, onApply, onNameChange, onIdentityDocumentChange, processingMinDurationMs, scannerModels]);
 
   useEffect(() => { readBarcodeRef.current = readBarcode; }, [readBarcode]);
 
@@ -559,7 +575,7 @@ export default function SubscriberIdentityImport({
     }
   };
 
-  const continueAfterProcessing = () => {
+  const continueAfterProcessing = useCallback(() => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
     setClosingProcessing(true);
     closeProcessingTimerRef.current = window.setTimeout(() => {
@@ -571,7 +587,13 @@ export default function SubscriberIdentityImport({
       setMessage("");
       closeProcessingTimerRef.current = null;
     }, 180);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!autoDismissProcessing || !processingComplete) return;
+    const timer = window.setTimeout(() => continueAfterProcessing(), 500);
+    return () => window.clearTimeout(timer);
+  }, [autoDismissProcessing, continueAfterProcessing, processingComplete]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void verifyAndListen(), 0);
@@ -717,7 +739,7 @@ export default function SubscriberIdentityImport({
             </p>
           </div>
         </div>
-        {!(front&&back)&&<ProjectButton type="button" disabled={!captureExtensionReady||!barcodeRead||working||processing} onClick={()=>prepareScannerSide(front ? "back" : "front")}>
+        {!(front&&back)&&<ProjectButton type="button" disabled={!barcodeRead||working||processing} onClick={()=>prepareScannerSide(front ? "back" : "front")}>
           <Camera className="identity-camera-icon"/>{front ? "متابعة تصوير الوجه الخلفي" : "ابدأ تصوير الهوية"}
         </ProjectButton>}
       </div>
@@ -733,13 +755,13 @@ export default function SubscriberIdentityImport({
       <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">معاينة أو اختيار صور الوجهين</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {([{ side: "front" as const, title: "الوجه الأمامي", file: front, url: frontUrl }, { side: "back" as const, title: "الوجه الخلفي", file: back, url: backUrl }]).map(({ side, title, file, url }) => <div key={side} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-white/10">
-        <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span><span className="flex items-center gap-1">{file&&<><ProjectTooltip label={`إعادة تصوير ${title}`}><button type="button" disabled={!captureExtensionReady||!barcodeRead||working||processing} className="grid h-7 w-7 place-items-center rounded-lg text-blue-600 hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-500/10" onClick={()=>prepareScannerSide(side)} aria-label={`إعادة تصوير ${title}`}><Camera className="h-4 w-4"/></button></ProjectTooltip><button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button></>}</span></div>
+        <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span><span className="flex items-center gap-1">{file&&<><ProjectTooltip label={`إعادة تصوير ${title}`}><button type="button" disabled={!barcodeRead||working||processing} className="grid h-7 w-7 place-items-center rounded-lg text-blue-600 hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-500/10" onClick={()=>prepareScannerSide(side)} aria-label={`إعادة تصوير ${title}`}><Camera className="h-4 w-4"/></button></ProjectTooltip><button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button></>}</span></div>
         {url ? <Image src={url} alt={`الصورة الملتقطة: ${title}`} width={320} height={128} unoptimized className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-contain dark:border-white/10"/> : <label className="mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-center text-[10px] text-slate-500 hover:border-blue-300 dark:border-white/15 dark:bg-white/[.02]"><Upload className="h-4 w-4 text-blue-600"/>اختيار صورة {title}<input type="file" accept="image/*" className="sr-only" onChange={(event)=>setSideFile(side,event.target.files?.[0]||null)}/></label>}
       </div>)}
       </div>
       <div className="mt-2 flex justify-end"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح الصور والنتيجة المؤقتة</ProjectButton></div>
     </section>
-    {positioningSide&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="identity-capture-title">
+    {positioningSide&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[10002] grid place-items-center bg-slate-950/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="identity-capture-title">
       <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#142338]">
         <header className="shrink-0 border-b border-slate-200 p-4 dark:border-white/10">
           <div className="flex items-center justify-between gap-3">
@@ -771,14 +793,14 @@ export default function SubscriberIdentityImport({
           {error&&<p role="alert" className="mt-2 rounded-xl bg-red-50 p-2.5 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200">{error}</p>}
         </div>
         <footer className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-[#142338]">
-          <ProjectTooltip label={`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا من القارئ`}><span className="block"><ProjectButton type="button" className="w-full" disabled={!captureExtensionReady||Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(positioningSide)}><Camera/>{capturingSide===positioningSide?"جارٍ التقاط الصورة…":`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"}`}</ProjectButton></span></ProjectTooltip>
+          <ProjectTooltip label={`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا من القارئ`}><span className="block"><ProjectButton type="button" className="w-full" disabled={Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(positioningSide)}><Camera/>{capturingSide===positioningSide?"جارٍ التقاط الصورة…":`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"}`}</ProjectButton></span></ProjectTooltip>
           {working&&<ProjectButton type="button" variant="secondary" className="mt-2 w-full" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ</ProjectButton>}
         </footer>
         <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @media (prefers-reduced-motion: reduce) { .identity-laser { animation: none !important; } }`}</style>
       </section>
     </div>, document.body)}
 
-    {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10000] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px] transition-opacity duration-200 ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
+    {processing&&typeof document!=="undefined"&&createPortal(<div className={`fixed inset-0 z-[10004] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[2px] transition-opacity duration-200 ${closingProcessing ? "opacity-0" : "opacity-100"}`} role="dialog" aria-modal="true" aria-labelledby="identity-processing-title">
       <section className={`w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-[opacity,transform] duration-200 dark:border-white/10 dark:bg-[#142338] ${closingProcessing ? "translate-y-1 scale-[.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
         <div className="flex items-center gap-3">
           <span className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${processingComplete ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>
