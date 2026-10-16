@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { AlertCircle, ArrowLeft, BadgeCheck, Camera, Download, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
@@ -30,12 +30,14 @@ export default function SubscriberIdentityImport({
   onNameChange,
   onIdentityDocumentChange,
   onBackToList,
+  renderBeforeCapture,
 }: {
   currentValues: IdentityValues;
   onApply: (values: IdentityValues) => void;
   onNameChange: (field: IdentityField, value: string) => void;
   onIdentityDocumentChange: (value: IdentityDocumentDraft | null) => void;
   onBackToList: () => void;
+  renderBeforeCapture?: ReactNode;
 }) {
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
@@ -661,6 +663,20 @@ export default function SubscriberIdentityImport({
       </div>
       <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `جارٍ التقاط ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} من القارئ.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
     </div>
+    {error&&<p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</p>}
+
+    <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]" aria-label="بيانات الهوية">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {identityFields.map((field, index) => <label key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
+          {field.label}{index < 2 && " *"}
+          <ProjectInput required={index < 2 || (index === 5 && barcodeRead)} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={inputClass} maxLength={index === 5 ? 50 : index === 4 ? 160 : 100} dir="auto"/>
+        </label>)}
+      </div>
+      {message&&<div role="status" aria-live="polite" className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] font-medium text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200"><BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300"/>{message}</div>}
+      <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
+    </section>
+    {renderBeforeCapture&&<div className="mt-3 ui-state-enter">{renderBeforeCapture}</div>}
+
     <section className="mt-3 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-slate-50 p-3 dark:border-blue-300/10 dark:from-[#17263b] dark:via-[#142338] dark:to-[#122033]" aria-label="تصوير وجهي الهوية">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -698,19 +714,6 @@ export default function SubscriberIdentityImport({
       </div>
       <div className="mt-2 flex justify-end"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح الصور والنتيجة المؤقتة</ProjectButton></div>
     </section>
-    {error&&<p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-[10px] leading-5 text-red-700 dark:bg-red-500/10 dark:text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</p>}
-
-    <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]" aria-label="بيانات الهوية">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {identityFields.map((field, index) => <label key={field.label} className="min-w-0 space-y-1 text-[11px] font-medium">
-          {field.label}{index < 2 && " *"}
-          <ProjectInput required={index < 2 || (index === 5 && barcodeRead)} value={field.value} onChange={(event) => updateIdentityField(index, event.target.value)} className={inputClass} maxLength={index === 5 ? 50 : index === 4 ? 160 : 100} dir="auto"/>
-        </label>)}
-      </div>
-      {message&&<div role="status" aria-live="polite" className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] font-medium text-emerald-800 dark:border-emerald-300/15 dark:bg-emerald-500/[.08] dark:text-emerald-200"><BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300"/>{message}</div>}
-      <p className="mt-2 text-[9px] leading-5 text-slate-500">بيانات الأب والأم والولادة والرقم الوطني مؤقتة في هذه التجربة.</p>
-    </section>
-
     {positioningSide&&typeof document!=="undefined"&&createPortal(<div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="identity-capture-title">
       <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#142338]">
         <header className="shrink-0 border-b border-slate-200 p-4 dark:border-white/10">
