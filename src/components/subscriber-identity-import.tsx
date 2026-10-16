@@ -657,13 +657,18 @@ export default function SubscriberIdentityImport({
         {positioningSide && <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-[#122033]">
           <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-slate-700 dark:text-slate-200"><span>وجّه {positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار القارئ</span><button type="button" onClick={()=>setPositioningSide(null)} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10">إلغاء</button></div>
           <div className="relative mx-auto mt-3 grid aspect-[1.65/1] w-full max-w-sm place-items-center overflow-hidden rounded-xl border-2 border-dashed border-blue-400 bg-slate-950 px-8 shadow-inner dark:border-blue-300/70">
-            <div className="relative grid aspect-[1.6/1] w-full place-items-center rounded-lg border border-white/30 bg-gradient-to-br from-slate-700 to-slate-900 shadow-xl">
+            <div className="relative grid aspect-[1.6/1] w-full place-items-center overflow-hidden rounded-lg border border-white/30 bg-gradient-to-br from-slate-700 to-slate-900 shadow-xl">
               <span className="text-[10px] font-semibold tracking-wide text-white/80">{positioningSide === "back" ? "وجّه منطقة الباركود نحو القارئ" : "وجّه بيانات الهوية نحو القارئ"}</span>
-              <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-red-400 shadow-[0_0_12px_4px_rgba(248,113,113,.75)]"/>
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+                <span className="identity-laser absolute inset-x-0 top-1/2 h-px bg-red-300/70 shadow-[0_0_8px_2px_rgba(248,113,113,.6)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out infinite" }}/>
+                <span className="identity-laser absolute inset-x-0 top-1/2 h-0.5 bg-red-400 shadow-[0_0_12px_4px_rgba(248,113,113,.85)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out -0.7s infinite" }}/>
+                <span className="identity-laser absolute inset-x-0 top-1/2 h-px bg-rose-200/70 shadow-[0_0_8px_2px_rgba(251,113,133,.65)]" style={{ animation: "identityLaserSweep 2.1s ease-in-out -1.4s infinite" }}/>
+              </div>
             </div>
             <span className="pointer-events-none absolute inset-2 rounded-lg border border-blue-300/30"/>
           </div>
-          <p className="mt-2 text-center text-[10px] leading-5 text-slate-500 dark:text-slate-400">حافظ على الهوية مستقيمة وكاملة ضمن الإطار، ثم اضغط زر الالتقاط.</p>
+          <style jsx global>{`@keyframes identityLaserSweep { 0%,100% { transform: translateY(-30px); opacity: .15; } 50% { transform: translateY(30px); opacity: 1; } } @media (prefers-reduced-motion: reduce) { .identity-laser { animation: none !important; } }`}</style>
+          <p className="mt-2 text-center text-[10px] leading-5 text-slate-500 dark:text-slate-400">حرّك الهوية حتى تستقر كاملة داخل الحدود تحت خطوط المسح، ثم اضغط زر الالتقاط.</p>
           <ProjectTooltip label={`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا من القارئ`}><span className="mt-3 block"><ProjectButton type="button" className="w-full" disabled={!captureExtensionReady||Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(positioningSide)}><Camera/>{capturingSide===positioningSide?"جارٍ التقاط الصورة…":"التقاط الصورة"}</ProjectButton></span></ProjectTooltip>
         </div>}
       </div>
