@@ -1,16 +1,6 @@
 const PAGE_SOURCE = "radius-lord-identity-page";
 const EXTENSION_SOURCE = "radius-lord-identity-extension";
-const ALLOWED_ACTIONS = new Set(["scanner-status", "scanner-capture-image", "scanner-preview-start"]);
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type !== "identity-native-preview-event" || typeof message.requestId !== "string") return;
-  window.postMessage({
-    source: EXTENSION_SOURCE,
-    type: message.result?.type || "preview-error",
-    requestId: message.requestId,
-    result: message.result,
-  }, window.location.origin);
-});
+const ALLOWED_ACTIONS = new Set(["scanner-status", "scanner-capture-image"]);
 
 window.addEventListener("message", (event) => {
   if (event.source !== window || event.origin !== window.location.origin) return;

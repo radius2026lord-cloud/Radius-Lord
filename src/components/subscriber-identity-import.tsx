@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { AlertCircle, ArrowLeft, BadgeCheck, Download, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw, Video, VideoOff } from "lucide-react";
+import { AlertCircle, ArrowLeft, BadgeCheck, Camera, Download, Fingerprint, ScanLine, Upload, Usb, X, RotateCcw } from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDialog from "@/components/ui/project-dialog";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectTooltip from "@/components/ui/project-tooltip";
-import { detectIdentityScannerExtension, requestIdentityScanner, startIdentityScannerPreview } from "@/lib/identity-scanner-extension";
+import { detectIdentityScannerExtension, requestIdentityScanner } from "@/lib/identity-scanner-extension";
 
 type IdentityField = "firstName" | "lastName";
 type IdentityValues = Partial<Record<IdentityField, string>>;
@@ -21,6 +21,7 @@ const inputClass = "border-[#9fb8d2] bg-white text-[#17386d] placeholder:text-sl
 const PYTHON_PROCESSOR_URL = "/api/identity/decode";
 const PROCESSING_CARD_DURATION_MS = 5000;
 const REQUIRED_IDENTITY_BRIDGE_VERSION = "0.3.0";
+const SETUP_PROMPT_STORAGE_KEY = "rl:identity-scanner-setup-prompted-v1";
 
 export default function SubscriberIdentityImport({
   currentValues,
@@ -49,9 +50,7 @@ export default function SubscriberIdentityImport({
   const [snapiStatus, setSnapiStatus] = useState("بانتظار فحص القارئ…");
   const [scannerModels, setScannerModels] = useState<string[]>([]);
   const [capturingSide, setCapturingSide] = useState<Side | null>(null);
-  const [previewFrame, setPreviewFrame] = useState("");
-  const [previewSide, setPreviewSide] = useState<Side | null>(null);
-  const [previewStarting, setPreviewStarting] = useState(false);
+  const [positioningSide, setPositioningSide] = useState<Side | null>(null);
   const [captureExtensionReady, setCaptureExtensionReady] = useState(false);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const [setupIssue, setSetupIssue] = useState<"extension" | "bridge" | "update">("extension");
@@ -63,12 +62,26 @@ export default function SubscriberIdentityImport({
   const autoListenRef = useRef(false);
   const autoStartSuppressedRef = useRef(false);
   const scannerCaptureInProgressRef = useRef(false);
-  const previewStopRef = useRef<(() => void) | null>(null);
-  const previewFrameTimerRef = useRef<number | null>(null);
   const activeBarcodeReadRef = useRef<{ done: Promise<void> } | null>(null);
   const hasIdentityBeenReadRef = useRef(false);
   const setupPromptedRef = useRef(false);
   const readBarcodeRef = useRef<() => Promise<void>>(async () => {});
+
+  useEffect(() => {
+    try { setupPromptedRef.current = window.localStorage.getItem(SETUP_PROMPT_STORAGE_KEY) === "1"; } catch {}
+  }, []);
+
+  const promptForSetup = (force = false) => {
+    if (!force && setupPromptedRef.current) return;
+    setupPromptedRef.current = true;
+    try { window.localStorage.setItem(SETUP_PROMPT_STORAGE_KEY, "1"); } catch {}
+    setSetupDialogOpen(true);
+  };
+
+  const clearSetupPrompt = () => {
+    setupPromptedRef.current = false;
+    try { window.localStorage.removeItem(SETUP_PROMPT_STORAGE_KEY); } catch {}
+  };
 
   const frontUrl = useMemo(() => front ? URL.createObjectURL(front) : "", [front]);
   const backUrl = useMemo(() => back ? URL.createObjectURL(back) : "", [back]);
@@ -92,8 +105,6 @@ export default function SubscriberIdentityImport({
   }, [processing, processingComplete]);
   useEffect(() => () => {
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
-    if (previewFrameTimerRef.current !== null) window.clearTimeout(previewFrameTimerRef.current);
-    previewStopRef.current?.();
   }, []);
   const emergencyReset = () => {
     autoListenRef.current = false;
@@ -101,13 +112,7 @@ export default function SubscriberIdentityImport({
     scannerCaptureInProgressRef.current = false;
     requestController.current?.abort();
     requestController.current = null;
-    previewStopRef.current?.();
-    previewStopRef.current = null;
-    if (previewFrameTimerRef.current !== null) window.clearTimeout(previewFrameTimerRef.current);
-    previewFrameTimerRef.current = null;
-    setPreviewFrame("");
-    setPreviewSide(null);
-    setPreviewStarting(false);
+    setPositioningSide(null);
     if (closeProcessingTimerRef.current !== null) window.clearTimeout(closeProcessingTimerRef.current);
     closeProcessingTimerRef.current = null;
     setClosingProcessing(false);
@@ -131,99 +136,11 @@ export default function SubscriberIdentityImport({
     (side === "front" ? setFront : setBack)(file);
   };
 
-  const resumeAutomaticBarcodeRead = () => {
-    if (scannerModels.length && !hasIdentityBeenReadRef.current && !autoStartSuppressedRef.current) {
-      autoListenRef.current = true;
-      window.setTimeout(() => { if (autoListenRef.current) void readBarcodeRef.current(); }, 1200);
-    }
-  };
-
-  const stopScannerPreview = () => {
-    previewStopRef.current?.();
-    previewStopRef.current = null;
-    if (previewFrameTimerRef.current !== null) window.clearTimeout(previewFrameTimerRef.current);
-    previewFrameTimerRef.current = null;
-    setPreviewFrame("");
-    setPreviewSide(null);
-    setPreviewStarting(false);
-    if (captureExtensionReady) setSnapiStatus("القارئ جاهز.");
-    resumeAutomaticBarcodeRead();
-  };
-
-  const startScannerPreviewForSide = async (side: Side) => {
-    if (!captureExtensionReady || working || previewStarting || previewSide) return;
-    autoListenRef.current = false;
-    statusPollController.current?.abort();
-    setPreviewStarting(true);
-    setPreviewSide(side);
-    setPreviewFrame("");
+  const prepareScannerSide = (side: Side) => {
+    if (!captureExtensionReady || working || capturingSide) return;
+    setPositioningSide(side);
     setError("");
-    setMessage("ضع الهوية أمام القارئ واضبطها داخل الإطار. يمكنك إيقاف المعاينة والعودة لطريقة الالتقاط السابقة في أي وقت.");
-    setSnapiStatus("جارٍ تشغيل معاينة القارئ…");
-
-    try {
-      const activeBarcodeRead = activeBarcodeReadRef.current;
-      if (activeBarcodeRead) {
-        const barcodeStopped = await new Promise<boolean>((resolve) => {
-          const timeout = window.setTimeout(() => resolve(false), 3000);
-          activeBarcodeRead.done.then(() => {
-            window.clearTimeout(timeout);
-            resolve(true);
-          });
-        });
-        if (!barcodeStopped) throw new Error("barcode_listener_stop_timeout");
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
-
-      const preview = startIdentityScannerPreview((dataUrl) => {
-        setPreviewFrame(dataUrl);
-        setPreviewStarting(false);
-        setSnapiStatus("معاينة القارئ تعمل.");
-        if (previewFrameTimerRef.current !== null) window.clearTimeout(previewFrameTimerRef.current);
-        previewFrameTimerRef.current = null;
-      }, (errorCode) => {
-        previewStopRef.current = null;
-        if (previewFrameTimerRef.current !== null) window.clearTimeout(previewFrameTimerRef.current);
-        previewFrameTimerRef.current = null;
-        setPreviewFrame("");
-        setPreviewSide(null);
-        setPreviewStarting(false);
-        setSnapiStatus(captureExtensionReady ? "القارئ جاهز." : "القارئ غير جاهز.");
-        resumeAutomaticBarcodeRead();
-        setError(errorCode === "scanner_video_capture_failed" || errorCode === "scanner_video_sdk_unavailable"
-          ? "لم يبدأ بث المعاينة من القارئ. أوقف التجربة للعودة إلى الالتقاط السابق، وتحقق من دعم SDK للفيديو."
-          : errorCode === "scanner_preview_start_timeout"
-            ? "لم تصل إطارات المعاينة من القارئ. يمكنك العودة لطريقة الالتقاط السابقة."
-            : `تعذر بدء المعاينة (${errorCode}). يمكنك استخدام الالتقاط السابق.`);
-      });
-      previewStopRef.current = preview.stop;
-      previewFrameTimerRef.current = window.setTimeout(() => {
-        if (!previewStopRef.current) return;
-        preview.stop();
-        previewStopRef.current = null;
-        setPreviewFrame("");
-        setPreviewSide(null);
-        setPreviewStarting(false);
-        setSnapiStatus("القارئ جاهز.");
-        setError("استجاب القارئ لطلب المعاينة لكنه لم يرسل إطارات فيديو. بقي الالتقاط الثابت متاحًا كما كان.");
-        resumeAutomaticBarcodeRead();
-      }, 12000);
-      await preview.ready;
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
-      previewStopRef.current?.();
-      previewStopRef.current = null;
-      if (previewFrameTimerRef.current !== null) window.clearTimeout(previewFrameTimerRef.current);
-      previewFrameTimerRef.current = null;
-      setPreviewSide(null);
-      setPreviewStarting(false);
-      setSnapiStatus(captureExtensionReady ? "القارئ جاهز." : "القارئ غير جاهز.");
-      resumeAutomaticBarcodeRead();
-      const errorCode = caught instanceof Error ? caught.message : "";
-      setError(errorCode === "barcode_listener_stop_timeout"
-        ? "تعذر إيقاف استماع PDF417 بأمان؛ أعد فحص القارئ ثم حاول المعاينة مجددًا."
-        : "تعذر بدء معاينة القارئ. بقيت طريقة الالتقاط السابقة متاحة.");
-    }
+    setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار التوجيه، ثم اضغط زر الالتقاط.`);
   };
 
   const captureScannerSide = async (side: Side) => {
@@ -239,16 +156,7 @@ export default function SubscriberIdentityImport({
     setWorking(true);
     setSnapiStatus("جارٍ التقاط صورة الهوية…");
     setError("");
-    setMessage(`ضع ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} أمام القارئ؛ سيبدأ الالتقاط تلقائيًا.`);
-
-    if (previewStopRef.current) {
-      previewStopRef.current();
-      previewStopRef.current = null;
-      setPreviewSide(null);
-      setPreviewFrame("");
-      setPreviewStarting(false);
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-    }
+    setMessage(`جارٍ التقاط ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} من القارئ…`);
 
     try {
       // Stop PDF417 listening before switching the same SNAPI reader into image mode.
@@ -283,6 +191,7 @@ export default function SubscriberIdentityImport({
         type: result.mimeType || "image/jpeg",
       });
       setSideFile(side, capturedFile);
+      setPositioningSide(null);
       setSnapiStatus("القارئ جاهز.");
       setMessage(`تم التقاط ${side === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا.`);
     } catch (caught) {
@@ -476,10 +385,7 @@ export default function SubscriberIdentityImport({
     if (!extensionDetected) {
       setCaptureExtensionReady(false);
       setSetupIssue("extension");
-      if (forcePrompt || !setupPromptedRef.current) {
-        setupPromptedRef.current = true;
-        setSetupDialogOpen(true);
-      }
+      promptForSetup(forcePrompt);
       return false;
     }
 
@@ -488,10 +394,7 @@ export default function SubscriberIdentityImport({
       if (result.bridgeVersion !== REQUIRED_IDENTITY_BRIDGE_VERSION) {
         setCaptureExtensionReady(false);
         setSetupIssue("update");
-        if (forcePrompt || !setupPromptedRef.current) {
-          setupPromptedRef.current = true;
-          setSetupDialogOpen(true);
-        }
+        promptForSetup(forcePrompt);
         return false;
       }
       const ready = result.ok === true && Boolean(result.scannerCount);
@@ -499,21 +402,16 @@ export default function SubscriberIdentityImport({
       const bridgeUnavailable = result.ok !== true && result.error !== "scanner_not_found";
       if (bridgeUnavailable) {
         setSetupIssue("bridge");
-        if (forcePrompt || !setupPromptedRef.current) {
-          setupPromptedRef.current = true;
-          setSetupDialogOpen(true);
-        }
+        promptForSetup(forcePrompt);
       } else {
+        clearSetupPrompt();
         setSetupDialogOpen(false);
       }
       return ready;
     } catch {
       setCaptureExtensionReady(false);
       setSetupIssue("bridge");
-      if (forcePrompt || !setupPromptedRef.current) {
-        setupPromptedRef.current = true;
-        setSetupDialogOpen(true);
-      }
+      promptForSetup(forcePrompt);
       return false;
     }
   };
@@ -530,8 +428,7 @@ export default function SubscriberIdentityImport({
       if (result.bridgeVersion !== REQUIRED_IDENTITY_BRIDGE_VERSION) {
         setCaptureExtensionReady(false);
         setSetupIssue("update");
-        setupPromptedRef.current = true;
-        setSetupDialogOpen(true);
+        promptForSetup(true);
         return;
       }
       const bridgeInstalled = result.ok === true || result.error === "scanner_not_found";
@@ -540,7 +437,7 @@ export default function SubscriberIdentityImport({
         return;
       }
       setCaptureExtensionReady(result.ok === true && Boolean(result.scannerCount));
-      setupPromptedRef.current = false;
+      clearSetupPrompt();
       setSetupDialogOpen(false);
       setMessage(result.ok ? "تم العثور على إضافة الالتقاط والقارئ." : "تم العثور على الإضافة؛ تحقق من توصيل القارئ وضبطه على SNAPI.");
     } catch {
@@ -549,17 +446,6 @@ export default function SubscriberIdentityImport({
       setCheckingSetup(false);
     }
   };
-
-  useEffect(() => {
-    let active = true;
-    void detectIdentityScannerExtension().then((installed) => {
-      if (!active || installed) return;
-      setupPromptedRef.current = true;
-      setSetupIssue("extension");
-      setSetupDialogOpen(true);
-    });
-    return () => { active = false; };
-  }, []);
 
   const testSnapi = async () => {
     const controller = new AbortController();
@@ -607,7 +493,7 @@ export default function SubscriberIdentityImport({
     }
   };
 
-  const verifyAndListen = async () => {
+  const verifyAndListen = async (forceSetupPrompt = false) => {
     autoListenRef.current = false;
     autoStartSuppressedRef.current = false;
     hasIdentityBeenReadRef.current = false;
@@ -615,6 +501,8 @@ export default function SubscriberIdentityImport({
     if (ready) {
       autoListenRef.current = true;
       void readBarcode();
+    } else if (forceSetupPrompt && !captureExtensionReady) {
+      await checkCaptureExtension(true);
     }
   };
 
@@ -694,6 +582,8 @@ export default function SubscriberIdentityImport({
       statusPollController.current?.abort();
       statusPollController.current = null;
     };
+    // The status poll is intentionally bound to the component's initial mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <section className={panelClass} aria-labelledby="subscriber-identity-title">
@@ -707,7 +597,7 @@ export default function SubscriberIdentityImport({
     >
       <p className="text-xs leading-6 text-slate-600 dark:text-slate-300">
         {setupIssue === "extension"
-          ? "لم يتمكن الموقع من اكتشاف إضافة Lord Radius في هذا المتصفح. نزّل حزمة التثبيت واتبع الخطوات أدناه."
+          ? "لم يتمكن الموقع من اكتشاف إضافة Lord Radius في هذا المتصفح. نزّل حزمة التثبيت واتبع الخطوات أدناه؛ ستظهر هذه النافذة تلقائيًا مرة واحدة على هذا المتصفح."
           : setupIssue === "update"
             ? "اكتشف الموقع أن برنامج الربط المحلي يحتاج تحديثًا. نزّل الحزمة الجديدة وشغّل المثبّت؛ ستبقى صور الهوية مؤقتة داخل الصفحة."
             : "تم اكتشاف إضافة المتصفح، لكن برنامج الربط المحلي لا يستجيب. أعد تشغيل المثبّت من الحزمة ثم أعد تحميل صفحة الموقع."}
@@ -715,15 +605,16 @@ export default function SubscriberIdentityImport({
       <ol className="mt-4 space-y-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-[11px] leading-6 text-blue-950 dark:border-blue-300/10 dark:bg-blue-500/[.06] dark:text-blue-100">
         {setupIssue === "update" ? <>
           <li>١. نزّل الحزمة الجديدة واختر «استخراج الكل»؛ لا تشغّل ملف BAT من داخل ZIP أو RAR.</li>
-          <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
+          <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل أصل الموقع الظاهر هنا: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
           <li>٣. بعد اكتمال التثبيت أعد تحميل هذه الصفحة واضغط «أعد التحقق»؛ لا حاجة لإعادة إضافة مجلد Chrome إذا كانت الإضافة مثبتة.</li>
         </> : <>
           <li>١. نزّل الحزمة واختر «استخراج الكل» على لابتوب Windows؛ لا تشغّل ملف BAT من داخل عارض ZIP أو RAR.</li>
-          <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل عنوان هذا الموقع: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
+          <li>٢. شغّل <bdi dir="ltr">tools\install-identity-scanner.bat</bdi> وأدخل أصل الموقع الظاهر هنا: <bdi dir="ltr">{typeof window !== "undefined" ? window.location.origin : ""}</bdi>.</li>
           <li>٣. في Chrome فعّل <bdi dir="ltr">Developer mode</bdi> ثم اختر <bdi dir="ltr">Load unpacked</bdi> وحدد مجلد الإضافة الذي يطبعه المثبّت.</li>
           <li>٤. أعد تحميل صفحة الموقع، ثم اضغط «أعد التحقق».</li>
         </>}
       </ol>
+      <p className="mt-2 text-[10px] leading-5 text-slate-500">يُعرض أصل الموقع تلقائيًا من الصفحة المفتوحة، لذلك لا يعتمد ملف التثبيت على localhost ثابت. عند تغيير النطاق لاحقًا، شغّل المثبّت على الموقع الجديد مرة واحدة لهذا الجهاز.</p>
       <p className="mt-3 text-[10px] leading-5 text-slate-500">تأكد كذلك من تثبيت تعريف قارئ Z‑3052 وضبطه على SNAPI مع Imaging Interface. يبقى الإدخال اليدوي متاحًا دون تثبيت.</p>
       <a href="/downloads/lord-radius-identity-scanner-setup.zip" download className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-[14px] bg-[#0758e9] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#064fd1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0758e9]/40">
         <Download className="h-4 w-4"/>{setupIssue === "update" ? "تنزيل تحديث الجسر" : "تنزيل حزمة التثبيت"}
@@ -737,7 +628,7 @@ export default function SubscriberIdentityImport({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <ProjectTooltip label="إعادة فحص اتصال قارئ الهوية"><ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void verifyAndListen()}><Usb/>إعادة الفحص</ProjectButton></ProjectTooltip>
+        <ProjectTooltip label="إعادة فحص اتصال قارئ الهوية"><ProjectButton type="button" variant="secondary" disabled={working} onClick={()=>void verifyAndListen(true)}><Usb/>إعادة الفحص</ProjectButton></ProjectTooltip>
         <ProjectTooltip label="العودة إلى قائمة المشتركين"><ProjectButton type="button" variant="secondary" onClick={onBackToList}><ArrowLeft/>العودة للقائمة</ProjectButton></ProjectTooltip>
         {working&&<ProjectButton type="button" variant="secondary" onClick={emergencyReset}><RotateCcw/>إيقاف طارئ وإعادة الضبط</ProjectButton>}
       </div>
@@ -748,35 +639,39 @@ export default function SubscriberIdentityImport({
         {snapiStatus==="القارئ جاهز."?<BadgeCheck className="h-4 w-4 text-emerald-600"/>:working?<span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"/>:<Usb className="h-4 w-4 text-blue-600"/>}
         <span>{snapiStatus}</span>
       </div>
-      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `ضع ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} أمام القارئ؛ سيبدأ الالتقاط تلقائيًا.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
+      <p className="text-[10px] font-medium text-blue-800 dark:text-blue-200">{capturingSide ? `جارٍ التقاط ${capturingSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} من القارئ.` : scannerModels.length ? "امسح باركود الهوية مباشرة؛ القراءة تبدأ تلقائيًا." : "سيبدأ الاستماع تلقائيًا عند اتصال القارئ."}</p>
     </div>
     <details open={Boolean(front || back)} className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
       <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 dark:text-slate-300">صور وجهي الهوية (اختياري)</summary>
       <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-300/10 dark:bg-blue-500/[.05]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200"><ScanLine className="h-4 w-4"/></span>
           <div>
-            <p className="text-[11px] font-bold text-blue-950 dark:text-blue-100"><Video className="ml-1 inline h-4 w-4"/>معاينة وضعية الهوية <span className="mr-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-800 dark:bg-amber-300/10 dark:text-amber-200">تجريبية</span></p>
-            <p className="mt-1 text-[10px] leading-5 text-slate-600 dark:text-slate-300">افتح المعاينة لضبط الهوية أمام القارئ. يمكنك إيقافها والرجوع لطريقة الالتقاط السابقة في أي وقت.</p>
+            <p className="text-[11px] font-bold text-blue-950 dark:text-blue-100">التقاط صورة الهوية بالقارئ</p>
+            <p className="mt-1 text-[10px] leading-5 text-slate-600 dark:text-slate-300">اختر الوجه للانتقال إلى إرشاد الوضعية، ثم ضع الهوية ضمن الإطار واضغط التقاط.</p>
           </div>
-          {previewSide && <ProjectTooltip label="إيقاف المعاينة والعودة لطريقة الالتقاط السابقة"><ProjectButton type="button" variant="secondary" onClick={stopScannerPreview}><VideoOff/>إيقاف المعاينة والعودة</ProjectButton></ProjectTooltip>}
         </div>
-        {previewSide ? <div className="mt-3 overflow-hidden rounded-xl border border-blue-200 bg-slate-950 dark:border-blue-300/20">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[10px] font-medium text-white"><span>{previewStarting ? "جارٍ فتح المعاينة…" : `معاينة ${previewSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"}`}</span><span className="rounded-full bg-white/15 px-2 py-0.5">{previewFrame ? "مباشر" : "بانتظار إطارات القارئ"}</span></div>
-          <div className="relative grid min-h-48 place-items-center bg-slate-900 p-3">
-            {previewFrame ? <Image src={previewFrame} alt="معاينة مباشرة لوضعية الهوية" width={640} height={400} unoptimized className="max-h-72 w-full rounded-lg object-contain"/> : <div className="flex flex-col items-center gap-2 py-12 text-center text-[11px] text-white/75"><span className="h-6 w-6 animate-pulse rounded-full border-2 border-blue-300/40 border-t-blue-300"/>ضع الهوية أمام القارئ وانتظر الصورة المباشرة.</div>}
-            <div className="pointer-events-none absolute inset-5 rounded-lg border-2 border-dashed border-emerald-300/80 shadow-[0_0_0_999px_rgba(2,6,23,.12)]"/>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ProjectButton type="button" variant={positioningSide === "front" ? "primary" : "secondary"} disabled={!captureExtensionReady||working} onClick={()=>prepareScannerSide("front")}><ScanLine/>انتقال إلى الوجه الأمامي</ProjectButton>
+          <ProjectButton type="button" variant={positioningSide === "back" ? "primary" : "secondary"} disabled={!captureExtensionReady||working} onClick={()=>prepareScannerSide("back")}><ScanLine/>انتقال إلى الوجه الخلفي</ProjectButton>
+        </div>
+        {positioningSide && <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-[#122033]">
+          <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-slate-700 dark:text-slate-200"><span>وجّه {positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} داخل إطار القارئ</span><button type="button" onClick={()=>setPositioningSide(null)} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10">إلغاء</button></div>
+          <div className="relative mx-auto mt-3 grid aspect-[1.65/1] w-full max-w-sm place-items-center overflow-hidden rounded-xl border-2 border-dashed border-blue-400 bg-slate-950 px-8 shadow-inner dark:border-blue-300/70">
+            <div className="relative grid aspect-[1.6/1] w-full place-items-center rounded-lg border border-white/30 bg-gradient-to-br from-slate-700 to-slate-900 shadow-xl">
+              <span className="text-[10px] font-semibold tracking-wide text-white/80">{positioningSide === "back" ? "وجّه منطقة الباركود نحو القارئ" : "وجّه بيانات الهوية نحو القارئ"}</span>
+              <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-red-400 shadow-[0_0_12px_4px_rgba(248,113,113,.75)]"/>
+            </div>
+            <span className="pointer-events-none absolute inset-2 rounded-lg border border-blue-300/30"/>
           </div>
-          <p className="px-3 py-2 text-[10px] leading-5 text-blue-50/85">اجعل البطاقة كاملة داخل الإطار، بصورة مستقيمة ومن دون انعكاس ضوئي. بعد ضبطها، اضغط زر الالتقاط أدناه؛ ستتوقف المعاينة قبل حفظ الصورة مؤقتًا.</p>
-        </div> : <div className="mt-3 flex flex-wrap gap-2">
-          <ProjectTooltip label="فتح معاينة حية مؤقتة لضبط وضعية الوجه الأمامي"><span><ProjectButton type="button" variant="secondary" disabled={!captureExtensionReady||working||previewStarting} onClick={()=>void startScannerPreviewForSide("front")}><Video/>معاينة وضعية الوجه الأمامي</ProjectButton></span></ProjectTooltip>
-          <ProjectTooltip label="فتح معاينة حية مؤقتة لضبط وضعية الوجه الخلفي"><span><ProjectButton type="button" variant="secondary" disabled={!captureExtensionReady||working||previewStarting} onClick={()=>void startScannerPreviewForSide("back")}><Video/>معاينة وضعية الوجه الخلفي</ProjectButton></span></ProjectTooltip>
+          <p className="mt-2 text-center text-[10px] leading-5 text-slate-500 dark:text-slate-400">حافظ على الهوية مستقيمة وكاملة ضمن الإطار، ثم اضغط زر الالتقاط.</p>
+          <ProjectTooltip label={`التقاط ${positioningSide === "front" ? "الوجه الأمامي" : "الوجه الخلفي"} مؤقتًا من القارئ`}><span className="mt-3 block"><ProjectButton type="button" className="w-full" disabled={!captureExtensionReady||Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(positioningSide)}><Camera/>{capturingSide===positioningSide?"جارٍ التقاط الصورة…":"التقاط الصورة"}</ProjectButton></span></ProjectTooltip>
         </div>}
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {([{ side: "front" as const, title: "الوجه الأمامي", file: front, url: frontUrl }, { side: "back" as const, title: "الوجه الخلفي", file: back, url: backUrl }]).map(({ side, title, file, url }) => <div key={side} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-white/10">
         <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-semibold">{title} <span className="font-normal text-slate-400">(اختياري)</span></span>{file&&<button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" onClick={()=>setSideFile(side,null)} aria-label={`إزالة صورة ${title}`}><X className="h-4 w-4"/></button>}</div>
-        {url ? <Image src={url} alt={`معاينة ${title}`} width={320} height={128} unoptimized className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-contain dark:border-white/10"/> : <label className="mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-center text-[10px] text-slate-500 hover:border-blue-300 dark:border-white/15 dark:bg-white/[.02]"><Upload className="h-4 w-4 text-blue-600"/>اختيار صورة {title}<input type="file" accept="image/*" className="sr-only" onChange={(event)=>setSideFile(side,event.target.files?.[0]||null)}/></label>}
-        <ProjectTooltip label={captureExtensionReady ? `التقاط ${title} مؤقتًا من قارئ الهوية المتصل باللابتوب` : "يلزم تثبيت إضافة التقاط الهوية على متصفح اللابتوب وتوصيل القارئ"}><span className="mt-2 block"><ProjectButton type="button" variant="secondary" className="w-full" disabled={!captureExtensionReady||Boolean(capturingSide)||processing} onClick={()=>void captureScannerSide(side)}><ScanLine/>{capturingSide===side?"بانتظار التقاط القارئ…":`التقاط ${title} بالقارئ`}</ProjectButton></span></ProjectTooltip>
+        {url ? <Image src={url} alt={`الصورة الملتقطة: ${title}`} width={320} height={128} unoptimized className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-contain dark:border-white/10"/> : <label className="mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-center text-[10px] text-slate-500 hover:border-blue-300 dark:border-white/15 dark:bg-white/[.02]"><Upload className="h-4 w-4 text-blue-600"/>اختيار صورة {title}<input type="file" accept="image/*" className="sr-only" onChange={(event)=>setSideFile(side,event.target.files?.[0]||null)}/></label>}
       </div>)}
       </div>
       <div className="mt-2 flex justify-end"><ProjectButton type="button" variant="secondary" onClick={clearTemporaryData}><X/>مسح الصور والنتيجة المؤقتة</ProjectButton></div>
