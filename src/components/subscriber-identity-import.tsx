@@ -341,9 +341,14 @@ export default function SubscriberIdentityImport({
         captureMethod: "qr",
       });
       setScannerModels(Array.isArray(scanResult.scannerModels) ? scanResult.scannerModels as string[] : scannerModels);
+      // The Python decoder may return the six ordered identityFields without
+      // a separate `fields` object. Use the values already rendered in the
+      // name and surname inputs so the subscriber draft receives them too.
       const names: IdentityValues = {};
-      if (!currentValues.firstName?.trim() && found.firstName?.trim()) names.firstName = found.firstName.trim();
-      if (!currentValues.lastName?.trim() && found.lastName?.trim()) names.lastName = found.lastName.trim();
+      const firstName = nextFields[0]?.value?.trim() || found.firstName?.trim() || "";
+      const lastName = nextFields[1]?.value?.trim() || found.lastName?.trim() || "";
+      if (!currentValues.firstName?.trim() && firstName) names.firstName = firstName;
+      if (!currentValues.lastName?.trim() && lastName) names.lastName = lastName;
       if (Object.keys(names).length) onApply(names);
       setMessage("تم ملء حقول الهوية. أكمل بيانات التواصل أدناه.");
       if (processingStartedAt !== null) {
