@@ -235,6 +235,8 @@ CREATE TABLE IF NOT EXISTS customer_identity_documents (
   address TEXT NULL,
   front_image_reference VARCHAR(500) NULL,
   back_image_reference VARCHAR(500) NULL,
+  front_image_data LONGBLOB NULL,
+  back_image_data LONGBLOB NULL,
   capture_method ENUM('manual','qr') NOT NULL DEFAULT 'manual',
   updated_by_manager_id BIGINT UNSIGNED NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
