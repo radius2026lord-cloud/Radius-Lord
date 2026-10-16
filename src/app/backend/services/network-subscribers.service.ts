@@ -1,4 +1,6 @@
-import {randomInt} from 'crypto';
+import {randomInt,randomUUID} from 'crypto';
+import {mkdir,readFile,unlink,writeFile} from 'fs/promises';
+import path from 'path';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
 
@@ -20,6 +22,17 @@ const coord=(value:any,low:number,high:number,field:string)=>{
  return n;
 };
 function paymentCode(){return 'C'+String(randomInt(0,10000000000)).padStart(10,'0');}
+function identityImageDirectory(scope:any){return path.join(path.resolve(process.env.IDENTITY_UPLOAD_DIR||'uploads/identity-documents'),String(Number(scope.tenant_id)),String(Number(scope.environment_id)));}
+async function decodeIdentityImage(value:any){
+ if(value==null||value==='')return null;
+ if(typeof value!=='string'||value.length>2_100_000)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityImages:'صورة الهوية أكبر من الحجم المسموح.'}});
+ const match=/^data:image\/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+ if(!match)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityImages:'صيغة صورة الهوية غير مدعومة.'}});
+ const bytes=Buffer.from(match[1],'base64');
+ if(!bytes.length||bytes.length>1_500_000)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityImages:'يجب ألا يتجاوز حجم كل صورة 1.5 ميغابايت.'}});
+ try{const sharp=require('sharp');return await sharp(bytes,{limitInputPixels:8_000_000,failOn:'warning'}).rotate().resize({width:2000,height:2000,fit:'inside',withoutEnlargement:true}).webp({quality:82}).toBuffer();}
+ catch{throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{identityImages:'تعذر قراءة صورة الهوية. اختر صورة واضحة بصيغة JPG أو PNG أو WebP.'}});}
+}
 const latinDigits=(value:string)=>value.replace(/[٠-٩۰-۹]/g,digit=>String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".indexOf(digit)%10));
 function splitBirthPlaceDate(value:any){
  const raw=String(value??'').trim();
@@ -99,7 +112,13 @@ export async function createNetworkSubscriber(scope:any,input:any){
   const status=String(input.status??'active');
   if(!['active','suspended'].includes(status))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{status:'اختر حالة صحيحة.'}});
   const categoryId=input.categoryId==null||input.categoryId===''?null:Number(input.categoryId);
-  if(categoryId!==null&&(!Number.isSafeInteger(categoryId)||categoryId<1))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{categoryId:'اختر تصنيفًا صالحًا.'}});
+  if(categoryId===null)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{categoryId:'اختر تصنيفًا لإتمام حفظ المشترك.'}});
+  if(!Number.isSafeInteger(categoryId)||categoryId<1)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{categoryId:'اختر تصنيفًا صالحًا.'}});
+  const uploadedIdentityImages=isIdentityEntry&&identityDocument?{
+   front:await decodeIdentityImage(input.identityImages?.front),
+   back:await decodeIdentityImage(input.identityImages?.back),
+  }:null;
+  const savedIdentityImagePaths:string[]=[];
   await app.beginTransaction();
   try{
    if(categoryId!==null){
@@ -119,8 +138,12 @@ export async function createNetworkSubscriber(scope:any,input:any){
    const id=Number(created.insertId);
    if(identityDocument){
     const {birthPlace,birthDate}=splitBirthPlaceDate(identityDocument.birthPlaceDate);
-    await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,capture_method,updated_by_manager_id)
-     VALUES(?,?,?,?,?,?,?,?,'qr',?)`,[id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,scope.managerId]);
+    const references:{front:string|null;back:string|null}={front:null,back:null};
+    const directory=identityImageDirectory(scope);
+    if(uploadedIdentityImages?.front||uploadedIdentityImages?.back)await mkdir(directory,{recursive:true});
+    for(const side of ['front','back'] as const){const image=uploadedIdentityImages?.[side];if(!image)continue;const name=randomUUID()+'.webp';await writeFile(path.join(directory,name),image,{flag:'wx'});savedIdentityImagePaths.push(path.join(directory,name));references[side]=name;}
+    await app.query(`INSERT INTO customer_identity_documents(customer_id,first_name,last_name,father_name,mother_name,birth_place,birth_date,national_number,front_image_reference,back_image_reference,capture_method,updated_by_manager_id)
+     VALUES(?,?,?,?,?,?,?,?,?,?,'qr',?)`,[id,firstName,lastName,identityDocument.fatherName,identityDocument.motherName,birthPlace,birthDate,identityDocument.nationalNumber,references.front,references.back,scope.managerId]);
    }
    if(address)await app.query(`INSERT INTO customer_address_suggestions(manager_id,address,address_hash)
     VALUES(?,?,UNHEX(SHA2(LOWER(TRIM(?)),256)))
@@ -134,6 +157,7 @@ export async function createNetworkSubscriber(scope:any,input:any){
    return {success:true,item:{id,manager_id:managerId,first_name:firstName,last_name:lastName,phone,address,latitude,longitude,notes,status,created_at:new Date().toISOString(),pppoe_count:0,hotspot_count:0,categories:categoryId?null:null,payment_code:code,identity_verified:Boolean(identityDocument)}};
   }catch(error){
    await app.rollback();
+   await Promise.all(savedIdentityImagePaths.map(filename=>unlink(filename).catch(()=>{})));
    try{await app.query(`INSERT INTO activity_log(actor_manager_id,actor_kind,action_code,target_type,result,failure_code)
     VALUES(?,'manager','subscribers.create','customer','failed','SUBSCRIBER_CREATE_REJECTED')`,[scope.managerId]);}catch{}
    throw error;
@@ -170,6 +194,8 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
   if(!Number.isSafeInteger(id)||id<1)throw new Error('SUBSCRIBER_INPUT');
   const [customers]:any=await app.query(`SELECT c.id,c.manager_id,c.first_name,c.last_name,c.phone,c.address,c.notes,c.payment_code,c.status,c.created_at,m.full_name manager_name,
     EXISTS(SELECT 1 FROM customer_identity_documents d WHERE d.customer_id=c.id AND d.capture_method='qr') identity_verified,
+    EXISTS(SELECT 1 FROM customer_identity_documents d WHERE d.customer_id=c.id AND d.front_image_reference IS NOT NULL) identity_front_image,
+    EXISTS(SELECT 1 FROM customer_identity_documents d WHERE d.customer_id=c.id AND d.back_image_reference IS NOT NULL) identity_back_image,
     (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships x JOIN customer_categories cat ON cat.id=x.category_id WHERE x.customer_id=c.id AND cat.archived_at IS NULL) categories
    FROM customers c LEFT JOIN managers m ON m.id=c.manager_id
    WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
@@ -203,5 +229,17 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
   ]);
   const accounts=[...pppoe.map((x:any)=>({...x,kind:'pppoe'})),...hotspot.map((x:any)=>({...x,kind:'hotspot'}))];
   return {item:customer,accounts};
+ });
+}
+
+export async function readNetworkSubscriberIdentityImage(scope:any,value:any,side:any){
+ return withNetwork(scope,async app=>{
+  const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
+  if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
+  const id=Number(value);if(!Number.isSafeInteger(id)||id<1||!['front','back'].includes(String(side)))throw new Error('SUBSCRIBER_INPUT');
+  const column=side==='front'?'front_image_reference':'back_image_reference';
+  const [rows]:any=await app.query(`SELECT d.${column} image_reference FROM customer_identity_documents d JOIN customers c ON c.id=d.customer_id WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
+  const name=rows[0]?.image_reference;if(typeof name!=='string'||! /^[a-f0-9-]{36}\.webp$/.test(name))throw new Error('SUBSCRIBER_IMAGE_NOT_FOUND');
+  return readFile(path.join(identityImageDirectory(scope),name));
  });
 }
