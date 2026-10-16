@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_barcode_processor import scanner_connection, scanner_ids_and_models, scanner_status_value
 
-BRIDGE_VERSION = "0.2.0"
+BRIDGE_VERSION = "0.3.0"
 
 
 def scanner_image_data_bytes(image_data, size):
@@ -132,6 +132,114 @@ def capture_scanner_image(timeout_seconds=55):
             pythoncom.CoUninitialize()
 
 
+def stream_scanner_preview(max_seconds=90, max_fps=4):
+    """Stream low-resolution frames until Chrome closes the native messaging port."""
+    pythoncom = None
+    scanner = None
+    scanner_id = None
+    trigger_pulled = False
+    last_frame_at = 0.0
+    last_heartbeat_at = 0.0
+    disconnected = False
+
+    def emit(payload):
+        nonlocal disconnected
+        try:
+            write_message(payload)
+        except (BrokenPipeError, OSError):
+            disconnected = True
+
+    try:
+        if sys.platform != "win32":
+            raise RuntimeError("scanner_windows_only")
+        try:
+            import pythoncom
+            import win32com.client
+        except ImportError as exc:
+            raise RuntimeError("scanner_sdk_python_missing") from exc
+        pythoncom.CoInitialize()
+
+        class VideoEvents:
+            def OnVideoEvent(self, event_type, size, video_data, scanner_data):
+                nonlocal last_frame_at
+                if int(event_type) != 1 or disconnected:
+                    return
+                now = time.monotonic()
+                if now - last_frame_at < 1 / max_fps:
+                    return
+                raw_frame = scanner_image_data_bytes(video_data, int(size))
+                if not raw_frame:
+                    return
+                try:
+                    frame = prepare_transport_image(raw_frame)
+                except Exception:
+                    return
+                last_frame_at = now
+                emit({
+                    "type": "preview-frame",
+                    "mimeType": "image/jpeg",
+                    "imageBase64": base64.b64encode(frame).decode("ascii"),
+                })
+
+        scanner = win32com.client.DispatchWithEvents("CoreScanner.CoreScanner", VideoEvents)
+        events = scanner
+        if scanner_status_value(scanner.Open(0, [1], 1)) != 0:
+            raise RuntimeError("scanner_sdk_open_failed")
+
+        scanner_ids = [0] * 255
+        result = scanner.GetScanners(0, scanner_ids)
+        xml_text = next((item for item in result if isinstance(item, str) and "<scanners" in item), "") if isinstance(result, (tuple, list)) else str(result)
+        devices = scanner_ids_and_models(xml_text)
+        if not devices:
+            raise RuntimeError("scanner_not_found")
+        scanner_id = devices[0]["scannerId"] or "1"
+
+        subscribe_xml = "<inArgs><cmdArgs><arg-int>1</arg-int><arg-int>4</arg-int></cmdArgs></inArgs>"
+        if scanner_status_value(scanner.ExecCommand(1001, subscribe_xml)) != 0:
+            raise RuntimeError("scanner_video_event_registration_failed")
+        capture_xml = f"<inArgs><scannerID>{scanner_id}</scannerID></inArgs>"
+        if scanner_status_value(scanner.ExecCommand(4000, capture_xml)) != 0:
+            raise RuntimeError("scanner_video_capture_failed")
+        if scanner_status_value(scanner.ExecCommand(2011, capture_xml)) != 0:
+            raise RuntimeError("scanner_video_trigger_failed")
+        trigger_pulled = True
+        emit({"type": "preview-ready", "scannerModels": [item["model"] for item in devices]})
+
+        deadline = time.monotonic() + max_seconds
+        last_heartbeat_at = time.monotonic()
+        while time.monotonic() < deadline and not disconnected:
+            pythoncom.PumpWaitingMessages()
+            now = time.monotonic()
+            if now - last_heartbeat_at >= 1:
+                emit({"type": "preview-heartbeat"})
+                last_heartbeat_at = now
+            time.sleep(0.01)
+        if not disconnected:
+            emit({"type": "preview-error", "error": "scanner_preview_timeout"})
+    except RuntimeError as exc:
+        emit({"type": "preview-error", "error": str(exc)})
+    except Exception:
+        emit({"type": "preview-error", "error": "scanner_video_sdk_unavailable"})
+    finally:
+        if scanner is not None:
+            if trigger_pulled and scanner_id:
+                try:
+                    scanner.ExecCommand(2012, f"<inArgs><scannerID>{scanner_id}</scannerID></inArgs>")
+                except Exception:
+                    pass
+            if scanner_id:
+                try:
+                    scanner.ExecCommand(3500, f"<inArgs><scannerID>{scanner_id}</scannerID></inArgs>")
+                except Exception:
+                    pass
+            try:
+                scanner.Close(0)
+            except Exception:
+                pass
+        if pythoncom is not None:
+            pythoncom.CoUninitialize()
+
+
 def read_message():
     header = sys.stdin.buffer.read(4)
     if not header:
@@ -164,6 +272,9 @@ def handle(message):
         return result
     if action == "scanner-capture-image":
         return capture_scanner_image(timeout_seconds=55)
+    if action == "scanner-preview-start":
+        stream_scanner_preview(max_seconds=90)
+        return None
     return {"ok": False, "error": "native_action_unsupported"}
 
 
@@ -175,7 +286,9 @@ def main():
             message = read_message()
             if message is None:
                 return
-            write_message(handle(message))
+            result = handle(message)
+            if result is not None:
+                write_message(result)
         except Exception:
             write_message({"ok": False, "error": "native_host_request_failed"})
 

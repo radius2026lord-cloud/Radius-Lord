@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lord Radius — التقاط الهوية",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ربط قارئ Z-3052 بميزة التقاط صور الهوية في Lord Radius.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5s5NMjiR+m9cKj2/sUNs1xtotnSSbenHc6C/bJ085lqAwp1lTWENzyyoQdZ8y8IdB6Cd5LsJ0maCBx9VmcSwlPbMteCpj0UK0u7NdOYQb8UqFbHWd9YEmYtDWKwktSvJ2jgnEoZizVc5XHzIH1BXcCGcqP5H+DnexyNZBwh/qhzJgcMf4TPSv53adyfmcbx36wMR1c6XJwbzi/6a5KYiGqMzpuQP1GImRYvHF5i7YT0V1L4S8+SGVQJe/rgqBtvSgoujuw39LiXt95dfzjh/vx1yiXJhAK9tPDPPFCByH9ARXgLt0+s7BV1HFctq5+X49B+Dx8MhQqX0/kBGlZdVswIDAQAB",
   "permissions": ["nativeMessaging"],

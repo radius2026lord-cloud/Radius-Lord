@@ -1,8 +1,17 @@
 importScripts("config.js");
 
 const HOST_NAME = "com.radiuslord.identity_capture";
-const ALLOWED_ACTIONS = new Set(["scanner-status", "scanner-capture-image"]);
+const ALLOWED_ACTIONS = new Set(["scanner-status", "scanner-capture-image", "scanner-preview-start"]);
 const activePorts = new Map();
+
+function forwardPreviewEvent(sender, requestId, result) {
+  if (!sender.tab?.id) return;
+  chrome.tabs.sendMessage(sender.tab.id, {
+    type: "identity-native-preview-event",
+    requestId,
+    result,
+  }, { frameId: sender.frameId }, () => void chrome.runtime.lastError);
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "identity-native-cancel") {
@@ -25,6 +34,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   const port = chrome.runtime.connectNative(HOST_NAME);
   activePorts.set(message.requestId, port);
+  const isPreview = message.action === "scanner-preview-start";
   let settled = false;
   const finish = (result) => {
     if (settled) return;
@@ -34,7 +44,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     port.disconnect();
     sendResponse(result);
   };
-  const timer = setTimeout(() => finish({ ok: false, error: "identity_native_host_timeout" }), 65000);
+  const timer = isPreview ? null : setTimeout(() => finish({ ok: false, error: "identity_native_host_timeout" }), 65000);
+  if (isPreview) {
+    port.onMessage.addListener((result) => {
+      forwardPreviewEvent(sender, message.requestId, result);
+      if (result?.type === "preview-error") {
+        activePorts.delete(message.requestId);
+        port.disconnect();
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      activePorts.delete(message.requestId);
+      if (!settled) forwardPreviewEvent(sender, message.requestId, {
+        type: "preview-stopped",
+        error: chrome.runtime.lastError?.message || "",
+      });
+    });
+    sendResponse({ ok: true, streaming: true });
+    port.postMessage({ action: message.action });
+    return undefined;
+  }
   port.onMessage.addListener(finish);
   port.onDisconnect.addListener(() => {
     if (!settled) finish({ ok: false, error: chrome.runtime.lastError?.message || "identity_native_host_disconnected" });
