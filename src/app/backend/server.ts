@@ -29,9 +29,8 @@ const startServer = (port: number) => {
 
   server.once('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${port} is already in use. Trying port ${port + 1}...`);
-      startServer(port + 1);
-      return;
+      console.error(`❌ Port ${port} is already in use. Stop the existing backend process before starting this version.`);
+      process.exit(1);
     }
 
     console.error('Server error:', err);
