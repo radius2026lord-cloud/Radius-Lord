@@ -255,7 +255,7 @@ a {
 }
 
 .dark .dashboard-shell-root :is(.text-slate-300, .text-slate-400, .text-slate-500) {
-  color: #ffffff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .dashboard-shell-root [class*="dark:text-[#9f98a5]"],
@@ -271,6 +271,17 @@ a {
 .dark .dashboard-shell-root .rl-breadcrumb button,
 .dark .dashboard-shell-root .rl-breadcrumb > span {
   color: #ffffff !important;
+}
+
+.dark .dashboard-shell-root .sidebar .rl-nav-main > span:not(.sidebar-active-icon) > .lucide,
+.dark .dashboard-shell-root .sidebar .rl-nav-sub:not([aria-current="page"]) > .lucide {
+  color: #c4bec8 !important;
+  filter: none !important;
+}
+
+.dark .dashboard-shell-root .sidebar .rl-nav-main:hover > span:not(.sidebar-active-icon) > .lucide,
+.dark .dashboard-shell-root .sidebar .rl-nav-sub:not([aria-current="page"]):hover > .lucide {
+  color: #f1eef4 !important;
 }
 
 /* Subscriber list: keep one continuous page canvas behind the Hostinger-style surfaces. */
@@ -310,7 +321,7 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .text-slate-300 {
-  color: #ffffff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .text-slate-400,
