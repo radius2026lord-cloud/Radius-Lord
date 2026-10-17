@@ -290,7 +290,7 @@ export default function DashboardShell({ children,network }: { children: React.R
                 <div className="min-h-0 overflow-hidden"><div className="space-y-1 py-1 pr-5">
                   {group.items.map((item) => {
                     const Icon = item.icon; const active = findNavMatch(navGroups,pathname)?.item.href===item.href;
-                    return <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 rl-nav-sub text-[13px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
+                    return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} onClick={() => mobile && setMobileOpen(false)} className={`flex min-h-10 items-center gap-2 rounded-[14px] px-2 rl-nav-sub text-[13px] font-medium transition ${active ? "bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.055] dark:text-white" : "text-slate-500 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-400 dark:hover:bg-white/[.045] dark:hover:text-white"}`}><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></Link>;
                   })}
                 </div></div>
               </div>
