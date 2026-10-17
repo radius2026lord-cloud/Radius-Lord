@@ -19,7 +19,7 @@ import {
   CircleDollarSign,
   Clock3,
   ChevronDown,
-  ChevronRight,
+  ChevronLeft,
   CreditCard,
   Crown,
   Database,
@@ -327,10 +327,10 @@ export default function DashboardShell({ children,network }: { children: React.R
               const group=match?.group;
               const current=match?.item;
               const currentLabel=accountType==="master_admin"&&new RegExp("^/Dashboard/connection-servers/[^/]+$").test(pathname)&&!pathname.endsWith("/add")?"تفاصيل وإعداد خادم الاتصال":current?.label??currentTitle;
-              return <nav aria-label="دليل التنقل" dir="ltr" className="rl-breadcrumb flex min-w-0 items-center gap-2 overflow-visible text-[13px] font-medium sm:gap-2.5 sm:text-sm">
+              return <nav aria-label="دليل التنقل" dir="rtl" className="rl-breadcrumb flex min-w-0 items-center gap-2 overflow-visible text-[13px] font-medium sm:gap-2.5 sm:text-sm">
                 <Link href={home.href} aria-label={home.label} title={home.label} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#5f6368] transition hover:bg-black/[.04] hover:text-[#202124] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8eabc8] dark:text-slate-400 dark:hover:bg-white/[.06] dark:hover:text-white"><Home className="h-[18px] w-[18px]"/></Link>
-                <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-[#9aa0a6] dark:text-slate-500"/>
-                {group&&<><Link href={group.items[0]?.href||home.href} dir="auto" className="min-w-0 max-w-[34vw] truncate text-[#5f6368] transition hover:text-[#202124] focus-visible:outline-none focus-visible:underline dark:text-slate-400 dark:hover:text-slate-100">{group.label}</Link><ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-[#9aa0a6] dark:text-slate-500"/></>}
+                <ChevronLeft aria-hidden="true" className="h-4 w-4 shrink-0 text-[#9aa0a6] dark:text-slate-500"/>
+                {group&&<><Link href={group.items[0]?.href||home.href} dir="auto" className="min-w-0 max-w-[34vw] truncate text-[#5f6368] transition hover:text-[#202124] focus-visible:outline-none focus-visible:underline dark:text-slate-400 dark:hover:text-slate-100">{group.label}</Link><ChevronLeft aria-hidden="true" className="h-4 w-4 shrink-0 text-[#9aa0a6] dark:text-slate-500"/></>}
                 {group&&group.items.length>1?<div ref={sectionMenuRef} className="relative min-w-0 shrink"><button type="button" aria-current="page" aria-haspopup="menu" aria-expanded={sectionMenuOpen} onClick={()=>setSectionMenuOpen(value=>!value)} title="التنقل بين صفحات القسم" className="flex min-w-0 items-center gap-1.5 rounded-md px-0.5 py-1 text-left font-semibold text-[#202124] transition hover:text-[#0758e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8eabc8] dark:text-slate-100 dark:hover:text-white"><span dir="auto" className="truncate">{currentLabel}</span><ChevronDown aria-hidden="true" className={`h-3 w-3 shrink-0 text-[#777a80] transition-transform ${sectionMenuOpen?"rotate-180":""}`}/></button>{sectionMenuOpen&&<div role="menu" aria-label={`أقسام ${group.label}`} className="ui-state-enter absolute left-0 top-[calc(100%+8px)] z-[90] w-[230px] overflow-hidden rounded-[16px] border border-[#d7e3ef] bg-[#f9fbfe] p-1.5 text-right shadow-[0_18px_45px_rgba(44,65,92,.22)] dark:border-white/[.12] dark:bg-[#302e33] dark:shadow-[0_22px_55px_rgba(0,0,0,.38)]">{group.items.map((item)=>{const ItemIcon=item.icon;const active=item.href===current?.href;return <Link key={item.href} href={item.href} role="menuitem" aria-current={active?"page":undefined} onClick={()=>setSectionMenuOpen(false)} className={`flex min-h-10 items-center gap-2.5 rounded-[12px] px-2.5 text-xs font-semibold transition ${active?"bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.08] dark:text-white":"text-slate-600 hover:bg-[#edf4fb] hover:text-[#0758e9] dark:text-slate-300 dark:hover:bg-white/[.05] dark:hover:text-white"}`}><ItemIcon className="h-4 w-4 shrink-0 text-[#0758e9] dark:text-[#8ab5ff]"/><span className="min-w-0 flex-1">{item.label}</span>{active&&<span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"/>}</Link>})}</div>}</div>:<span aria-current="page" dir="auto" className="min-w-0 truncate px-0.5 py-1 font-semibold text-[#202124] dark:text-slate-100">{currentLabel}</span>}
               </nav>;
             })()}

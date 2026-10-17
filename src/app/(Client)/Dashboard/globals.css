@@ -258,6 +258,39 @@ a {
   box-shadow: none !important;
 }
 
+/* Keep the subscribers dark theme on one calm blue-gray palette with readable muted text. */
+.dark .rl-hostinger-subscribers {
+  --oneui-bg: #101d2a;
+  --oneui-workspace: #122131;
+  --oneui-surface: #192b3d;
+  --oneui-surface-2: #203346;
+  --oneui-surface-3: #293b4d;
+  --oneui-border: rgba(180, 199, 218, 0.14);
+  --oneui-border-strong: rgba(190, 208, 226, 0.23);
+  --oneui-text: #e2eaf2;
+  --oneui-muted: #afbdca;
+  background-color: var(--oneui-bg) !important;
+  color: var(--oneui-text);
+}
+
+.dark .rl-hostinger-subscribers .dashboard-main-shell > header > div,
+.dark .rl-hostinger-subscribers > aside.dashboard-logout-surface,
+.dark .rl-hostinger-subscribers .rl-mobile-sidebar-panel,
+.dark .rl-hostinger-subscribers .dashboard-main-shell > footer > div {
+  background-color: var(--oneui-surface) !important;
+  border-color: var(--oneui-border) !important;
+}
+
+.dark .rl-hostinger-subscribers .text-slate-300 {
+  color: #d1dce7 !important;
+}
+
+.dark .rl-hostinger-subscribers .text-slate-400,
+.dark .rl-hostinger-subscribers .text-slate-500,
+.dark .rl-hostinger-subscribers [class*="dark:text-[#b9b3bd]"] {
+  color: var(--oneui-muted) !important;
+}
+
 .dark [class*="dark:bg-[#0d243b]"],
 .dark [class*="dark:bg-[#0d243c]"],
 .dark [class*="dark:bg-[#0b2036]"],
