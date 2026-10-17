@@ -267,8 +267,8 @@ a {
   --oneui-surface-3: #37343d;
   --oneui-border: rgba(235, 230, 240, 0.08);
   --oneui-border-strong: rgba(235, 230, 240, 0.13);
-  --oneui-text: #f0edf3;
-  --oneui-muted: #c2bdc7;
+  --oneui-text: #faf9fb;
+  --oneui-muted: #e2dee6;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
 }
@@ -282,7 +282,7 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .text-slate-300 {
-  color: #e1dce5 !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .text-slate-400,
@@ -293,7 +293,7 @@ a {
 
 /* Keep key navigation and page labels crisp against the soft plum surfaces. */
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main {
-  color: #eeeaf1 !important;
+  color: #faf9fb !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main:hover,
@@ -302,7 +302,7 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-sub {
-  color: #d8d3dc !important;
+  color: #eeeaf1 !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-sub[aria-current="page"] {
@@ -312,7 +312,7 @@ a {
 .dark .rl-hostinger-subscribers .rl-breadcrumb a,
 .dark .rl-hostinger-subscribers .rl-breadcrumb > span,
 .dark .rl-hostinger-subscribers .rl-breadcrumb button {
-  color: #e2dde6 !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .rl-breadcrumb > :is(svg) {
@@ -320,15 +320,15 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .collection-table-scroll thead {
-  color: #f0edf3 !important;
+  color: #faf9fb !important;
 }
 
 .dark .rl-hostinger-subscribers :is(h1, h2, h3) {
-  color: #f5f2f6;
+  color: #faf9fb;
 }
 
 .dark .rl-hostinger-subscribers .collection-table-scroll tbody {
-  color: #e1dce5;
+  color: #f1eef4;
 }
 
 .dark .rl-hostinger-subscribers [class*="dark:bg-[#172b40]"],
