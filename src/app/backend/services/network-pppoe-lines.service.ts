@@ -39,9 +39,9 @@ const packagesSql=`SELECT p.id package_id,p.name,p.package_type,p.base_price,p.o
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.graceSource')) grace_source,
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.globalGraceDays')) global_grace_days
  FROM pppoe_packages p JOIN pppoe_package_versions v ON v.id=(SELECT x.id FROM pppoe_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1)
- WHERE p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL AND p.package_type NOT IN('daily','addon') ORDER BY p.id DESC`;
+ WHERE p.is_enabled=1 AND p.archived_at IS NULL AND p.package_type NOT IN('daily','addon') ORDER BY p.id DESC`;
 
-export async function readPppoeLinePackages(scope:any){return withNetwork(scope,async app=>{await principal(app,scope);const [[packages],[servers]]:any=await Promise.all([app.query(packagesSql,[scope.managerId]),app.query("SELECT n.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),n.nasname) name,n.nasname address FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.name,l.id")]);return {packages,servers};});}
+export async function readPppoeLinePackages(scope:any){return withNetwork(scope,async app=>{await principal(app,scope);const [[packages],[servers]]:any=await Promise.all([app.query(packagesSql),app.query("SELECT n.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),n.nasname) name,n.nasname address FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.name,l.id")]);return {packages,servers};});}
 
 export async function createPppoeLine(scope:any,input:any){
  return withNetwork(scope,async app=>{await app.beginTransaction();try{
@@ -53,10 +53,9 @@ export async function createPppoeLine(scope:any,input:any){
   const [customers]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE",[customerId]);if(!customers[0])throw new Error('PPPOE_LINE_CUSTOMER_UNAVAILABLE');
   const [nasRows]:any=await app.query("SELECT n.id,n.nasname FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.id FOR UPDATE");
   if(!nasRows.length)throw new Error('PPPOE_LINE_NAS_REQUIRED');
-  if(!allowedNasId)invalid('allowedNasId');
   let allowedNas:any=null;
   if(allowedNasId){allowedNas=nasRows.find((nas:any)=>Number(nas.id)===allowedNasId);if(!allowedNas)throw new Error('PPPOE_LINE_NAS_UNAVAILABLE');}
-  const [versions]:any=await app.query(`${packagesSql.replace('ORDER BY p.id DESC','AND v.id=? ORDER BY p.id DESC')} FOR UPDATE`,[scope.managerId,versionId]);const version=versions[0];if(!version)throw new Error('PPPOE_LINE_PACKAGE_UNAVAILABLE');
+  const [versions]:any=await app.query(`${packagesSql.replace('ORDER BY p.id DESC','AND v.id=? ORDER BY p.id DESC')} FOR UPDATE`,[versionId]);const version=versions[0];if(!version)throw new Error('PPPOE_LINE_PACKAGE_UNAVAILABLE');
   let graceDays=Number(version.grace_days||0);const graceSource=version.grace_source==='global'?'global':'package';if(graceSource==='global')graceDays=Number(version.global_grace_days||0);
   const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('pppoe')");const identityId=Number(identity.insertId);
   try{await app.query('INSERT INTO radius_username_reservations(username,radius_identity_id) VALUES(?,?)',[username,identityId]);}catch(error:any){if(error?.code==='ER_DUP_ENTRY')throw new Error('PPPOE_LINE_USERNAME_TAKEN');throw error;}
