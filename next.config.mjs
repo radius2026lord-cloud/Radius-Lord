@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:4001/api/:path*', // يوجّه للباك إند
+        destination: `${(process.env.BACKEND_API_URL || `http://localhost:${process.env.PORT || 4001}`).replace(/\/$/, '')}/api/:path*`, // يوجّه للباك إند على المنفذ المضبوط
       },
     ];
   },
