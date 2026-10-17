@@ -245,10 +245,10 @@ a {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035) !important;
 }
 
-/* Subscriber list: keep one continuous page canvas behind the Hostinger-style white surfaces. */
+/* Subscriber list: keep one continuous page canvas behind the Hostinger-style surfaces. */
 .dark .rl-hostinger-subscribers .workspace-frame {
   background-color: transparent !important;
-  border-color: #40556a !important;
+  border-color: var(--oneui-border-strong) !important;
   box-shadow: none !important;
 }
 
@@ -258,17 +258,17 @@ a {
   box-shadow: none !important;
 }
 
-/* Keep the subscribers dark theme on one calm blue-gray palette with readable muted text. */
+/* One UI 8.5-inspired dark palette: soft charcoal-plum surfaces and calm separators. */
 .dark .rl-hostinger-subscribers {
-  --oneui-bg: #101d2a;
-  --oneui-workspace: #122131;
-  --oneui-surface: #192b3d;
-  --oneui-surface-2: #203346;
-  --oneui-surface-3: #293b4d;
-  --oneui-border: rgba(180, 199, 218, 0.14);
-  --oneui-border-strong: rgba(190, 208, 226, 0.23);
-  --oneui-text: #e2eaf2;
-  --oneui-muted: #afbdca;
+  --oneui-bg: #19171d;
+  --oneui-workspace: #1d1b21;
+  --oneui-surface: #242228;
+  --oneui-surface-2: #2d2a32;
+  --oneui-surface-3: #37343d;
+  --oneui-border: rgba(235, 230, 240, 0.08);
+  --oneui-border-strong: rgba(235, 230, 240, 0.13);
+  --oneui-text: #f0edf3;
+  --oneui-muted: #b1abb6;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
 }
@@ -289,6 +289,20 @@ a {
 .dark .rl-hostinger-subscribers .text-slate-500,
 .dark .rl-hostinger-subscribers [class*="dark:text-[#b9b3bd]"] {
   color: var(--oneui-muted) !important;
+}
+
+.dark .rl-hostinger-subscribers [class*="dark:bg-[#172b40]"],
+.dark .rl-hostinger-subscribers [class*="dark:bg-[#29435d]"],
+.dark .rl-hostinger-subscribers [class*="dark:bg-[#16283b]"],
+.dark .rl-hostinger-subscribers [class*="dark:bg-[#102136]"],
+.dark .rl-hostinger-subscribers [class*="dark:bg-[#10243a]"],
+.dark .rl-hostinger-subscribers [class*="dark:bg-[#142d47]"] {
+  background-color: var(--oneui-surface-2) !important;
+}
+
+.dark .rl-hostinger-subscribers tbody > tr + tr {
+  border-top-width: 1px !important;
+  border-color: var(--oneui-border) !important;
 }
 
 .dark [class*="dark:bg-[#0d243b]"],
