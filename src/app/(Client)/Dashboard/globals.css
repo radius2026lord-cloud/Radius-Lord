@@ -246,7 +246,12 @@ a {
 }
 
 /* Subscriber list: keep one continuous page canvas behind the Hostinger-style white surfaces. */
-.dark .rl-hostinger-subscribers .workspace-frame,
+.dark .rl-hostinger-subscribers .workspace-frame {
+  background-color: transparent !important;
+  border-color: rgba(255,255,255,.16) !important;
+  box-shadow: none !important;
+}
+
 .dark .rl-hostinger-subscribers .workspace-scroll {
   background-color: transparent !important;
   border-color: transparent !important;
