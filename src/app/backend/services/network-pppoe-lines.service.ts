@@ -41,7 +41,7 @@ const packagesSql=`SELECT p.id package_id,p.name,p.package_type,p.base_price,p.o
  FROM pppoe_packages p JOIN pppoe_package_versions v ON v.id=(SELECT x.id FROM pppoe_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1)
  WHERE p.is_enabled=1 AND p.archived_at IS NULL AND p.package_type NOT IN('daily','addon') ORDER BY p.id DESC`;
 
-export async function readPppoeLinePackages(scope:any){return withNetwork(scope,async app=>{await principal(app,scope);const [[packages],[servers]]:any=await Promise.all([app.query(packagesSql),app.query("SELECT n.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),n.nasname) name,n.nasname address,l.vendor FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.name,l.id")]);return {packages,servers};});}
+export async function readPppoeLinePackages(scope:any){return withNetwork(scope,async app=>{await principal(app,scope);const [[packages],[servers]]:any=await Promise.all([app.query(packagesSql),app.query("SELECT n.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),n.nasname) name,n.nasname address,l.vendor FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.name,l.id")]);if(!packages.length||!servers.length){const [database]:any=await app.query('SELECT DATABASE() database_name');console.warn('[pppoe-lines] empty selector data',{database:database[0]?.database_name,profiles:packages.length,servers:servers.length});}return {packages,servers};});}
 
 export async function createPppoeLine(scope:any,input:any){
  return withNetwork(scope,async app=>{await app.beginTransaction();try{
