@@ -245,23 +245,38 @@ a {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035) !important;
 }
 
-/* High-contrast white typography across every Dashboard route in dark mode. */
+/* Calm, consistent near-white typography across the complete dashboard in dark mode. */
 .dark .dashboard-shell-root {
-  color: #ffffff;
+  --oneui-text: #f1eef4;
+  --oneui-muted: #f1eef4;
+  color: #f1eef4;
 }
 
 .dark .dashboard-shell-root :is(h1, h2, h3) {
-  color: #ffffff !important;
-}
-
-.dark .dashboard-shell-root :is(.text-slate-300, .text-slate-400, .text-slate-500) {
   color: #f1eef4 !important;
 }
 
-.dark .dashboard-shell-root [class*="dark:text-[#9f98a5]"],
-.dark .dashboard-shell-root [class*="dark:text-[#aaa4af]"],
-.dark .dashboard-shell-root [class*="dark:text-[#96909b]"],
-.dark .dashboard-shell-root [class*="dark:text-[#b9b3bd]"] {
+.dark .dashboard-shell-root :is(
+  [class*="text-slate-"], [class*="dark:text-slate-"],
+  [class*="text-gray-"], [class*="dark:text-gray-"],
+  [class*="text-zinc-"], [class*="dark:text-zinc-"],
+  [class*="text-neutral-"], [class*="dark:text-neutral-"],
+  [class*="text-stone-"], [class*="dark:text-stone-"],
+  [class*="text-white"],
+  [class*="dark:text-[#918a96]"], [class*="dark:text-[#9f98a5]"],
+  [class*="dark:text-[#aaa4af]"], [class*="dark:text-[#96909b]"],
+  [class*="dark:text-[#b9b3bd]"], [class*="dark:text-[#bdb6c1]"],
+  [class*="dark:text-[#c4bec8]"], [class*="dark:text-[#d4ced7]"],
+  [class*="dark:text-[#d6d1d9]"], [class*="dark:text-[#d8d2dc]"],
+  [class*="dark:text-[#ddd7e1]"], [class*="dark:text-[#e3dee6]"],
+  [class*="dark:text-[#ece8ee]"], [class*="dark:text-[#f3f5f8]"],
+  [class*="dark:text-[#f4f1f5]"], [class*="dark:text-[#f6f2f7]"],
+  [class*="dark:text-[#dce8fa]"]
+) {
+  color: #f1eef4 !important;
+}
+
+.dark .dashboard-shell-root .rl-field-value {
   color: #f1eef4 !important;
 }
 
@@ -270,7 +285,7 @@ a {
 .dark .dashboard-shell-root .rl-breadcrumb a,
 .dark .dashboard-shell-root .rl-breadcrumb button,
 .dark .dashboard-shell-root .rl-breadcrumb > span {
-  color: #ffffff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .dashboard-shell-root .sidebar .rl-nav-main > span:not(.sidebar-active-icon) > .lucide,
@@ -306,7 +321,7 @@ a {
   --oneui-surface-3: #37343d;
   --oneui-border: rgba(235, 230, 240, 0.08);
   --oneui-border-strong: rgba(235, 230, 240, 0.13);
-  --oneui-text: #ffffff;
+  --oneui-text: #f1eef4;
   --oneui-muted: #f1eef4;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
@@ -332,12 +347,12 @@ a {
 
 /* Keep key navigation and page labels crisp against the soft plum surfaces. */
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main {
-  color: #ffffff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main:hover,
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main:focus-visible {
-  color: #fff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-sub {
@@ -345,7 +360,7 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-sub[aria-current="page"] {
-  color: #fff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .rl-breadcrumb a,
@@ -359,15 +374,15 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .collection-table-scroll thead {
-  color: #ffffff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers :is(h1, h2, h3) {
-  color: #ffffff !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers .collection-table-scroll tbody {
-  color: #f7f5f8 !important;
+  color: #f1eef4 !important;
 }
 
 .dark .rl-hostinger-subscribers [class*="dark:bg-[#172b40]"],
