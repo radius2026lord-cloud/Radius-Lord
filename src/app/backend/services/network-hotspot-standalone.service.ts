@@ -53,7 +53,7 @@ export async function createHotspotStandalone(scope:any,input:any){
     username=String(input.username).trim().toLowerCase();
     if(!/^[a-z0-9_.@-]{1,64}$/.test(username))invalid('username');
     password=mode==='code'?username:String(input.password??'');
-    if(mode==='username_password'&&(!password.trim()||password.length>128))invalid('password');
+    if(mode==='username_password'&&(Array.from(password).length>15||/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u.test(password)))invalid('password');
    }
    const [cs]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE",[customerId]);
    if(!cs[0])throw new Error('HOTSPOT_STANDALONE_CUSTOMER_UNAVAILABLE');
