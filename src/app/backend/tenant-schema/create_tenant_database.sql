@@ -758,7 +758,7 @@ CREATE TABLE package_service_policies (
   duration_value INT UNSIGNED NULL,
   duration_unit_id SMALLINT UNSIGNED NULL,
   expiry_day TINYINT UNSIGNED NULL,
-  starts_at ENUM('activation','first_connection') NULL,
+  starts_at ENUM('activation','first_connection','creation') NULL,
   grace_days SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   quota_exhaustion_action ENUM('stop','reduce_speed') NOT NULL DEFAULT 'stop',
   reduced_download_bps BIGINT UNSIGNED NULL,

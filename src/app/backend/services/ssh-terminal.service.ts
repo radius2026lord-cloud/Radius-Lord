@@ -222,11 +222,11 @@ export async function inspectInstalledRadius(serverId: number) {
     await new Promise<void>((resolve,reject)=>{client.once('ready',resolve);client.once('error',reject);client.once('close',()=>reject(new Error('انقطع SSH.')));client.connect(options(c));});
     await new Promise<void>((resolve,reject)=>{
       const timer=setTimeout(()=>{client.destroy();reject(new Error('انتهت مهلة فحص FreeRADIUS.'));},20000);
-      client.exec('test -x /usr/sbin/freeradius && systemctl is-active --quiet freeradius && sudo -n /usr/sbin/freeradius -C >/dev/null 2>&1', (error,stream)=>{
+      client.exec('test -x /usr/sbin/freeradius && test -x /usr/bin/radclient && systemctl is-active --quiet freeradius && sudo -n /usr/sbin/freeradius -C >/dev/null 2>&1', (error,stream)=>{
         if(error){clearTimeout(timer);return reject(error);}
         stream.resume();stream.stderr.resume();
         stream.once('error',(e:Error)=>{clearTimeout(timer);reject(e);});
-        stream.once('close',(code:number)=>{clearTimeout(timer);code===0?resolve():reject(new Error('تحقق من وجود FreeRADIUS وتشغيله وصلاحية sudo لفحص إعداداته.'));});
+        stream.once('close',(code:number)=>{clearTimeout(timer);code===0?resolve():reject(new Error('تحقق من تشغيل FreeRADIUS وصحة إعداداته وتوفر radclient لفصل جلسات NAS.'));});
       });
     });
   } finally { client.destroy(); }

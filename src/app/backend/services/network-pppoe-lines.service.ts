@@ -1,16 +1,24 @@
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
+import {pppoeExpiry} from './network-pppoe-lifecycle.service';
 
 function invalid(field:string):never{const error:any=new Error('PPPOE_LINE_INPUT');error.fields={[field]:'تحقق من القيمة المدخلة.'};throw error;}
 function integer(value:any,field:string){const number=Number(value);if(!Number.isSafeInteger(number)||number<1)invalid(field);return number;}
+function sqlTimestamp(value:Date){return value.toISOString().slice(0,23).replace('T',' ');}
 async function principal(app:any,scope:any){const access=await managerAccess(app,scope.managerId,scope.authVersion);if(access.role!=='principal')throw new Error('NETWORK_AUTH');return access;}
 
 async function ensureRadiusGroup(app:any,version:any){
- const rate=(value:any)=>{const n=BigInt(String(value));if(n%1000000000n===0n)return n/1000000000n+'G';if(n%1000000n===0n)return n/1000000n+'M';if(n%1000n===0n)return n/1000n+'k';return String(n);};
+ const rate=(value:any)=>{const n=BigInt(String(value)),g=BigInt(1000000000),m=BigInt(1000000),k=BigInt(1000);if(n%g===BigInt(0))return n/g+'G';if(n%m===BigInt(0))return n/m+'M';if(n%k===BigInt(0))return n/k+'k';return String(n);};
  const [rates]:any=await app.query("SELECT id FROM radgroupreply WHERE groupname=? AND attribute='Mikrotik-Rate-Limit' LIMIT 1",[version.radius_group_name]);
  if(!rates.length)await app.query("INSERT INTO radgroupreply(groupname,attribute,op,value) VALUES(?,'Mikrotik-Rate-Limit','=',?)",[version.radius_group_name,rate(version.upload_bps)+'/'+rate(version.download_bps)]);
  const [sessions]:any=await app.query("SELECT id FROM radgroupcheck WHERE groupname=? AND attribute='Simultaneous-Use' LIMIT 1",[version.radius_group_name]);
  if(!sessions.length)await app.query("INSERT INTO radgroupcheck(groupname,attribute,op,value) VALUES(?,'Simultaneous-Use',':=',?)",[version.radius_group_name,String(version.simultaneous_sessions)]);
+ const [settings]:any=await app.query('SELECT radius_interim_update_seconds FROM network_settings WHERE id=1');
+ const interimSeconds=Number(settings[0]?.radius_interim_update_seconds);
+ if(!Number.isSafeInteger(interimSeconds)||interimSeconds<60)throw new Error('PPPOE_ACCOUNTING_INTERVAL_REQUIRED');
+ const [interim]:any=await app.query("SELECT id FROM radgroupreply WHERE groupname=? AND attribute='Acct-Interim-Interval' LIMIT 1",[version.radius_group_name]);
+ if(!interim.length)await app.query("INSERT INTO radgroupreply(groupname,attribute,op,value) VALUES(?,'Acct-Interim-Interval',':=',?)",[version.radius_group_name,String(interimSeconds)]);
+ else await app.query("UPDATE radgroupreply SET op=':=',value=? WHERE groupname=? AND attribute='Acct-Interim-Interval'",[String(interimSeconds),version.radius_group_name]);
  const radius=typeof version.radius_snapshot==='string'?JSON.parse(version.radius_snapshot):version.radius_snapshot||{};
  if(radius.framed_pool){const [pool]:any=await app.query("SELECT id FROM radgroupreply WHERE groupname=? AND attribute='Framed-Pool' LIMIT 1",[version.radius_group_name]);if(!pool.length)await app.query("INSERT INTO radgroupreply(groupname,attribute,op,value) VALUES(?,'Framed-Pool','=',?)",[version.radius_group_name,String(radius.framed_pool)]);}
  if(radius.mikrotik_group){const [group]:any=await app.query("SELECT id FROM radgroupreply WHERE groupname=? AND attribute='Mikrotik-Group' LIMIT 1",[version.radius_group_name]);if(!group.length)await app.query("INSERT INTO radgroupreply(groupname,attribute,op,value) VALUES(?,'Mikrotik-Group','=',?)",[version.radius_group_name,String(radius.mikrotik_group)]);}
@@ -41,7 +49,7 @@ export async function createPppoeLine(scope:any,input:any){
   const lineName=String(input.lineName??'').trim();if(lineName.length>150)invalid('lineName');
   const allowedNasId=input.allowedNasId==null||input.allowedNasId===''?null:integer(input.allowedNasId,'allowedNasId');
   const username=String(input.username??'').trim().toLowerCase();if(!/^[a-z0-9_.@-]{1,64}$/.test(username))invalid('username');
-  const password=String(input.password??'');if(!password||password.length>64||/[\u0000-\u001f\u007f\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u.test(password))invalid('password');
+  const password=String(input.password??'');if(!password||password.length>64||/[\u0000-\u001f\u007f\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(password))invalid('password');
   const [customers]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE",[customerId]);if(!customers[0])throw new Error('PPPOE_LINE_CUSTOMER_UNAVAILABLE');
   const [nasRows]:any=await app.query("SELECT n.id,n.nasname FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.id FOR UPDATE");
   if(!nasRows.length)throw new Error('PPPOE_LINE_NAS_REQUIRED');
@@ -63,7 +71,25 @@ export async function createPppoeLine(scope:any,input:any){
   const gifted=Number(version.is_gift)===1,basePrice=String(version.base_price),effectivePrice=gifted?'0.00':offerActive?String(version.offer_price):basePrice;
   const [subscription]:any=await app.query("INSERT INTO pppoe_subscriptions(account_id,package_version_id,service_role,parent_subscription_id,created_by,event_type,renewal_mode,base_price_snapshot,offer_price_snapshot,offer_ends_at_snapshot,effective_price_snapshot,currency_code,is_gift_snapshot,grace_source_snapshot,grace_days_snapshot,effective_service_snapshot,quota_allowance_bytes,lifecycle) VALUES(?,?,'base',NULL,?,'activation','normal',?,?,?,?,?,?,?,?,?,?,'pending')",[accountId,versionId,scope.managerId,basePrice,offerActive?String(version.offer_price):null,offerActive?version.offer_ends_at:null,effectivePrice,version.currency_code,gifted?1:0,graceSource,graceDays,JSON.stringify(service),version.quota_bytes]);
   await app.query('INSERT INTO pppoe_subscription_usage(subscription_id,upload_bytes,download_bytes) VALUES(?,0,0)',[subscription.insertId]);
+  const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc');
+  const createdAt=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');
+  let lifecycle='pending';
+  if(service.starts_at==='creation'||service.validity_mode==='calendar_monthly'){
+   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');
+   const expiresAt=pppoeExpiry(createdAt,service,settings[0]?.timezone||'Asia/Damascus'),graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
+   await app.query("UPDATE pppoe_subscriptions SET lifecycle='active',activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?",[sqlTimestamp(createdAt),sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
+   const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-Date.now())/1000));
+   await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(timeout)]);
+   lifecycle=graceEnds.getTime()<=Date.now()?'ended':'active';
+   if(lifecycle==='ended'){
+    await app.query("UPDATE pppoe_subscriptions SET lifecycle='ended',ended_at=UTC_TIMESTAMP(6) WHERE id=?",[subscription.insertId]);
+    await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
+    await app.query("DELETE FROM radreply WHERE username=? AND attribute='Session-Timeout'",[username]);
+   }
+  }else if(service.starts_at==='activation'){
+   await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
+  }
   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,subscriptionId:Number(subscription.insertId)})]);
-  await app.commit();return {success:true,item:{id:accountId,username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle:'pending'}};
+  await app.commit();return {success:true,item:{id:accountId,username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle}};
  }catch(error){await app.rollback();throw error;}});
 }

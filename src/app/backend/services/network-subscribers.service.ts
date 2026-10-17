@@ -275,8 +275,12 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
    WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
   const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
   const [[pppoe],[hotspot]]:any=await Promise.all([
-   app.query(`SELECT p.id,r.current_username username,p.line_name,COALESCE(p.admin_status,'enabled') status,
-    COALESCE((SELECT pkg.name FROM pppoe_subscriptions ps JOIN pppoe_package_versions pv ON pv.id=ps.package_version_id JOIN pppoe_packages pkg ON pkg.id=pv.package_id WHERE ps.account_id=p.id AND ps.lifecycle IN('pending','active') ORDER BY ps.id DESC LIMIT 1),(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
+   app.query(`SELECT p.id,r.current_username username,p.line_name,p.admin_status status,sp.lifecycle,sp.expires_at,sp.grace_expires_at,sp.quota_allowance_bytes,
+    JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
+    COALESCE(su.upload_bytes,0)+COALESCE(su.download_bytes,0) used_bytes,
+    JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.quota_exhaustion_action')) quota_exhaustion_action,
+    JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.starts_at')) starts_at,
+    COALESCE((SELECT pkg.name FROM pppoe_subscriptions ps JOIN pppoe_package_versions pv ON pv.id=ps.package_version_id JOIN pppoe_packages pkg ON pkg.id=pv.package_id WHERE ps.account_id=p.id AND ps.service_role='base' ORDER BY ps.id DESC LIMIT 1),(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
     (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
@@ -284,8 +288,10 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
     (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
     FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
+    LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
+    LEFT JOIN pppoe_subscription_usage su ON su.subscription_id=sp.id
     LEFT JOIN (SELECT username,SUM(acctinputoctets) upload_bytes,SUM(acctoutputoctets) download_bytes FROM radacct GROUP BY username) u ON u.username=r.current_username
-    WHERE p.customer_id=? AND p.archived_at IS NULL AND p.admin_status='enabled' ORDER BY p.id DESC`,[id]),
+    WHERE p.customer_id=? AND p.archived_at IS NULL ORDER BY p.id DESC`,[id]),
    app.query(`SELECT a.id,r.current_username username,a.status status,p.name service_name,sp.lifecycle,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,

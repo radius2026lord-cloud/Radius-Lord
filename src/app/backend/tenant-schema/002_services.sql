@@ -214,7 +214,7 @@ CREATE TABLE package_service_policies (
   duration_unit_id SMALLINT UNSIGNED NULL,
   expiry_day TINYINT UNSIGNED NULL,
   expiry_time TIME NULL DEFAULT NULL COMMENT 'Local time for fixed-day profile expiry',
-  starts_at ENUM('activation','first_connection') NULL,
+  starts_at ENUM('activation','first_connection','creation') NULL,
   grace_days SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   quota_exhaustion_action ENUM('stop','reduce_speed') NOT NULL DEFAULT 'stop',
   reduced_download_bps BIGINT UNSIGNED NULL,
