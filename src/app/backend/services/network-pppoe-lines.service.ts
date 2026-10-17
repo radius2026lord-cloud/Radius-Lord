@@ -35,6 +35,11 @@ const packagesSql=`SELECT p.id package_id,p.name,p.package_type,p.base_price,p.o
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.units.time.name_ar')) duration_unit_name,
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.duration_unit_id')) duration_unit_id,
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.starts_at')) starts_at,
+ JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.expiry_day')) expiry_day,
+ JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.expiry_time')) expiry_time,
+ JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.units.time.seconds_per_unit')) seconds_per_unit,
+ JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.units.time.calculation_kind')) calculation_kind,
+ JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.timezone')) service_timezone,
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.grace_days')) grace_days,
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.graceSource')) grace_source,
  JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.globalGraceDays')) global_grace_days

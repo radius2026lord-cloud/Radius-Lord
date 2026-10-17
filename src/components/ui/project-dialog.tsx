@@ -1,13 +1,16 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { useState } from "react";
 import {PanelsTopLeft,TriangleAlert,X} from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectTooltip from "@/components/ui/project-tooltip";
+import { ProjectDialogDropdownContext } from "@/components/ui/project-dialog-dropdown-context";
 import "./project-dialog.css";
 
 export default function ProjectDialog({open=true,title,description,onClose,children,footer,maxWidth="max-w-2xl",danger=false,busy=false,headerAccessory,headerDetails,titleClassName="",hostingerStyle=false,compact=false}:{open?:boolean;title:string;description?:string;onClose:()=>void;children:React.ReactNode;footer?:React.ReactNode;maxWidth?:string;danger?:boolean;busy?:boolean;headerAccessory?:React.ReactNode;headerDetails?:React.ReactNode;titleClassName?:string;hostingerStyle?:boolean;compact?:boolean}){
- return <Dialog.Root open={open} onOpenChange={value=>{if(!value&&!busy)onClose();}}><Dialog.Portal>
+ const [dropdownOpen,setDropdownOpen]=useState(false);
+ return <ProjectDialogDropdownContext.Provider value={setDropdownOpen}><Dialog.Root modal={!dropdownOpen} open={open} onOpenChange={value=>{if(!value&&!busy)onClose();}}><Dialog.Portal>
   <Dialog.Overlay className="rl-dialog-overlay fixed inset-0 z-[10000] bg-[#071525]/65 backdrop-blur-[8px]"/>
   <Dialog.Content dir="rtl" {...(!description?{"aria-describedby":undefined}:{})} onEscapeKeyDown={e=>{if(busy)e.preventDefault();}} onPointerDownOutside={e=>{const target=e.target;if(busy||(target instanceof Element&&target.closest("[data-project-dropdown-menu]")))e.preventDefault();}} onFocusOutside={e=>{const target=e.target;if(target instanceof Element&&target.closest("[data-project-dropdown-menu]"))e.preventDefault();}} className={`rl-dialog-panel ${hostingerStyle?"rl-hostinger-dialog-canvas":""} fixed left-1/2 top-1/2 z-[10001] flex max-h-[calc(100dvh-32px)] w-[calc(100%-24px)] ${maxWidth} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden ${hostingerStyle?"rounded-[22px] border-[#e4e4e7] bg-[#f1f3f5] shadow-[0_24px_70px_-26px_rgba(32,33,36,.42)] dark:border-white/[.12] dark:bg-[#0b1b2a]":"rounded-[26px] border-slate-200 bg-white shadow-[0_36px_110px_-16px_rgba(0,0,0,.65)] dark:border-white/10 dark:bg-[#17263b]"} border text-slate-800 outline-none dark:text-slate-200 sm:w-[calc(100%-48px)]`}>
    <div className={`flex shrink-0 items-start gap-3 border-b ${hostingerStyle?"rl-hostinger-dialog-canvas":""} ${compact?"px-4 py-3 sm:px-5 sm:py-3.5":"px-5 py-5 sm:py-6 sm:px-6"} dark:border-white/10 ${hostingerStyle?"border-[#e4e4e7] bg-[#f1f3f5] dark:bg-[#0b1b2a]":"border-slate-100 bg-gradient-to-l from-blue-50/70 to-white dark:from-blue-500/10 dark:to-transparent"}`}>
@@ -19,5 +22,5 @@ export default function ProjectDialog({open=true,title,description,onClose,child
    <div className={`min-h-0 overflow-y-auto overscroll-contain ${compact?"p-3 sm:p-4":"p-5 sm:p-6"} ${hostingerStyle?"rl-hostinger-dialog-canvas":""} ${hostingerStyle?"bg-[#f1f3f5] dark:bg-[#0b1b2a]":"bg-white dark:bg-[#17263b]"}`}>{children}</div>
    {footer&&<div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 dark:border-white/10 dark:bg-white/[.025] sm:px-6">{footer}</div>}
   </Dialog.Content>
- </Dialog.Portal></Dialog.Root>;
+ </Dialog.Portal></Dialog.Root></ProjectDialogDropdownContext.Provider>;
 }
