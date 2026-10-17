@@ -122,8 +122,8 @@ body.dashboard-enter .rl-breadcrumb {
   }
 }
 
-/* Brand navy in light mode, a readable blue tint over dark surfaces. */
-:root.dark { --rl-type-heading-color: #a8c7f4; }
+/* Brand navy in light mode, white for clear dark-mode headings and navigation. */
+:root.dark { --rl-type-heading-color: #ffffff; }
 body.dashboard-enter :is(h1, h2, h3, .rl-shell-title)[class] {
   /* Existing dark font utilities set an important color. */
   color: var(--rl-type-heading-color) !important;
