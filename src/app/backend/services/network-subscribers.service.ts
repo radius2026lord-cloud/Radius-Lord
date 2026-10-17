@@ -129,9 +129,9 @@ export async function createNetworkSubscriber(scope:any,input:any){
   const entryMode=String(input.entryMode??'manual');
   if(!['manual','identity'].includes(entryMode))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{entryMode:'اختر طريقة إدخال صالحة.'}});
   const isIdentityEntry=entryMode==='identity';
-  const phone=isIdentityEntry?text(input.phone,15,'phone',true):null;
+  const phone=text(input.phone,15,'phone',isIdentityEntry);
   if(phone&&!/^[0-9]{1,15}$/.test(phone))throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{phone:'أدخل أرقام الهاتف فقط وبحد أقصى 15 رقمًا.'}});
-  const address=isIdentityEntry?text(input.address,10000,'address',true):null,notes=text(input.notes,10000,'notes');
+  const address=text(input.address,10000,'address',isIdentityEntry),notes=text(input.notes,10000,'notes');
   const identityInput=isIdentityEntry&&input.identityDocument&&typeof input.identityDocument==='object'?input.identityDocument:null;
   const identityDocument=identityInput?.captureMethod==='qr'?{
    fatherName:text(identityInput.fatherName,100,'fatherName'),
