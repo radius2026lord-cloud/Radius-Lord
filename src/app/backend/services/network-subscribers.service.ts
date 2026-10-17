@@ -276,7 +276,7 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
   const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
   const [[pppoe],[hotspot]]:any=await Promise.all([
    app.query(`SELECT p.id,r.current_username username,p.line_name,COALESCE(p.admin_status,'enabled') status,
-    (SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1) service_name,
+    COALESCE((SELECT pkg.name FROM pppoe_subscriptions ps JOIN pppoe_package_versions pv ON pv.id=ps.package_version_id JOIN pppoe_packages pkg ON pkg.id=pv.package_id WHERE ps.account_id=p.id AND ps.lifecycle IN('pending','active') ORDER BY ps.id DESC LIMIT 1),(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
     (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
