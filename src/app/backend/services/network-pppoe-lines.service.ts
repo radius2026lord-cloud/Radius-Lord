@@ -48,6 +48,12 @@ const packagesSql=`SELECT p.id package_id,p.name,p.package_type,p.base_price,p.o
 
 export async function readPppoeLinePackages(scope:any){return withNetwork(scope,async app=>{await principal(app,scope);const [[packages],[servers],[settings],[serviceTypes],[connectionMethods]]:any=await Promise.all([app.query(packagesSql),app.query("SELECT n.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),n.nasname) name,n.nasname address,l.vendor FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.name,l.id"),app.query('SELECT timezone FROM network_settings WHERE id=1'),app.query('SELECT id,code,name FROM service_types ORDER BY id'),app.query('SELECT id,service_type_id,code,name FROM connection_methods ORDER BY service_type_id,id')]);const timezone=String(settings[0]?.timezone||'Asia/Damascus');for(const item of packages)item.service_timezone=timezone;if(!packages.length||!servers.length){const [database]:any=await app.query('SELECT DATABASE() database_name');console.warn('[pppoe-lines] empty selector data',{database:database[0]?.database_name,profiles:packages.length,servers:servers.length});}return {packages,servers,serviceTypes,connectionMethods};});}
 
+export async function checkPppoeLineUsername(scope:any,value:any){
+ const username=String(value??'').trim().toLowerCase();
+ if(!/^[a-z0-9_.@-]{1,64}$/.test(username))invalid('username');
+ return withNetwork(scope,async app=>{await principal(app,scope);const [rows]:any=await app.query('SELECT username FROM radius_username_reservations WHERE username=? LIMIT 1',[username]);return {username,available:rows.length===0};});
+}
+
 export async function createPppoeLine(scope:any,input:any){
  return withNetwork(scope,async app=>{await app.beginTransaction();try{
   const access=await principal(app,scope),customerId=integer(input.customerId,'customerId'),versionId=integer(input.packageVersionId,'packageVersionId');
