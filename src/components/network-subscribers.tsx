@@ -574,10 +574,15 @@ export default function NetworkSubscribers({endpoint,tab="list",onTabChange,canC
         <p className="lg:col-span-3 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-[10px] leading-5 text-sky-800 dark:border-sky-300/10 dark:bg-sky-500/[.06] dark:text-sky-200">{selectedStationPool?<>سيخصص النظام تلقائيًا أول IP متاح من {selectedStationPool.name} ({selectedStationPool.range_start} – {selectedStationPool.range_end}) ويحجزه للقطعة عند الحفظ.</>:"لن يُطلب إدخال IP يدويًا؛ اختر نطاق الإدارة بعد إعداده في تبويب القطع."}</p>
        </div>}
       </div>}
-  <label className="min-w-0 space-y-1 text-xs font-medium text-[#202124] dark:text-slate-200 sm:col-span-2"><span className="block h-5 leading-5">عنوان موقع الخط</span><SubscriberAutocomplete compact endpoint={endpoint} field="address" value={pppoeForm.address} onChange={value=>setPppoeForm(form=>({...form,address:value,...(value!==form.address?{latitude:"",longitude:""}:{})}))} icon={MapPin} placeholder="اكتب أول حرفين لعرض العناوين المحفوظة" required={false}/></label>
-      <div className="min-w-0 space-y-2 sm:col-span-2"><div><p className="text-xs font-medium text-[#202124] dark:text-slate-200">تحديد موقع الخط على الخريطة</p><p className="mt-1 text-[10px] leading-4 text-[#5f6368] dark:text-slate-400">انقر على الخريطة لاختيار نقطة، أو استخدم موقع الجهاز الحالي، ثم ثبّت الموقع.</p></div><ProjectLocationMap compact active={pppoeOpen&&!createdPppoe&&pppoeStep===3} latitude={pppoeForm.latitude} longitude={pppoeForm.longitude} disabled={pppoeBusy||Boolean(createdPppoe)} onChange={(latitude,longitude)=>setPppoeForm(form=>({...form,latitude,longitude}))}/></div>
-     </div>
-    </section>
+    </div>
+   </section>
+   <section className="space-y-2 rounded-[20px] border border-[#e4e4e7] bg-[#f7f8fa] p-3 dark:border-white/[.12] dark:bg-[#0d243b]" aria-label="عنوان وموقع الخط">
+    <h3 className="flex items-center gap-2 text-xs font-semibold text-[#202124] dark:text-slate-100"><MapPin className="h-4 w-4 text-rose-500"/>العنوان والموقع <span className="text-[10px] font-normal text-[#5f6368] dark:text-slate-400">اختياري</span></h3>
+    <div className="grid items-start gap-2 sm:grid-cols-2">
+     <label className="min-w-0 space-y-1 text-xs font-medium text-[#202124] dark:text-slate-200 sm:col-span-2"><span className="block h-5 leading-5">عنوان موقع الخط</span><SubscriberAutocomplete compact endpoint={endpoint} field="address" value={pppoeForm.address} onChange={value=>setPppoeForm(form=>({...form,address:value,...(value!==form.address?{latitude:"",longitude:""}:{})}))} icon={MapPin} placeholder="اكتب أول حرفين لعرض العناوين المحفوظة" required={false}/></label>
+     <div className="min-w-0 space-y-2 sm:col-span-2"><div><p className="text-xs font-medium text-[#202124] dark:text-slate-200">تحديد الموقع على الخريطة</p><p className="mt-1 text-[10px] leading-4 text-[#5f6368] dark:text-slate-400">انقر على الخريطة لاختيار نقطة، أو استخدم موقع الجهاز الحالي، ثم ثبّت الموقع.</p></div><ProjectLocationMap compact active={pppoeOpen&&!createdPppoe&&pppoeStep===3} latitude={pppoeForm.latitude} longitude={pppoeForm.longitude} disabled={pppoeBusy||Boolean(createdPppoe)} onChange={(latitude,longitude)=>setPppoeForm(form=>({...form,latitude,longitude}))}/></div>
+    </div>
+   </section>
    </section>
   </>}
  <div className="flex items-center justify-between gap-2 pt-0.5">
