@@ -275,7 +275,7 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
    WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
   const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
   const [[pppoe],[hotspot]]:any=await Promise.all([
-   app.query(`SELECT p.id,r.current_username username,p.line_name,p.address,p.latitude,p.longitude,p.distribution_box_serial,p.distribution_box_description,p.station_vendor,p.station_ip_address,p.admin_status status,st.name service_type_name,cm.name connection_method_name,cm.code connection_method_code,sp.lifecycle,sp.expires_at,sp.grace_expires_at,sp.quota_allowance_bytes,
+   app.query(`SELECT p.id,r.current_username username,p.line_name,p.address,p.latitude,p.longitude,p.distribution_box_serial,p.distribution_box_description,COALESCE(ed.vendor,p.station_vendor) station_vendor,COALESCE(INET_NTOA(ed.management_ipv4),p.station_ip_address) station_ip_address,p.station_device_id,ed.name station_device_name,p.admin_status status,st.name service_type_name,cm.name connection_method_name,cm.code connection_method_code,sp.lifecycle,sp.expires_at,sp.grace_expires_at,sp.quota_allowance_bytes,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
     COALESCE(su.upload_bytes,0)+COALESCE(su.download_bytes,0) used_bytes,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.quota_exhaustion_action')) quota_exhaustion_action,
@@ -288,6 +288,7 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
     (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
     FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
+    LEFT JOIN network_equipment_devices ed ON ed.id=p.station_device_id
     LEFT JOIN service_types st ON st.id=p.service_type_id
     LEFT JOIN connection_methods cm ON cm.id=p.connection_method_id
     LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
