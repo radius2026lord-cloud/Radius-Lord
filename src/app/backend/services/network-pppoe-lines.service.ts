@@ -1,6 +1,6 @@
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
-import {pppoeExpiry} from './network-pppoe-lifecycle.service';
+import {parsePppoeLocalDateTime,pppoeExpiry} from './network-pppoe-lifecycle.service';
 
 function invalid(field:string):never{const error:any=new Error('PPPOE_LINE_INPUT');error.fields={[field]:'تحقق من القيمة المدخلة.'};throw error;}
 function integer(value:any,field:string){const number=Number(value);if(!Number.isSafeInteger(number)||number<1)invalid(field);return number;}
@@ -61,6 +61,9 @@ export async function createPppoeLine(scope:any,input:any){
   let allowedNas:any=null;
   if(allowedNasId){allowedNas=nasRows.find((nas:any)=>Number(nas.id)===allowedNasId);if(!allowedNas)throw new Error('PPPOE_LINE_NAS_UNAVAILABLE');}
   const [versions]:any=await app.query(`${packagesSql.replace('ORDER BY p.id DESC','AND v.id=? ORDER BY p.id DESC')} FOR UPDATE`,[versionId]);const version=versions[0];if(!version)throw new Error('PPPOE_LINE_PACKAGE_UNAVAILABLE');
+  const service=typeof version.service_snapshot==='string'?JSON.parse(version.service_snapshot):version.service_snapshot;
+  const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const serviceTimezone=String(settings[0]?.timezone||'Asia/Damascus');
+  if(input.expiresAtOverride){const expiry=parsePppoeLocalDateTime(input.expiresAtOverride,serviceTimezone),[clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc'),now=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');if(expiry<=now)throw new Error('PPPOE_LINE_EXPIRY_INVALID');service.expires_at_override=expiry.toISOString();}
   let graceDays=Number(version.grace_days||0);const graceSource=version.grace_source==='global'?'global':'package';if(graceSource==='global')graceDays=Number(version.global_grace_days||0);
   const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('pppoe')");const identityId=Number(identity.insertId);
   try{await app.query('INSERT INTO radius_username_reservations(username,radius_identity_id) VALUES(?,?)',[username,identityId]);}catch(error:any){if(error?.code==='ER_DUP_ENTRY')throw new Error('PPPOE_LINE_USERNAME_TAKEN');throw error;}
@@ -70,7 +73,6 @@ export async function createPppoeLine(scope:any,input:any){
   await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Cleartext-Password',':=',?)",[username,password]);
   if(allowedNas)await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'NAS-IP-Address','==',?)",[username,String(allowedNas.nasname)]);
   await app.query('INSERT INTO radusergroup(username,groupname,priority) VALUES(?,?,1)',[username,version.radius_group_name]);
-  const service=typeof version.service_snapshot==='string'?JSON.parse(version.service_snapshot):version.service_snapshot;
   const offerActive=version.offer_price!==null&&version.offer_price!==undefined&&version.offer_ends_at&&new Date(version.offer_ends_at).getTime()>Date.now();
   const gifted=Number(version.is_gift)===1,basePrice=String(version.base_price),effectivePrice=gifted?'0.00':offerActive?String(version.offer_price):basePrice;
   const [subscription]:any=await app.query("INSERT INTO pppoe_subscriptions(account_id,package_version_id,service_role,parent_subscription_id,created_by,event_type,renewal_mode,base_price_snapshot,offer_price_snapshot,offer_ends_at_snapshot,effective_price_snapshot,currency_code,is_gift_snapshot,grace_source_snapshot,grace_days_snapshot,effective_service_snapshot,quota_allowance_bytes,lifecycle) VALUES(?,?,'base',NULL,?,'activation','normal',?,?,?,?,?,?,?,?,?,?,'pending')",[accountId,versionId,scope.managerId,basePrice,offerActive?String(version.offer_price):null,offerActive?version.offer_ends_at:null,effectivePrice,version.currency_code,gifted?1:0,graceSource,graceDays,JSON.stringify(service),version.quota_bytes]);
@@ -79,8 +81,7 @@ export async function createPppoeLine(scope:any,input:any){
   const createdAt=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');
   let lifecycle='pending';
   if(service.starts_at==='creation'||service.validity_mode==='calendar_monthly'){
-   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');
-   const expiresAt=pppoeExpiry(createdAt,service,settings[0]?.timezone||'Asia/Damascus'),graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
+   const expiresAt=pppoeExpiry(createdAt,service,serviceTimezone),graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
    await app.query("UPDATE pppoe_subscriptions SET lifecycle='active',activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?",[sqlTimestamp(createdAt),sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
    const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-Date.now())/1000));
    await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(timeout)]);
@@ -93,7 +94,7 @@ export async function createPppoeLine(scope:any,input:any){
   }else if(service.starts_at==='activation'){
    await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
   }
-  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,subscriptionId:Number(subscription.insertId)})]);
+  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,expiresAtOverride:service.expires_at_override||null,subscriptionId:Number(subscription.insertId)})]);
   await app.commit();return {success:true,item:{id:accountId,username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle}};
  }catch(error){await app.rollback();throw error;}});
 }

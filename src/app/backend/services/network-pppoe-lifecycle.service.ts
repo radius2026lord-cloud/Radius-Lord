@@ -18,12 +18,21 @@ function resolveLocal(parts:any,zone:string){
  for(let index=0;index<5;index++){const offset=utc(parts)-utc(localParts(result,zone));if(!offset)return result;result=new Date(result.getTime()+offset);}
  throw new Error('PPPOE_LIFECYCLE_TIMEZONE');
 }
+export function parsePppoeLocalDateTime(value:any,zone:string){
+ const match=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(value??''));
+ if(!match)throw new Error('PPPOE_LINE_EXPIRY_INVALID');
+ const [,yearText,monthText,dayText,hourText,minuteText]=match,parts={year:Number(yearText),month:Number(monthText),day:Number(dayText),hour:Number(hourText),minute:Number(minuteText),second:0};
+ if(parts.year<2000||parts.month<1||parts.month>12||parts.day<1||parts.day>new Date(Date.UTC(parts.year,parts.month,0)).getUTCDate()||parts.hour>23||parts.minute>59)throw new Error('PPPOE_LINE_EXPIRY_INVALID');
+ let date:Date;try{date=resolveLocal(parts,zone);const resolved=localParts(date,zone);if((['year','month','day','hour','minute'] as const).some(key=>resolved[key]!==parts[key]))throw new Error('invalid local time');}catch{throw new Error('PPPOE_LINE_EXPIRY_INVALID');}
+ return date;
+}
 function addCalendarMonths(start:Date,months:number,zone:string){
  const parts=localParts(start,zone),next=new Date(Date.UTC(parts.year,parts.month-1+months,1));
  const year=next.getUTCFullYear(),month=next.getUTCMonth()+1,day=Math.min(parts.day,new Date(Date.UTC(year,month,0)).getUTCDate());
  return resolveLocal({...parts,year,month,day},zone);
 }
 export function pppoeExpiry(startValue:any,service:any,zone:string){
+ if(service?.expires_at_override)return dateValue(service.expires_at_override);
  const start=dateValue(startValue),mode=String(service.validity_mode||'duration'),parts=localParts(start,zone);
  if(mode==='calendar_monthly'){
   const month=parts.month===12?1:parts.month+1,year=parts.month===12?parts.year+1:parts.year;
