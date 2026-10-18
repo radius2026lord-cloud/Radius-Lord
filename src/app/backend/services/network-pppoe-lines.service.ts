@@ -1,4 +1,4 @@
-import {isIP} from 'node:net';
+import {createEquipmentStationForPppoe} from './network-equipment.service';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
 import {parsePppoeLocalDateTime,pppoeExpiry} from './network-pppoe-lifecycle.service';
@@ -63,8 +63,8 @@ export async function createPppoeLine(scope:any,input:any){
   const serviceTypeId=input.serviceTypeId==null||input.serviceTypeId===''?null:integer(input.serviceTypeId,'serviceTypeId');
   const connectionMethodId=input.connectionMethodId==null||input.connectionMethodId===''?null:integer(input.connectionMethodId,'connectionMethodId');
   const distributionBoxSerial=String(input.distributionBoxSerial??'').trim(),distributionBoxDescription=String(input.distributionBoxDescription??'').trim();
-  const stationVendor=String(input.stationVendor??'').trim(),stationIpAddress=String(input.stationIpAddress??'').trim();
-  if(distributionBoxSerial.length>100||distributionBoxDescription.length>500||stationIpAddress.length>45)invalid('installationDetails');
+  const stationDeviceId=input.stationDeviceId==null||input.stationDeviceId===''?null:integer(input.stationDeviceId,'stationDeviceId'),newStation=input.newStation&&typeof input.newStation==='object'?input.newStation:null;
+  if(distributionBoxSerial.length>100||distributionBoxDescription.length>500||stationDeviceId&&newStation)invalid('installationDetails');
   const latitude=input.latitude==null||input.latitude===''?null:Number(input.latitude),longitude=input.longitude==null||input.longitude===''?null:Number(input.longitude);
   if((latitude===null)!==(longitude===null)||latitude!==null&&(!Number.isFinite(latitude)||latitude < -90||latitude > 90)||longitude!==null&&(!Number.isFinite(longitude)||longitude < -180||longitude > 180))invalid('location');
   const allowedNasId=input.allowedNasId==null||input.allowedNasId===''?null:integer(input.allowedNasId,'allowedNasId');
@@ -78,16 +78,25 @@ export async function createPppoeLine(scope:any,input:any){
   if(serviceType?.code==='wifi_outdoor'){
    if(!connectionMethod)invalid('connectionMethodId');
    if(connectionMethod.code==='distribution_box'){
-    if(!distributionBoxSerial||stationVendor||stationIpAddress)invalid('installationDetails');
+    if(!distributionBoxSerial||stationDeviceId||newStation)invalid('installationDetails');
    }else if(connectionMethod.code==='station'){
-    if(!['ubnt','mimosa','mikrotik'].includes(stationVendor)||isIP(stationIpAddress)===0||distributionBoxSerial||distributionBoxDescription)invalid('installationDetails');
+    if(distributionBoxSerial||distributionBoxDescription||Boolean(stationDeviceId)===Boolean(newStation))invalid('installationDetails');
+    if(newStation&&(!newStation.name||!newStation.poolId||!['ubnt','mimosa','mikrotik'].includes(String(newStation.vendor))))invalid('installationDetails');
    }else invalid('connectionMethodId');
-  }else if(connectionMethodId||distributionBoxSerial||distributionBoxDescription||stationVendor||stationIpAddress)invalid('installationDetails');
+  }else if(connectionMethodId||distributionBoxSerial||distributionBoxDescription||stationDeviceId||newStation)invalid('installationDetails');
   const [nasRows]:any=await app.query("SELECT n.id,n.nasname FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.id FOR UPDATE");
   if(!nasRows.length)throw new Error('PPPOE_LINE_NAS_REQUIRED');
   let allowedNas:any=null;
   if(allowedNasId){allowedNas=nasRows.find((nas:any)=>Number(nas.id)===allowedNasId);if(!allowedNas)throw new Error('PPPOE_LINE_NAS_UNAVAILABLE');}
   const [versions]:any=await app.query(`${packagesSql.replace('ORDER BY p.id DESC','AND v.id=? ORDER BY p.id DESC')} FOR UPDATE`,[versionId]);const version=versions[0];if(!version)throw new Error('PPPOE_LINE_PACKAGE_UNAVAILABLE');
+  let stationDevice:any=null;
+  if(serviceType?.code==='wifi_outdoor'&&connectionMethod?.code==='station'){
+   if(newStation){stationDevice=await createEquipmentStationForPppoe(app,scope,customerId,{...newStation,address:newStation.address||address,latitude:newStation.latitude||latitude,longitude:newStation.longitude||longitude});}
+   else{
+    const [devices]:any=await app.query("SELECT d.id,d.vendor,INET_NTOA(d.management_ipv4) management_ip FROM network_equipment_devices d WHERE d.id=? AND d.device_role='station' AND d.customer_id=? AND d.status='active' AND d.management_ipv4 IS NOT NULL AND NOT EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.station_device_id=d.id AND p.archived_at IS NULL) FOR UPDATE",[stationDeviceId,customerId]);
+    stationDevice=devices[0];if(!stationDevice)throw new Error('PPPOE_LINE_STATION_UNAVAILABLE');
+   }
+  }
   const service=typeof version.service_snapshot==='string'?JSON.parse(version.service_snapshot):version.service_snapshot;
   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const serviceTimezone=String(settings[0]?.timezone||'Asia/Damascus');
   if(input.expiresAtOverride){const expiry=parsePppoeLocalDateTime(input.expiresAtOverride,serviceTimezone),[clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc'),now=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');if(expiry<=now)throw new Error('PPPOE_LINE_EXPIRY_INVALID');service.expires_at_override=expiry.toISOString();}
@@ -95,7 +104,8 @@ export async function createPppoeLine(scope:any,input:any){
   const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('pppoe')");const identityId=Number(identity.insertId);
   try{await app.query('INSERT INTO radius_username_reservations(username,radius_identity_id) VALUES(?,?)',[username,identityId]);}catch(error:any){if(error?.code==='ER_DUP_ENTRY')throw new Error('PPPOE_LINE_USERNAME_TAKEN');throw error;}
   await app.query('UPDATE radius_identities SET current_username=? WHERE id=?',[username,identityId]);
-  const [account]:any=await app.query("INSERT INTO pppoe_accounts(customer_id,radius_identity_id,line_name,admin_status,address,latitude,longitude,service_type_id,connection_method_id,distribution_box_serial,distribution_box_description,station_vendor,station_ip_address,allowed_nas_id,created_by) VALUES(?,?,?,'enabled',?,?,?,?,?,?,?,?,?,?,?)",[customerId,identityId,lineName||null,address||null,latitude,longitude,serviceTypeId,connectionMethodId,distributionBoxSerial||null,distributionBoxDescription||null,stationVendor||null,stationIpAddress||null,allowedNasId,scope.managerId]);const accountId=Number(account.insertId);
+  const legacyVendor=stationDevice&&['ubnt','mimosa','mikrotik'].includes(String(stationDevice.vendor))?stationDevice.vendor:null,stationIp=stationDevice?.management_ip||stationDevice?.managementIp||null;
+  const [account]:any=await app.query("INSERT INTO pppoe_accounts(customer_id,radius_identity_id,line_name,admin_status,address,latitude,longitude,service_type_id,connection_method_id,distribution_box_serial,distribution_box_description,station_vendor,station_ip_address,station_device_id,allowed_nas_id,created_by) VALUES(?,?,?,'enabled',?,?,?,?,?,?,?,?,?,?,?,?)",[customerId,identityId,lineName||null,address||null,latitude,longitude,serviceTypeId,connectionMethodId,distributionBoxSerial||null,distributionBoxDescription||null,legacyVendor,stationIp,stationDevice?.id||null,allowedNasId,scope.managerId]);const accountId=Number(account.insertId);
   await ensureRadiusGroup(app,version);
   await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Cleartext-Password',':=',?)",[username,password]);
   if(allowedNas)await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'NAS-IP-Address','==',?)",[username,String(allowedNas.nasname)]);
@@ -121,7 +131,7 @@ export async function createPppoeLine(scope:any,input:any){
   }else if(service.starts_at==='activation'){
    await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
   }
-  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,serviceTypeId,connectionMethodId,distributionBoxSerial:distributionBoxSerial||null,distributionBoxDescription:distributionBoxDescription||null,stationVendor:stationVendor||null,stationIpAddress:stationIpAddress||null,address:address||null,latitude,longitude,expiresAtOverride:service.expires_at_override||null,subscriptionId:Number(subscription.insertId)})]);
+  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,serviceTypeId,connectionMethodId,distributionBoxSerial:distributionBoxSerial||null,distributionBoxDescription:distributionBoxDescription||null,stationDeviceId:stationDevice?.id||null,stationManagementIp:stationIp,address:address||null,latitude,longitude,expiresAtOverride:service.expires_at_override||null,subscriptionId:Number(subscription.insertId)})]);
   await app.commit();return {success:true,item:{id:accountId,username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle}};
  }catch(error){await app.rollback();throw error;}});
 }
