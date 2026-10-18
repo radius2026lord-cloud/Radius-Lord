@@ -26,7 +26,7 @@ import {env} from '../config/env';
 import {db} from '../config/db';
 import {networkScope,withNetwork,validateLocalLicense} from '../services/network-runtime.service';
 import {provisioningKey,decryptProvisioningSecret} from '../services/provisioning-secrets.service';
-import {readNetworkOvpn,createNetworkNas,provisionNetworkNas,networkNasScript,nasRadiusClients,markNasRadiusConfigured,refreshNasLinks} from '../services/network-ovpn.service';
+import {readNetworkOvpn,createNetworkNas,provisionNetworkNas,networkNasScript,nasRadiusClients,markNasRadiusConfigured,setNetworkNasEnabled,refreshNasLinks} from '../services/network-ovpn.service';
 import {readPrivateSetting,applyRadiusDatabase,radiusDatabaseHost} from '../services/radius-provision.service';
 const router=Router();
 const failed=new Map<string,{count:number;until:number}>();
@@ -118,7 +118,14 @@ router.get('/:slug/settings',async(req,res)=>{try{return res.json(await readNetw
 router.post('/:slug/settings',async(req,res)=>{try{return res.json(await saveNetworkSettings(await principal(req),req.body));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:(e as Error).message==='SETTINGS_INPUT'?422:409).json(settingsError(e));}});
 router.get('/:slug/managers',async(req,res)=>{try{return res.json(await readManagers(await management(req)));}catch(e){if(['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes((e as any).code))return res.status(503).json({message:'تحتاج قاعدة هذه الشبكة إلى تطبيق ترقيتي أدوار المستخدمين والأرشيف.'});return res.status(401).json({message:'انتهت الجلسة أو لا تملك صلاحية إدارة المستخدمين.'});}});
 router.post('/:slug/managers',async(req,res)=>{try{return res.json(await mutateManagers(await management(req),req.body));}catch(e){const message=(e as Error).message;return res.status(message==='NETWORK_AUTH'?401:409).json({message:message==='NETWORK_AUTH'?'انتهت الجلسة.':(e as any).code==='ER_DUP_ENTRY'?'الاسم مستخدم بالفعل.':(e as any).code||/^[A-Z_]+$/.test(message)?'تعذر حفظ العملية.':message});}});
-const nasError=(e:unknown)=>({message:(e as Error)?.message==='NAS_PLAN_LIMIT_REACHED'?'وصلت إلى عدد أجهزة NAS المسموح به في الخطة.':(e as Error)?.message==='NAS_INPUT_INVALID'?'تحقق من الاسم وعنوان الإدارة والشركة والطراز وخدمات RADIUS.':(e as Error)?.message==='NETWORK_AUTH'?'انتهت الجلسة أو لا تملك صلاحية إدارة الخوادم.':'تعذر تجهيز اتصال NAS. يمكنك إعادة المحاولة لاستكماله؛ راجع البوابة والشهادات وSSH.',code:/^[A-Z0-9_]+$/.test((e as Error)?.message??'')?(e as Error).message:'NAS_OPERATION_FAILED'});
+const nasError=(e:unknown)=>({message:(e as Error)?.message==='NAS_PLAN_LIMIT_REACHED'?'وصلت إلى عدد أجهزة NAS المسموح به في الخطة.':(e as Error)?.message==='NAS_INPUT_INVALID'?'تحقق من البيانات الأساسية وخدمات RADIUS.':(e as Error)?.message==='NAS_STATUS_INPUT'?'حالة NAS المحددة غير صالحة.':(e as Error)?.message==='NAS_NOT_FOUND'?'جهاز NAS غير موجود أو مؤرشف.':(e as Error)?.message==='NETWORK_AUTH'?'انتهت الجلسة أو لا تملك صلاحية إدارة الخوادم.':'تعذر تجهيز اتصال NAS. يمكنك إعادة المحاولة لاستكماله؛ راجع البوابة والشهادات وSSH.',code:/^[A-Z0-9_]+$/.test((e as Error)?.message??'')?(e as Error).message:'NAS_OPERATION_FAILED'});
+async function syncNasRadius(central:any,app:any,scope:any,snapshot:any){
+ const state=await readPrivateSetting('environment_runtime','environment_'+scope.environment_id);if(!state||state.tenantId!==Number(scope.tenant_id)||state.subscriptionId!==Number(scope.subscription_id)||state.radiusServerId!==snapshot.radiusServerId)throw new Error('NAS_RADIUS_SCOPE');
+ const [configs]:any=await central.query("SELECT setting_value FROM platform_settings WHERE id=? AND setting_group='free_radius'",[snapshot.radiusServerId]);if(!configs[0])throw new Error('RADIUS_NOT_FOUND');const radius=JSON.parse(configs[0].setting_value);
+ const [servers]:any=await central.query('SELECT * FROM database_servers WHERE id=?',[scope.database_server_id]);if(!servers[0]||servers[0].tls_required||Number(radius.sshServerId)!==Number(state.radiusSshServerId))throw new Error('NAS_RADIUS_SCOPE');
+ await applyRadiusDatabase({sshServerId:radius.sshServerId,radiusHost:radius.host,databaseHost:await radiusDatabaseHost(servers[0],radius.host),databasePort:Number(servers[0].port),databaseName:scope.db_name,username:scope.radius_username,password:decryptProvisioningSecret(scope.radius_password_encrypted),authPort:state.authPort,accountingPort:state.accountingPort,name:'rl_env_'+scope.environment_id,secret:decryptProvisioningSecret(state.radiusSecretEncrypted),clients:await nasRadiusClients(app)});
+ await markNasRadiusConfigured(app);
+}
 router.get('/:slug/dashboard',async(req,res)=>{
  try{const scope=await principal(req);const tab=String(req.query.tab||'overview');
  const queries:Record<string,string>={
@@ -131,7 +138,7 @@ router.get('/:slug/dashboard',async(req,res)=>{
  const data=await withNetwork(scope,async app=>{if(tab==='overview'){const [rows]:any=await app.query("SELECT (SELECT COUNT(*) FROM pppoe_accounts WHERE archived_at IS NULL) subscribers,(SELECT COUNT(*) FROM pppoe_packages WHERE archived_at IS NULL) profiles,(SELECT COUNT(*) FROM hotspot_accounts WHERE archived_at IS NULL) hotspot,(SELECT COUNT(*) FROM lord_nas WHERE archived_at IS NULL) servers");return {summary:rows[0]};}const [items]=await app.query(queries[tab]);return {items};});return res.json(data);
  }catch(e){if((e as Error).message==='NETWORK_AUTH'||(e as Error).name==='TokenExpiredError'||(e as Error).name==='JsonWebTokenError')return res.status(401).json({message:'انتهت الجلسة أو لا تملك صلاحية إدارة الشبكة.'});console.error(e);return res.status(503).json({message:'تعذر تحميل بيانات الشبكة.'});}
 });
-router.get('/:slug/nas',async(req,res)=>{try{const scope=await principal(req);return res.json(await withNetwork(scope,async app=>{const snapshot=await readNetworkOvpn(app);const [rows]:any=await app.query("SELECT l.id,l.name,l.vendor,l.model,l.radius_services,l.management_host,l.location,l.description,l.activity_status,l.last_seen_at,c.tunnel_address,c.server_host,c.central_tunnel_id,JSON_EXTRACT(c.configuration_snapshot,'$.radiusConfigured') radius_ready FROM lord_nas l LEFT JOIN nas_ovpn_connections c ON c.nas_id=l.id WHERE l.archived_at IS NULL ORDER BY l.id");return {configured:Boolean(snapshot),maxNas:snapshot?snapshot.maxNas===0?0:snapshot.maxNas+snapshot.additionalNas:0,items:rows.map((r:any)=>({id:Number(r.id),name:r.name,vendor:r.vendor,model:r.model??null,services:String(r.radius_services||'').split(',').filter(Boolean),managementHost:r.management_host,location:r.location??null,description:r.description??null,address:r.tunnel_address??null,ready:Boolean(r.central_tunnel_id)&&String(r.radius_ready)==='true',status:r.activity_status==='recent'&&r.last_seen_at&&Date.now()-new Date(r.last_seen_at).getTime()<90000?'connected':r.activity_status==='stale'?'disconnected':'awaiting_link',lastSeenAt:r.last_seen_at}))};}));}catch{return res.status(401).json({message:'انتهت الجلسة أو لا تملك صلاحية إدارة الخوادم.'});}});
+router.get('/:slug/nas',async(req,res)=>{try{const scope=await principal(req);return res.json(await withNetwork(scope,async app=>{const snapshot=await readNetworkOvpn(app);const [rows]:any=await app.query("SELECT l.id,l.name,l.vendor,l.model,l.radius_services,l.is_enabled,l.location,l.description,l.activity_status,l.last_seen_at,c.tunnel_address,c.server_host,c.central_tunnel_id,JSON_EXTRACT(c.configuration_snapshot,'$.radiusConfigured') radius_ready FROM lord_nas l LEFT JOIN nas_ovpn_connections c ON c.nas_id=l.id WHERE l.archived_at IS NULL ORDER BY l.id");return {configured:Boolean(snapshot),maxNas:snapshot?snapshot.maxNas===0?0:snapshot.maxNas+snapshot.additionalNas:0,items:rows.map((r:any)=>({id:Number(r.id),name:r.name,vendor:r.vendor,model:r.model??null,services:String(r.radius_services||'').split(',').filter(Boolean),isEnabled:Number(r.is_enabled)===1,address:r.tunnel_address??null,location:r.location??null,description:r.description??null,ready:Boolean(r.central_tunnel_id)&&String(r.radius_ready)==='true',status:r.activity_status==='recent'&&r.last_seen_at&&Date.now()-new Date(r.last_seen_at).getTime()<90000?'connected':r.activity_status==='stale'?'disconnected':'awaiting_link',lastSeenAt:r.last_seen_at}))};}));}catch{return res.status(401).json({message:'انتهت الجلسة أو لا تملك صلاحية إدارة الخوادم.'});}});
 router.get('/:slug/nas/:id/script',async(req,res)=>{try{const scope=await principal(req),id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1)throw new Error('NAS_INPUT_INVALID');const script=await withNetwork(scope,app=>networkNasScript(app,id));res.setHeader('Cache-Control','no-store, private');res.setHeader('Pragma','no-cache');res.setHeader('Content-Type','text/plain; charset=utf-8');res.setHeader('Content-Disposition',`attachment; filename="radius-lord-nas-${id}.rsc"`);return res.send(script);}catch(e){return res.status(409).json(nasError(e));}});
 async function provisionNasRequest(req:Request,res:any,refresh=false){
  const central=await db.pool.getConnection();let locked=false;
@@ -140,18 +147,32 @@ async function provisionNasRequest(req:Request,res:any,refresh=false){
  await withNetwork(scope,async app=>{
  const snapshot=await readNetworkOvpn(app);if(!snapshot)throw new Error('NAS_NEW_ENVIRONMENT_REQUIRED');const license=await validateLocalLicense(app,scope);if(snapshot.maxNas!==Number(license.base_max_nas)||snapshot.additionalNas!==Number(license.additional_nas_capacity))throw new Error('NAS_LICENSE_SNAPSHOT_CHANGED');
  if(refresh){await refreshNasLinks(central,app,scope,snapshot);return;}
- const id=req.params.id?Number(req.params.id):await createNetworkNas(app,scope,scope.managerId,snapshot,{name:String(req.body?.name??''),requestId:String(req.body?.requestId??''),vendor:String(req.body?.vendor??'mikrotik'),model:String(req.body?.model??''),managementHost:String(req.body?.managementHost??''),radiusServices:Array.isArray(req.body?.radiusServices)?req.body.radiusServices:undefined,location:String(req.body?.location??''),description:String(req.body?.description??'')});if(!Number.isSafeInteger(id)||id<1)throw new Error('NAS_INPUT_INVALID');
+ const id=req.params.id?Number(req.params.id):await createNetworkNas(app,scope,scope.managerId,snapshot,{name:String(req.body?.name??''),requestId:String(req.body?.requestId??''),vendor:String(req.body?.vendor??'mikrotik'),model:String(req.body?.model??''),radiusServices:Array.isArray(req.body?.radiusServices)?req.body.radiusServices:undefined,location:String(req.body?.location??''),description:String(req.body?.description??''),enabled:req.body?.enabled});if(!Number.isSafeInteger(id)||id<1)throw new Error('NAS_INPUT_INVALID');
  await provisionNetworkNas(central,app,scope,id,snapshot);
- const state=await readPrivateSetting('environment_runtime','environment_'+scope.environment_id);if(!state||state.tenantId!==Number(scope.tenant_id)||state.subscriptionId!==Number(scope.subscription_id)||state.radiusServerId!==snapshot.radiusServerId)throw new Error('NAS_RADIUS_SCOPE');
- const [configs]:any=await central.query("SELECT setting_value FROM platform_settings WHERE id=? AND setting_group='free_radius'",[snapshot.radiusServerId]);if(!configs[0])throw new Error('RADIUS_NOT_FOUND');const radius=JSON.parse(configs[0].setting_value);
- const [servers]:any=await central.query('SELECT * FROM database_servers WHERE id=?',[scope.database_server_id]);if(!servers[0]||servers[0].tls_required||Number(radius.sshServerId)!==Number(state.radiusSshServerId))throw new Error('NAS_RADIUS_SCOPE');
- await applyRadiusDatabase({sshServerId:radius.sshServerId,radiusHost:radius.host,databaseHost:await radiusDatabaseHost(servers[0],radius.host),databasePort:Number(servers[0].port),databaseName:scope.db_name,username:scope.radius_username,password:decryptProvisioningSecret(scope.radius_password_encrypted),authPort:state.authPort,accountingPort:state.accountingPort,name:'rl_env_'+scope.environment_id,secret:decryptProvisioningSecret(state.radiusSecretEncrypted),clients:await nasRadiusClients(app)});
- await markNasRadiusConfigured(app);
- });return res.json({success:true,message:refresh?'تم تحديث حالة الأنفاق من البوابة.':'تم تجهيز الاتصال وربطه بخدمة RADIUS. حمّل السكربت وطبّقه على جهاز NAS.'});
+ await syncNasRadius(central,app,scope,snapshot);
+ });return res.json({success:true,message:refresh?'تم تحديث حالة الأنفاق من البوابة.':'تم إنشاء NAS وربطه بخدمة RADIUS. افتح إعداداته لنسخ سكربت الربط الخاص بهذا الجهاز.'});
  }catch(e){return res.status(409).json(nasError(e));}finally{if(locked)await central.query("SELECT RELEASE_LOCK('radius-lord:database-provisioner')");central.release();}
 }
 router.post('/:slug/nas',async(req,res)=>provisionNasRequest(req,res));
 router.post('/:slug/nas/:id/retry',async(req,res)=>provisionNasRequest(req,res));
+router.post('/:slug/nas/:id/status',async(req,res)=>{
+ const central=await db.pool.getConnection();let locked=false;
+ try{
+  const id=Number(req.params.id),enabled=req.body?.enabled;if(!Number.isSafeInteger(id)||id<1||typeof enabled!=='boolean')throw new Error('NAS_STATUS_INPUT');
+  const [lock]:any=await central.query("SELECT GET_LOCK('radius-lord:database-provisioner',0) acquired");if(!lock[0]?.acquired)throw new Error('NAS_PROVISIONING_BUSY');locked=true;
+  const scope=await principal(req);
+  await withNetwork(scope,async app=>{
+   const snapshot=await readNetworkOvpn(app);if(!snapshot)throw new Error('NAS_NEW_ENVIRONMENT_REQUIRED');
+   const license=await validateLocalLicense(app,scope);if(snapshot.maxNas!==Number(license.base_max_nas)||snapshot.additionalNas!==Number(license.additional_nas_capacity))throw new Error('NAS_LICENSE_SNAPSHOT_CHANGED');
+   const [rows]:any=await app.query('SELECT is_enabled FROM lord_nas WHERE id=? AND archived_at IS NULL',[id]);if(!rows[0])throw new Error('NAS_NOT_FOUND');
+   const previous=Boolean(rows[0].is_enabled);if(previous===enabled)return;
+   await setNetworkNasEnabled(app,id,enabled);
+   try{await syncNasRadius(central,app,scope,snapshot);}catch(error){await setNetworkNasEnabled(app,id,previous);throw error;}
+  });
+  return res.json({success:true,enabled,message:enabled?'تم تفعيل NAS وتحديث عملاء RADIUS.':'تم إيقاف NAS وإزالته من عملاء RADIUS.'});
+ }catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:409).json(nasError(e));}
+ finally{if(locked)await central.query("SELECT RELEASE_LOCK('radius-lord:database-provisioner')");central.release();}
+});
 router.post('/:slug/nas-check',async(req,res)=>provisionNasRequest(req,res,true));
 router.post('/:slug/activate',async(req,res)=>{
  const key='activate:'+(req.ip??'');const now=Date.now(),attempts=failed.get(key);if(attempts&&attempts.until>now&&attempts.count>=10)return res.status(429).json({message:'انتظر دقائق قبل إعادة المحاولة.'});
