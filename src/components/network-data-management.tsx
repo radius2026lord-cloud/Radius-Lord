@@ -1,7 +1,7 @@
 "use client";
 
 import {useCallback,useEffect,useState} from "react";
-import {ArchiveRestore,CalendarClock,ClipboardList,Database,FileSpreadsheet,HardDriveDownload,RefreshCw,ShieldCheck} from "lucide-react";
+import {ArchiveRestore,CalendarClock,ClipboardList,Database,FileSpreadsheet,HardDriveDownload,RefreshCw,ShieldCheck,Upload} from "lucide-react";
 import NetworkPppoeImport from "@/components/network-pppoe-import";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectLoading from "@/components/ui/project-loading";
@@ -19,7 +19,7 @@ export default function NetworkDataManagement({endpoint}:{endpoint:string}){
  const loadReview=useCallback(async()=>{setLoading(true);setError("");try{const response=await fetch(`${endpoint}/pppoe/import/review`,{credentials:"include",cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحميل قائمة المراجعة.");setReview(data);}catch(e){setError(e instanceof Error?e.message:"تعذر تحميل قائمة المراجعة.");}finally{setLoading(false);}},[endpoint]);
  useEffect(()=>{let live=true;void fetch(`${endpoint}/categories`,{credentials:"include",cache:"no-store"}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحميل التصنيفات.");if(live)setCategories(Array.isArray(data.items)?data.items.map((item:any)=>({id:Number(item.id),name:String(item.name)})):[]);}).catch(e=>{if(live)setError(e instanceof Error?e.message:"تعذر تحميل التصنيفات.");});return()=>{live=false};},[endpoint]);
  useEffect(()=>{if(pane==="review")void loadReview();},[pane,loadReview]);
- const panes:[Pane,string,typeof Database][]=[["import","استيراد البيانات",FileSpreadsheet],["review","مراجعة الصفوف",ClipboardList],["backup","النسخ والاستعادة",ArchiveRestore]];
+ const panes:[Pane,string,typeof Database][]=[["import","استيراد البيانات",Upload],["review","مراجعة الصفوف",ClipboardList],["backup","النسخ والاستعادة",ArchiveRestore]];
  return <section className="space-y-4" dir="rtl">
   <FloatingNotice error={error} onDismiss={()=>setError("")}/>
   <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-lg font-bold text-[#202124] dark:text-white">إدارة البيانات</h1><p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">استيراد حسابات PPPoE ومراجعة الصفوف التي تحتاج معالجة، مع تخصيص مساحة للنسخ والاستعادة.</p></div>{pane==="review"&&<ProjectButton variant="secondary" disabled={loading} onClick={()=>void loadReview()}><RefreshCw/>تحديث القائمة</ProjectButton>}</header>
