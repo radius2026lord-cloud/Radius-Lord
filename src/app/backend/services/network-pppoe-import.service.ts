@@ -23,12 +23,12 @@ function normalizedSpeed(value:any){
 }
 function localExpiry(value:any){
  const raw=digits(text(value,80));if(!raw)return null;
- let match=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$/.exec(raw);
- if(!match){const dmy=/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T](\d{1,2}):(\d{2}))?$/.exec(raw);if(dmy)match=[dmy[0],dmy[3],dmy[2],dmy[1],dmy[4]||'',dmy[5]||''] as unknown as RegExpExecArray;}
+ let match=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);
+ if(!match){const dmy=/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);if(dmy&&Number(dmy[1])>12)match=[dmy[0],dmy[3],dmy[2],dmy[1],dmy[4]||'',dmy[5]||'',dmy[6]||''] as unknown as RegExpExecArray;}
  if(!match)return undefined;
- const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]),hour=match[4]===''||!match[4]?23:Number(match[4]),minute=match[5]===''||!match[5]?59:Number(match[5]);
- const date=new Date(Date.UTC(year,month-1,day,hour,minute));if(year<2000||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day||hour>23||minute>59)return undefined;
- return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+ const hasTime=Boolean(match[4]),year=Number(match[1]),month=Number(match[2]),day=Number(match[3]),hour=hasTime?Number(match[4]):23,minute=hasTime?Number(match[5]):59,second=hasTime?Number(match[6]||0):59;
+ const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(year<2000||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day||hour>23||minute>59||second>59)return undefined;
+ return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:${String(second).padStart(2,'0')}`;
 }
 function rowIdentity(row:any,index:number){
  const firstName=text(row.firstName,100)||`عميل ${index+1}`;
@@ -102,7 +102,7 @@ async function inspectRows(app:any,rows:any[],versionMap:any){
  const usernameHits=new Set<string>(),phoneHits=new Set<string>();
  for(let offset=0;offset<usernames.length;offset+=400){const chunk=usernames.slice(offset,offset+400);if(!chunk.length)continue;const [found]:any=await app.query(`SELECT username FROM radius_username_reservations WHERE username IN (${chunk.map(()=>'?').join(',')})`,chunk);for(const item of found)usernameHits.add(String(item.username));}
  for(let offset=0;offset<phones.length;offset+=400){const chunk=phones.slice(offset,offset+400);if(!chunk.length)continue;const [found]:any=await app.query(`SELECT phone FROM customers WHERE phone IN (${chunk.map(()=>'?').join(',')})`,chunk);for(const item of found)phoneHits.add(String(item.phone));}
- const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const zone=String(settings[0]?.timezone||'Asia/Damascus');const localNow=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(part=>part.type!=='literal').map(part=>[part.type,part.value])) as any;const localNowText=`${localNow.year}-${localNow.month}-${localNow.day}T${localNow.hour}:${localNow.minute}`;
+ const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const zone=String(settings[0]?.timezone||'Asia/Damascus');const localNow=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(part=>part.type!=='literal').map(part=>[part.type,part.value])) as any;const localNowText=`${localNow.year}-${localNow.month}-${localNow.day}T${localNow.hour}:${localNow.minute}:${localNow.second}`;
  const seenNames=new Set<string>(),seenPhones=new Set<string>();
  return normalized.map(({rowNumber,data})=>{
   const reasons:string[]=[];let kind:'ready'|'duplicate'|'rejected'='ready';
