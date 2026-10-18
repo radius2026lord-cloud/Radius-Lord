@@ -3,6 +3,7 @@ import {lookup} from 'dns/promises';
 import type mysql from 'mysql2/promise';
 import type {PoolConnection} from 'mysql2/promise';
 import {db} from '../config/db';
+import {env} from '../config/env';
 import {RouterApi} from './routeros-api.service';
 import {inspectRouter,preflightInventory,validateProvision,poolRanges} from './ovpn-provision.service';
 import {encryptProvisioningSecret,decryptProvisioningSecret} from './provisioning-secrets.service';
@@ -126,15 +127,35 @@ export async function nasRadiusClients(app:mysql.Connection){
  const [rows]:any=await app.query('SELECT l.id,n.nasname address,n.secret FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN nas_ovpn_connections c ON c.nas_id=l.id WHERE l.archived_at IS NULL AND l.is_enabled=1');return rows.map((r:any)=>({name:'rl_nas_'+r.id,address:r.address,secret:r.secret}));
 }
 const ros=(s:string)=>'"'+s.replace(/\\/g,'\\\\').replace(/\$/g,'\\$').replace(/"/g,'\\"').replace(/\r/g,'\\r').replace(/\n/g,'\\n')+'"';
-export async function networkNasScript(app:mysql.Connection,nasId:number){
- const [rows]:any=await app.query('SELECT c.*,n.secret,l.name,l.coa_port,l.radius_services FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id JOIN nas n ON n.id=l.radius_nas_id WHERE c.nas_id=? AND l.archived_at IS NULL',[nasId]);const row=rows[0];if(!row)fail('NAS_CONNECTION_NOT_READY');const coaPort=Number(row.coa_port);if(!Number.isInteger(coaPort)||coaPort<1||coaPort>65535)fail('NAS_COA_PORT_INVALID');const radiusServices=String(row.radius_services||'ppp').split(',').filter((service:string)=>service==='ppp'||service==='hotspot');if(!radiusServices.length)fail('NAS_SERVICES_INVALID');
- const c=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot,name=c.certificateName;
+export async function networkNasScript(app:mysql.Connection,nasId:number,scope:any){
+ await app.beginTransaction();let row:any,c:any,telemetryToken='';try{
+ const [rows]:any=await app.query('SELECT c.*,n.secret,l.name,l.coa_port,l.radius_services FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id JOIN nas n ON n.id=l.radius_nas_id WHERE c.nas_id=? AND l.archived_at IS NULL FOR UPDATE',[nasId]);row=rows[0];if(!row)fail('NAS_CONNECTION_NOT_READY');c=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot;
+ if(!c.telemetryTokenEncrypted){telemetryToken=randomBytes(32).toString('base64url');c.telemetryTokenEncrypted=encryptProvisioningSecret(telemetryToken);await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(c),nasId]);}else telemetryToken=decryptProvisioningSecret(c.telemetryTokenEncrypted);
+ await app.commit();
+ }catch(error){await app.rollback();throw error;}
+ const coaPort=Number(row.coa_port);if(!Number.isInteger(coaPort)||coaPort<1||coaPort>65535)fail('NAS_COA_PORT_INVALID');const radiusServices=String(row.radius_services||'ppp').split(',').filter((service:string)=>service==='ppp'||service==='hotspot');if(!radiusServices.length)fail('NAS_SERVICES_INVALID');
+ const name=c.certificateName,telemetryUrl=new URL(`/api/network/${encodeURIComponent(scope.slug)}/nas/${nasId}/telemetry`,env.FRONTEND_URL).toString(),telemetryName='rl_nas_'+nasId+'_metrics';
+ const telemetrySource=[
+  ':local cpu [/system resource get cpu-load]',
+  ':local freeMemory [/system resource get free-memory]',
+  ':local totalMemory [/system resource get total-memory]',
+  ':local version [/system resource get version]',
+  ':local board [/system resource get board-name]',
+  ':local uptime [/system resource get uptime]',
+  ':local temperature "null"',
+  ':local rawTemperature ""',
+  ':do { :set rawTemperature [/system health get [find where name="cpu-temperature"] value] } on-error={ :do { :set rawTemperature [/system health get [find where name="temperature"] value] } on-error={} }',
+  ':if ([:len $rawTemperature] > 0) do={ :set temperature [:tostr [:tonum $rawTemperature]] }',
+  ':local payload ("{\\\"cpu\\\":" . $cpu . ",\\\"freeMemory\\\":" . $freeMemory . ",\\\"totalMemory\\\":" . $totalMemory . ",\\\"temperature\\\":" . $temperature . ",\\\"version\\\":\\\"" . $version . "\\\",\\\"board\\\":\\\"" . $board . "\\\",\\\"uptime\\\":\\\"" . $uptime . "\\\"}")',
+  '/tool fetch url='+ros(telemetryUrl)+' http-method=post http-header-field='+ros('Content-Type: application/json,Authorization: Bearer '+telemetryToken)+' http-data=$payload output=none keep-result=no',
+ ].join('\n');
+ const telemetrySetup=['/system scheduler remove [find where name='+ros(telemetryName)+']','/system script remove [find where name='+ros(telemetryName)+']','/system script add name='+ros(telemetryName)+' policy=read,write,test source='+ros(telemetrySource),'/system scheduler add name='+ros(telemetryName)+' interval=5m start-time=startup on-event='+ros('/system script run '+telemetryName)+' policy=read,write,test'];
  if(!c.radiusConfigured)fail('NAS_RADIUS_NOT_READY');
  const coaComment=ros(name+'_coa'),coaFirewall='/ip firewall filter add chain=input action=accept protocol=udp src-address='+ros(row.radius_server_address+'/32')+' dst-port='+coaPort+' in-interface=$ovpnName comment='+coaComment+' place-before=0';
  const coaUpdate=['/ip firewall filter remove [find where comment='+coaComment+']',coaFirewall,'/radius incoming set accept=yes port='+coaPort];
- const lines=['# Radius Lord: managed OpenVPN + PPP RADIUS. Import on RouterOS 6.43+ / 7.', '# Keep this file private. Gateway must route VPN traffic to the RADIUS address.', ':local ovpnName '+ros(name), ':if ([:len [/interface ovpn-client find where name=$ovpnName]] > 0) do={',...coaUpdate,':put "Radius Lord CoA reception updated for the existing connection."','} else={'];
+ const lines=['# Radius Lord: managed OpenVPN + PPP RADIUS. Import on RouterOS 6.43+ / 7.', '# Keep this file private. Gateway must route VPN traffic to the RADIUS address.', ':local ovpnName '+ros(name), ':if ([:len [/interface ovpn-client find where name=$ovpnName]] > 0) do={',...coaUpdate,...telemetrySetup,':put "Radius Lord link and monitoring updated for the existing connection."','} else={'];
  for(const [suffix,value] of [['ca',c.caCertificate],['client',c.clientCertificate],['key',decryptProvisioningSecret(row.client_private_key_encrypted)]]){const file=name+'_'+suffix;lines.push('/file print file='+ros(file),':delay 1s','/file set [find where name='+ros(file+'.txt')+'] contents='+ros(value),'/certificate import file-name='+ros(file+'.txt')+' passphrase='+ros(suffix==='key'?decryptProvisioningSecret(c.keyPassphraseEncrypted):''),'/file remove [find where name='+ros(file+'.txt')+']');}
- lines.push('/certificate set [find where fingerprint='+ros(c.caFingerprint)+'] trusted=yes',':local clientCert [/certificate find where common-name='+ros(name)+' and private-key=yes]',':if ([:len $clientCert] != 1) do={ :error "Client certificate missing or ambiguous" }',':set clientCert [/certificate get $clientCert name]',':local cipher "aes256-cbc"',':if ([:pick [/system resource get version] 0 2] = "6.") do={ :set cipher "aes256" }','/interface ovpn-client add name=$ovpnName connect-to='+ros(row.server_host)+' port='+row.server_port+' user='+ros(row.tunnel_username)+' password='+ros(decryptProvisioningSecret(row.tunnel_password_encrypted))+' certificate=$clientCert cipher=$cipher auth=sha1 add-default-route=no use-peer-dns=no verify-server-certificate=yes disabled=no','/ip route add dst-address='+ros(row.radius_server_address+'/32')+' gateway=$ovpnName comment='+ros(name),...coaUpdate,'/radius add service='+radiusServices.join(',')+' address='+ros(row.radius_server_address)+' src-address='+ros(row.tunnel_address)+' authentication-port='+c.authPort+' accounting-port='+c.accountingPort+' secret='+ros(row.secret)+' timeout=3s comment='+ros(name),...(radiusServices.includes('ppp')?['/ppp aaa set use-radius=yes accounting=yes interim-update=3m']:[]),':put "Radius Lord configuration imported. Check the OpenVPN interface and gateway routing."','}');
+ lines.push('/certificate set [find where fingerprint='+ros(c.caFingerprint)+'] trusted=yes',':local clientCert [/certificate find where common-name='+ros(name)+' and private-key=yes]',':if ([:len $clientCert] != 1) do={ :error "Client certificate missing or ambiguous" }',':set clientCert [/certificate get $clientCert name]',':local cipher "aes256-cbc"',':if ([:pick [/system resource get version] 0 2] = "6.") do={ :set cipher "aes256" }','/interface ovpn-client add name=$ovpnName connect-to='+ros(row.server_host)+' port='+row.server_port+' user='+ros(row.tunnel_username)+' password='+ros(decryptProvisioningSecret(row.tunnel_password_encrypted))+' certificate=$clientCert cipher=$cipher auth=sha1 add-default-route=no use-peer-dns=no verify-server-certificate=yes disabled=no','/ip route add dst-address='+ros(row.radius_server_address+'/32')+' gateway=$ovpnName comment='+ros(name),...coaUpdate,'/radius add service='+radiusServices.join(',')+' address='+ros(row.radius_server_address)+' src-address='+ros(row.tunnel_address)+' authentication-port='+c.authPort+' accounting-port='+c.accountingPort+' secret='+ros(row.secret)+' timeout=3s comment='+ros(name),...(radiusServices.includes('ppp')?['/ppp aaa set use-radius=yes accounting=yes interim-update=3m']:[]),...telemetrySetup,':put "Radius Lord configuration imported. Check the OpenVPN interface and gateway routing."','}');
  return lines.join('\r\n')+'\r\n';
 }
 export async function refreshNasLinks(central:PoolConnection,app:mysql.Connection,scope:any,snapshot:any){
