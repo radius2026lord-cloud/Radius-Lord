@@ -1,6 +1,6 @@
 "use client";
 import {useCallback,useEffect,useRef,useState,type FormEvent} from "react";
-import {Activity,Check,Copy,Cpu,HardDrive,LoaderCircle,MapPin,MemoryStick,Plus,RefreshCw,Router,Server,ShieldCheck, Thermometer,Wifi} from "lucide-react";
+import {Activity,Cable,Check,Copy,Cpu,HardDrive,LoaderCircle,MapPin,MemoryStick,Plus,RefreshCw,Router,Server,ShieldCheck,Thermometer,Wifi} from "lucide-react";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectDialog from "@/components/ui/project-dialog";
