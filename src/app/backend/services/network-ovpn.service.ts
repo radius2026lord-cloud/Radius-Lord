@@ -38,10 +38,10 @@ async function withGateway<T>(central:PoolConnection,id:number,operation:(api:Ro
  try{api=await RouterApi.connect({host:g.api_host,port:Number(g.api_port),username:g.api_username,password,secure:Boolean(g.api_tls)});return await operation(api,g);}
  finally{api?.close();await central.query('SELECT RELEASE_LOCK(?)',[lockName]);}
 }
-export async function createNetworkNas(app:mysql.Connection,scope:any,managerId:number,snapshot:any,input:{name:string;requestId:string;vendor?:string;model?:string;managementHost?:string;radiusServices?:string[];location?:string;description?:string}){
- const name=String(input.name??'').trim(),managementHost=String(input.managementHost??'127.0.0.2').trim(),vendor=String(input.vendor??'mikrotik');
+export async function createNetworkNas(app:mysql.Connection,scope:any,managerId:number,snapshot:any,input:{name:string;requestId:string;vendor?:string;model?:string;radiusServices?:string[];location?:string;description?:string;enabled?:boolean}){
+ const name=String(input.name??'').trim(),vendor=String(input.vendor??'mikrotik');
  const services=Array.isArray(input.radiusServices)?Array.from(new Set(input.radiusServices.filter(value=>value==='ppp'||value==='hotspot'))):['ppp'];
- if(!name||name.length>150||!managementHost||managementHost.length>255||! /^[a-zA-Z0-9_.:-]+$/.test(managementHost)||vendor!=='mikrotik'||!services.length||! /^[a-zA-Z0-9_-]{8,64}$/.test(input.requestId))fail('NAS_INPUT_INVALID');
+ if(!name||name.length>150||vendor!=='mikrotik'||!services.length||! /^[a-zA-Z0-9_-]{8,64}$/.test(input.requestId)||input.enabled!==undefined&&typeof input.enabled!=='boolean')fail('NAS_INPUT_INVALID');
  const model=String(input.model??'').trim(),location=String(input.location??'').trim(),description=String(input.description??'').trim();
  if(model.length>100||location.length>150||description.length>200)fail('NAS_INPUT_INVALID');
  const shortname='rl_'+scope.environment_id+'_'+createHash('sha256').update(input.requestId).digest('hex').slice(0,12);
@@ -51,7 +51,7 @@ export async function createNetworkNas(app:mysql.Connection,scope:any,managerId:
  if(existing[0]){await app.commit();return Number(existing[0].id);}
  const [count]:any=await app.query('SELECT COUNT(*) count FROM nas');if(snapshot.maxNas!==0&&Number(count[0].count)>=snapshot.maxNas+snapshot.additionalNas)fail('NAS_PLAN_LIMIT_REACHED');
  const [nas]:any=await app.query("INSERT INTO nas (nasname,shortname,type,secret,description) VALUES ('127.0.0.2',?,?,?,'Radius Lord managed OpenVPN')",[shortname,vendor,randomBytes(24).toString('hex')]);
- const [local]:any=await app.query("INSERT INTO lord_nas (radius_nas_id,name,vendor,model,radius_services,coa_host,management_host,auth_port,acct_port,coa_port,location,description,created_by) VALUES (?,?,?,?,?,'127.0.0.2',?,?,?,3799,?,?,?)",[nas.insertId,name,vendor,model||null,services.join(','),managementHost,snapshot.authPort,snapshot.accountingPort,location||null,description||null,managerId]);
+ const [local]:any=await app.query("INSERT INTO lord_nas (radius_nas_id,name,vendor,model,radius_services,coa_host,management_host,auth_port,acct_port,coa_port,is_enabled,location,description,created_by) VALUES (?,?,?,?,?,'127.0.0.2','127.0.0.2',?,?,?, ?,?,?,?)",[nas.insertId,name,vendor,model||null,services.join(','),snapshot.authPort,snapshot.accountingPort,3799,input.enabled===false?0:1,location||null,description||null,managerId]);
  await app.commit();return Number(local.insertId);
  }catch(e){await app.rollback();throw e;}
 }
@@ -106,7 +106,7 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  const configuration={radiusConfigured:false,...snapshot,certificateName:username,caFingerprint:ca.fingerprint,caCertificate:caPem,clientCertificate:certPem,keyPassphraseEncrypted:encryptProvisioningSecret(passphrase)};
  await app.beginTransaction();try{
  await app.query('UPDATE nas SET nasname=?,server=? WHERE id=?',[tunnel.tunnel_address,'rl_env_'+scope.environment_id,local.radius_nas_id]);
- await app.query('UPDATE lord_nas SET coa_host=? WHERE id=?',[tunnel.tunnel_address,nasId]);
+ await app.query('UPDATE lord_nas SET coa_host=?,management_host=? WHERE id=?',[tunnel.tunnel_address,tunnel.tunnel_address,nasId]);
  await app.query(`INSERT INTO nas_ovpn_connections (nas_id,central_tunnel_id,central_gateway_id,server_host,server_port,transport_protocol,tunnel_username,tunnel_password_encrypted,encryption_key_id,tunnel_address,ca_certificate_reference,client_certificate_reference,client_private_key_encrypted,radius_server_address,configuration_snapshot,sync_version,synced_at) VALUES (?,?,?,?,?,'tcp',?,?,'gateway-key-v1',?,?,?,?,?,?,1,NOW(6))`,[nasId,tunnel.id,snapshot.gatewayId,snapshot.host,snapshot.port,username,tunnel.tunnel_password_encrypted,tunnel.tunnel_address,ca.name,username,encryptProvisioningSecret(keyPem),snapshot.radiusAddress,JSON.stringify(configuration)]);
  await app.commit();}catch(e){await app.rollback();throw e;}
  await central.query("UPDATE nas_tunnels SET status='awaiting_link' WHERE id=?",[tunnel.id]);
@@ -115,6 +115,12 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
 
 export async function markNasRadiusConfigured(app:mysql.Connection){
  await app.query("UPDATE nas_ovpn_connections SET configuration_snapshot=JSON_SET(configuration_snapshot,'$.radiusConfigured',JSON_EXTRACT('true','$')),synced_at=NOW(6)");
+}
+export async function setNetworkNasEnabled(app:mysql.Connection,nasId:number,enabled:boolean){
+ if(!Number.isSafeInteger(nasId)||nasId<1||typeof enabled!=='boolean')fail('NAS_STATUS_INPUT');
+ const [result]:any=await app.query('UPDATE lord_nas SET is_enabled=? WHERE id=? AND archived_at IS NULL',[enabled?1:0,nasId]);
+ if(!result.affectedRows)fail('NAS_NOT_FOUND');
+ return enabled;
 }
 export async function nasRadiusClients(app:mysql.Connection){
  const [rows]:any=await app.query('SELECT l.id,n.nasname address,n.secret FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN nas_ovpn_connections c ON c.nas_id=l.id WHERE l.archived_at IS NULL AND l.is_enabled=1');return rows.map((r:any)=>({name:'rl_nas_'+r.id,address:r.address,secret:r.secret}));
