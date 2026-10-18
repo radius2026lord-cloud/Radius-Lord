@@ -68,17 +68,23 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  const serverCert=certs.find(r=>r.name===o.certificate_name),cas=certs.filter(r=>r['key-usage']?.includes('key-cert-sign')&&yes(r['private-key'])&&!yes(r.expired)&&!revoked(r.revoked));
  const ca=(cas.find(r=>r.name===serverCert?.ca)||cas.find(r=>r['common-name']===serverCert?.issuer))??fail('OVPN_SIGNING_CA_REQUIRED');
  if(!ca?.fingerprint)fail('OVPN_SIGNING_CA_REQUIRED');
- const marker='Radius Lord env '+scope.environment_id+' nas '+nasId,username='rl_env_'+scope.environment_id+'_nas_'+nasId;
  let [reservations]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=? AND tenant_nas_id=?',[scope.environment_id,nasId]);let tunnel=reservations[0];
+ if(!tunnel){
+ const [available]:any=await central.query("SELECT * FROM nas_tunnels WHERE environment_id=? AND tenant_nas_id IS NULL AND status='reserved' ORDER BY reservation_slot LIMIT 1",[scope.environment_id]);
+ if(available[0]){tunnel=available[0];const [claimed]:any=await central.query("UPDATE nas_tunnels SET tenant_nas_id=?,status='provisioning' WHERE id=? AND tenant_nas_id IS NULL AND status='reserved'",[nasId,tunnel.id]);if(!claimed.affectedRows)fail('NAS_RESERVATION_RACE');tunnel.tenant_nas_id=nasId;tunnel.status='provisioning';}
+ }
  if(!tunnel){
  const [reserved]:any=await central.query('SELECT tunnel_address FROM nas_tunnels WHERE ovpn_gateway_id=?',[snapshot.gatewayId]);
  const used=await api.command('/ip/pool/used/print',{'.proplist':'pool,address'}),secrets=await api.command('/ppp/secret/print',{'.proplist':'remote-address'});
  const occupied=new Set([...reserved.map((r:any)=>r.tunnel_address),...used.map(r=>r.address),...secrets.map(r=>r['remote-address'])]);
  let address='';for(const range of poolRanges(o).split(',')){const [a,b]=range.split('-').map(ipNumber);for(let n=a;n<=b;n++){const candidate=ipString(n);if(!occupied.has(candidate)){address=candidate;break;}}if(address)break;}if(!address)fail('OVPN_POOL_FULL');
- const [insert]:any=await central.query("INSERT INTO nas_tunnels (environment_id,ovpn_gateway_id,tenant_nas_id,tunnel_username,tunnel_password_encrypted,tunnel_address,certificate_reference,status) VALUES (?,?,?,?,?,?,?,'provisioning')",[scope.environment_id,snapshot.gatewayId,nasId,username,encryptProvisioningSecret(randomBytes(24).toString('base64url')),address,username]);
+ const [slots]:any=await central.query('SELECT reservation_slot FROM nas_tunnels WHERE environment_id=? AND reservation_slot IS NOT NULL',[scope.environment_id]);const usedSlots=new Set(slots.map((r:any)=>Number(r.reservation_slot)));let slot=1;while(usedSlots.has(slot))slot++;
+ const username='rl_env_'+scope.environment_id+'_nas_'+nasId;
+ const [insert]:any=await central.query("INSERT INTO nas_tunnels (environment_id,ovpn_gateway_id,tenant_nas_id,reservation_slot,tunnel_username,tunnel_password_encrypted,tunnel_address,certificate_reference,status) VALUES (?,?,?,?,?,?,?,?,'provisioning')",[scope.environment_id,snapshot.gatewayId,nasId,slot,username,encryptProvisioningSecret(randomBytes(24).toString('base64url')),address,username]);
  [reservations]=await central.query('SELECT * FROM nas_tunnels WHERE id=?',[insert.insertId]);tunnel=reservations[0];
  }
- if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.tunnel_username!==username||tunnel.certificate_reference!==username)fail('OVPN_TUNNEL_OWNERSHIP');
+ const username=String(tunnel.tunnel_username),marker=/_slot_\d+$/.test(username)?'Radius Lord env '+scope.environment_id+' nas slot '+tunnel.reservation_slot:'Radius Lord env '+scope.environment_id+' nas '+nasId;
+ if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username)fail('OVPN_TUNNEL_OWNERSHIP');
  const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);
  if(owned.some(r=>r.comment!==marker||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');
  if(!owned.length)await api.command('/ppp/secret/add',{name:username,password:decryptProvisioningSecret(tunnel.tunnel_password_encrypted),service:'ovpn',profile:o.ppp_profile,'remote-address':tunnel.tunnel_address,'local-address':o.server_tunnel_address,comment:marker});
@@ -111,6 +117,34 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  await app.query(`INSERT INTO nas_ovpn_connections (nas_id,central_tunnel_id,central_gateway_id,server_host,server_port,transport_protocol,tunnel_username,tunnel_password_encrypted,encryption_key_id,tunnel_address,ca_certificate_reference,client_certificate_reference,client_private_key_encrypted,radius_server_address,configuration_snapshot,sync_version,synced_at) VALUES (?,?,?,?,?,'tcp',?,?,'gateway-key-v1',?,?,?,?,?,?,1,NOW(6))`,[nasId,tunnel.id,snapshot.gatewayId,snapshot.host,snapshot.port,username,tunnel.tunnel_password_encrypted,tunnel.tunnel_address,ca.name,username,encryptProvisioningSecret(keyPem),snapshot.radiusAddress,JSON.stringify(configuration)]);
  await app.commit();}catch(e){await app.rollback();throw e;}
  await central.query("UPDATE nas_tunnels SET status='awaiting_link' WHERE id=?",[tunnel.id]);
+ });
+}
+
+export async function reserveNetworkNasCapacity(central:PoolConnection,scope:any,snapshot:any,capacity:number){
+ if(!Number.isSafeInteger(capacity)||capacity<0)fail('NAS_CAPACITY_INVALID');if(capacity===0)return 0;
+ return withGateway(central,snapshot.gatewayId,async(api,g)=>{
+  const o=validateProvision({...g,certificate_mode:'existing',profile_mode:'existing',pool_mode:'existing'}),inventory=await inspectRouter(api),current=preflightInventory(inventory,o);
+  if(!current.server||!(yes(current.server.enabled)||['false','no'].includes(current.server.disabled))||Number(current.server.port)!==o.ovpn_port||current.server.certificate!==o.certificate_name||current.server['default-profile']!==o.ppp_profile||(current.server.protocol??'tcp')!=='tcp'||!yes(current.server['require-client-certificate']))fail('OVPN_SERVER_CHANGED');
+  if(g.ovpn_host!==snapshot.host||Number(g.ovpn_port)!==snapshot.port||g.ppp_profile!==snapshot.profile||g.tunnel_cidr!==snapshot.cidr||g.server_tunnel_address!==snapshot.serverAddress||g.certificate_name!==snapshot.serverCertificate)fail('OVPN_GATEWAY_SNAPSHOT_CHANGED');
+  const certs=await api.command('/certificate/print',{'.proplist':'.id,name,common-name,issuer,ca,key-usage,private-key,fingerprint,expired,revoked'}),serverCert=certs.find(r=>r.name===o.certificate_name),cas=certs.filter(r=>r['key-usage']?.includes('key-cert-sign')&&yes(r['private-key'])&&!yes(r.expired)&&!revoked(r.revoked)),ca=(cas.find(r=>r.name===serverCert?.ca)||cas.find(r=>r['common-name']===serverCert?.issuer))??fail('OVPN_SIGNING_CA_REQUIRED');if(!ca?.fingerprint)fail('OVPN_SIGNING_CA_REQUIRED');
+  const [existing]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=? ORDER BY id',[scope.environment_id]);let nextSlot=1;
+  for(const tunnel of existing){if(tunnel.reservation_slot)continue;while(existing.some((r:any)=>Number(r.reservation_slot)===nextSlot))nextSlot++;await central.query('UPDATE nas_tunnels SET reservation_slot=? WHERE id=? AND reservation_slot IS NULL',[nextSlot,tunnel.id]);tunnel.reservation_slot=nextSlot++;}
+  let count=0;
+  for(let slot=1;slot<=capacity;slot++){
+   let tunnel=existing.find((r:any)=>Number(r.reservation_slot)===slot);if(tunnel?.tenant_nas_id)continue;if(tunnel?.status==='reserved')continue;
+   if(!tunnel){
+    const [reserved]:any=await central.query('SELECT tunnel_address FROM nas_tunnels WHERE ovpn_gateway_id=?',[snapshot.gatewayId]),used=await api.command('/ip/pool/used/print',{'.proplist':'pool,address'}),secrets=await api.command('/ppp/secret/print',{'.proplist':'remote-address'}),occupied=new Set([...reserved.map((r:any)=>r.tunnel_address),...used.map((r:any)=>r.address),...secrets.map((r:any)=>r['remote-address'])]);let address='';
+    for(const range of poolRanges(o).split(',')){const [a,b]=range.split('-').map(ipNumber);for(let n=a;n<=b;n++){const candidate=ipString(n);if(!occupied.has(candidate)){address=candidate;break;}}if(address)break;}if(!address)fail('OVPN_POOL_FULL');
+    const username='rl_env_'+scope.environment_id+'_slot_'+slot,password=encryptProvisioningSecret(randomBytes(24).toString('base64url')),[insert]:any=await central.query("INSERT INTO nas_tunnels (environment_id,ovpn_gateway_id,tenant_nas_id,reservation_slot,tunnel_username,tunnel_password_encrypted,tunnel_address,certificate_reference,status) VALUES (?,?,NULL,?,?,?,?,?,'provisioning')",[scope.environment_id,snapshot.gatewayId,slot,username,password,address,username]);
+    const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE id=?',[insert.insertId]);tunnel=rows[0];existing.push(tunnel);
+   }
+   const username=String(tunnel.tunnel_username),marker='Radius Lord env '+scope.environment_id+' nas slot '+slot;
+   if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username||!/_slot_\d+$/.test(username))fail('OVPN_TUNNEL_OWNERSHIP');
+   const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);if(owned.some(r=>r.comment!==marker||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');if(!owned.length)await api.command('/ppp/secret/add',{name:username,password:decryptProvisioningSecret(tunnel.tunnel_password_encrypted),service:'ovpn',profile:o.ppp_profile,'remote-address':tunnel.tunnel_address,'local-address':o.server_tunnel_address,comment:marker});
+   let cert=certs.find(r=>r.name===username);if(cert&&(cert['common-name']!==username||!cert['key-usage']?.includes('tls-client')))fail('OVPN_CLIENT_CERT_CONFLICT');if(!cert){await api.command('/certificate/add',{name:username,'common-name':username,'key-size':'2048','days-valid':'825','key-usage':'digital-signature,key-encipherment,tls-client'});cert=(await api.command('/certificate/print',{'.proplist':'.id,name'},['?name='+username]))[0];}if(!cert?.['.id'])fail('OVPN_CLIENT_CERT_REQUIRED');if(!cert.fingerprint)await api.command('/certificate/sign',{'.id':cert['.id'],name:username,ca:ca.name},[],45000);cert=(await api.command('/certificate/print',{'.proplist':'.id,name,fingerprint,private-key,key-usage,expired,revoked,common-name'},['?name='+username]))[0];if(!cert?.fingerprint||!yes(cert['private-key'])||yes(cert.expired)||revoked(cert.revoked))fail('OVPN_CLIENT_CERT_NOT_READY');
+   await central.query("UPDATE nas_tunnels SET status='reserved' WHERE id=? AND tenant_nas_id IS NULL",[tunnel.id]);tunnel.status='reserved';count++;
+  }
+  return count;
  });
 }
 
@@ -159,11 +193,11 @@ export async function networkNasScript(app:mysql.Connection,nasId:number,scope:a
  return lines.join('\r\n')+'\r\n';
 }
 export async function refreshNasLinks(central:PoolConnection,app:mysql.Connection,scope:any,snapshot:any){
- return withGateway(central,snapshot.gatewayId,async(api)=>{const active=await api.command('/ppp/active/print',{'.proplist':'name,address,service'});const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=? AND ovpn_gateway_id=?',[scope.environment_id,snapshot.gatewayId]);for(const t of rows){const connected=active.some(r=>r.name===t.tunnel_username&&r.address===t.tunnel_address&&r.service==='ovpn');await central.query("UPDATE nas_tunnels SET status=?,last_seen_at=IF(?,NOW(),last_seen_at) WHERE id=?",[connected?'connected':t.last_seen_at?'disconnected':'awaiting_link',connected,t.id]);await app.query('UPDATE lord_nas SET activity_status=?,last_seen_at=IF(?,NOW(6),last_seen_at) WHERE id=?',[connected?'recent':t.last_seen_at?'stale':'unknown',connected,t.tenant_nas_id]);}return rows.length;});
+ return withGateway(central,snapshot.gatewayId,async(api)=>{const active=await api.command('/ppp/active/print',{'.proplist':'name,address,service'});const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=? AND ovpn_gateway_id=?',[scope.environment_id,snapshot.gatewayId]);for(const t of rows){if(!t.tenant_nas_id)continue;const connected=active.some(r=>r.name===t.tunnel_username&&r.address===t.tunnel_address&&r.service==='ovpn');await central.query("UPDATE nas_tunnels SET status=?,last_seen_at=IF(?,NOW(),last_seen_at) WHERE id=?",[connected?'connected':t.last_seen_at?'disconnected':'awaiting_link',connected,t.id]);await app.query('UPDATE lord_nas SET activity_status=?,last_seen_at=IF(?,NOW(6),last_seen_at) WHERE id=?',[connected?'recent':t.last_seen_at?'stale':'unknown',connected,t.tenant_nas_id]);}return rows.length;});
 }
 export async function removeNetworkTunnels(central:PoolConnection,environmentId:number){
  const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=?',[environmentId]);
- for(const t of rows){const name='rl_env_'+environmentId+'_nas_'+t.tenant_nas_id,marker='Radius Lord env '+environmentId+' nas '+t.tenant_nas_id;if(t.tunnel_username!==name||t.certificate_reference!==name)fail('OVPN_CLEANUP_OWNERSHIP');
+ for(const t of rows){const name=String(t.tunnel_username),reserved=/_slot_\d+$/.test(name),expected=reserved?'rl_env_'+environmentId+'_slot_'+t.reservation_slot:'rl_env_'+environmentId+'_nas_'+t.tenant_nas_id,marker=reserved?'Radius Lord env '+environmentId+' nas slot '+t.reservation_slot:'Radius Lord env '+environmentId+' nas '+t.tenant_nas_id;if(name!==expected||!/^rl_env_\d+_(?:nas_\d+|slot_\d+)$/.test(name)||t.certificate_reference!==name||reserved&&Number(t.reservation_slot)<1||!reserved&&!t.tenant_nas_id)fail('OVPN_CLEANUP_OWNERSHIP');
  await withGateway(central,Number(t.ovpn_gateway_id),async(api)=>{
  const secrets=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment'},['?name='+name]);if(secrets.some(r=>r.comment!==marker))fail('OVPN_CLEANUP_SECRET_CONFLICT');
  const certs=await api.command('/certificate/print',{'.proplist':'.id,name,common-name,key-usage'},['?name='+name]);if(certs.some(r=>r['common-name']!==name||!r['key-usage']?.includes('tls-client')))fail('OVPN_CLEANUP_CERT_CONFLICT');
