@@ -1,0 +1,68 @@
+"use client";
+
+import {useMemo,useState} from 'react';
+import * as XLSX from 'xlsx';
+import {CheckCircle2,Download,FileSpreadsheet,LockKeyhole,Upload,X} from 'lucide-react';
+import ProjectButton from '@/components/ui/project-button';
+import ProjectDialog from '@/components/ui/project-dialog';
+import ProjectDropdown from '@/components/ui/project-dropdown';
+import {ProjectInfoCard} from '@/components/ui/project-info-card';
+import FloatingNotice from '@/components/ui/floating-notice';
+type Category={id:number;name:string};
+
+type ImportRow={rowNumber:number;firstName:string;lastName:string;username:string;password:string;profile:string;phone:string;expiresAt:string;notes:string};
+type Profile={id:number;name:string;version:number;speed:string};
+type Preview={total:number;ready:number;duplicates:number;rejected:number;withPhone:number;withoutPhone:number;withExpiry:number;withoutExpiry:number;profiles:Profile[];items:Array<{rowNumber:number;firstName:string;lastName:string;username:string;profile:string;normalizedSpeed:string|null;phone:boolean;expiresAt:string|null;packageVersionId:number|null;kind:'ready'|'duplicate'|'rejected';reasons:string[]}>};
+const key=(value:any)=>String(value??'').trim().toLowerCase().replace(/[\s_\-،:]/g,'');
+const aliases:Record<keyof Omit<ImportRow,'rowNumber'>,string[]>={
+ firstName:['الاسم الاول','الاسم الأول','first name','firstname','first_name','الاسم'],
+ lastName:['الكنية','الكنيه','last name','lastname','last_name','surname'],
+ username:['اليوزر','اليوزرنيم','اسم المستخدم','username','user name','login'],
+ password:['باسبورد','باسورد','كلمة المرور','كلمة السر','password','pass'],
+ profile:['بروفايل','البروفايل','السرعة','السرعه','profile','speed','rate limit'],
+ phone:['رقم الهاتف','الهاتف','الجوال','phone','mobile'],
+ expiresAt:['تاريخ الانتهاء','تاريخ انتهاء','end time','expiry date','expires at','expiration'],
+ notes:['ملاحظات','notes','comment','comments'],
+};
+function parseWorkbook(file:File){return file.arrayBuffer().then(buffer=>{
+ const workbook=XLSX.read(buffer,{type:'array',cellDates:true,raw:false});const sheet=workbook.Sheets[workbook.SheetNames[0]];if(!sheet)throw new Error('الملف لا يحتوي على ورقة بيانات.');
+ const matrix=XLSX.utils.sheet_to_json<any[]>(sheet,{header:1,raw:false,defval:'',blankrows:false,dateNF:'yyyy-mm-dd'});if(matrix.length<2)throw new Error('أضف صف العناوين ثم صفًا واحدًا على الأقل.');
+ const headers=matrix[0].map((value:any)=>String(value??'').trim()),columns={} as Record<keyof Omit<ImportRow,'rowNumber'>,number>;
+ for(const field of Object.keys(aliases) as Array<keyof Omit<ImportRow,'rowNumber'>>){const found=headers.findIndex(header=>aliases[field].some(alias=>key(header)===key(alias)));if(found>=0)columns[field]=found;}
+ if(columns.username===undefined||columns.password===undefined||columns.profile===undefined)throw new Error('لم أتعرف على أعمدة اليوزر والباسورد والبروفايل. استخدم صف عناوين واضحًا مثل: اليوزر، باسبورد، بروفايل.');
+ return matrix.slice(1).map((values:any[],index)=>{const get=(field:keyof Omit<ImportRow,'rowNumber'>)=>columns[field]===undefined?'':String(values[columns[field]]??'').trim();return {rowNumber:index+2,firstName:get('firstName'),lastName:get('lastName'),username:get('username'),password:get('password'),profile:get('profile'),phone:get('phone'),expiresAt:get('expiresAt'),notes:get('notes')};}).filter(row=>row.username||row.password||row.profile||row.firstName||row.lastName);
+ });}
+const reasonName:Record<string,string>={required_credentials:'اسم المستخدم أو كلمة المرور ناقصة أو غير صالحة',profile_missing:'البروفايل مفقود',profile_unmapped:'لا يوجد بروفايل خدمة مطابق',profile_invalid:'صيغة السرعة أو البروفايل غير صالحة',expiry_invalid:'صيغة تاريخ الانتهاء غير مفهومة',expiry_past:'تاريخ الانتهاء مضى',phone_invalid:'رقم الهاتف غير صالح',username_duplicate:'اسم المستخدم مكرر',phone_duplicate:'رقم الهاتف مكرر',row_create_failed:'تعذر إنشاء الحساب؛ راجع توافق البيانات'};
+export default function NetworkPppoeImport({endpoint,categories,onCompleted}:{endpoint:string;categories:Category[];onCompleted:()=>void}){
+ const [open,setOpen]=useState(false),[file,setFile]=useState<File|null>(null),[rows,setRows]=useState<ImportRow[]>([]),[categoryId,setCategoryId]=useState(''),[profileMap,setProfileMap]=useState<Record<string,string>>({}),[availableProfiles,setAvailableProfiles]=useState<Profile[]>([]),[preview,setPreview]=useState<Preview|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const options=useMemo(()=>categories.map(item=>({value:String(item.id),label:item.name})),[categories]);
+ const profiles=availableProfiles;
+ const reset=()=>{if(busy)return;setOpen(false);setFile(null);setRows([]);setCategoryId('');setProfileMap({});setAvailableProfiles([]);setPreview(null);setError('');setNotice('');};
+ const chooseFile=async(next:File|null)=>{setFile(next);setPreview(null);setAvailableProfiles([]);setError('');if(!next)return;if(next.size>10*1024*1024){setError('حجم الملف يتجاوز 10 ميغابايت.');return;}if(!/\.(csv|xlsx|xls)$/i.test(next.name)){setError('اختر ملف CSV أو Excel بصيغة XLSX أو XLS.');return;}try{const parsed=await parseWorkbook(next);if(parsed.length>5000)throw new Error('الحد الأقصى 5000 صف في الملف الواحد.');setRows(parsed);setProfileMap({});if(!parsed.length)throw new Error('لم أجد صفوف حسابات في الملف.');}catch(e){setRows([]);setError(e instanceof Error?e.message:'تعذر قراءة الملف.');}};
+ const runPreview=async()=>{if(!rows.length){setError('اختر ملفًا صالحًا أولًا.');return;}if(!categoryId){setError('اختر تصنيف المشتركين قبل المعاينة.');return;}setBusy(true);setError('');try{const response=await fetch(`${endpoint}/pppoe/import/preview`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows,categoryId,profileMap,sourceName:file?.name})});const data=await response.json();if(!response.ok)throw new Error(data.message||'تعذرت معاينة الملف.');setAvailableProfiles(Array.isArray(data.profiles)?data.profiles:[]);setPreview(data);}catch(e){setError(e instanceof Error?e.message:'تعذرت معاينة الملف.');}finally{setBusy(false);}};
+ const commit=async()=>{if(!preview||preview.ready<1)return;setBusy(true);setError('');try{const response=await fetch(`${endpoint}/pppoe/import/commit`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows,categoryId,profileMap,sourceName:file?.name})});const data=await response.json();if(!response.ok)throw new Error(data.message||'تعذر استيراد الحسابات.');setNotice(`اكتمل الاستيراد: أُنشئ ${Number(data.imported).toLocaleString('ar')} خط، وحُفظ ${Number(data.queued).toLocaleString('ar')} صف للمراجعة.`);setOpen(false);setPreview(null);setRows([]);setFile(null);setAvailableProfiles([]);onCompleted();}catch(e){setError(e instanceof Error?e.message:'تعذر استيراد الحسابات.');}finally{setBusy(false);}};
+ const distinct=Array.from(new Set(rows.map(row=>row.profile).filter(Boolean)));
+ const exportIssues=()=>{if(!preview)return;const rowsByNumber=new Map(rows.map(row=>[row.rowNumber,row]));const data=preview.items.filter(item=>item.kind!=='ready').map(item=>{const source=rowsByNumber.get(item.rowNumber);return {الصف:item.rowNumber,'الاسم الأول':item.firstName,الكنية:item.lastName,اليوزر:item.username,البروفايل:item.profile,السرعة_المطبعة:item.normalizedSpeed||'',الهاتف:source?.phone||'',تاريخ_الانتهاء:source?.expiresAt||'',السبب:item.reasons.map(reason=>reasonName[reason]||reason).join('، ')}});const worksheet=XLSX.utils.json_to_sheet(data),csv=XLSX.utils.sheet_to_csv(worksheet,{FS:','});const blob=new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='pppoe-import-review.csv';link.click();URL.revokeObjectURL(url);};
+ const mappingOptions=[{value:'',label:'غير مربوط — سيُنقل للمراجعة'},...profiles.map(profile=>({value:String(profile.id),label:`${profile.name} · ${profile.speed} · إصدار ${profile.version}`}))];
+ return <>
+  <FloatingNotice message={notice} error={error} onDismiss={()=>{setNotice('');setError('');}}/>
+  <ProjectButton variant="secondary" onClick={()=>{setOpen(true);setError('');}}><FileSpreadsheet/>استيراد PPPoE</ProjectButton>
+  <ProjectDialog open={open} title="استيراد حسابات PPPoE" description="حلّل CSV أو Excel، راجع ربط البروفايلات والصفوف قبل إنشاء أي حساب." onClose={reset} busy={busy} maxWidth="max-w-5xl" hostingerStyle compact>
+   <div className="space-y-4" dir="rtl">
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,.65fr)]">
+     <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-dashed border-[#9fb8d2] bg-[#f6f9fc] px-4 py-3 text-xs font-semibold text-[#17386d] hover:bg-[#edf4fb] dark:border-white/20 dark:bg-white/[.035] dark:text-slate-100"><span className="flex items-center gap-2"><Upload className="h-4 w-4 text-blue-600"/>{file?file.name:'اختر ملف CSV أو Excel'}</span><span className="text-[10px] font-normal text-slate-500">حتى 10 MB</span><input type="file" accept=".csv,.xlsx,.xls,text/csv" className="sr-only" disabled={busy} onChange={event=>void chooseFile(event.target.files?.[0]||null)}/></label>
+     <label className="space-y-1 text-[11px] font-semibold text-[#202124] dark:text-slate-200"><span>تصنيف المشتركين *</span><ProjectDropdown fieldStyle value={categoryId} onChange={value=>{setCategoryId(value);setPreview(null);}} options={options} placeholder="اختر التصنيف" disabled={busy||!categories.length}/></label>
+    </div>
+    {rows.length>0&&<ProjectInfoCard tone="info" className="text-[11px]">تمت قراءة {rows.length.toLocaleString('ar')} صفًا. يلزم ربط كل بروفايل وارد بباقة خدمة موجودة في قاعدة الشبكة. لا تُنشأ بروفايلات جديدة تلقائيًا.</ProjectInfoCard>}
+    {distinct.length>0&&<section className="space-y-2 rounded-2xl border border-[#e4e4e7] bg-white p-3 dark:border-white/10 dark:bg-[#0d243b]"><h3 className="text-xs font-bold text-[#17386d] dark:text-slate-100">ربط البروفايلات بالسرعات المعتمدة</h3>{distinct.map(profile=><label key={profile} className="grid items-center gap-2 text-[11px] sm:grid-cols-[minmax(140px,.6fr)_minmax(0,1.4fr)]"><span className="truncate font-medium" title={profile}>{profile}</span><ProjectDropdown fieldStyle compact value={profileMap[profile]||''} onChange={value=>{setProfileMap(current=>({...current,[profile]:value}));setPreview(null);}} options={mappingOptions} placeholder="طابقه مع بروفايل خدمة" disabled={busy}/></label>)}</section>}
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-1.5 text-[10px] text-slate-500"><LockKeyhole className="h-3.5 w-3.5"/>كلمات المرور لا تظهر في المعاينة أو التقرير، والصفوف المحفوظة للمراجعة تُشفّر.</p><ProjectButton variant="secondary" disabled={busy||!rows.length||!categoryId} onClick={()=>void runPreview()}><FileSpreadsheet/>معاينة وتحليل</ProjectButton></div>
+    {preview&&<>
+     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[{label:'الحسابات الجاهزة',value:preview.ready,tone:'text-emerald-700'},{label:'مكررات للمراجعة',value:preview.duplicates,tone:'text-amber-700'},{label:'صفوف غير صالحة',value:preview.rejected,tone:'text-rose-700'},{label:'إجمالي الصفوف',value:preview.total,tone:'text-blue-700'}].map(item=><div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[.03]"><p className="text-[10px] text-slate-500">{item.label}</p><p className={`mt-1 text-lg font-bold ${item.tone}`}>{item.value.toLocaleString('ar')}</p></div>)}</div>
+     <div className="grid gap-2 rounded-xl bg-[#f5f8fb] p-3 text-[10px] text-slate-600 dark:bg-white/[.035] dark:text-slate-300 sm:grid-cols-2"><p>أرقام هاتف موجودة: {preview.withPhone} · فارغة: {preview.withoutPhone}</p><p>تاريخ انتهاء موجود: {preview.withExpiry} · فارغ: {preview.withoutExpiry}</p></div>
+     {preview.items.length>0&&<div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-white/10"><table className="w-full min-w-[620px] text-right text-[10px]"><thead className="sticky top-0 bg-[#f1f7fd] text-[#17386d] dark:bg-[#142b43] dark:text-slate-100"><tr>{['صف','الاسم','اسم المستخدم','البروفايل / السرعة','الحالة','سبب المراجعة'].map(value=><th key={value} className="px-2 py-2 font-semibold">{value}</th>)}</tr></thead><tbody>{preview.items.map(item=><tr key={item.rowNumber} className="border-t border-slate-100 dark:border-white/[.06]"><td className="px-2 py-2">{item.rowNumber}</td><td className="px-2 py-2">{item.firstName} {item.lastName}</td><td dir="ltr" className="px-2 py-2 text-right">{item.username||'—'}</td><td className="px-2 py-2">{item.profile}{item.normalizedSpeed?` → ${item.normalizedSpeed}`:''}</td><td className="px-2 py-2">{item.kind==='ready'?'جاهز':item.kind==='duplicate'?'مكرر':'يحتاج تصحيح'}</td><td className="px-2 py-2">{item.reasons.map(reason=>reasonName[reason]||reason).join('، ')||'—'}</td></tr>)}</tbody></table></div>}
+     <div className="flex flex-wrap justify-between gap-2">{(preview.duplicates+preview.rejected)>0&&<ProjectButton variant="secondary" disabled={busy} onClick={exportIssues}><Download/>تنزيل تقرير الصفوف للمراجعة</ProjectButton>}<div className="mr-auto flex flex-wrap justify-end gap-2"><ProjectButton variant="secondary" disabled={busy} onClick={reset}><X/>إغلاق</ProjectButton><ProjectButton disabled={busy||preview.ready<1} onClick={()=>void commit()}><CheckCircle2/>استيراد {preview.ready.toLocaleString('ar')} حساب</ProjectButton></div></div>
+    </>}
+   </div>
+  </ProjectDialog>
+ </>;
+}

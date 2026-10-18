@@ -14,7 +14,7 @@ BEGIN
    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Central platform tables detected; tenant foundation refused';
  END IF;
  IF EXISTS (SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME NOT IN
-   ('time_units','network_settings','network_contact_numbers','platform_subscription','permission_groups','permissions','permission_group_permissions','managers','customers','customer_identity_documents','address_keywords','customer_categories','customer_category_manager_assignments','customer_category_memberships','activity_log')) THEN
+   ('time_units','network_settings','network_contact_numbers','platform_subscription','permission_groups','permissions','permission_group_permissions','managers','customers','customer_identity_documents','address_keywords','customer_categories','customer_category_manager_assignments','customer_category_memberships','pppoe_import_batches','pppoe_import_review_rows','activity_log')) THEN
    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Existing unrelated tables found; use a new tenant database';
  END IF;
 END$$
@@ -182,7 +182,6 @@ CREATE TABLE IF NOT EXISTS customers (
   KEY idx_customer_owner_archive (manager_id,archived_at,id),
   KEY idx_customer_name (last_name,first_name),
   CONSTRAINT chk_customer_first_name CHECK (CHAR_LENGTH(TRIM(first_name))>0),
-  CONSTRAINT chk_customer_last_name CHECK (CHAR_LENGTH(TRIM(last_name))>0),
   CONSTRAINT chk_customer_payment_code CHECK (CHAR_LENGTH(TRIM(payment_code))>0),
   CONSTRAINT chk_customer_coordinates CHECK ((latitude IS NULL AND longitude IS NULL) OR (latitude IS NOT NULL AND longitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)),
   CONSTRAINT fk_customer_manager FOREIGN KEY (manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
@@ -276,6 +275,38 @@ CREATE TABLE IF NOT EXISTS customer_category_memberships (
   CONSTRAINT fk_membership_category_assignment FOREIGN KEY (category_id,manager_id) REFERENCES customer_category_manager_assignments(category_id,manager_id) ON DELETE RESTRICT,
   CONSTRAINT fk_membership_actor FOREIGN KEY (assigned_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS pppoe_import_batches (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  created_by BIGINT UNSIGNED NOT NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  source_name VARCHAR(255) NULL,
+  total_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  imported_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  duplicate_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  rejected_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  status ENUM('processing','completed','completed_with_issues') NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  KEY idx_pppoe_import_batch_time(created_at,id),
+  CONSTRAINT fk_pppoe_import_batch_actor FOREIGN KEY(created_by) REFERENCES managers(id),
+  CONSTRAINT fk_pppoe_import_batch_category FOREIGN KEY(category_id) REFERENCES customer_categories(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS pppoe_import_review_rows (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  batch_id BIGINT UNSIGNED NOT NULL,
+  source_row_number INT UNSIGNED NOT NULL,
+  username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  reason_code VARCHAR(64) NOT NULL,
+  encrypted_payload TEXT NOT NULL,
+  resolved_at DATETIME(6) NULL,
+  resolved_by BIGINT UNSIGNED NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  UNIQUE KEY uq_pppoe_import_review_source(batch_id,source_row_number),
+  KEY idx_pppoe_import_review_open(resolved_at,batch_id,id),
+  CONSTRAINT fk_pppoe_import_review_batch FOREIGN KEY(batch_id) REFERENCES pppoe_import_batches(id),
+  CONSTRAINT fk_pppoe_import_review_actor FOREIGN KEY(resolved_by) REFERENCES managers(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS activity_log (

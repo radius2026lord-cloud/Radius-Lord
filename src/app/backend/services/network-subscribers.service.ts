@@ -310,7 +310,7 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     LEFT JOIN hotspot_period_usage u ON u.period_id=sp.id
     WHERE sc.customer_id=? AND a.archived_at IS NULL AND a.status='enabled' ORDER BY a.id DESC`,[id])
   ]);
-  const accounts=[...pppoe.map((x:any)=>({...x,kind:'pppoe'})),...hotspot.map((x:any)=>({...x,kind:'hotspot'}))];
+  const accounts=[...pppoe.map((x:any)=>({...x,kind:'pppoe',incomplete_fields:[!customer.phone?'phone':null,!x.address?'address':null,!x.service_type_name?'connection_type':null].filter(Boolean),documentation_missing:Number(customer.identity_verified)!==1})),...hotspot.map((x:any)=>({...x,kind:'hotspot',incomplete_fields:[],documentation_missing:Number(customer.identity_verified)!==1}))];
   return {item:customer,accounts};
  });
 }

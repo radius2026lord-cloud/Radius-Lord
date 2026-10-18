@@ -170,6 +170,7 @@ export default function DashboardShell({ children,network }: { children: React.R
    {label:'الهوتسبوت',icon:Radio,items:[{label:'الباقات',href:`${network.basePath}?tab=hotspot&hotspotTab=packages`,icon:Layers},{label:'دفعات الكروت',href:`${network.basePath}?tab=hotspot&hotspotTab=batches`,icon:CreditCard},{label:'الحسابات الفردية',href:`${network.basePath}?tab=hotspot&hotspotTab=standalone`,icon:Users}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    ...(network.isPrincipal?[{label:'إدارة القطع',icon:Router,items:[{label:'سجل القطع ونطاقات IP',href:`${network.basePath}?tab=equipment`,icon:Router}]}]:[]),
+   ...(network.isPrincipal?[{label:'إدارة البيانات',icon:Database,items:[{label:'استيراد ومراجعة البيانات',href:`${network.basePath}?tab=data`,icon:Database}]}]:[]),
    {label:'الإعدادات',icon:Settings,items:[{label:'إعدادات الشبكة',href:`${network.basePath}?tab=settings`,icon:Settings},{label:'إعدادات RADIUS',href:`${network.basePath}?tab=radius-settings`,icon:Server}]},
    {label:'اشتراكي',icon:CreditCard,items:[{label:'معلومات الاشتراك',href:`${network.basePath}?tab=subscription`,icon:CreditCard}]},
    ...(network.canViewActivity?[{label:'السجلات',icon:ScrollText,items:[{label:'سجل النظام',href:`${network.basePath}?tab=activity`,icon:ScrollText},{label:'سجل الإدارة',href:`${network.basePath}?tab=admin-activity`,icon:ShieldCheck}]}]:[]),
