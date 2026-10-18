@@ -275,7 +275,7 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
    WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
   const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
   const [[pppoe],[hotspot]]:any=await Promise.all([
-   app.query(`SELECT p.id,r.current_username username,p.line_name,p.address,p.latitude,p.longitude,p.admin_status status,st.name service_type_name,cm.name connection_method_name,sp.lifecycle,sp.expires_at,sp.grace_expires_at,sp.quota_allowance_bytes,
+   app.query(`SELECT p.id,r.current_username username,p.line_name,p.address,p.latitude,p.longitude,p.distribution_box_serial,p.distribution_box_description,p.station_vendor,p.station_ip_address,p.admin_status status,st.name service_type_name,cm.name connection_method_name,cm.code connection_method_code,sp.lifecycle,sp.expires_at,sp.grace_expires_at,sp.quota_allowance_bytes,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
     COALESCE(su.upload_bytes,0)+COALESCE(su.download_bytes,0) used_bytes,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.quota_exhaustion_action')) quota_exhaustion_action,
