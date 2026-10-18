@@ -1,9 +1,8 @@
 "use client";
 
 import {useEffect,useRef,useState} from "react";
-import {createPortal} from "react-dom";
 import {CircleCheck,TriangleAlert,X} from "lucide-react";
-import ProjectButton from "@/components/ui/project-button";
+import {createPortal} from "react-dom";
 import "./floating-notice.css";
 
 export default function FloatingNotice({error,warning:warningMessage,message,onDismiss,action}:{error?:string;warning?:string;message?:string;onDismiss:()=>void;action?:{label:string;onClick:()=>void}}){
@@ -28,16 +27,14 @@ export default function FloatingNotice({error,warning:warningMessage,message,onD
  if(!mounted||!visible)return null;
  const warning=visible.warning;
  const caution=visible.caution;
- return createPortal(<div dir="rtl" className="pointer-events-none fixed inset-x-3 bottom-[110px] z-[11000] flex justify-center sm:inset-x-auto sm:left-6 sm:bottom-[110px] sm:w-[380px] sm:justify-start">
-  <div key={`${warning}:${caution}:${visible.text}`} data-state={closing?"closed":"open"} role={warning?"alert":"status"} aria-atomic="true" onMouseEnter={()=>setPaused(true)} onMouseLeave={()=>setPaused(false)} onFocusCapture={()=>setPaused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setPaused(false);}} className={`rl-floating-notice pointer-events-auto relative w-full max-w-md overflow-hidden rounded-[20px] border bg-white shadow-[0_20px_60px_-10px_rgba(15,23,42,.4)] ring-[3px] ring-slate-200/60 dark:ring-slate-700/60 dark:bg-[#17263b] ${warning?"border-red-200 dark:border-red-400/25":caution?"border-amber-300 dark:border-amber-400/30":"border-emerald-200 dark:border-emerald-400/25"}`}>
-   <div className="flex max-h-[calc(100dvh-160px)] items-start gap-3.5 overflow-y-auto p-5">
-    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] ${warning?"bg-red-50 text-red-500 dark:bg-red-500/15 dark:text-red-300":caution?"bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300":"bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"}`}>
-     {warning||caution?<TriangleAlert className="h-6 w-6"/>:<CircleCheck className="h-6 w-6"/>}
-    </span>
-    <div className="min-w-0 flex-1"><p className="mb-1.5 text-sm font-bold text-slate-800 dark:text-slate-100">{warning?"تعذر إكمال العملية":caution?"تنبيه مهم":"تمت العملية بنجاح"}</p><p className="whitespace-pre-wrap break-words text-xs leading-6 text-slate-600 dark:text-slate-300">{visible.text}</p>{action&&<ProjectButton variant="secondary" className="mt-3" onClick={action.onClick}>{action.label}</ProjectButton>}</div>
-    <ProjectButton variant="ghost" size="icon" aria-label="إغلاق التنبيه" onClick={()=>dismiss.current()} className="h-8 w-8 rounded-full border border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/5"><X/></ProjectButton>
-   </div>
-   <div aria-hidden="true" className={`h-1 ${warning?"bg-red-100 dark:bg-red-500/10":caution?"bg-amber-100 dark:bg-amber-500/10":"bg-emerald-100 dark:bg-emerald-500/10"}`}><div key={String(paused)} className={`rl-notice-progress h-full origin-right ${warning?"bg-red-400":caution?"bg-amber-500":"bg-emerald-500"}`} style={{animationDuration:`${duration}ms`,animationPlayState:paused?"paused":"running"}}/></div>
+ return createPortal(<div dir="rtl" className="pointer-events-none fixed inset-x-0 bottom-6 z-[11000] flex justify-center px-3 sm:bottom-7">
+  <div key={`${warning}:${caution}:${visible.text}`} data-state={closing?"closed":"open"} role={warning?"alert":"status"} aria-live={warning?"assertive":"polite"} aria-atomic="true" onMouseEnter={()=>setPaused(true)} onMouseLeave={()=>setPaused(false)} onFocusCapture={()=>setPaused(true)} onBlurCapture={event=>{if(!event.currentTarget.contains(event.relatedTarget))setPaused(false);}} className={`rl-floating-notice pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-[18px] border border-white/[.08] bg-[#171717] px-4 py-3 text-white shadow-[0_12px_36px_rgba(0,0,0,.32)] sm:min-h-[64px] sm:px-5`}>
+   <span className="grid h-6 w-6 shrink-0 place-items-center">
+    {warning||caution?<TriangleAlert className={`h-5 w-5 ${warning?"text-rose-400":"text-amber-400"}`}/>:<CircleCheck className="h-5 w-5 text-emerald-500"/>}
+   </span>
+   <div className="min-w-0 flex-1"><p className="max-w-[min(72vw,520px)] whitespace-pre-wrap break-words text-center text-sm font-medium leading-6 text-white">{visible.text}</p>{action&&<button type="button" onClick={action.onClick} className="mt-1 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline">{action.label}</button>}</div>
+   <span aria-hidden="true" className="h-8 shrink-0 border-r border-white/[.16]"/>
+   <button type="button" aria-label="إغلاق الإشعار" onClick={()=>dismiss.current()} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white transition-colors hover:bg-white/[.10] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"><X className="h-5 w-5"/></button>
   </div>
  </div>,document.body);
 }
