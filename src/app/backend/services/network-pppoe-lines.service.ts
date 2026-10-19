@@ -55,7 +55,7 @@ export async function checkPppoeLineUsername(scope:any,value:any){
  return withNetwork(scope,async app=>{await principal(app,scope);const [rows]:any=await app.query('SELECT username FROM radius_username_reservations WHERE username=? LIMIT 1',[username]);return {username,available:rows.length===0};});
 }
 
-export async function createPppoeLine(scope:any,input:any,sharedConnection?:any){
+export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,options:{importedExpiry?:boolean}={}){
  const create=async(app:any)=>{if(!sharedConnection)await app.beginTransaction();try{
   const access=await principal(app,scope),customerId=integer(input.customerId,'customerId'),versionId=integer(input.packageVersionId,'packageVersionId');
   const lineName=String(input.lineName??'').trim();if(lineName.length>150)invalid('lineName');
@@ -99,7 +99,8 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any)
   }
   const service=typeof version.service_snapshot==='string'?JSON.parse(version.service_snapshot):version.service_snapshot;
   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const serviceTimezone=String(settings[0]?.timezone||'Asia/Damascus');
-  if(input.expiresAtOverride){const expiry=parsePppoeLocalDateTime(input.expiresAtOverride,serviceTimezone),[clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc'),now=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');if(expiry<=now)throw new Error('PPPOE_LINE_EXPIRY_INVALID');service.expires_at_override=expiry.toISOString();}
+  let explicitExpiry:Date|null=null;
+  if(input.expiresAtOverride){explicitExpiry=parsePppoeLocalDateTime(input.expiresAtOverride,serviceTimezone);const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc'),now=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');if(explicitExpiry<=now&&!options.importedExpiry)throw new Error('PPPOE_LINE_EXPIRY_INVALID');service.expires_at_override=explicitExpiry.toISOString();}
   let graceDays=Number(version.grace_days||0);const graceSource=version.grace_source==='global'?'global':'package';if(graceSource==='global')graceDays=Number(version.global_grace_days||0);
   const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('pppoe')");const identityId=Number(identity.insertId);
   try{await app.query('INSERT INTO radius_username_reservations(username,radius_identity_id) VALUES(?,?)',[username,identityId]);}catch(error:any){if(error?.code==='ER_DUP_ENTRY')throw new Error('PPPOE_LINE_USERNAME_TAKEN');throw error;}
@@ -117,7 +118,18 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any)
   const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc');
   const createdAt=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');
   let lifecycle='pending';
-  if(service.starts_at==='creation'||service.validity_mode==='calendar_monthly'){
+  if(options.importedExpiry&&explicitExpiry){
+   const expiresAt=explicitExpiry,graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
+   lifecycle=graceEnds.getTime()<=createdAt.getTime()?'ended':'active';
+   await app.query('UPDATE pppoe_subscriptions SET lifecycle=?,activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?',[lifecycle,sqlTimestamp(createdAt),sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
+   if(lifecycle==='active'){
+    const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-createdAt.getTime())/1000));
+    await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(timeout)]);
+   }else{
+    await app.query("UPDATE pppoe_subscriptions SET ended_at=UTC_TIMESTAMP(6) WHERE id=?",[subscription.insertId]);
+    await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
+   }
+  }else if(service.starts_at==='creation'||service.validity_mode==='calendar_monthly'){
    const expiresAt=pppoeExpiry(createdAt,service,serviceTimezone),graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
    await app.query("UPDATE pppoe_subscriptions SET lifecycle='active',activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?",[sqlTimestamp(createdAt),sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
    const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-Date.now())/1000));
