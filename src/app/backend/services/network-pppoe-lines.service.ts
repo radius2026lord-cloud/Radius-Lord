@@ -55,8 +55,8 @@ export async function checkPppoeLineUsername(scope:any,value:any){
  return withNetwork(scope,async app=>{await principal(app,scope);const [rows]:any=await app.query('SELECT username FROM radius_username_reservations WHERE username=? LIMIT 1',[username]);return {username,available:rows.length===0};});
 }
 
-export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,options:{importedExpiry?:boolean}={}){
- const create=async(app:any)=>{if(!sharedConnection)await app.beginTransaction();try{
+export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,options:{importedExpiry?:boolean;onStage?:(stage:string)=>void}={}){
+ const create=async(app:any)=>{if(!sharedConnection)await app.beginTransaction();let stage='access.validate';const mark=(next:string)=>{stage=next;options.onStage?.(next);};try{
   const access=await principal(app,scope),customerId=integer(input.customerId,'customerId'),versionId=integer(input.packageVersionId,'packageVersionId');
   const lineName=String(input.lineName??'').trim();if(lineName.length>150)invalid('lineName');
   const address=String(input.address??'').trim();if(address.length>4000)invalid('address');
@@ -70,7 +70,7 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
   const allowedNasId=input.allowedNasId==null||input.allowedNasId===''?null:integer(input.allowedNasId,'allowedNasId');
   const username=String(input.username??'').trim().toLowerCase();if(!/^[a-z0-9_.@-]{1,64}$/.test(username))invalid('username');
   const password=String(input.password??'');if(!password||password.length>64||/[\u0000-\u001f\u007f\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(password))invalid('password');
-  const [customers]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE",[customerId]);if(!customers[0])throw new Error('PPPOE_LINE_CUSTOMER_UNAVAILABLE');
+  mark('customer.lock');const [customers]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE',[customerId]);if(!customers[0])throw new Error('PPPOE_LINE_CUSTOMER_UNAVAILABLE');
   const [[serviceTypes],[connectionMethods]]:any=await Promise.all([app.query('SELECT id,code FROM service_types'),app.query('SELECT id,service_type_id,code FROM connection_methods')]);
   const serviceType=serviceTypes.find((row:any)=>Number(row.id)===serviceTypeId);
   const connectionMethod=connectionMethods.find((row:any)=>Number(row.id)===connectionMethodId&&Number(row.service_type_id)===serviceTypeId);
@@ -84,11 +84,11 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
     if(newStation&&(!newStation.name||!newStation.poolId||!['ubnt','mimosa','mikrotik'].includes(String(newStation.vendor))))invalid('installationDetails');
    }else invalid('connectionMethodId');
   }else if(connectionMethodId||distributionBoxSerial||distributionBoxDescription||stationDeviceId||newStation)invalid('installationDetails');
-  const [nasRows]:any=await app.query("SELECT n.id,n.nasname FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.id FOR UPDATE");
+  mark('nas.validate');const [nasRows]:any=await app.query("SELECT n.id,n.nasname FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0 ORDER BY l.id FOR UPDATE");
   if(!nasRows.length)throw new Error('PPPOE_LINE_NAS_REQUIRED');
   let allowedNas:any=null;
   if(allowedNasId){allowedNas=nasRows.find((nas:any)=>Number(nas.id)===allowedNasId);if(!allowedNas)throw new Error('PPPOE_LINE_NAS_UNAVAILABLE');}
-  const [versions]:any=await app.query(`${packagesSql.replace('ORDER BY p.id DESC','AND v.id=? ORDER BY p.id DESC')} FOR UPDATE`,[versionId]);const version=versions[0];if(!version)throw new Error('PPPOE_LINE_PACKAGE_UNAVAILABLE');
+  mark('package_version.lock');const [versions]:any=await app.query(`${packagesSql.replace('ORDER BY p.id DESC','AND v.id=? ORDER BY p.id DESC')} FOR UPDATE`,[versionId]);const version=versions[0];if(!version)throw new Error('PPPOE_LINE_PACKAGE_UNAVAILABLE');
   let stationDevice:any=null;
   if(serviceType?.code==='wifi_outdoor'&&connectionMethod?.code==='station'){
    if(newStation){stationDevice=await createEquipmentStationForPppoe(app,scope,customerId,{...newStation,address:newStation.address||address,latitude:newStation.latitude||latitude,longitude:newStation.longitude||longitude});}
@@ -102,19 +102,19 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
   let explicitExpiry:Date|null=null;
   if(input.expiresAtOverride){explicitExpiry=parsePppoeLocalDateTime(input.expiresAtOverride,serviceTimezone);const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc'),now=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');if(explicitExpiry<=now&&!options.importedExpiry)throw new Error('PPPOE_LINE_EXPIRY_INVALID');service.expires_at_override=explicitExpiry.toISOString();}
   let graceDays=Number(version.grace_days||0);const graceSource=version.grace_source==='global'?'global':'package';if(graceSource==='global')graceDays=Number(version.global_grace_days||0);
-  const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('pppoe')");const identityId=Number(identity.insertId);
-  try{await app.query('INSERT INTO radius_username_reservations(username,radius_identity_id) VALUES(?,?)',[username,identityId]);}catch(error:any){if(error?.code==='ER_DUP_ENTRY')throw new Error('PPPOE_LINE_USERNAME_TAKEN');throw error;}
-  await app.query('UPDATE radius_identities SET current_username=? WHERE id=?',[username,identityId]);
+  mark('radius_identity.create');const [identity]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('pppoe')");const identityId=Number(identity.insertId);
+  mark('radius_username_reservation.create');try{await app.query('INSERT INTO radius_username_reservations(username,radius_identity_id) VALUES(?,?)',[username,identityId]);}catch(error:any){if(error?.code==='ER_DUP_ENTRY')throw new Error('PPPOE_LINE_USERNAME_TAKEN');throw error;}
+  mark('radius_identity.set_current_username');await app.query('UPDATE radius_identities SET current_username=? WHERE id=?',[username,identityId]);
   const legacyVendor=stationDevice&&['ubnt','mimosa','mikrotik'].includes(String(stationDevice.vendor))?stationDevice.vendor:null,stationIp=stationDevice?.management_ip||stationDevice?.managementIp||null;
-  const [account]:any=await app.query("INSERT INTO pppoe_accounts(customer_id,radius_identity_id,line_name,admin_status,address,latitude,longitude,service_type_id,connection_method_id,distribution_box_serial,distribution_box_description,station_vendor,station_ip_address,station_device_id,allowed_nas_id,created_by) VALUES(?,?,?,'enabled',?,?,?,?,?,?,?,?,?,?,?,?)",[customerId,identityId,lineName||null,address||null,latitude,longitude,serviceTypeId,connectionMethodId,distributionBoxSerial||null,distributionBoxDescription||null,legacyVendor,stationIp,stationDevice?.id||null,allowedNasId,scope.managerId]);const accountId=Number(account.insertId);
+  mark('pppoe_account.create');const [account]:any=await app.query("INSERT INTO pppoe_accounts(customer_id,radius_identity_id,line_name,admin_status,address,latitude,longitude,service_type_id,connection_method_id,distribution_box_serial,distribution_box_description,station_vendor,station_ip_address,station_device_id,allowed_nas_id,created_by) VALUES(?,?,?,'enabled',?,?,?,?,?,?,?,?,?,?,?,?)",[customerId,identityId,lineName||null,address||null,latitude,longitude,serviceTypeId,connectionMethodId,distributionBoxSerial||null,distributionBoxDescription||null,legacyVendor,stationIp,stationDevice?.id||null,allowedNasId,scope.managerId]);const accountId=Number(account.insertId);
   await ensureRadiusGroup(app,version);
   await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Cleartext-Password',':=',?)",[username,password]);
   if(allowedNas)await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'NAS-IP-Address','==',?)",[username,String(allowedNas.nasname)]);
   await app.query('INSERT INTO radusergroup(username,groupname,priority) VALUES(?,?,1)',[username,version.radius_group_name]);
   const offerActive=version.offer_price!==null&&version.offer_price!==undefined&&version.offer_ends_at&&new Date(version.offer_ends_at).getTime()>Date.now();
   const gifted=Number(version.is_gift)===1,basePrice=String(version.base_price),effectivePrice=gifted?'0.00':offerActive?String(version.offer_price):basePrice;
-  const [subscription]:any=await app.query("INSERT INTO pppoe_subscriptions(account_id,package_version_id,service_role,parent_subscription_id,created_by,event_type,renewal_mode,base_price_snapshot,offer_price_snapshot,offer_ends_at_snapshot,effective_price_snapshot,currency_code,is_gift_snapshot,grace_source_snapshot,grace_days_snapshot,effective_service_snapshot,quota_allowance_bytes,lifecycle) VALUES(?,?,'base',NULL,?,'activation','normal',?,?,?,?,?,?,?,?,?,?,'pending')",[accountId,versionId,scope.managerId,basePrice,offerActive?String(version.offer_price):null,offerActive?version.offer_ends_at:null,effectivePrice,version.currency_code,gifted?1:0,graceSource,graceDays,JSON.stringify(service),version.quota_bytes]);
-  await app.query('INSERT INTO pppoe_subscription_usage(subscription_id,upload_bytes,download_bytes) VALUES(?,0,0)',[subscription.insertId]);
+  mark('subscription.create');const [subscription]:any=await app.query("INSERT INTO pppoe_subscriptions(account_id,package_version_id,service_role,parent_subscription_id,created_by,event_type,renewal_mode,base_price_snapshot,offer_price_snapshot,offer_ends_at_snapshot,effective_price_snapshot,currency_code,is_gift_snapshot,grace_source_snapshot,grace_days_snapshot,effective_service_snapshot,quota_allowance_bytes,lifecycle) VALUES(?,?,'base',NULL,?,'activation','normal',?,?,?,?,?,?,?,?,?,?,'pending')",[accountId,versionId,scope.managerId,basePrice,offerActive?String(version.offer_price):null,offerActive?version.offer_ends_at:null,effectivePrice,version.currency_code,gifted?1:0,graceSource,graceDays,JSON.stringify(service),version.quota_bytes]);
+  mark('subscription_usage.create');await app.query('INSERT INTO pppoe_subscription_usage(subscription_id,upload_bytes,download_bytes) VALUES(?,0,0)',[subscription.insertId]);
   const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc');
   const createdAt=clock[0].now_utc instanceof Date?clock[0].now_utc:new Date(String(clock[0].now_utc).replace(' ','T')+'Z');
   let lifecycle='pending';
@@ -147,8 +147,8 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
   }else if(service.starts_at==='activation'){
    await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
   }
-  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,serviceTypeId,connectionMethodId,distributionBoxSerial:distributionBoxSerial||null,distributionBoxDescription:distributionBoxDescription||null,stationDeviceId:stationDevice?.id||null,stationManagementIp:stationIp,address:address||null,latitude,longitude,expiresAtOverride:service.expires_at_override||null,subscriptionId:Number(subscription.insertId)})]);
+  mark('line.activity_log.create');await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,serviceTypeId,connectionMethodId,distributionBoxSerial:distributionBoxSerial||null,distributionBoxDescription:distributionBoxDescription||null,stationDeviceId:stationDevice?.id||null,stationManagementIp:stationIp,address:address||null,latitude,longitude,expiresAtOverride:service.expires_at_override||null,subscriptionId:Number(subscription.insertId)})]);
   if(!sharedConnection)await app.commit();return {success:true,item:{id:accountId,username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle}};
- }catch(error){if(!sharedConnection)await app.rollback();throw error;}};
+ }catch(error:any){if(error&&typeof error==='object')error.pppoeStage=stage;if(!sharedConnection)await app.rollback();throw error;}};
  return sharedConnection?create(sharedConnection):withNetwork(scope,create);
 }
