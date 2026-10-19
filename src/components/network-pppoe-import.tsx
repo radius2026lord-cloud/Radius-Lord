@@ -90,7 +90,7 @@ function normalizeImportExpiry(input:string,ambiguousOrder:"dmy"|"mdy"="dmy"):st
  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}`;
 }
 function profileOptionLabel(item:SpeedProfile){
- const speed=formatInputSpeed(item.speed);
+ const speed=formatBpsPair(item.speed);
  return `${speed||"بروفايل الخدمة"} · إصدار ${item.version}`;
 }
 
