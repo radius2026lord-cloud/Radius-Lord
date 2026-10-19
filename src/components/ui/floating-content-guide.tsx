@@ -28,7 +28,7 @@ export default function FloatingContentGuide({contentRef}:{contentRef:RefObject<
    const editing=content.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,[aria-expanded="true"]');
    const bottom=Math.min(view.bottom,window.innerHeight);
    const available=scroller?scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight:document.documentElement.scrollHeight-window.scrollY-window.innerHeight;
-   const next=!editing&&available>28&&bounds.bottom>bottom+24&&bounds.top<bottom&&bottom>view.top+100?{left:view.left+view.width/2,bottom:window.innerHeight-bottom+12}:null;
+   const next=!editing&&available>28&&bounds.bottom>bottom+24&&bounds.top<bottom&&bottom>view.top+100?{left:view.left+view.width-68,bottom:window.innerHeight-bottom+12}:null;
    if(next)lastPosition.current=next;
    setPosition(next);
   };
@@ -44,5 +44,5 @@ export default function FloatingContentGuide({contentRef}:{contentRef:RefObject<
   return()=>{resize.disconnect();cancelAnimationFrame(frame);document.removeEventListener('scroll',schedule,true);document.removeEventListener('focusin',schedule);document.removeEventListener('focusout',schedule);window.removeEventListener('resize',schedule);};
  },[contentRef]);
  if(!mounted||!lastPosition.current)return null;
- return createPortal(<div dir="rtl" className="fixed z-40 -translate-x-1/2" style={position??lastPosition.current} aria-hidden={!shown}><div className={`transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${shown?"translate-y-0 scale-100 opacity-100":"pointer-events-none translate-y-2 scale-95 opacity-0"}`}><ProjectTooltip label="عرض بقية المعلومات"><Button disabled={!shown} onClick={()=>nextRef.current()} className="max-w-[calc(100vw-32px)] rounded-full border border-white/30 !bg-[#0758e9]/65 backdrop-blur-[2px] shadow-[0_4px_14px_rgba(7,88,233,.16)] hover:!bg-[#0758e9]/85"><ArrowDown className="motion-safe:animate-bounce"/><span>المزيد بالأسفل</span></Button></ProjectTooltip></div></div>,document.body);
+ return createPortal(<div dir="rtl" className="fixed z-40 -translate-x-1/2" style={position??lastPosition.current} aria-hidden={!shown}><div className={`transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${shown?"translate-y-0 scale-100 opacity-100":"pointer-events-none translate-y-2 scale-95 opacity-0"}`}><ProjectTooltip label="عرض بقية المعلومات"><Button aria-label="متابعة لعرض بقية المعلومات" title="متابعة لعرض بقية المعلومات" disabled={!shown} onClick={()=>nextRef.current()} className="max-w-[calc(100vw-32px)] rounded-full border border-white/30 !bg-[#0758e9]/50 px-3 py-1 text-[11px] shadow-[0_2px_8px_rgba(7,88,233,.12)] hover:!bg-[#0758e9]/70"><ArrowDown className="h-3.5 w-3.5"/><span>تابع للأسفل</span></Button></ProjectTooltip></div></div>,document.body);
 }
