@@ -55,7 +55,7 @@ function normalizeImportExpiry(input:string,ambiguousOrder:"dmy"|"mdy"="dmy"):st
  if(!value)return null;
  const months:Record<string,number>={jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
  const monthNamed=/^(?:(\d{1,2})[-/. ]([a-z]{3,9})[-/. ](\d{4})|([a-z]{3,9})[-/. ](\d{1,2})[-/. ](\d{4}))(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/i.exec(value);
- if(monthNamed){const day=Number(monthNamed[1]||monthNamed[5]),month=months[(monthNamed[2]||monthNamed[4]).toLowerCase()],year=Number(monthNamed[3]||monthNamed[6]),hasTime=Boolean(monthNamed[7]),hour=hasTime?Number(monthNamed[7]):23,minute=hasTime?Number(monthNamed[8]):59,second=hasTime?Number(monthNamed[9]||0):59;const test=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(!month||year<1900||year>9999||test.getUTCFullYear()!==year||test.getUTCMonth()!==month-1||test.getUTCDate()!==day||hour>23||minute>59||second>59)return null;const pad=(n:number)=>String(n).padStart(2,"0");return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;}
+ if(monthNamed){const day=Number(monthNamed[1]||monthNamed[5]),month=months[(monthNamed[2]||monthNamed[4]).toLowerCase()],year=Number(monthNamed[3]||monthNamed[6]),hasTime=Boolean(monthNamed[7]),hour=hasTime?Number(monthNamed[7]):23,minute=hasTime?Number(monthNamed[8]):59,second=hasTime?Number(monthNamed[9]||0):59;const test=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(!month||year<1900||year>9999||test.getUTCFullYear()!==year||test.getUTCMonth()!==month-1||test.getUTCDate()!==day||hour>23||minute>59||second>59)return null;const pad=(n:number)=>String(n).padStart(2,"0");return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}`;}
  const compact=/^(\d{4})(\d{2})(\d{2})$/.exec(value);
  const match=compact||/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i.exec(value);
  if(!match)return null;
@@ -71,14 +71,14 @@ function normalizeImportExpiry(input:string,ambiguousOrder:"dmy"|"mdy"="dmy"):st
  const test=new Date(Date.UTC(year,month-1,day,hour,minute,second));
  if(year<1900||year>9999||test.getUTCFullYear()!==year||test.getUTCMonth()!==month-1||test.getUTCDate()!==day||hour>23||minute>59||second>59)return null;
  const pad=(n:number)=>String(n).padStart(2,"0");
- return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+ return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}`;
 }
 function profileOptionLabel(item:SpeedProfile){
  const speed=item.speed.trim().split("/").map(part=>{const raw=part.trim();if(!/^\d+(?:\.\d+)?$/.test(raw))return raw;const value=Number(raw);if(value>=1_000_000)return `${Number((value/1_000_000).toFixed(2))}M`;if(value>=1_000)return `${Number((value/1_000).toFixed(2))}K`;return raw;}).join("/");
  return `${speed||"بروفايل الخدمة"} · إصدار ${item.version}`;
 }
 
-const reasonName:Record<string,string>={required_credentials:"اسم المستخدم أو كلمة المرور ناقصة أو غير صالحة",profile_missing:"البروفايل مفقود",profile_unmapped:"لا يوجد بروفايل خدمة مطابق",profile_invalid:"صيغة السرعة أو البروفايل غير صالحة",expiry_invalid:"صيغة تاريخ الانتهاء غير مفهومة",expiry_past:"تاريخ الانتهاء مضى",phone_invalid:"رقم الهاتف غير صالح",username_duplicate:"اسم المستخدم مكرر",phone_duplicate:"رقم الهاتف مكرر",row_create_failed:"تعذر إنشاء الحساب؛ راجع توافق البيانات"};
+const reasonName:Record<string,string>={required_credentials:"اسم المستخدم أو كلمة المرور ناقصة أو غير صالحة",profile_missing:"البروفايل مفقود",profile_unmapped:"لا يوجد بروفايل خدمة مطابق",profile_invalid:"صيغة السرعة أو البروفايل غير صالحة",expiry_invalid:"صيغة تاريخ الانتهاء غير مفهومة",phone_invalid:"رقم الهاتف غير صالح",username_duplicate:"اسم المستخدم مكرر",phone_duplicate:"رقم الهاتف مكرر",row_create_failed:"تعذر إنشاء الحساب؛ راجع توافق البيانات"};
 
 export default function NetworkPppoeImport({endpoint,categories,onCompleted}:{endpoint:string;categories:Category[];onCompleted:()=>void}){
  const [unifiedExpiry,setUnifiedExpiry]=useState(""),[stage,setStage]=useState<1|2|3|4>(1),[open,setOpen]=useState(false),[file,setFile]=useState<File|null>(null),[sheetRows,setSheetRows]=useState<string[][]>([]),[hasHeader,setHasHeader]=useState(true),[mapping,setMapping]=useState<Record<number,FieldKey|"">>({}),[categoryId,setCategoryId]=useState(""),[profileMap,setProfileMap]=useState<Record<string,string>>({}),[availableProfiles,setAvailableProfiles]=useState<SpeedProfile[]>([]),[profileRefs,setProfileRefs]=useState<ProfileReferences|null>(null),[profileDefaults,setProfileDefaults]=useState<ProfileDefaults|null>(null),[preview,setPreview]=useState<Preview|null>(null),[previewStale,setPreviewStale]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
