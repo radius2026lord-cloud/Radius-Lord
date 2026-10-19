@@ -1,6 +1,7 @@
 import {db} from '../config/db';
 import {networkScope} from './network-runtime.service';
 import {revertExpiredProfileBoosts} from './network-profiles.service';
+import {revertExpiredPppoeLineSpeedBoosts} from './network-pppoe-speed-boost.service';
 
 let timer:NodeJS.Timeout|undefined,running=false;
 
@@ -12,7 +13,7 @@ export function startProfileSpeedBoostWorker(){
   try{
    const [rows]:any=await db.query("SELECT DISTINCT t.slug FROM tenants t JOIN tenant_environments e ON e.tenant_id=t.id WHERE t.status='active' AND t.archived_at IS NULL AND e.status='ready' AND e.archived_at IS NULL");
    for(const row of rows){
-    try{await revertExpiredProfileBoosts(await networkScope(row.slug));}
+    try{const scope=await networkScope(row.slug);await revertExpiredProfileBoosts(scope);await revertExpiredPppoeLineSpeedBoosts(scope);}
     catch(error){const code=(error as any)?.code;if(!['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR','NETWORK_NOT_AVAILABLE'].includes(code))console.error('[profile-speed-boost-worker]',code||'ENVIRONMENT_UNAVAILABLE');}
    }
   }catch(error){console.error('[profile-speed-boost-worker]',(error as any)?.code||'WORKER_UNAVAILABLE');}
