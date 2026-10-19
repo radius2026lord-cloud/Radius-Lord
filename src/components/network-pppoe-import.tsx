@@ -53,6 +53,9 @@ async function parseWorkbook(file:File):Promise<string[][]>{
 function normalizeImportExpiry(input:string):string|null{
  const value=input.trim().replace(/[٠-٩۰-۹]/g,d=>String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".indexOf(d)%10));
  if(!value)return null;
+ const months:Record<string,number>={jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
+ const monthNamed=/^(?:(\d{1,2})[-/. ]([a-z]{3,9})[-/. ](\d{4})|([a-z]{3,9})[-/. ](\d{1,2})[-/. ](\d{4}))(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/i.exec(value);
+ if(monthNamed){const day=Number(monthNamed[1]||monthNamed[5]),month=months[(monthNamed[2]||monthNamed[4]).toLowerCase()],year=Number(monthNamed[3]||monthNamed[6]),hasTime=Boolean(monthNamed[7]),hour=hasTime?Number(monthNamed[7]):23,minute=hasTime?Number(monthNamed[8]):59,second=hasTime?Number(monthNamed[9]||0):59;const test=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(!month||year<1900||year>9999||test.getUTCFullYear()!==year||test.getUTCMonth()!==month-1||test.getUTCDate()!==day||hour>23||minute>59||second>59)return null;const pad=(n:number)=>String(n).padStart(2,"0");return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;}
  const compact=/^(\d{4})(\d{2})(\d{2})$/.exec(value);
  const match=compact||/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i.exec(value);
  if(!match)return null;
@@ -71,7 +74,7 @@ function normalizeImportExpiry(input:string):string|null{
  return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
 }
 function profileOptionLabel(item:SpeedProfile){
- const cleanName=item.name.trim().replace(/\s*[·•|]\s*\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?\s*(?:bps|bit\/s)?\s*$/i,"").trim();
+ const cleanName=item.name.trim().replace(/\b\d{4,}(?:\.\d+)?\s*\/\s*\d{4,}(?:\.\d+)?(?:\s*(?:bps|bit\/s))?\b/gi,"").replace(/\s*[·•|]\s*[·•|]?\s*$/," ").replace(/\s{2,}/g," ").trim();
  const speed=item.speed.trim();
  const profileName=cleanName&&cleanName.toLocaleLowerCase()!==speed.toLocaleLowerCase()?`${cleanName} · ${speed}`:speed||cleanName;
  return `${profileName} · إصدار ${item.version}`;
@@ -94,7 +97,7 @@ export default function NetworkPppoeImport({endpoint,categories,onCompleted}:{en
   Object.entries(mapping).forEach(([column,field])=>{if(field)row[field]=String(source.values[Number(column)]??"").trim();});
   return row;
  }).filter(row=>row.firstName||row.lastName||row.username||row.password||row.profile||row.phone||row.expiresAt||row.notes),[sourceRows,mapping]);
- const expiryStats=useMemo(()=>({missing:rows.filter(row=>!row.expiresAt).length,invalid:rows.filter(row=>row.expiresAt&&!normalizeImportExpiry(row.expiresAt)).length,converted:rows.filter(row=>row.expiresAt&&normalizeImportExpiry(row.expiresAt)!==row.expiresAt).length}),[rows]);
+ const expiryStats=useMemo(()=>({missing:rows.filter(row=>!row.expiresAt).length,invalid:rows.filter(row=>row.expiresAt&&!normalizeImportExpiry(row.expiresAt)).length,converted:rows.filter(row=>{if(!row.expiresAt)return false;const normalized=normalizeImportExpiry(row.expiresAt);return Boolean(normalized&&normalized!==row.expiresAt);}).length}),[rows]);
  const effectiveRows=useMemo(()=>rows.map(row=>({...row,expiresAt:row.expiresAt?(normalizeImportExpiry(row.expiresAt)||row.expiresAt):(unifiedExpiry?normalizeImportExpiry(unifiedExpiry)||"": "")})),[rows,unifiedExpiry]);
  const distinct=useMemo(()=>Array.from(new Set(rows.map(row=>row.profile).filter(Boolean))),[rows]);
  const mappedFields=new Set(Object.values(mapping).filter(Boolean));
