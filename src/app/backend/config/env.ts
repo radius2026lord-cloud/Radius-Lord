@@ -18,6 +18,10 @@ export const env = {
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'MY_SECRET_KEY',
 
+  // Shared MikroTik management API credentials for newly added NAS devices.
+  MIKROTIK_API_USERNAME: process.env.MIKROTIK_API_USERNAME || 'lord',
+  MIKROTIK_API_PASSWORD: process.env.MIKROTIK_API_PASSWORD || '',
+
   // Frontend
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
