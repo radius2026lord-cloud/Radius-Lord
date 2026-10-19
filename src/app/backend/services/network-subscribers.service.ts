@@ -86,13 +86,10 @@ export async function readNetworkSubscribers(scope:any){
    p.admin_status status,sp.lifecycle,sp.expires_at,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
     COALESCE(pkg.name,(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions
-   FROM pppoe_accounts p
-   JOIN radius_identities r ON r.id=p.radius_identity_id
+   FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
    LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
-   LEFT JOIN pppoe_package_versions pv ON pv.id=sp.package_version_id
-   LEFT JOIN pppoe_packages pkg ON pkg.id=pv.package_id
-   WHERE p.customer_id IN (?) AND p.archived_at IS NULL
-   ORDER BY p.customer_id,p.id DESC`,[customerIds]):[[]];
+   LEFT JOIN pppoe_package_versions pv ON pv.id=sp.package_version_id LEFT JOIN pppoe_packages pkg ON pkg.id=pv.package_id
+   WHERE p.customer_id IN (?) AND p.archived_at IS NULL ORDER BY p.customer_id,p.id DESC`,[customerIds]):[[]];
   const linesByCustomer=new Map<number,any[]>();
   for(const line of pppoeLines){const id=Number(line.customer_id);const group=linesByCustomer.get(id)||[];group.push(line);linesByCustomer.set(id,group);}
   for(const item of items)item.pppoe_lines=linesByCustomer.get(Number(item.id))||[];
@@ -162,7 +159,8 @@ export async function createNetworkSubscriber(scope:any,input:any){
   const categoryId=input.categoryId==null||input.categoryId===''?null:Number(input.categoryId);
   if(categoryId===null)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{categoryId:'اختر تصنيفًا لإتمام حفظ المشترك.'}});
   if(!Number.isSafeInteger(categoryId)||categoryId<1)throw Object.assign(new Error('SUBSCRIBER_INPUT'),{fields:{categoryId:'اختر تصنيفًا صالحًا.'}});
-  const uploadedIdentityImages=isIdentityEntry&&identityDocument?{   front:await decodeIdentityImage(input.identityImages?.front),
+  const uploadedIdentityImages=isIdentityEntry&&identityDocument?{
+   front:await decodeIdentityImage(input.identityImages?.front),
    back:await decodeIdentityImage(input.identityImages?.back),
   }:null;
   await app.beginTransaction();
@@ -311,7 +309,8 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     WHERE p.customer_id=? AND p.archived_at IS NULL ORDER BY p.id DESC`,[id]),
    app.query(`SELECT a.id,r.current_username username,a.status status,p.name service_name,sp.lifecycle,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
-    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
+    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
     (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
     (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
     (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
