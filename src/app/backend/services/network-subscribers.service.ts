@@ -295,6 +295,8 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     COALESCE((SELECT pkg.name FROM pppoe_subscriptions ps JOIN pppoe_package_versions pv ON pv.id=ps.package_version_id JOIN pppoe_packages pkg ON pkg.id=pv.package_id WHERE ps.account_id=p.id AND ps.service_role='base' ORDER BY ps.id DESC LIMIT 1),(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
+    (SELECT GREATEST(TIMESTAMPDIFF(SECOND,ra.acctstarttime,NOW()),0) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) session_seconds,
+    (SELECT ra.acctstarttime FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) session_started_at,
     (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
     (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
     (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
