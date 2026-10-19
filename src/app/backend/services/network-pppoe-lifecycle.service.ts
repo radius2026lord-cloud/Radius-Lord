@@ -104,7 +104,7 @@ async function recordActivation(app:any,sub:any,username:string,startedAt:Date,z
 
 export async function activatePppoeLine(scope:any,value:any){
  return withNetwork(scope,async app=>{await app.beginTransaction();try{
-  const access=await principal(app,scope),id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
+  await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
   const [rows]:any=await app.query("SELECT a.id,a.radius_identity_id,a.admin_status,a.created_at,r.current_username username,s.* FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscriptions s ON s.account_id=a.id AND s.service_role='base' AND s.lifecycle='pending' WHERE a.id=? AND a.archived_at IS NULL FOR UPDATE",[id]);
   const sub=rows[0];if(!sub)throw new Error('PPPOE_LINE_NOT_PENDING');if(sub.admin_status!=='enabled')throw new Error('PPPOE_LINE_DISABLED');
   const service=typeof sub.effective_service_snapshot==='string'?JSON.parse(sub.effective_service_snapshot):sub.effective_service_snapshot;
@@ -182,6 +182,41 @@ export async function disconnectPppoeLine(scope:any,value:any){
   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.disconnect','pppoe_account',?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.radius_identity_id,JSON.stringify(result)]);
   return {success:true,id,...result,disconnectPending:result.acknowledged<result.attempted};
  });
+}
+
+export async function readPppoeLineUsageHistory(scope:any,value:any){
+ return withNetwork(scope,async app=>{await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
+  const [rows]:any=await app.query("SELECT a.id,a.customer_id,r.current_username username,s.id subscription_id,s.expires_at,COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id LEFT JOIN pppoe_subscriptions s ON s.id=(SELECT latest.id FROM pppoe_subscriptions latest WHERE latest.account_id=a.id AND latest.service_role='base' ORDER BY latest.id DESC LIMIT 1) LEFT JOIN pppoe_subscription_usage u ON u.subscription_id=s.id WHERE a.id=? AND a.archived_at IS NULL",[id]);const line=rows[0];if(!line)throw new Error('PPPOE_LINE_UNAVAILABLE');
+  const [sessions]:any=await app.query('SELECT acctstarttime started_at,acctupdatetime updated_at,acctstoptime stopped_at,acctsessiontime session_seconds,COALESCE(acctinputoctets,0) upload_bytes,COALESCE(acctoutputoctets,0) download_bytes,framedipaddress framed_ip,nasipaddress nas_ip,callingstationid calling_station_id,acctterminatecause terminate_cause FROM radacct WHERE username=? ORDER BY COALESCE(acctstoptime,acctupdatetime,acctstarttime) DESC,radacctid DESC LIMIT 50',[line.username]);
+  return {line:{id:Number(line.id),customerId:Number(line.customer_id),username:String(line.username),subscriptionId:line.subscription_id?Number(line.subscription_id):null,expiresAt:line.expires_at,uploadBytes:String(line.upload_bytes),downloadBytes:String(line.download_bytes)},sessions};
+ });
+}
+
+export async function updatePppoeLineExpiry(scope:any,value:any,input:any){
+ return withNetwork(scope,async app=>{await app.beginTransaction();try{
+  await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
+  const [settings]:any=await app.query('SELECT timezone,grace_policy,global_grace_days FROM network_settings WHERE id=1');const zone=String(settings[0]?.timezone||'Asia/Damascus');
+  const expiry=parsePppoeLocalDateTime(input?.expiresAt,zone);const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) now_utc');if(expiry<=dateValue(clock[0].now_utc))throw new Error('PPPOE_LINE_EXPIRY_INVALID');
+  const [rows]:any=await app.query("SELECT a.id,a.admin_status,a.radius_identity_id,r.current_username username,s.id subscription_id,s.lifecycle,s.expires_at,s.grace_expires_at,s.grace_source_snapshot,s.grace_days_snapshot FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscriptions s ON s.id=(SELECT latest.id FROM pppoe_subscriptions latest WHERE latest.account_id=a.id AND latest.service_role='base' ORDER BY latest.id DESC LIMIT 1) WHERE a.id=? AND a.archived_at IS NULL FOR UPDATE",[id]);const row=rows[0];if(!row)throw new Error('PPPOE_LINE_UNAVAILABLE');if(row.lifecycle!=='active')throw new Error('PPPOE_LINE_EXPIRY_UNAVAILABLE');
+  const graceDays=row.grace_source_snapshot==='global'?Math.max(0,Number(settings[0]?.global_grace_days||0)):Math.max(0,Number(row.grace_days_snapshot||0));const grace=graceDays?new Date(expiry.getTime()+graceDays*86400000):null;
+  await app.query('UPDATE pppoe_subscriptions SET expires_at=?,grace_expires_at=? WHERE id=?',[sqlDate(expiry),grace?sqlDate(grace):null,row.subscription_id]);if(row.admin_status==='enabled')await setSessionTimeout(app,row.username,grace||expiry);await markRejected(app,row.username,row.admin_status!=='enabled');
+  const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,before_data,after_data,result) VALUES(?,?,'manager','pppoe.subscription.expiry.update','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.radius_identity_id,JSON.stringify({expiresAt:row.expires_at,graceExpiresAt:row.grace_expires_at}),JSON.stringify({expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,timezone:zone})]);
+  await app.commit();return {success:true,id,expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,serviceTimezone:zone};
+ }catch(error){await app.rollback();throw error;}});
+}
+
+export async function endPppoeSubscription(scope:any,value:any){
+ return withNetwork(scope,async app=>{await app.beginTransaction();let username='';let pendingDisconnect=false;try{
+  await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
+  const [rows]:any=await app.query("SELECT a.id,a.customer_id,a.radius_identity_id,r.current_username username,s.id subscription_id,s.lifecycle,s.expires_at FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscriptions s ON s.id=(SELECT latest.id FROM pppoe_subscriptions latest WHERE latest.account_id=a.id AND latest.service_role='base' ORDER BY latest.id DESC LIMIT 1) WHERE a.id=? AND a.archived_at IS NULL FOR UPDATE",[id]);
+  const row=rows[0];if(!row)throw new Error('PPPOE_LINE_UNAVAILABLE');if(!['pending','active'].includes(String(row.lifecycle)))throw new Error('PPPOE_LINE_END_UNAVAILABLE');username=String(row.username);
+  await app.query("UPDATE pppoe_subscriptions SET lifecycle='ended',ended_at=UTC_TIMESTAMP(6) WHERE id=? AND lifecycle IN('pending','active')",[row.subscription_id]);
+  await markRejected(app,username,true);
+  const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);
+  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,before_data,after_data,result) VALUES(?,?,'manager','pppoe.subscription.end','pppoe_account',?,?,?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.customer_id,row.radius_identity_id,JSON.stringify({subscriptionId:Number(row.subscription_id),lifecycle:row.lifecycle,expiresAt:row.expires_at}),JSON.stringify({subscriptionId:Number(row.subscription_id),lifecycle:'ended'})]);
+  await app.commit();try{const result=await disconnectPppoeSessions(scope,app,username,true);pendingDisconnect=result.acknowledged<result.attempted;}catch{pendingDisconnect=true;}
+  return {success:true,id,subscriptionId:Number(row.subscription_id),disconnectPending:pendingDisconnect};
+ }catch(error){await app.rollback();throw error;}});
 }
 
 export async function archivePppoeLine(scope:any,value:any){
