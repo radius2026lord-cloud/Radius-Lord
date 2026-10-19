@@ -109,7 +109,8 @@ async function inspectRows(app:any,rows:any[],versionMap:any){
   if(!data.profile)reasons.push('profile_missing');
   const versionId=versionMap?.[data.profile]??(data.speed?versionMap?.[data.speed]:null)??null;
   if(!versionId)reasons.push(data.speed?'profile_unmapped':'profile_invalid');
-  if(data.expiry===undefined)reasons.push('expiry_invalid');
+  // A date that cannot be normalized must not prevent creating the PPPoE line.
+  // Keep the account and import it without an expiry so an administrator can complete it later.
   if(data.phone&&!/^\d{1,15}$/.test(data.phone))reasons.push('phone_invalid');
   const dupUsername=usernameHits.has(data.username)||seenNames.has(data.username);
   const dupPhone=Boolean(data.phone)&&(phoneHits.has(data.phone)||seenPhones.has(data.phone));
