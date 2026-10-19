@@ -83,7 +83,7 @@ export async function readNetworkSubscribers(scope:any){
    FROM customers c ${where} ORDER BY c.id DESC LIMIT 500`,params);
   const customerIds=items.map((item:any)=>Number(item.id));
   const [pppoeLines]:any=customerIds.length?await app.query(`SELECT p.customer_id,p.id,p.line_name,r.current_username username,
-   p.admin_status status,sp.lifecycle,sp.expires_at,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
+   p.admin_status status,sp.lifecycle,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.starts_at')) starts_at,sp.expires_at,sp.grace_expires_at,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
     COALESCE(pkg.name,(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions
    FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
