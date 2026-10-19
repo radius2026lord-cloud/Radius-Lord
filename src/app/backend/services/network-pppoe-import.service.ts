@@ -52,6 +52,24 @@ function prepareRows(rows:any[]){
   return {raw:raw||{},rowNumber};
  }).filter(item=>!blank(item.raw)).map((item,index)=>({...item,data:rowIdentity(item.raw,index)}));
 }
+function safeRowFailure(error:any){
+ const message=String(error?.message||'');
+ if(message==='PPPOE_LINE_USERNAME_TAKEN')return 'username_duplicate';
+ if(message==='PPPOE_IMPORT_PHONE_DUPLICATE')return 'phone_duplicate';
+ if(message==='PPPOE_ACCOUNTING_INTERVAL_REQUIRED')return 'accounting_interval_required';
+ if(error?.code==='ER_CHECK_CONSTRAINT_VIOLATED'&&message.includes('chk_ppp_subscription_times'))return 'expiry_constraint';
+ if(error?.code==='ER_CHECK_CONSTRAINT_VIOLATED')return 'database_constraint';
+ if(error?.code==='ER_NO_REFERENCED_ROW_2')return 'database_reference';
+ if(error?.code==='ER_BAD_NULL_ERROR'||error?.code==='ER_NO_DEFAULT_FOR_FIELD')return 'database_required_field';
+ if(error?.code==='ER_DUP_ENTRY')return 'database_duplicate';
+ return 'row_create_failed';
+}
+function logSafeRowFailure(batchId:number,rowNumber:number,error:any,reason:string){
+ const code=String(error?.code||''),sqlState=String(error?.sqlState||''),rawMessage=String(error?.message||'');
+ const constraint=/(?:constraint|check constraint)\\s+['\u0060]?([A-Za-z0-9_]+)/i.exec(rawMessage)?.[1];
+ console.error('[pppoe-import] row creation failed',{batchId,rowNumber,reason,databaseCode:/^[A-Z0-9_]{2,64}$/.test(code)?code:undefined,sqlState:/^[0-9A-Z]{5}$/.test(sqlState)?sqlState:undefined,constraint:constraint&&/^[A-Za-z0-9_]{1,80}$/.test(constraint)?constraint:undefined});
+}
+
 async function verifySupportedSchema(app:any){
  try{
   await app.query('SELECT manager_id,first_name,last_name,phone,notes,payment_code,created_by_manager_id FROM customers LIMIT 0');
@@ -164,7 +182,7 @@ export async function commitPppoeImport(scope:any,input:any){
     const line=await createPppoeLine(scope,{customerId,packageVersionId:item.packageVersionId,username:data.username,password:data.password,expiresAtOverride:data.expiry||'',address:'',lineName:''},app,{importedExpiry:true});
     await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.import.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role}),line.item.id,customerId,line.item.id,JSON.stringify({batchId,rowNumber:item.rowNumber,username:data.username,categoryId,packageVersionId:item.packageVersionId})]);
     await app.query('UPDATE pppoe_import_batches SET imported_rows=imported_rows+1 WHERE id=?',[batchId]);await app.commit();imported.push(item.rowNumber);
-   }catch(error:any){await app.rollback();const code=error?.message==='PPPOE_LINE_USERNAME_TAKEN'?'username_duplicate':error?.message==='PPPOE_IMPORT_PHONE_DUPLICATE'?'phone_duplicate':'row_create_failed';queue.push({rowNumber:item.rowNumber,reason:code,username:data.username||null,raw:data});}
+   }catch(error:any){await app.rollback();const code=safeRowFailure(error);logSafeRowFailure(batchId,item.rowNumber,error,code);queue.push({rowNumber:item.rowNumber,reason:code,username:data.username||null,raw:data});}
   }
   for(const record of queue){await app.query('INSERT INTO pppoe_import_review_rows(batch_id,source_row_number,username,reason_code,encrypted_payload) VALUES(?,?,?,?,?)',[batchId,record.rowNumber,record.username,record.reason,encryptProvisioningSecret(JSON.stringify(record.raw))]);}
   const duplicates=queue.filter(row=>row.reason.includes('duplicate')).length,rejected=queue.length-duplicates,status=queue.length?'completed_with_issues':'completed';
