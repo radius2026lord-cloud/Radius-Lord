@@ -24,7 +24,7 @@ function normalizedSpeed(value:any){
 function localExpiry(value:any){
  const raw=digits(text(value,80));if(!raw)return null;
  let match=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);
- if(!match){const dmy=/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);if(dmy&&Number(dmy[1])>12)match=[dmy[0],dmy[3],dmy[2],dmy[1],dmy[4]||'',dmy[5]||'',dmy[6]||''] as unknown as RegExpExecArray;}
+ if(!match){const numeric=/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);if(numeric){const first=Number(numeric[1]),second=Number(numeric[2]);if(first>12)match=[numeric[0],numeric[3],numeric[2],numeric[1],numeric[4]||'',numeric[5]||'',numeric[6]||''] as unknown as RegExpExecArray;else if(first>=1&&first<=12&&second>=1&&second<=31)match=[numeric[0],numeric[3],numeric[1],numeric[2],numeric[4]||'',numeric[5]||'',numeric[6]||''] as unknown as RegExpExecArray;}}
  if(!match)return undefined;
  const hasTime=Boolean(match[4]),year=Number(match[1]),month=Number(match[2]),day=Number(match[3]),hour=hasTime?Number(match[4]):23,minute=hasTime?Number(match[5]):59,second=hasTime?Number(match[6]||0):59;
  const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(year<1900||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day||hour>23||minute>59||second>59)return undefined;
