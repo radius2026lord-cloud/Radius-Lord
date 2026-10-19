@@ -66,7 +66,7 @@ function safeRowFailure(error:any){
 }
 function logSafeRowFailure(batchId:number,rowNumber:number,error:any,reason:string,stage:string){
  const code=String(error?.code||''),sqlState=String(error?.sqlState||''),rawMessage=String(error?.message||'');
- const constraint=/CONSTRAINT\\s+[`'\"]([A-Za-z0-9_]+)[`'\"]/i.exec(rawMessage)?.[1];
+ const constraint=/CONSTRAINT\s+[`'\"]([A-Za-z0-9_]+)[`'\"]/i.exec(rawMessage)?.[1];
  console.error('[pppoe-import] row creation failed',{batchId,rowNumber,reason,stage:stage||error?.pppoeStage||'unknown',databaseCode:/^[A-Z0-9_]{2,64}$/.test(code)?code:undefined,sqlState:/^[0-9A-Z]{5}$/.test(sqlState)?sqlState:undefined,constraint:constraint&&/^[A-Za-z0-9_]{1,80}$/.test(constraint)?constraint:undefined});
 }
 
