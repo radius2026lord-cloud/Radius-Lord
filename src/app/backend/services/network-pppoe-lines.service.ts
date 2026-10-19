@@ -121,7 +121,11 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
   if(options.importedExpiry&&explicitExpiry){
    const expiresAt=explicitExpiry,graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
    lifecycle=graceEnds.getTime()<=createdAt.getTime()?'ended':'active';
-   await app.query('UPDATE pppoe_subscriptions SET lifecycle=?,activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?',[lifecycle,sqlTimestamp(createdAt),sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
+   // For imported expiries already in the past, the original activation date is unknown.
+   // Keep that unknown as NULL and retain the imported expiry; the tenant check constraint
+   // explicitly permits this for ended rows and active rows still within a grace period.
+   const activationAt=expiresAt<=createdAt?null:sqlTimestamp(createdAt);
+   await app.query('UPDATE pppoe_subscriptions SET lifecycle=?,activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?',[lifecycle,activationAt,sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
    if(lifecycle==='active'){
     const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-createdAt.getTime())/1000));
     await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(timeout)]);
