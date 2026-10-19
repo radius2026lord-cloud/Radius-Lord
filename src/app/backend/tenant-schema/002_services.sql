@@ -403,7 +403,7 @@ CREATE TABLE pppoe_subscriptions (
  CONSTRAINT chk_ppp_subscription_money CHECK(base_price_snapshot>=0 AND effective_price_snapshot>=0 AND is_gift_snapshot IN(0,1) AND (is_gift_snapshot=0 OR effective_price_snapshot=0) AND ((offer_price_snapshot IS NULL AND offer_ends_at_snapshot IS NULL) OR (offer_price_snapshot IS NOT NULL AND offer_price_snapshot>=0 AND offer_price_snapshot<=base_price_snapshot AND offer_ends_at_snapshot IS NOT NULL))),
  CONSTRAINT chk_ppp_subscription_snapshot CHECK(JSON_TYPE(effective_service_snapshot)='OBJECT'),
  CONSTRAINT chk_ppp_subscription_quota CHECK(quota_allowance_bytes IS NULL OR quota_allowance_bytes>0),
- CONSTRAINT chk_ppp_subscription_times CHECK((activated_at IS NULL AND expires_at IS NULL) OR (activated_at IS NOT NULL AND expires_at IS NOT NULL AND expires_at>activated_at)),
+ CONSTRAINT chk_ppp_subscription_times CHECK((activated_at IS NULL AND expires_at IS NULL) OR (activated_at IS NOT NULL AND expires_at IS NOT NULL AND expires_at>activated_at) OR (lifecycle='ended' AND activated_at IS NULL AND expires_at IS NOT NULL) OR (lifecycle='active' AND activated_at IS NULL AND expires_at IS NOT NULL AND grace_expires_at IS NOT NULL AND grace_expires_at>expires_at)),
  CONSTRAINT chk_ppp_subscription_parent CHECK((service_role='base' AND parent_subscription_id IS NULL) OR (service_role<>'base' AND parent_subscription_id IS NOT NULL)),
  CONSTRAINT fk_ppp_subscription_creator FOREIGN KEY(created_by) REFERENCES managers(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
