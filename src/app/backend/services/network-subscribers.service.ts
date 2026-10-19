@@ -81,6 +81,18 @@ export async function readNetworkSubscribers(scope:any){
       OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL AND EXISTS(SELECT 1 FROM hotspot_service_periods ended WHERE ended.account_id=h.id AND ended.lifecycle='ended') AND NOT EXISTS(SELECT 1 FROM hotspot_service_periods live WHERE live.account_id=h.id AND live.lifecycle IN('pending','active')))) has_expired_subscription,
     (SELECT GROUP_CONCAT(DISTINCT ra.nasipaddress ORDER BY ra.nasipaddress SEPARATOR ',') FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ra.nasipaddress<>'' AND (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL))) server_addresses
    FROM customers c ${where} ORDER BY c.id DESC LIMIT 500`,params);
+  const customerIds=items.map((item:any)=>Number(item.id));
+  const [pppoeLines]:any=customerIds.length?await app.query(`SELECT p.customer_id,p.id,p.line_name,r.current_username username,
+   p.admin_status status,sp.lifecycle,sp.expires_at,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
+    COALESCE(pkg.name,(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions
+   FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
+   LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
+   LEFT JOIN pppoe_package_versions pv ON pv.id=sp.package_version_id LEFT JOIN pppoe_packages pkg ON pkg.id=pv.package_id
+   WHERE p.customer_id IN (?) AND p.archived_at IS NULL ORDER BY p.customer_id,p.id DESC`,[customerIds]):[[]];
+  const linesByCustomer=new Map<number,any[]>();
+  for(const line of pppoeLines){const id=Number(line.customer_id);const group=linesByCustomer.get(id)||[];group.push(line);linesByCustomer.set(id,group);}
+  for(const item of items)item.pppoe_lines=linesByCustomer.get(Number(item.id))||[];
   const [categories]:any=await app.query(`SELECT c.id,c.name FROM customer_categories c JOIN customer_category_manager_assignments a ON a.category_id=c.id
    WHERE a.manager_id=? AND c.archived_at IS NULL ORDER BY c.name,c.id`,[managerId]);
   const linkedCustomerScope=principal?'':'AND c.manager_id=?';
