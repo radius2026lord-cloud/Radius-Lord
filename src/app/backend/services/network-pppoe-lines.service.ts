@@ -55,7 +55,7 @@ export async function checkPppoeLineUsername(scope:any,value:any){
  return withNetwork(scope,async app=>{await principal(app,scope);const [rows]:any=await app.query('SELECT username FROM radius_username_reservations WHERE username=? LIMIT 1',[username]);return {username,available:rows.length===0};});
 }
 
-export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,options:{importedExpiry?:boolean;onStage?:(stage:string)=>void}={}){
+export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,options:{importedExpiry?:boolean;includeIdentityId?:boolean;onStage?:(stage:string)=>void}={}){
  const create=async(app:any)=>{if(!sharedConnection)await app.beginTransaction();let stage='access.validate';const mark=(next:string)=>{stage=next;options.onStage?.(next);};try{
   const access=await principal(app,scope),customerId=integer(input.customerId,'customerId'),versionId=integer(input.packageVersionId,'packageVersionId');
   const lineName=String(input.lineName??'').trim();if(lineName.length>150)invalid('lineName');
@@ -148,7 +148,7 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
    await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
   }
   mark('line.activity_log.create');await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:access.manager.id,full_name:access.manager.full_name}),accountId,customerId,identityId,JSON.stringify({customerId,packageVersionId:versionId,lineName:lineName||null,username,allowedNasId,serviceTypeId,connectionMethodId,distributionBoxSerial:distributionBoxSerial||null,distributionBoxDescription:distributionBoxDescription||null,stationDeviceId:stationDevice?.id||null,stationManagementIp:stationIp,address:address||null,latitude,longitude,expiresAtOverride:service.expires_at_override||null,subscriptionId:Number(subscription.insertId)})]);
-  if(!sharedConnection)await app.commit();return {success:true,item:{id:accountId,username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle}};
+  if(!sharedConnection)await app.commit();return {success:true,item:{id:accountId,...(options.includeIdentityId?{radius_identity_id:identityId}:{}),username,line_name:lineName||null,package_name:version.name,version_no:Number(version.version_no),lifecycle}};
  }catch(error:any){if(error&&typeof error==='object')error.pppoeStage=stage;if(!sharedConnection)await app.rollback();throw error;}};
  return sharedConnection?create(sharedConnection):withNetwork(scope,create);
 }
