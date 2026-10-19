@@ -90,7 +90,7 @@ export function CollectionTable({children,minWidth="850px",rowCards=false,hostin
 
 export function CollectionTableHead({children,rowCards=false,strongSeparators=false}:{children:React.ReactNode;rowCards?:boolean;strongSeparators?:boolean}){return <thead className={`text-[10px] font-semibold tracking-wide dark:text-slate-300 ${rowCards?`${strongSeparators?"border-b-2 border-[#cbd7e2] shadow-[0_2px_5px_rgba(44,71,97,.08)] [&>tr>th]:border-b-2 [&>tr>th]:border-[#cbd7e2]":"border-b border-[#e5eaf0]"} bg-[#fafbfd] text-[#53677d] dark:border-white/[.12] dark:bg-[#16283b]`:`border-b-[3px] border-[#9ebbd9] bg-[#d3e2f2] text-[#17386d] shadow-[0_3px_0_rgba(104,139,176,.10)] dark:border-white/[.18] dark:bg-[#3b383e]`}`}>{children}</thead>}
 
-export function CollectionTableBody({children,rowCards=false,strongSeparators=false}:{children:React.ReactNode;rowCards?:boolean;strongSeparators?:boolean}){return <tbody className={rowCards?`${strongSeparators?"divide-y-2 divide-[#d1dce6]":"divide-y divide-[#e8edf2]"} dark:divide-white/[.10]`:`divide-y divide-[#c4d3e2] dark:divide-white/[.13]`}>{children}</tbody>}
+export function CollectionTableBody({children,rowCards=false,strongSeparators=false}:{children:React.ReactNode;rowCards?:boolean;strongSeparators?:boolean}){return <tbody className={rowCards?`${strongSeparators?"divide-y-2 divide-[#bdcbd9]":"divide-y divide-[#e8edf2]"} dark:divide-white/[.12]`:`divide-y divide-[#c4d3e2] dark:divide-white/[.13]`}>{children}</tbody>}
 
 export function CollectionMobileList({children}:{children:React.ReactNode}){return <section className="ui-state-enter space-y-3 md:hidden">{children}</section>}
 
