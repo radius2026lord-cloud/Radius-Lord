@@ -7,11 +7,18 @@ import {managerAccess} from './network-manager-access.service';
 
 type CoaSession={host:string;port:number;secret:string;username:string;sessionId:string;nasIp:string;rateLimit:string};
 
-function scaleRate(rate:string,multiplier:number){
- const match=/^\s*(\d+(?:\.\d+)?)([kKmMgG]?)\s*\/\s*(\d+(?:\.\d+)?)([kKmMgG]?)\s*$/.exec(rate);
- if(!match)throw new Error('PPPOE_SPEED_BOOST_RATE_UNSUPPORTED');
- const format=(value:string,unit:string)=>{const scaled=Number(value)*multiplier;if(!Number.isFinite(scaled)||scaled>1_000_000_000)throw new Error('PPPOE_SPEED_BOOST_INPUT');return `${String(Number(scaled))}${unit}`;};
- return `${format(match[1],match[2])}/${format(match[3],match[4])}`;
+function toBps(value:any){
+ const mbps=Number(value);
+ if(!Number.isFinite(mbps)||mbps<=0||mbps>1_000_000||Math.round(mbps*1000)!==mbps*1000)throw new Error('PPPOE_SPEED_BOOST_INPUT');
+ return BigInt(Math.round(mbps*1_000_000));
+}
+function formatBps(value:bigint){
+ for(const [size,suffix] of [[1_000_000_000n,'G'],[1_000_000n,'M'],[1_000n,'k']] as const)if(value%size===0n)return `${value/size}${suffix}`;
+ return String(value);
+}
+function rateLimit(downloadBps:bigint,uploadBps:bigint){
+ // RouterOS Mikrotik-Rate-Limit order in this project is upload/download.
+ return `${formatBps(uploadBps)}/${formatBps(downloadBps)}`;
 }
 
 function remoteCoaScript(rows:CoaSession[]){
@@ -45,9 +52,9 @@ async function getActiveSessions(app:any,username:string){
 }
 
 export async function startPppoeLineSpeedBoost(scope:any,lineValue:any,input:any){
- const id=Number(lineValue),multiplier=Number(input?.multiplier),durationValue=Number(input?.durationValue),durationUnit=String(input?.durationUnit||'');
+ const id=Number(lineValue),downloadBps=toBps(input?.downloadMbps),uploadBps=toBps(input?.uploadMbps),durationValue=Number(input?.durationValue),durationUnit=String(input?.durationUnit||'');
  const units:Record<string,number>={minute:60,hour:3600,day:86400};
- if(!Number.isSafeInteger(id)||id<1||!Number.isInteger(multiplier)||multiplier<2||multiplier>5||!Number.isInteger(durationValue)||durationValue<1||!units[durationUnit]||durationValue*units[durationUnit]>2592000)throw new Error('PPPOE_SPEED_BOOST_INPUT');
+ if(!Number.isSafeInteger(id)||id<1||!Number.isInteger(durationValue)||durationValue<1||!units[durationUnit]||durationValue*units[durationUnit]>2592000)throw new Error('PPPOE_SPEED_BOOST_INPUT');
  await withNetwork(scope,async app=>{const access=await managerAccess(app,scope.managerId,scope.authVersion);if(access.role!=='principal'&&!access.permissions.includes('customers.update'))throw new Error('NETWORK_AUTH');});
  await revertExpiredPppoeLineSpeedBoosts(scope);
  return withNetwork(scope,async app=>{
@@ -67,17 +74,17 @@ export async function startPppoeLineSpeedBoost(scope:any,lineValue:any,input:any
    const [groups]:any=await app.query(`SELECT rr.value FROM radusergroup ug JOIN radgroupreply rr ON rr.groupname=ug.groupname
     WHERE ug.username=? AND rr.attribute='Mikrotik-Rate-Limit' ORDER BY ug.priority,ug.id,rr.id LIMIT 1`,[username]);
    originalRate=String(overrides[0]?.value||groups[0]?.value||'');if(!originalRate)throw new Error('PPPOE_SPEED_BOOST_RATE_UNAVAILABLE');
-   boostedRate=scaleRate(originalRate,multiplier);
+   boostedRate=rateLimit(downloadBps,uploadBps);
    const originalOverrides=JSON.stringify(overrides.map((row:any)=>({op:String(row.op),value:String(row.value)})));
    const durationSeconds=durationValue*units[durationUnit];
    const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) started_at,DATE_ADD(UTC_TIMESTAMP(6),INTERVAL '+durationSeconds+' SECOND) expires_at');
    await app.query("DELETE FROM radreply WHERE username=? AND attribute='Mikrotik-Rate-Limit'",[username]);
    await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Mikrotik-Rate-Limit',':=',?)",[username,boostedRate]);
-   const [created]:any=await app.query(`INSERT INTO pppoe_line_speed_boosts(account_id,username,multiplier,original_rate_limit,boosted_rate_limit,original_user_reply,started_at,expires_at,created_by)
-    VALUES(?,?,?,?,?,?,?, ?,?)`,[id,username,multiplier,originalRate,boostedRate,originalOverrides,clock[0].started_at,clock[0].expires_at,scope.managerId]);
+   const [created]:any=await app.query(`INSERT INTO pppoe_line_speed_boosts(account_id,username,multiplier,download_bps,upload_bps,original_rate_limit,boosted_rate_limit,original_user_reply,started_at,expires_at,created_by)
+    VALUES(?,?,NULL,?,?,?,?,?,?,?,?)`,[id,username,downloadBps.toString(),uploadBps.toString(),originalRate,boostedRate,originalOverrides,clock[0].started_at,clock[0].expires_at,scope.managerId]);
    coaAttempted=true;const result=await sendCoa(scope,sessions,boostedRate);if(result.acknowledged!==result.attempted)throw new Error('PPPOE_SPEED_BOOST_COA_FAILED');
    const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);
-   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.speed_boost','pppoe_account',?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,account.radius_identity_id,JSON.stringify({multiplier,originalRateLimit:originalRate,boostedRateLimit:boostedRate,startedAt:clock[0].started_at,expiresAt:clock[0].expires_at})]);
+   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.speed_boost','pppoe_account',?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,account.radius_identity_id,JSON.stringify({downloadBps:downloadBps.toString(),uploadBps:uploadBps.toString(),originalRateLimit:originalRate,boostedRateLimit:boostedRate,startedAt:clock[0].started_at,expiresAt:clock[0].expires_at})]);
    await app.commit();return {success:true,id:Number(created.insertId),rateLimit:boostedRate,expiresAt:clock[0].expires_at};
   }catch(error){await app.rollback();if(coaAttempted&&originalRate)try{const sessions=await getActiveSessions(app,username);if(sessions.length)await sendCoa(scope,sessions,originalRate);}catch{}throw error;}
  });
