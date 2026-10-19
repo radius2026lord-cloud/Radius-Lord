@@ -27,7 +27,7 @@ function localExpiry(value:any){
  if(!match){const dmy=/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);if(dmy&&Number(dmy[1])>12)match=[dmy[0],dmy[3],dmy[2],dmy[1],dmy[4]||'',dmy[5]||'',dmy[6]||''] as unknown as RegExpExecArray;}
  if(!match)return undefined;
  const hasTime=Boolean(match[4]),year=Number(match[1]),month=Number(match[2]),day=Number(match[3]),hour=hasTime?Number(match[4]):23,minute=hasTime?Number(match[5]):59,second=hasTime?Number(match[6]||0):59;
- const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(year<2000||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day||hour>23||minute>59||second>59)return undefined;
+ const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));if(year<1900||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day||hour>23||minute>59||second>59)return undefined;
  return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:${String(second).padStart(2,'0')}`;
 }
 function rowIdentity(row:any,index:number){
@@ -102,7 +102,6 @@ async function inspectRows(app:any,rows:any[],versionMap:any){
  const usernameHits=new Set<string>(),phoneHits=new Set<string>();
  for(let offset=0;offset<usernames.length;offset+=400){const chunk=usernames.slice(offset,offset+400);if(!chunk.length)continue;const [found]:any=await app.query(`SELECT username FROM radius_username_reservations WHERE username IN (${chunk.map(()=>'?').join(',')})`,chunk);for(const item of found)usernameHits.add(String(item.username));}
  for(let offset=0;offset<phones.length;offset+=400){const chunk=phones.slice(offset,offset+400);if(!chunk.length)continue;const [found]:any=await app.query(`SELECT phone FROM customers WHERE phone IN (${chunk.map(()=>'?').join(',')})`,chunk);for(const item of found)phoneHits.add(String(item.phone));}
- const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const zone=String(settings[0]?.timezone||'Asia/Damascus');const localNow=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(part=>part.type!=='literal').map(part=>[part.type,part.value])) as any;const localNowText=`${localNow.year}-${localNow.month}-${localNow.day}T${localNow.hour}:${localNow.minute}:${localNow.second}`;
  const seenNames=new Set<string>(),seenPhones=new Set<string>();
  return normalized.map(({rowNumber,data})=>{
   const reasons:string[]=[];let kind:'ready'|'duplicate'|'rejected'='ready';
@@ -111,7 +110,6 @@ async function inspectRows(app:any,rows:any[],versionMap:any){
   const versionId=versionMap?.[data.profile]??(data.speed?versionMap?.[data.speed]:null)??null;
   if(!versionId)reasons.push(data.speed?'profile_unmapped':'profile_invalid');
   if(data.expiry===undefined)reasons.push('expiry_invalid');
-  else if(data.expiry&&data.expiry<localNowText)reasons.push('expiry_past');
   if(data.phone&&!/^\d{1,15}$/.test(data.phone))reasons.push('phone_invalid');
   const dupUsername=usernameHits.has(data.username)||seenNames.has(data.username);
   const dupPhone=Boolean(data.phone)&&(phoneHits.has(data.phone)||seenPhones.has(data.phone));
@@ -162,7 +160,7 @@ export async function commitPppoeImport(scope:any,input:any){
     const managerId=ownerId(access);let customer:any=null;
     for(let attempt=0;attempt<8;attempt++){const code=paymentCode();try{[customer]=await app.query("INSERT INTO customers(manager_id,status,first_name,last_name,phone,notes,payment_code,created_by_manager_id) VALUES(?,'active',?,?,?,?,?,?)",[managerId,data.firstName,data.lastName,data.phone||null,data.notes||null,code,scope.managerId]);break;}catch(error:any){if(error?.code==='ER_DUP_ENTRY'&&String(error?.message||'').includes('uq_customer_phone'))throw new Error('PPPOE_IMPORT_PHONE_DUPLICATE');if(error?.code!=='ER_DUP_ENTRY'||attempt===7)throw error;}}
     const customerId=Number(customer.insertId);await app.query('INSERT INTO customer_category_memberships(customer_id,category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?,?)',[customerId,categoryId,managerId,scope.managerId]);
-    const line=await createPppoeLine(scope,{customerId,packageVersionId:item.packageVersionId,username:data.username,password:data.password,expiresAtOverride:data.expiry||'',address:'',lineName:''},app);
+    const line=await createPppoeLine(scope,{customerId,packageVersionId:item.packageVersionId,username:data.username,password:data.password,expiresAtOverride:data.expiry||'',address:'',lineName:''},app,{importedExpiry:true});
     await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.import.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role}),line.item.id,customerId,line.item.id,JSON.stringify({batchId,rowNumber:item.rowNumber,username:data.username,categoryId,packageVersionId:item.packageVersionId})]);
     await app.query('UPDATE pppoe_import_batches SET imported_rows=imported_rows+1 WHERE id=?',[batchId]);await app.commit();imported.push(item.rowNumber);
    }catch(error:any){await app.rollback();const code=error?.message==='PPPOE_LINE_USERNAME_TAKEN'?'username_duplicate':error?.message==='PPPOE_IMPORT_PHONE_DUPLICATE'?'phone_duplicate':'row_create_failed';queue.push({rowNumber:item.rowNumber,reason:code,username:data.username||null,raw:data});}
