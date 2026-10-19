@@ -48,11 +48,11 @@ export async function startPppoeLineSpeedBoost(scope:any,lineValue:any,input:any
  const id=Number(lineValue),multiplier=Number(input?.multiplier),durationValue=Number(input?.durationValue),durationUnit=String(input?.durationUnit||'');
  const units:Record<string,number>={minute:60,hour:3600,day:86400};
  if(!Number.isSafeInteger(id)||id<1||!Number.isInteger(multiplier)||multiplier<2||multiplier>5||!Number.isInteger(durationValue)||durationValue<1||!units[durationUnit]||durationValue*units[durationUnit]>2592000)throw new Error('PPPOE_SPEED_BOOST_INPUT');
- await withNetwork(scope,async app=>{const access=await managerAccess(app,scope.managerId,scope.authVersion);if(access.role!=='principal'&&!access.permissions.includes('customers.edit'))throw new Error('NETWORK_AUTH');});
+ await withNetwork(scope,async app=>{const access=await managerAccess(app,scope.managerId,scope.authVersion);if(access.role!=='principal'&&!access.permissions.includes('customers.update'))throw new Error('NETWORK_AUTH');});
  await revertExpiredPppoeLineSpeedBoosts(scope);
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion);
-  if(access.role!=='principal'&&!access.permissions.includes('customers.edit'))throw new Error('NETWORK_AUTH');
+  if(access.role!=='principal'&&!access.permissions.includes('customers.update'))throw new Error('NETWORK_AUTH');
   await app.beginTransaction();let coaAttempted=false,username='',originalRate='',boostedRate='';
   try{
    const [accounts]:any=await app.query(`SELECT p.id,p.radius_identity_id,p.admin_status,r.current_username username,sp.lifecycle,sp.expires_at
