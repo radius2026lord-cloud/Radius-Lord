@@ -16,7 +16,12 @@ export function ProjectInfoCard({tone="info",className="",...props}:ComponentPro
   return <div className={`box-border min-w-0 max-w-full rounded-[18px] border p-4 ${tones[tone].surface} ${className}`} {...props}/>;
 }
 export function ProjectCardIcon({icon:Icon,tone="info"}:{icon:LucideIcon;tone?:InfoCardTone}) {
-  return <span className={`inline-flex shrink-0 items-center justify-center ${tones[tone].ink}`}><Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true"/></span>;
+  const iconClass = tones[tone].ink;
+  return (
+    <span className={`inline-flex shrink-0 items-center justify-center ${iconClass}`}>
+      <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+    </span>
+  );
 }
 export function ProjectCardDetails({open,children}:{open:boolean;children:ReactNode}) {
   return <div className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-in-out motion-reduce:transition-none ${open?'grid-rows-[1fr] translate-y-0 opacity-100':'grid-rows-[0fr] translate-y-2 opacity-0'}`} aria-hidden={!open} inert={!open}><div className="min-h-0 overflow-hidden">{children}</div></div>;
