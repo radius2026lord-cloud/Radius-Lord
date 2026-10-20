@@ -284,36 +284,36 @@ async function readPppoeLiveTraffic(api:RouterApi,username:string){
    ||String(iface.name||'')==='<pppoe-'+username+'>'
   ));
   const selected=matched.length?matched:(sessions.length===1&&userInterfaces.length===1?userInterfaces:[]);
-  if(!selected.length)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+  if(!selected.length)throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
   let upload=0n,download=0n,hasCounters=false;
   const asCounter=(value:unknown):bigint|undefined=>{
    const normalized=String(value??'').replace(/[,\s]/g,'');
    return /^\d+$/.test(normalized)?BigInt(normalized):undefined;
   };
   for(const iface of selected){
-   let counterRow:any;
-   for(const counterMode of ['stats-detail','stats']){
+   let tx:bigint|undefined,rx:bigint|undefined;
+   const modes=[
+    {attrs:{'.proplist':'.id,name,bytes'}},
+    {attrs:{'.proplist':'.id,name,tx-byte,rx-byte,bytes','stats-detail':''}},
+    {attrs:{'.proplist':'.id,name,tx-byte,rx-byte,bytes',stats:''}}
+   ];
+   for(const mode of modes){
     try{
-     const rows=await api.command('/interface/print',{
-      '.proplist':'.id,name,tx-byte,rx-byte,bytes',
-      [counterMode]:''
-     },['?.id='+iface['.id']]);
-     if(rows[0]){counterRow=rows[0];if(asCounter(counterRow['tx-byte'])!==undefined&&asCounter(counterRow['rx-byte'])!==undefined)break;}
+     const rows=await api.command('/interface/print',mode.attrs,['?.id='+iface['.id']]);
+     const row=rows[0];if(!row)continue;
+     tx=asCounter(row['tx-byte']);rx=asCounter(row['rx-byte']);
+     if(tx===undefined||rx===undefined){
+      const pair=String(row.bytes||'').split('/');
+      if(pair.length===2){tx=asCounter(pair[0]);rx=asCounter(pair[1]);}
+     }
+     if(tx!==undefined&&rx!==undefined)break;
     }catch(error){lastError=error;}
-   }
-   if(!counterRow)continue;
-   // RouterOS interface statistics expose separate tx-byte/rx-byte fields.
-   // A few API builds expose the PPP pair as bytes=tx/rx instead.
-   let tx=asCounter(counterRow['tx-byte']),rx=asCounter(counterRow['rx-byte']);
-   if(tx===undefined||rx===undefined){
-    const pair=String(counterRow.bytes||'').split('/');
-    if(pair.length===2){tx=asCounter(pair[0]);rx=asCounter(pair[1]);}
    }
    if(tx===undefined||rx===undefined)continue;
    // tx from the router is subscriber download; rx is subscriber upload.
    download+=tx;upload+=rx;hasCounters=true;
   }
-  if(!hasCounters)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+  if(!hasCounters)throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
   return buildPppoeTraffic(sessions,routerosVersion,'routeros_api_pppoe_interface',upload,download);
  }catch(error){if(error instanceof Error)throw error;throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');}
 }
