@@ -282,10 +282,12 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    await cleanup();
    let relayRulesStarted=false;
    try{
-    stage='install_relay_rules';
     relayRulesStarted=true;
+    stage='install_dstnat_rule';
     await gatewayApi.command('/ip/firewall/nat/add',{chain:'dstnat',protocol:'tcp','src-address':sourceAddress,'dst-port':String(relayPort),action:'dst-nat','to-addresses':String(tunnel.tunnel_address),'to-ports':String(port),comment:marker+'-dst','place-before':'0'});
+    stage='install_forward_rule';
     await gatewayApi.command('/ip/firewall/filter/add',{chain:'forward',action:'accept',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),comment:marker+'-allow','place-before':'0'});
+    stage='install_srcnat_rule';
     await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'src-nat',protocol:'tcp','dst-address':String(tunnel.tunnel_address),'dst-port':String(port),'to-addresses':String(c.serverAddress),comment:marker+'-src','place-before':'0'});
     stage='probe_nas_api_relay';
     tcp=await probeNasApiTcp(gatewayReachability.targetAddress,relayPort);
@@ -304,7 +306,8 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
  }catch(error){
   const [current]:any=await app.query('SELECT configuration_snapshot FROM nas_ovpn_connections WHERE nas_id=?',[nasId]);
   const raw=error instanceof Error?error.message:'NAS_API_UNKNOWN',osCode=String((error as NodeJS.ErrnoException)?.code||''),errorName=error instanceof Error?error.name:'UnknownError',code=raw==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'NAS_API_LOGIN_FAILED':/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'API_CONNECTION_FAILED',rawDiagnostics=tcp?{...tcp}:((error as Error&{diagnostics?:any}).diagnostics||{}),diagnostics={...rawDiagnostics,targetPort:relayTargetPort||undefined,relayPort:relayTargetPort||undefined,transport:'ovpn_gateway_relay',stage,failureCode:code,errorName,...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{}),directFailure:directFailure instanceof Error&&/^[A-Z][A-Z0-9_]{1,63}$/.test(directFailure.message)?directFailure.message:'DIRECT_PATH_FAILED',login:code==='NAS_API_LOGIN_FAILED'?'failed':stage==='read_nas_api_resources'?'authenticated':'not-tested'};
-  console.error('[nas-api-check]',{environmentId:Number(scope.environment_id),nasId,stage,code,errorName,...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{})});
+  const safeErrorSummary=error instanceof Error&&/^فشل الأمر \/ip\/firewall\/(?:nat|filter)\/(?:add|remove): [^\\r\\n]{1,180}$/.test(error.message)?error.message:undefined;
+  console.error('[nas-api-check]',{environmentId:Number(scope.environment_id),nasId,stage,code,errorName,...(safeErrorSummary?{errorSummary:safeErrorSummary}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{})});
   if(current[0]){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code,transport:'ovpn_gateway_relay',connection:diagnostics};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
   const failure=new Error(code);(failure as Error&{diagnostics?:typeof diagnostics}).diagnostics=diagnostics;throw failure;
  }finally{api?.close();}
