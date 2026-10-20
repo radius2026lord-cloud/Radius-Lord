@@ -46,7 +46,7 @@ async function sendCoa(scope:any,sessions:any[],rateLimit:string){
 async function getActiveSessions(app:any,username:string){
  const [rows]:any=await app.query(`SELECT ra.username,ra.acctsessionid,ra.nasipaddress,COALESCE(NULLIF(l.coa_host,''),ra.nasipaddress) coa_host,COALESCE(NULLIF(l.coa_port,0),3799) coa_port,n.secret
   FROM radacct ra JOIN nas n ON n.nasname=ra.nasipaddress JOIN lord_nas l ON l.radius_nas_id=n.id
-  WHERE ra.username=? AND ra.acctstoptime IS NULL AND ra.acctsessionid<>'' AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0
+  WHERE ra.username=? AND ra.acctstoptime IS NULL AND COALESCE(ra.acctupdatetime,ra.acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE AND ra.acctsessionid<>'' AND l.is_enabled=1 AND FIND_IN_SET('ppp',l.radius_services)>0
   ORDER BY ra.radacctid LIMIT 20`,[username]);
  return rows;
 }
@@ -105,12 +105,12 @@ export async function revertExpiredPppoeLineSpeedBoosts(scope:any){
    for(const item of due){
     await app.beginTransaction();let changed=false;
     try{
-     const [rows]:any=await app.query("SELECT * FROM pppoe_line_speed_boosts WHERE id=? AND status='active' AND expires_at<=UTC_TIMESTAMP(6) FOR UPDATE",[item.id]);const boost=rows[0];if(!boost){await app.rollback();continue;}
+     const [rows]:any=await app.query("SELECT b.*,a.customer_id,a.radius_identity_id FROM pppoe_line_speed_boosts b JOIN pppoe_accounts a ON a.id=b.account_id WHERE b.id=? AND b.status='active' AND b.expires_at<=UTC_TIMESTAMP(6) FOR UPDATE",[item.id]);const boost=rows[0];if(!boost){await app.rollback();continue;}
      const sessions=await getActiveSessions(app,String(boost.username));
      if(sessions.length){const result=await sendCoa(scope,sessions,String(boost.original_rate_limit));if(result.attempted!==result.acknowledged)throw new Error('PPPOE_SPEED_BOOST_COA_FAILED');changed=true;}
      await restoreReply(app,String(boost.username),String(boost.original_user_reply));
      await app.query("UPDATE pppoe_line_speed_boosts SET status='reverted',reverted_at=UTC_TIMESTAMP(6) WHERE id=?",[boost.id]);
-     await app.query("INSERT INTO activity_log(actor_kind,action_code,target_type,target_id,before_data,after_data,result) VALUES('system','pppoe.line.speed_boost.revert','pppoe_account',?,?,?,'success')",[boost.account_id,JSON.stringify({rateLimit:boost.boosted_rate_limit,expiresAt:boost.expires_at}),JSON.stringify({rateLimit:boost.original_rate_limit,revertedAt:new Date().toISOString(),activeSessionUpdated:changed})]);
+     await app.query("INSERT INTO activity_log(actor_kind,action_code,target_type,target_id,customer_id,account_id,before_data,after_data,result) VALUES('system','pppoe.line.speed_boost.revert','pppoe_account',?,?,?,?,?,'success')",[boost.account_id,boost.customer_id,boost.radius_identity_id,JSON.stringify({rateLimit:boost.boosted_rate_limit,expiresAt:boost.expires_at}),JSON.stringify({rateLimit:boost.original_rate_limit,revertedAt:new Date().toISOString(),activeSessionUpdated:changed})]);
      await app.commit();count++;
     }catch(error){await app.rollback();console.error('[pppoe-line-speed-boost]',(error as any)?.code||(error as Error).message||'REVERT_FAILED');}
    }

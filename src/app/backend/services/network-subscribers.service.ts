@@ -22,6 +22,8 @@ const coord=(value:any,low:number,high:number,field:string)=>{
  return n;
 };
 function paymentCode(){return 'C'+String(randomInt(0,10000000000)).padStart(10,'0');}
+// Open radacct rows stop counting as live when interim accounting goes stale.
+const liveAccountingSession=(alias='ra')=>`${alias}.acctstoptime IS NULL AND COALESCE(${alias}.acctupdatetime,${alias}.acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE`;
 function identityImageDirectory(scope:any){return path.join(path.resolve(process.env.IDENTITY_UPLOAD_DIR||'uploads/identity-documents'),String(Number(scope.tenant_id)),String(Number(scope.environment_id)));}
 async function decodeIdentityImage(value:any){
  if(value==null||value==='')return null;
@@ -74,12 +76,12 @@ export async function readNetworkSubscribers(scope:any){
     (SELECT COUNT(*) FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL) hotspot_count,
     (SELECT GROUP_CONCAT(cat.name ORDER BY cat.name SEPARATOR '، ') FROM customer_category_memberships m JOIN customer_categories cat ON cat.id=m.category_id WHERE m.customer_id=c.id AND cat.archived_at IS NULL) categories,
     (SELECT GROUP_CONCAT(DISTINCT m.category_id ORDER BY m.category_id SEPARATOR ',') FROM customer_category_memberships m JOIN customer_categories cat ON cat.id=m.category_id WHERE m.customer_id=c.id AND cat.archived_at IS NULL) category_ids,
-    EXISTS(SELECT 1 FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ra.acctstoptime IS NULL AND ((EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL)))) is_online,
+    EXISTS(SELECT 1 FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ${liveAccountingSession('ra')} AND ((EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL)))) is_online,
     (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.archived_at IS NULL AND EXISTS(SELECT 1 FROM pppoe_subscriptions live WHERE live.account_id=p.id AND live.lifecycle IN('pending','active')))
       OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL AND EXISTS(SELECT 1 FROM hotspot_service_periods live WHERE live.account_id=h.id AND live.lifecycle IN('pending','active')))) has_current_subscription,
     (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.archived_at IS NULL AND EXISTS(SELECT 1 FROM pppoe_subscriptions ended WHERE ended.account_id=p.id AND ended.lifecycle='ended') AND NOT EXISTS(SELECT 1 FROM pppoe_subscriptions live WHERE live.account_id=p.id AND live.lifecycle IN('pending','active')))
       OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.archived_at IS NULL AND EXISTS(SELECT 1 FROM hotspot_service_periods ended WHERE ended.account_id=h.id AND ended.lifecycle='ended') AND NOT EXISTS(SELECT 1 FROM hotspot_service_periods live WHERE live.account_id=h.id AND live.lifecycle IN('pending','active')))) has_expired_subscription,
-    (SELECT GROUP_CONCAT(DISTINCT ra.nasipaddress ORDER BY ra.nasipaddress SEPARATOR ',') FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ra.nasipaddress<>'' AND (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL))) server_addresses
+    (SELECT GROUP_CONCAT(DISTINCT ra.nasipaddress ORDER BY ra.nasipaddress SEPARATOR ',') FROM radacct ra JOIN radius_identities r ON r.current_username=ra.username WHERE ${liveAccountingSession('ra')} AND ra.nasipaddress<>'' AND (EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.radius_identity_id=r.id AND p.archived_at IS NULL) OR EXISTS(SELECT 1 FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=c.id AND h.radius_identity_id=r.id AND h.archived_at IS NULL))) server_addresses
    FROM customers c ${where} ORDER BY c.id DESC LIMIT 500`,params);
   const customerIds=items.map((item:any)=>Number(item.id));
   const [pppoeLines]:any=customerIds.length?await app.query(`SELECT p.customer_id,p.id,p.line_name,r.current_username username,
@@ -90,7 +92,7 @@ export async function readNetworkSubscribers(scope:any){
     (SELECT b.download_bps FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_download_bps,
     (SELECT b.upload_bps FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_upload_bps,
     COALESCE(pkg.name,(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
-    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions
    FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
    LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
    LEFT JOIN pppoe_package_versions pv ON pv.id=sp.package_version_id LEFT JOIN pppoe_packages pkg ON pkg.id=pv.package_id
@@ -99,7 +101,7 @@ export async function readNetworkSubscribers(scope:any){
   for(const line of pppoeLines){const id=Number(line.customer_id);const group=linesByCustomer.get(id)||[];group.push(line);linesByCustomer.set(id,group);}
   for(const item of items)item.pppoe_lines=linesByCustomer.get(Number(item.id))||[];
   const [hotspotLines]:any=customerIds.length?await app.query(`SELECT sc.customer_id,a.id,r.current_username username,a.status,sp.lifecycle,sp.expires_at,p.name service_name,
-   (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions
+   (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions
    FROM hotspot_standalone_cards sc JOIN hotspot_accounts a ON a.id=sc.account_id
    JOIN radius_identities r ON r.id=a.radius_identity_id
    LEFT JOIN hotspot_service_periods sp ON sp.id=(SELECT period.id FROM hotspot_service_periods period WHERE period.account_id=a.id ORDER BY period.created_at DESC,period.id DESC LIMIT 1)
@@ -287,7 +289,7 @@ export async function verifyNetworkSubscriberIdentity(scope:any,input:any){
 }
 
 
-export async function readNetworkSubscriberDetail(scope:any,value:any){
+export async function readNetworkSubscriberDetail(scope:any,value:any,options:{includeActivity?:boolean}={}){
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
   if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
@@ -314,13 +316,13 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.starts_at')) starts_at,
     COALESCE((SELECT pkg.name FROM pppoe_subscriptions ps JOIN pppoe_package_versions pv ON pv.id=ps.package_version_id JOIN pppoe_packages pkg ON pkg.id=pv.package_id WHERE ps.account_id=p.id AND ps.service_role='base' ORDER BY ps.id DESC LIMIT 1),(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
-    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
-    (SELECT GREATEST(TIMESTAMPDIFF(SECOND,ra.acctstarttime,NOW()),0) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) session_seconds,
-    (SELECT ra.acctstarttime FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) session_started_at,
-    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
-    (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
-    (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
-    (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions,
+    (SELECT GREATEST(TIMESTAMPDIFF(SECOND,ra.acctstarttime,UTC_TIMESTAMP(6)),0) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) session_seconds,
+    (SELECT ra.acctstarttime FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) session_started_at,
+    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) last_seen,
+    (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
+    (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
+    (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
     FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
     LEFT JOIN network_equipment_devices ed ON ed.id=p.station_device_id
     LEFT JOIN service_types st ON st.id=p.service_type_id
@@ -331,11 +333,11 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     WHERE p.customer_id=? AND p.archived_at IS NULL ORDER BY p.id DESC`,[id]),
    app.query(`SELECT a.id,r.current_username username,a.status status,p.name service_name,sp.lifecycle,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
-    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions,
-    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) last_seen,
-    (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
-    (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
-    (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
+    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions,
+    (SELECT MAX(ra.acctupdatetime) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) last_seen,
+    (SELECT ra.framedipaddress FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) framed_ip,
+    (SELECT ra.callingstationid FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) calling_station,
+    (SELECT ra.nasipaddress FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')} ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1) nas_ip
     FROM hotspot_accounts a JOIN hotspot_standalone_cards sc ON sc.account_id=a.id
     JOIN radius_identities r ON r.id=a.radius_identity_id
     LEFT JOIN hotspot_service_periods sp ON sp.live_account_id=a.id
@@ -345,7 +347,23 @@ export async function readNetworkSubscriberDetail(scope:any,value:any){
     WHERE sc.customer_id=? AND a.archived_at IS NULL AND a.status='enabled' ORDER BY a.id DESC`,[id])
   ]);
   const accounts=[...pppoe.map((x:any)=>({...x,kind:'pppoe',incomplete_fields:[!customer.phone?'phone':null,!x.address?'address':null,!x.service_type_name?'connection_type':null].filter(Boolean),documentation_missing:Number(customer.identity_verified)!==1})),...hotspot.map((x:any)=>({...x,kind:'hotspot',incomplete_fields:[],documentation_missing:Number(customer.identity_verified)!==1}))];
-  return {item:customer,accounts};
+  const canViewActivity=options.includeActivity!==false&&(principal||access.permissions.includes('activity.view'));
+  let activity:any[]=[],sessions:any[]=[],authAttempts:any[]=[];
+  if(canViewActivity){
+   const identityIds=`SELECT radius_identity_id FROM pppoe_accounts WHERE customer_id=? UNION SELECT h.radius_identity_id FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=?`;
+   const [[logs],[accounting],[auth]]:any=await Promise.all([
+    app.query(`SELECT a.id,a.actor_snapshot,a.actor_kind,a.action_code,a.target_type,a.target_id,a.before_data,a.after_data,a.result,a.failure_code,a.occurred_at
+     FROM activity_log a WHERE a.customer_id=? OR a.account_id IN (${identityIds}) ORDER BY a.occurred_at DESC,a.id DESC LIMIT 200`,[id,id,id]),
+    app.query(`SELECT ra.radacctid,ra.username,ra.acctsessionid,ra.nasipaddress,ra.acctstarttime,ra.acctupdatetime,ra.acctstoptime,ra.acctsessiontime,ra.acctinputoctets,ra.acctoutputoctets,ra.framedipaddress,ra.callingstationid,ra.acctterminatecause
+     FROM radacct ra WHERE ra.username IN (SELECT r.current_username FROM radius_identities r WHERE r.id IN (${identityIds})) ORDER BY COALESCE(ra.acctstoptime,ra.acctupdatetime,ra.acctstarttime) DESC,ra.radacctid DESC LIMIT 100`,[id,id]),
+    app.query(`SELECT pa.id,pa.username,pa.reply,pa.authdate FROM radpostauth pa WHERE pa.username IN (SELECT r.current_username FROM radius_identities r WHERE r.id IN (${identityIds})) ORDER BY pa.authdate DESC,pa.id DESC LIMIT 100`,[id,id])
+   ]);
+   const safeJson=(value:any)=>{if(value==null)return null;let parsed=value;try{if(typeof value==='string')parsed=JSON.parse(value);}catch{return null;}const redact=(item:any):any=>{if(Array.isArray(item))return item.map(redact);if(item&&typeof item==='object'){const result:any={};for(const [key,entry] of Object.entries(item))result[key]=/password|secret|national.?number|front.?image|back.?image|image.?data|token/i.test(key)?'[محجوب]':redact(entry);return result;}return item;};return redact(parsed);};
+   activity=logs.map((row:any)=>({...row,actor_snapshot:safeJson(row.actor_snapshot),before_data:safeJson(row.before_data),after_data:safeJson(row.after_data)}));
+   sessions=accounting.map((row:any)=>({id:Number(row.radacctid),username:row.username,session_id:row.acctsessionid,nas_ip:row.nasipaddress,started_at:row.acctstarttime,last_update:row.acctupdatetime||row.acctstarttime,stopped_at:row.acctstoptime,session_seconds:row.acctsessiontime,upload_bytes:row.acctinputoctets,download_bytes:row.acctoutputoctets,framed_ip:row.framedipaddress,calling_station:row.callingstationid,terminate_cause:row.acctterminatecause}));
+   authAttempts=auth.map((row:any)=>({id:Number(row.id),username:row.username,reply:row.reply,occurred_at:row.authdate}));
+  }
+  return {item:customer,accounts,activity,sessions,authAttempts,canViewActivity};
  });
 }
 
