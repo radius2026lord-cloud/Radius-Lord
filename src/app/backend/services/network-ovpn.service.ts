@@ -240,7 +240,7 @@ function routerOsTimeMs(raw:unknown):number|null{
 async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
  if(!address||!isIpv4(String(address)))return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null};
  try{
-  const rows=await api.command('/ping',{address:String(address),count:'3'},[],7000);
+  const rows=await api.command('/ping',{address:String(address),count:'3',interval:'300ms'},[],7000);
   const summary=rows.find(row=>row['avg-rtt']!==undefined||row['packet-loss']!==undefined||row.received!==undefined)||{};
   const samples=rows.map(row=>routerOsTimeMs(row.time)).filter((value):value is number=>value!==null);
   const averageMs=routerOsTimeMs(summary['avg-rtt'])??(samples.length?samples.reduce((sum,value)=>sum+value,0)/samples.length:null);
