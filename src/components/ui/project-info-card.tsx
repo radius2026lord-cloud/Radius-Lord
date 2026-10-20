@@ -13,10 +13,12 @@ const tones = {
 };
 export type InfoCardTone = keyof typeof tones;
 export function ProjectInfoCard({tone="info",className="",...props}:ComponentProps<"div"> & {tone?:InfoCardTone}) {
-  return <div className={`box-border min-w-0 max-w-full rounded-[18px] border p-4 ${tones[tone].surface} ${className}`} {...props}/>;
+  const palette = tones[tone] ?? tones.info;
+  return <div className={`box-border min-w-0 max-w-full rounded-[18px] border p-4 ${palette.surface} ${className}`} {...props}/>;
 }
 export function ProjectCardIcon({icon:Icon,tone="info"}:{icon:LucideIcon;tone?:InfoCardTone}) {
-  const iconClass = tones[tone].ink;
+  const palette = tones[tone] ?? tones.info;
+  const iconClass = palette.ink;
   return (
     <span className={`inline-flex shrink-0 items-center justify-center ${iconClass}`}>
       <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
