@@ -365,6 +365,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    }
   });
   if(monitorUsername)return {apiPort:port,checkedAt:new Date().toISOString(),traffic:result.traffic,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
+  if(!result.sample)fail('NAS_API_INVALID_RESPONSE');
   await saveNasApiSample(app,nasId,port,result.sample,'ovpn_gateway_relay',result.gatewayId);
   return {apiPort:port,checkedAt:result.sample.receivedAt,metrics:result.sample,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
  }catch(error){
