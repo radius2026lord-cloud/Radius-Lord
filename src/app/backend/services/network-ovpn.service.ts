@@ -290,10 +290,10 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    // RouterOS API place-before expects an internal item ID (for example *1), not
    // the CLI list position "0". Read IDs after cleanup so retries never refer to
    // one of the temporary rules that cleanup just removed.
-   const [natOrder,filterOrder]:any=await Promise.all([
-    gatewayApi.command('/ip/firewall/nat/print',{'.proplist':'.id'}),
-    gatewayApi.command('/ip/firewall/filter/print',{'.proplist':'.id'})
-   ]);
+   stage='read_nat_rule_order';
+   const natOrder=await gatewayApi.command('/ip/firewall/nat/print',{'.proplist':'.id'});
+   stage='read_filter_rule_order';
+   const filterOrder=await gatewayApi.command('/ip/firewall/filter/print',{'.proplist':'.id'});
    const natPlaceBefore=natOrder[0]?.['.id'],filterPlaceBefore=filterOrder[0]?.['.id'];
    let relayRulesStarted=false;
    try{
