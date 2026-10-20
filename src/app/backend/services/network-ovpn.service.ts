@@ -254,12 +254,34 @@ async function readPppoeLiveTraffic(api:RouterApi,username:string){
  // Compatibility path: obtain the live PPPoE interface and its byte counters using
  // RouterOS API resources. This works even when /ppp/active does not expose "stats".
  try{
-  const interfaces=await api.command('/interface/pppoe-server/print',{'.proplist':'.id,name,user,remote-address'});
-  const userInterfaces=interfaces.filter(row=>row.user===username&&row['.id']);
+  let userInterfaces:any[]=[];
+  try{
+   const interfaces=await api.command('/interface/pppoe-server/print',{'.proplist':'.id,name,user,remote-address'});
+   userInterfaces=interfaces.filter(row=>row['.id']&&(
+    String(row.user||'')===username||
+    String(row.name||'')===username||
+    String(row.name||'')==='pppoe-'+username||
+    String(row.name||'')==='<pppoe-'+username+'>'
+   ));
+  }catch(error){lastError=error;}
+  // Older RouterOS builds may expose the dynamic PPPoE interface only in the
+  // generic interface menu. Match its runtime name when the dedicated menu is absent.
+  if(!userInterfaces.length){
+   try{
+    const interfaces=await api.command('/interface/print',{'.proplist':'.id,name,type'});
+    userInterfaces=interfaces.filter(row=>row['.id']&&
+     (String(row.type||'').toLowerCase().includes('pppoe')||/^<?pppoe-/i.test(String(row.name||'')))&&
+     (String(row.name||'')===username||
+      String(row.name||'')==='pppoe-'+username||
+      String(row.name||'')==='<pppoe-'+username+'>')
+    );
+   }catch(error){lastError=error;}
+  }
   const matched=userInterfaces.filter(iface=>sessions.some(session=>
-   (session['caller-id']&&String(iface['remote-address']||'').toLowerCase()===String(session['caller-id']).toLowerCase())
+   session['caller-id']&&String(iface['remote-address']||'').toLowerCase()===String(session['caller-id']).toLowerCase()
    ||String(iface.name||'')===username
    ||String(iface.name||'')==='pppoe-'+username
+   ||String(iface.name||'')==='<pppoe-'+username+'>'
   ));
   const selected=matched.length?matched:(sessions.length===1&&userInterfaces.length===1?userInterfaces:[]);
   if(!selected.length)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
