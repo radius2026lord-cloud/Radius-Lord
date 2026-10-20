@@ -287,7 +287,7 @@ function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:s
  if(uploadValue===undefined||downloadValue===undefined){
   for(const session of sessions){const pair=String(session.bytes||'').split('/');if(pair.length===2&&pair.every(value=>/^\d+$/.test(value))){download+=BigInt(pair[0]);upload+=BigInt(pair[1]);}}
  }
- if(!sessions.length||uploadValue===undefined&&downloadValue===undefined&&sessions.every(session=>!/^\\d+\/\d+$/.test(String(session.bytes||''))))throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+ if(!sessions.length||uploadValue===undefined&&downloadValue===undefined&&sessions.every(session=>!/^\d+/\d+$/.test(String(session.bytes||''))))throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
  const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
  return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
