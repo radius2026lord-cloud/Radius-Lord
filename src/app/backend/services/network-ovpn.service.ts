@@ -1,6 +1,7 @@
 import {createHash,randomBytes,X509Certificate,createPrivateKey,createPublicKey} from 'crypto';
 import {lookup} from 'dns/promises';
 import {createSocket} from 'dgram';
+import {createConnection} from 'net';
 import type mysql from 'mysql2/promise';
 import type {PoolConnection} from 'mysql2/promise';
 import {db} from '../config/db';
@@ -17,6 +18,9 @@ const isIpv4=(s:string)=>{const parts=s.split('.');return parts.length===4&&part
 // The generated RouterOS API allowlist and input rule must match that source,
 // which can differ from the OVPN gateway's tunnel address.
 function outboundIpv4(host:string):Promise<string>{return new Promise((resolve,reject)=>{const socket=createSocket('udp4');socket.once('error',error=>{try{socket.close();}catch{}reject(new Error('NAS_API_ROUTE_UNAVAILABLE'));});socket.connect(9,host,()=>{const address=socket.address().address;socket.close();if(!isIpv4(address))return reject(new Error('NAS_API_ROUTE_UNAVAILABLE'));resolve(address);});});}
+// Probe the exact TCP path used by RouterOS API before attempting credentials.
+// Returning the kernel-selected local address makes API allowlist/routing issues visible.
+function probeNasApiTcp(host:string,port:number):Promise<{sourceAddress:string;targetAddress:string;elapsedMs:number}>{return new Promise((resolve,reject)=>{const started=Date.now(),socket=createConnection({host,port});let settled=false;const finish=(failure?:Error)=>{if(settled)return;settled=true;clearTimeout(timer);const diagnostics={sourceAddress:String(socket.localAddress??''),targetAddress:String(socket.remoteAddress??host),elapsedMs:Date.now()-started};socket.removeAllListeners();socket.destroy();if(failure){(failure as Error&{diagnostics?:typeof diagnostics}).diagnostics=diagnostics;reject(failure);}else resolve(diagnostics);};const timer=setTimeout(()=>finish(new Error('NAS_API_TCP_TIMEOUT')),4000);socket.once('connect',()=>finish());socket.once('error',error=>{const code=(error as NodeJS.ErrnoException).code;finish(new Error(code==='ECONNREFUSED'?'NAS_API_TCP_REFUSED':code==='EHOSTUNREACH'||code==='ENETUNREACH'?'NAS_API_ROUTE_UNAVAILABLE':'NAS_API_TCP_FAILED'));});});}
 const ipString=(n:number)=>[Math.floor(n/16777216),Math.floor(n/65536)%256,Math.floor(n/256)%256,n%256].join('.');
 const yes=(v:string)=>v==='true'||v==='yes';
 const revoked=(v:string)=>Boolean(v&&!['false','no'].includes(v));
@@ -218,8 +222,9 @@ export async function checkNetworkNasApi(app:mysql.Connection,nasId:number){
  const [rows]:any=await app.query("SELECT c.tunnel_address,l.name,l.is_enabled,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  const row=rows[0];if(!row)fail('NAS_API_NOT_CONFIGURED');if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
  const port=Number(row.port);if(!Number.isInteger(port)||port<1||port>65535)fail('NAS_API_PORT_INVALID');
- let api:RouterApi|undefined;
+ let api:RouterApi|undefined,tcp:{sourceAddress:string;targetAddress:string;elapsedMs:number}|undefined;
  try{
+  tcp=await probeNasApiTcp(String(row.tunnel_address),port);
   api=await RouterApi.connect({host:String(row.tunnel_address),port,username:String(row.username),password:decryptProvisioningSecret(row.password_encrypted),secure:false});
   const [resource]=await api.command('/system/resource/print',{'.proplist':'cpu-load,free-memory,total-memory,version,board-name,uptime'});
   if(!resource)fail('NAS_API_EMPTY_RESPONSE');
@@ -233,11 +238,12 @@ export async function checkNetworkNasApi(app:mysql.Connection,nasId:number){
   config.telemetrySamples=[...(Array.isArray(config.telemetrySamples)?config.telemetrySamples:[]),sample].slice(-36);config.telemetryLatest=sample;config.apiLastCheck={receivedAt:sample.receivedAt,ok:true,port};
   await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);
   if(sample.version)await app.query('UPDATE lord_nas SET routeros_version=? WHERE id=?',[sample.version,nasId]);
-  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample};
+  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,connection:{...tcp,login:'ok' as const}};
  }catch(error){
   const [current]:any=await app.query('SELECT configuration_snapshot FROM nas_ovpn_connections WHERE nas_id=?',[nasId]);
-  if(current[0]){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code:(error as Error).message};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
-  throw error;
+  const code=error instanceof Error?error.message:'NAS_API_UNKNOWN',diagnostics=tcp?{...tcp,login:code==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'failed':'not-tested'}:(error as Error&{diagnostics?:unknown}).diagnostics;
+  if(current[0]){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code,connection:diagnostics};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
+  const failure=new Error(code==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'NAS_API_LOGIN_FAILED':code);if(diagnostics)(failure as Error&{diagnostics?:typeof diagnostics}).diagnostics=diagnostics;throw failure;
  }finally{api?.close();}
 }
 export async function refreshNasLinks(central:PoolConnection,app:mysql.Connection,scope:any,snapshot:any){
