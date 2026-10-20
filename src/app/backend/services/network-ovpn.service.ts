@@ -231,6 +231,30 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
  await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);
  if(sample.version)await app.query('UPDATE lord_nas SET routeros_version=? WHERE id=?',[sample.version,nasId]);
 }
+function routerOsTimeMs(raw:unknown):number|null{
+ const value=String(raw??'').trim().toLowerCase();if(!value||value==='timeout'||value==='unreachable')return null;
+ const clock=value.match(/^(\\d+):(\\d{2}):(\\d{2})(?:\\.(\\d+))?$/);if(clock)return Number(clock[1])*3600000+Number(clock[2])*60000+Number(clock[3])*1000+Number('0.'+(clock[4]||'0'))*1000;
+ let total=0,matched=false;for(const match of value.matchAll(/(\\d+(?:\\.\\d+)?)(ns|us|µs|ms|s|m|h)/g)){matched=true;const unit=match[2],factor=unit==='ns'?0.000001:unit==='us'||unit==='µs'?0.001:unit==='ms'?1:unit==='s'?1000:unit==='m'?60000:3600000;total+=Number(match[1])*factor;}
+ if(matched)return Number.isFinite(total)?total:null;const number=Number(value);return Number.isFinite(number)&&number>=0?number:null;
+}
+async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
+ if(!address||!isIpv4(String(address)))return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null};
+ try{
+  const rows=await api.command('/ping',{address:String(address),count:'3',interval:'300ms'},[],7000);
+  const summary=rows.find(row=>row['avg-rtt']!==undefined||row['packet-loss']!==undefined||row.received!==undefined)||{};
+  const samples=rows.map(row=>routerOsTimeMs(row.time)).filter((value):value is number=>value!==null);
+  const receivedRaw=Number(summary.received),received=Number.isFinite(receivedRaw)?receivedRaw:samples.length;
+  const sentRaw=Number(summary.sent),sent=Number.isFinite(sentRaw)&&sentRaw>0?sentRaw:3;
+  const averageMs=routerOsTimeMs(summary['avg-rtt'])??(samples.length?samples.reduce((sum,value)=>sum+value,0)/samples.length:null);
+  const lossRaw=summary['packet-loss']===undefined?null:Number.parseFloat(String(summary['packet-loss']));
+  const packetLoss=lossRaw!==null&&Number.isFinite(lossRaw)?Math.max(0,Math.min(100,lossRaw)):Math.max(0,Math.min(100,((sent-received)/sent)*100);
+  return {status:received>0&&averageMs!==null?'ok' as const:'timeout' as const,averageMs,packetLoss};
+ }catch{return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null};}
+}
+async function addPppoePing(api:RouterApi,traffic:any){
+ const ping=traffic.connected?await readPppoeClientPing(api,traffic.framedIp):{status:'offline' as const,averageMs:null as number|null,packetLoss:100 as number};
+ return {...traffic,ping};
+}
 async function readPppoeLiveTraffic(api:RouterApi,username:string){
  // Ask RouterOS for its version for diagnostics only. Capability checks below determine
  // the actual data path, so no release number is treated as a compatibility boundary.
@@ -248,7 +272,7 @@ async function readPppoeLiveTraffic(api:RouterApi,username:string){
    const rows=await api.command('/ppp/active/print',attempt.attrs);
    sessions=rows.filter(row=>row.name===username&&String(row.service||'').toLowerCase()==='pppoe');
    if(!sessions.length)return {connected:false,uploadBytes:'0',downloadBytes:'0',sessionCount:0,sessionSeconds:0,routerosVersion,counterSource:attempt.source};
-   if(sessions.some(row=>/^\d+\/\d+$/.test(String(row.bytes||''))))return buildPppoeTraffic(sessions,routerosVersion,attempt.source);
+   if(sessions.some(row=>/^\d+\/\d+$/.test(String(row.bytes||''))))return addPppoePing(api,buildPppoeTraffic(sessions,routerosVersion,attempt.source));
   }catch(error){lastError=error;}
  }
  // Compatibility path: obtain the live PPPoE interface and its byte counters using
@@ -314,7 +338,7 @@ async function readPppoeLiveTraffic(api:RouterApi,username:string){
    download+=tx;upload+=rx;hasCounters=true;
   }
   if(!hasCounters)throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
-  return buildPppoeTraffic(sessions,routerosVersion,'routeros_api_pppoe_interface',upload,download);
+  return addPppoePing(api,buildPppoeTraffic(sessions,routerosVersion,'routeros_api_pppoe_interface',upload,download));
  }catch(error){if(error instanceof Error)throw error;throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');}
 }
 function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:string,uploadValue?:bigint,downloadValue?:bigint){
