@@ -280,15 +280,23 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    };
    stage='prepare_relay_rules';
    await cleanup();
+   // RouterOS API place-before expects an internal item ID (for example *1), not
+   // the CLI list position "0". Read IDs after cleanup so retries never refer to
+   // one of the temporary rules that cleanup just removed.
+   const [natOrder,filterOrder]:any=await Promise.all([
+    gatewayApi.command('/ip/firewall/nat/print',{'.proplist':'.id'}),
+    gatewayApi.command('/ip/firewall/filter/print',{'.proplist':'.id'})
+   ]);
+   const natPlaceBefore=natOrder[0]?.['.id'],filterPlaceBefore=filterOrder[0]?.['.id'];
    let relayRulesStarted=false;
    try{
     relayRulesStarted=true;
     stage='install_dstnat_rule';
-    await gatewayApi.command('/ip/firewall/nat/add',{chain:'dstnat',protocol:'tcp','src-address':sourceAddress,'dst-port':String(relayPort),action:'dst-nat','to-addresses':String(tunnel.tunnel_address),'to-ports':String(port),comment:marker+'-dst','place-before':'0'});
+    await gatewayApi.command('/ip/firewall/nat/add',{chain:'dstnat',protocol:'tcp','src-address':sourceAddress,'dst-port':String(relayPort),action:'dst-nat','to-addresses':String(tunnel.tunnel_address),'to-ports':String(port),comment:marker+'-dst',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
     stage='install_forward_rule';
-    await gatewayApi.command('/ip/firewall/filter/add',{chain:'forward',action:'accept',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),comment:marker+'-allow','place-before':'0'});
+    await gatewayApi.command('/ip/firewall/filter/add',{chain:'forward',action:'accept',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),comment:marker+'-allow',...(filterPlaceBefore?{'place-before':filterPlaceBefore}:{})});
     stage='install_srcnat_rule';
-    await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'src-nat',protocol:'tcp','dst-address':String(tunnel.tunnel_address),'dst-port':String(port),'to-addresses':String(c.serverAddress),comment:marker+'-src','place-before':'0'});
+    await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'src-nat',protocol:'tcp','dst-address':String(tunnel.tunnel_address),'dst-port':String(port),'to-addresses':String(c.serverAddress),comment:marker+'-src',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
     stage='probe_nas_api_relay';
     tcp=await probeNasApiTcp(gatewayReachability.targetAddress,relayPort);
     stage='nas_api_login';
