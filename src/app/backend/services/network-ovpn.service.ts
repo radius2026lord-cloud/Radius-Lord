@@ -276,8 +276,10 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     for(const [path,suffix] of [['/ip/firewall/filter','-allow'],['/ip/firewall/nat','-dst'],['/ip/firewall/nat','-src']] as const){
      const kind=path.endsWith('/filter')?'filter':'nat';
      stage='cleanup_'+kind+'_print';
-     const found=await gatewayApi.command(path+'/print',{'.proplist':'.id'},['?comment='+marker+suffix]);
-     for(const item of found)if(item['.id']){
+     // Read the menu without RouterOS query words; match our exact managed comment locally.
+     // This avoids RouterOS/API-version-specific behavior for comment query filters.
+     const found=await gatewayApi.command(path+'/print',{'.proplist':'.id,comment'});
+     for(const item of found.filter(row=>row.comment===marker+suffix))if(item['.id']){
       stage='cleanup_'+kind+'_remove';
       await gatewayApi.command(path+'/remove',{'.id':item['.id']});
      }
