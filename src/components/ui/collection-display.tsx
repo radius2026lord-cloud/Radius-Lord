@@ -49,7 +49,7 @@ export function CollectionBulkActions({label="تطبيق إجراء",items,allSe
  </div>
 }
 
-export function CollectionGrid({children,className=""}:{children:React.ReactNode;className?:string}){return <section className={`ui-state-enter grid grid-cols-1 items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 ${className}`}>{children}</section>}
+export function CollectionGrid({children,className=""}:{children:React.ReactNode;className?:string}){return <section className={`ui-state-enter grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 ${className}`}>{children}</section>}
 
 export function collectionCardClass(selected=false){
  return `group relative box-border min-w-0 max-w-full cursor-pointer rounded-[22px] border p-4 shadow-[0_8px_22px_rgba(58,84,112,.08)] transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(.22,.8,.25,1)] hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_16px_34px_rgba(58,84,112,.16)] dark:hover:shadow-[0_18px_38px_rgba(0,0,0,.22)] ${selected?"border-[#6aaeff] ring-2 ring-[#1479ff]/15 dark:border-[#4c8dff]":"border-[#8da9c4] hover:border-[#78afe9] dark:border-white/[.12] dark:hover:border-white/[.20]"}`;
