@@ -365,9 +365,10 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    }
   });
   if(monitorUsername)return {apiPort:port,checkedAt:new Date().toISOString(),traffic:result.traffic,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
-  if(!result.sample)fail('NAS_API_INVALID_RESPONSE');
-  await saveNasApiSample(app,nasId,port,result.sample,'ovpn_gateway_relay',result.gatewayId);
-  return {apiPort:port,checkedAt:result.sample.receivedAt,metrics:result.sample,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
+  const sample=result.sample;
+  if(typeof sample==='undefined')throw new Error('NAS_API_INVALID_RESPONSE');
+  await saveNasApiSample(app,nasId,port,sample,'ovpn_gateway_relay',result.gatewayId);
+  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
  }catch(error){
   const [current]:any=await app.query('SELECT configuration_snapshot FROM nas_ovpn_connections WHERE nas_id=?',[nasId]);
   const raw=error instanceof Error?error.message:'NAS_API_UNKNOWN',osCode=String((error as NodeJS.ErrnoException)?.code||''),errorName=error instanceof Error?error.name:'UnknownError',code=raw==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'NAS_API_LOGIN_FAILED':/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'API_CONNECTION_FAILED',rawDiagnostics=tcp?{...tcp}:((error as Error&{diagnostics?:any}).diagnostics||{}),diagnostics={...rawDiagnostics,targetPort:relayTargetPort||undefined,relayPort:relayTargetPort||undefined,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,transport:'ovpn_gateway_relay',stage,failureCode:code,errorName,...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{}),directFailure:directFailure instanceof Error&&/^[A-Z][A-Z0-9_]{1,63}$/.test(directFailure.message)?directFailure.message:'DIRECT_PATH_FAILED',login:code==='NAS_API_LOGIN_FAILED'?'failed':stage==='read_nas_api_resources'?'authenticated':'not-tested'};
