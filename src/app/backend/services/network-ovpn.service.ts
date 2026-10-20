@@ -233,8 +233,8 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
 }
 function routerOsTimeMs(raw:unknown):number|null{
  const value=String(raw??'').trim().toLowerCase();if(!value||value==='timeout'||value==='unreachable')return null;
- const clock=value.match(/^(\\d+):(\\d{2}):(\\d{2})(?:\\.(\\d+))?$/);if(clock)return Number(clock[1])*3600000+Number(clock[2])*60000+Number(clock[3])*1000+Number('0.'+(clock[4]||'0'))*1000;
- let total=0,matched=false;for(const match of value.matchAll(/(\\d+(?:\\.\\d+)?)(ns|us|µs|ms|s|m|h)/g)){matched=true;const unit=match[2],factor=unit==='ns'?0.000001:unit==='us'||unit==='µs'?0.001:unit==='ms'?1:unit==='s'?1000:unit==='m'?60000:3600000;total+=Number(match[1])*factor;}
+ const clock=value.match(/^(\d+):(\d{2}):(\d{2})(?:\.(\d+))?$/);if(clock)return Number(clock[1])*3600000+Number(clock[2])*60000+Number(clock[3])*1000+Number('0.'+(clock[4]||'0'))*1000;
+ let total=0,matched=false;for(const match of value.matchAll(/(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)/g)){matched=true;const unit=match[2],factor=unit==='ns'?0.000001:unit==='us'||unit==='µs'?0.001:unit==='ms'?1:unit==='s'?1000:unit==='m'?60000:3600000;total+=Number(match[1])*factor;}
  if(matched)return Number.isFinite(total)?total:null;const number=Number(value);return Number.isFinite(number)&&number>=0?number:null;
 }
 async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
