@@ -286,19 +286,32 @@ async function readPppoeLiveTraffic(api:RouterApi,username:string){
   const selected=matched.length?matched:(sessions.length===1&&userInterfaces.length===1?userInterfaces:[]);
   if(!selected.length)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
   let upload=0n,download=0n,hasCounters=false;
+  const asCounter=(value:unknown):bigint|undefined=>{
+   const normalized=String(value??'').replace(/[,\s]/g,'');
+   return /^\d+$/.test(normalized)?BigInt(normalized):undefined;
+  };
   for(const iface of selected){
-   let rows:any[]=[];
-   try{rows=await api.command('/interface/print',{'.proplist':'.id,name,bytes'},['?.id='+iface['.id']]);}
-   catch(error){lastError=error;}
-   let pair=String(rows[0]?.bytes||'').split('/');
-   if(pair.length!==2||!pair.every(value=>/^\d+$/.test(value))){
-    try{rows=await api.command('/interface/print',{'.proplist':'.id,name,bytes',stats:''},['?.id='+iface['.id']]);}
-    catch(error){lastError=error;}
-    pair=String(rows[0]?.bytes||'').split('/');
+   let counterRow:any;
+   for(const counterMode of ['stats-detail','stats']){
+    try{
+     const rows=await api.command('/interface/print',{
+      '.proplist':'.id,name,tx-byte,rx-byte,bytes',
+      [counterMode]:''
+     },['?.id='+iface['.id']]);
+     if(rows[0]){counterRow=rows[0];if(asCounter(counterRow['tx-byte'])!==undefined&&asCounter(counterRow['rx-byte'])!==undefined)break;}
+    }catch(error){lastError=error;}
    }
-   if(pair.length!==2||!pair.every(value=>/^\d+$/.test(value)))continue;
-   // RouterOS byte pairs are tx/rx from the router perspective: download/upload.
-   download+=BigInt(pair[0]);upload+=BigInt(pair[1]);hasCounters=true;
+   if(!counterRow)continue;
+   // RouterOS interface statistics expose separate tx-byte/rx-byte fields.
+   // A few API builds expose the PPP pair as bytes=tx/rx instead.
+   let tx=asCounter(counterRow['tx-byte']),rx=asCounter(counterRow['rx-byte']);
+   if(tx===undefined||rx===undefined){
+    const pair=String(counterRow.bytes||'').split('/');
+    if(pair.length===2){tx=asCounter(pair[0]);rx=asCounter(pair[1]);}
+   }
+   if(tx===undefined||rx===undefined)continue;
+   // tx from the router is subscriber download; rx is subscriber upload.
+   download+=tx;upload+=rx;hasCounters=true;
   }
   if(!hasCounters)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
   return buildPppoeTraffic(sessions,routerosVersion,'routeros_api_pppoe_interface',upload,download);
