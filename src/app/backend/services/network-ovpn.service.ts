@@ -231,13 +231,124 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
  await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);
  if(sample.version)await app.query('UPDATE lord_nas SET routeros_version=? WHERE id=?',[sample.version,nasId]);
 }
+function routerOsTimeMs(raw:unknown):number|null{
+ const value=String(raw??'').trim().toLowerCase();if(!value||value==='timeout'||value==='unreachable')return null;
+ const clock=value.match(/^(\d+):(\d{2}):(\d{2})(?:\.(\d+))?$/);if(clock)return Number(clock[1])*3600000+Number(clock[2])*60000+Number(clock[3])*1000+Number('0.'+(clock[4]||'0'))*1000;
+ let total=0,matched=false;for(const match of value.matchAll(/(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)/g)){matched=true;const unit=match[2],factor=unit==='ns'?0.000001:unit==='us'||unit==='µs'?0.001:unit==='ms'?1:unit==='s'?1000:unit==='m'?60000:3600000;total+=Number(match[1])*factor;}
+ if(matched)return Number.isFinite(total)?total:null;const number=Number(value);return Number.isFinite(number)&&number>=0?number:null;
+}
+async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
+ if(!address||!isIpv4(String(address)))return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null};
+ try{
+  const rows=await api.command('/ping',{address:String(address),count:'3',interval:'300ms'},[],7000);
+  const summary=rows.find(row=>row['avg-rtt']!==undefined||row['packet-loss']!==undefined||row.received!==undefined)||{};
+  const samples=rows.map(row=>routerOsTimeMs(row.time)).filter((value):value is number=>value!==null);
+  const averageMs=routerOsTimeMs(summary['avg-rtt'])??(samples.length?samples.reduce((sum,value)=>sum+value,0)/samples.length:null);
+  const receivedRaw=Number(summary.received),received=Number.isFinite(receivedRaw)?receivedRaw:samples.length||(averageMs!==null?1:0);
+  const sentRaw=Number(summary.sent),sent=Number.isFinite(sentRaw)&&sentRaw>0?sentRaw:(samples.length?3:1);
+  const lossRaw=summary['packet-loss']===undefined?null:Number.parseFloat(String(summary['packet-loss']));
+  const packetLoss=lossRaw!==null&&Number.isFinite(lossRaw)?Math.max(0,Math.min(100,lossRaw)):Math.max(0,Math.min(100,((sent-received)/sent)*100));
+  return {status:received>0&&averageMs!==null?'ok' as const:'timeout' as const,averageMs,packetLoss};
+ }catch{return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null};}
+}
+async function addPppoePing(api:RouterApi,traffic:any){
+ const ping=traffic.connected?await readPppoeClientPing(api,traffic.framedIp):{status:'offline' as const,averageMs:null as number|null,packetLoss:100 as number};
+ return {...traffic,ping};
+}
 async function readPppoeLiveTraffic(api:RouterApi,username:string){
- const rows=await api.command('/ppp/active/print',{'.proplist':'name,service,bytes,uptime,address,caller-id',stats:''});
- const sessions=rows.filter(row=>row.name===username&&String(row.service||'').toLowerCase()==='pppoe');
- if(!sessions.length)return {connected:false,uploadBytes:'0',downloadBytes:'0',sessionCount:0,sessionSeconds:0};
- let upload=0n,download=0n;
- for(const session of sessions){const [routerToClient,clientToRouter]=String(session.bytes||'0/0').split('/');if(/^\d+$/.test(routerToClient||''))download+=BigInt(routerToClient);if(/^\d+$/.test(clientToRouter||''))upload+=BigInt(clientToRouter);}
- const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null};
+ // Ask RouterOS for its version for diagnostics only. Capability checks below determine
+ // the actual data path, so no release number is treated as a compatibility boundary.
+ let routerosVersion='غير معروف';
+ try{const [resource]=await api.command('/system/resource/print',{'.proplist':'version'});if(resource?.version)routerosVersion=String(resource.version).slice(0,80);}catch{/* Metadata permission is optional. */}
+ const base='name,service,bytes,uptime,address,caller-id';
+ const attempts=[
+  {source:'routeros_api_ppp_stats',attrs:{'.proplist':base,stats:''}},
+  {source:'routeros_api_ppp_bytes',attrs:{'.proplist':base}}
+ ] as const;
+ let sessions:any[]=[];
+ let lastError:unknown;
+ for(const attempt of attempts){
+  try{
+   const rows=await api.command('/ppp/active/print',attempt.attrs);
+   sessions=rows.filter(row=>row.name===username&&String(row.service||'').toLowerCase()==='pppoe');
+   if(!sessions.length)return {connected:false,uploadBytes:'0',downloadBytes:'0',sessionCount:0,sessionSeconds:0,routerosVersion,counterSource:attempt.source};
+   if(sessions.some(row=>/^\d+\/\d+$/.test(String(row.bytes||''))))return addPppoePing(api,buildPppoeTraffic(sessions,routerosVersion,attempt.source));
+  }catch(error){lastError=error;}
+ }
+ // Compatibility path: obtain the live PPPoE interface and its byte counters using
+ // RouterOS API resources. This works even when /ppp/active does not expose "stats".
+ try{
+  let userInterfaces:any[]=[];
+  try{
+   const interfaces=await api.command('/interface/pppoe-server/print',{'.proplist':'.id,name,user,remote-address'});
+   userInterfaces=interfaces.filter(row=>row['.id']&&(
+    String(row.user||'')===username||
+    String(row.name||'')===username||
+    String(row.name||'')==='pppoe-'+username||
+    String(row.name||'')==='<pppoe-'+username+'>'
+   ));
+  }catch(error){lastError=error;}
+  // Older RouterOS builds may expose the dynamic PPPoE interface only in the
+  // generic interface menu. Match its runtime name when the dedicated menu is absent.
+  if(!userInterfaces.length){
+   try{
+    const interfaces=await api.command('/interface/print',{'.proplist':'.id,name,type'});
+    userInterfaces=interfaces.filter(row=>row['.id']&&
+     (String(row.type||'').toLowerCase().includes('pppoe')||/^<?pppoe-/i.test(String(row.name||'')))&&
+     (String(row.name||'')===username||
+      String(row.name||'')==='pppoe-'+username||
+      String(row.name||'')==='<pppoe-'+username+'>')
+    );
+   }catch(error){lastError=error;}
+  }
+  const matched=userInterfaces.filter(iface=>sessions.some(session=>
+   session['caller-id']&&String(iface['remote-address']||'').toLowerCase()===String(session['caller-id']).toLowerCase()
+   ||String(iface.name||'')===username
+   ||String(iface.name||'')==='pppoe-'+username
+   ||String(iface.name||'')==='<pppoe-'+username+'>'
+  ));
+  const selected=matched.length?matched:(sessions.length===1&&userInterfaces.length===1?userInterfaces:[]);
+  if(!selected.length)throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+  let upload=0n,download=0n,hasCounters=false;
+  const asCounter=(value:unknown):bigint|undefined=>{
+   const normalized=String(value??'').replace(/[,\s]/g,'');
+   return /^\d+$/.test(normalized)?BigInt(normalized):undefined;
+  };
+  for(const iface of selected){
+   let tx:bigint|undefined,rx:bigint|undefined;
+   const modes:Array<{attrs:Record<string,string>}>=[
+    {attrs:{'.proplist':'.id,name,bytes'}},
+    {attrs:{'.proplist':'.id,name,tx-byte,rx-byte,bytes','stats-detail':''}},
+    {attrs:{'.proplist':'.id,name,tx-byte,rx-byte,bytes',stats:''}}
+   ];
+   for(const mode of modes){
+    try{
+     const rows=await api.command('/interface/print',mode.attrs,['?.id='+iface['.id']]);
+     const row=rows[0];if(!row)continue;
+     tx=asCounter(row['tx-byte']);rx=asCounter(row['rx-byte']);
+     if(tx===undefined||rx===undefined){
+      const pair=String(row.bytes||'').split('/');
+      if(pair.length===2){tx=asCounter(pair[0]);rx=asCounter(pair[1]);}
+     }
+     if(tx!==undefined&&rx!==undefined)break;
+    }catch(error){lastError=error;}
+   }
+   if(tx===undefined||rx===undefined)continue;
+   // tx from the router is subscriber download; rx is subscriber upload.
+   download+=tx;upload+=rx;hasCounters=true;
+  }
+  if(!hasCounters)throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+  return addPppoePing(api,buildPppoeTraffic(sessions,routerosVersion,'routeros_api_pppoe_interface',upload,download));
+ }catch(error){if(error instanceof Error)throw error;throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');}
+}
+function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:string,uploadValue?:bigint,downloadValue?:bigint){
+ let upload=uploadValue??0n,download=downloadValue??0n;
+ if(uploadValue===undefined||downloadValue===undefined){
+  for(const session of sessions){const pair=String(session.bytes||'').split('/');if(pair.length===2&&pair.every(value=>/^\d+$/.test(value))){download+=BigInt(pair[0]);upload+=BigInt(pair[1]);}}
+ }
+ if(!sessions.length||uploadValue===undefined&&downloadValue===undefined&&sessions.every(session=>!/^\d+\/\d+$/.test(String(session.bytes||''))))throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+ const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
+ return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
 export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string){
  const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);

@@ -38,3 +38,13 @@ next-env.d.ts
 # Backend secrets are local to each deployment
 .env
 .env.gateway-key.lock
+
+# Local dependencies and runtime files
+**/node_modules/
+**/uploads/
+next-dev.log
+
+# Local dependencies and runtime files
+**/node_modules/
+**/uploads/
+next-dev.log
