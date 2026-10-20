@@ -28,7 +28,7 @@ export default function FloatingContentGuide({contentRef}:{contentRef:RefObject<
    const editing=content.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,[aria-expanded="true"]');
    const bottom=Math.min(view.bottom,window.innerHeight);
    const available=scroller?scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight:document.documentElement.scrollHeight-window.scrollY-window.innerHeight;
-   const next=!editing&&available>28&&bounds.bottom>bottom+24&&bounds.top<bottom&&bottom>view.top+100?{left:view.left+view.width-68,bottom:window.innerHeight-bottom+12}:null;
+   const next=!editing&&available>28&&bounds.bottom>bottom+24&&bounds.top<bottom&&bottom>view.top+100?{left:view.left+84,bottom:window.innerHeight-bottom+12}:null;
    if(next)lastPosition.current=next;
    setPosition(next);
   };
