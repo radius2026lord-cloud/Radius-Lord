@@ -289,6 +289,32 @@ export async function verifyNetworkSubscriberIdentity(scope:any,input:any){
 }
 
 
+export async function readNetworkPppoeApiTarget(scope:any,customerValue:any,lineValue:any){
+ return withNetwork(scope,async app=>{
+  const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
+  if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
+  const customerId=Number(customerValue),lineId=Number(lineValue);
+  if(!Number.isSafeInteger(customerId)||customerId<1||!Number.isSafeInteger(lineId)||lineId<1)throw new Error('SUBSCRIBER_INPUT');
+  const [rows]:any=await app.query(`SELECT p.id,p.customer_id,r.current_username username,
+    COALESCE(ra.nasipaddress,n.nasname) nas_ip,ra.acctstarttime,ra.acctupdatetime,ra.framedipaddress,
+    n.id radius_nas_id,l.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),NULLIF(n.nasname,'')) nas_name
+   FROM pppoe_accounts p JOIN customers c ON c.id=p.customer_id
+   JOIN radius_identities r ON r.id=p.radius_identity_id AND r.service_kind='pppoe'
+   LEFT JOIN radacct ra ON ra.username=r.current_username AND ${liveAccountingSession('ra')}
+   LEFT JOIN nas n ON n.id=COALESCE(
+    (SELECT nh.id FROM radacct history JOIN nas nh ON nh.nasname=history.nasipaddress
+     WHERE history.username=r.current_username AND history.nasipaddress<>''
+     ORDER BY IF(${liveAccountingSession('history')},0,1),COALESCE(history.acctupdatetime,history.acctstoptime,history.acctstarttime) DESC,history.radacctid DESC LIMIT 1),
+    p.allowed_nas_id)
+   LEFT JOIN lord_nas l ON l.radius_nas_id=n.id AND l.archived_at IS NULL
+   WHERE p.id=? AND p.customer_id=? AND p.archived_at IS NULL AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'}
+   ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1`,principal?[lineId,customerId]:[lineId,customerId,managerId]);
+  const row=rows[0];if(!row)throw new Error('SUBSCRIBER_LINE_NOT_FOUND');
+  const connected=Boolean(row.nas_ip&&row.nas_id);
+  return {customerId,lineId,username:String(row.username),connected,nasId:connected?Number(row.nas_id):null,nasIp:row.nas_ip?String(row.nas_ip):null,nasName:row.nas_name?String(row.nas_name):null,sessionStartedAt:row.acctstarttime||null,lastSeen:row.acctupdatetime||null,framedIp:row.framedipaddress||null};
+ });
+}
+
 export async function readNetworkSubscriberDetail(scope:any,value:any,options:{includeActivity?:boolean;activityOffset?:number}={}){
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
