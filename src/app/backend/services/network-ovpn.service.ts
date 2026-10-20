@@ -266,7 +266,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    const apiSessions=await gatewayApi.command('/user/active/print',{'.proplist':'name,address,via'});
    const gatewayApiPeers=Array.from(new Set(apiSessions
     .filter(session=>session.name===String(g.api_username)&&['api','api-ssl'].includes(String(session.via||'')))
-    .map(session=>String(session.address||'').split('/')[0].replace(/:\\d+$/,''))
+    .map(session=>String(session.address||'').split('/')[0])
     .filter(isIpv4)));
    if(gatewayApiPeers.length!==1)fail('OVPN_GATEWAY_API_PEER_AMBIGUOUS');
    const sourceAddress=gatewayApiPeers[0];
