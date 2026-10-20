@@ -98,6 +98,16 @@ export async function readNetworkSubscribers(scope:any){
   const linesByCustomer=new Map<number,any[]>();
   for(const line of pppoeLines){const id=Number(line.customer_id);const group=linesByCustomer.get(id)||[];group.push(line);linesByCustomer.set(id,group);}
   for(const item of items)item.pppoe_lines=linesByCustomer.get(Number(item.id))||[];
+  const [hotspotLines]:any=customerIds.length?await app.query(`SELECT sc.customer_id,a.id,r.current_username username,a.status,sp.lifecycle,sp.expires_at,p.name service_name,
+   (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ra.acctstoptime IS NULL) live_sessions
+   FROM hotspot_standalone_cards sc JOIN hotspot_accounts a ON a.id=sc.account_id
+   JOIN radius_identities r ON r.id=a.radius_identity_id
+   LEFT JOIN hotspot_service_periods sp ON sp.id=(SELECT period.id FROM hotspot_service_periods period WHERE period.account_id=a.id ORDER BY period.created_at DESC,period.id DESC LIMIT 1)
+   LEFT JOIN hotspot_package_versions v ON v.id=sp.package_version_id LEFT JOIN hotspot_packages p ON p.id=v.package_id
+   WHERE sc.customer_id IN (?) AND a.archived_at IS NULL ORDER BY sc.customer_id,a.id DESC`,[customerIds]):[[]];
+  const hotspotLinesByCustomer=new Map<number,any[]>();
+  for(const line of hotspotLines){const id=Number(line.customer_id);const group=hotspotLinesByCustomer.get(id)||[];group.push(line);hotspotLinesByCustomer.set(id,group);}
+  for(const item of items)item.hotspot_lines=hotspotLinesByCustomer.get(Number(item.id))||[];
   const [categories]:any=await app.query(`SELECT c.id,c.name FROM customer_categories c JOIN customer_category_manager_assignments a ON a.category_id=c.id
    WHERE a.manager_id=? AND c.archived_at IS NULL ORDER BY c.name,c.id`,[managerId]);
   const linkedCustomerScope=principal?'':'AND c.manager_id=?';
