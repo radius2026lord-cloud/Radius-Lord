@@ -55,7 +55,7 @@ export class RouterApi {
    else if(/timeout|timed out/.test(raw))reason='انتهت مهلة العملية على MikroTik.';
    p.failure=new Error(`فشل الأمر ${p.path}: ${reason}`);
    // Keep RouterOS' sanitized trap text for targeted traffic diagnostics.
-   const routerMessage=String(row.message??'').replace(/[\\r\\n\\t]+/g,' ').replace(/[^\\x20-\\x7E\\u0600-\\u06FF]/g,'').slice(0,180);
+   const routerMessage=String(row.message??'').replace(/[\r\n\t]+/g,' ').replace(/[^\x20-\x7E\u0600-\u06FF]/g,'').slice(0,180);
    if(routerMessage)(p.failure as Error&{routerMessage?:string}).routerMessage=routerMessage;
   }
   if(words[0]==='!done'){clearTimeout(p.timer);this.pending=undefined;if(p.failure)p.reject(p.failure);else {if(row.ret!==undefined)p.rows.push(row);p.resolve(p.rows);}}
