@@ -292,7 +292,7 @@ async function readPppoeLiveTraffic(api:RouterApi,username:string){
   };
   for(const iface of selected){
    let tx:bigint|undefined,rx:bigint|undefined;
-   const modes=[
+   const modes:Array<{attrs:Record<string,string>}>=[
     {attrs:{'.proplist':'.id,name,bytes'}},
     {attrs:{'.proplist':'.id,name,tx-byte,rx-byte,bytes','stats-detail':''}},
     {attrs:{'.proplist':'.id,name,tx-byte,rx-byte,bytes',stats:''}}
