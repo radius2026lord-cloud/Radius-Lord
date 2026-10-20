@@ -596,6 +596,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  const pppoeAppliedDownload=Number(pppoeBoostActive?pppoeSpeedLine?.speed_boost_download_bps:pppoeSpeedLine?.download_bps)||0;
  const capturePppoeUsageReport=async()=>{
   const line=pppoeSpeedLine;if(!line)return;
+  const reportCustomerName=(line.customer_name||`${detail?.first_name||""} ${detail?.last_name||""}`).trim();
   const capturedAt=new Date();
   const canvas=document.createElement("canvas");canvas.width=1200;canvas.height=900;
   const ctx=canvas.getContext("2d");if(!ctx){setPppoeNoticeError("تعذر إنشاء صورة التقرير على هذا المتصفح.");return;}
@@ -608,15 +609,14 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
   rounded(32,30,1136,152,24,"#142d47");
   write("Radius Lord · تقرير استهلاك PPPoE",1060,76,27,"#ffffff",true);
   write(`الشبكة: ${networkName||"Radius Lord"}`,1060,108,16,"#bfcee0",true);
-  write(line.customer_name||`${detail?.first_name||""} ${detail?.last_name||""}`.trim()||"بيانات المشترك",1060,137,20,"#dce9f6",true);
-  write(`اسم المستخدم: ${line.username}   ·   الباقة: ${line.service_name||"—"}`,1060,165,14,"#bfcee0");
+  if(reportCustomerName)write(reportCustomerName,1060,137,20,"#dce9f6",true);
+  write(`اسم المستخدم: ${line.username}   ·   الباقة: ${line.service_name||"—"}`,1060,reportCustomerName?165:145,14,"#bfcee0");
   rounded(48,52,260,86,16,"#1d3a58");
   write("وقت التقاط التقرير",288,83,12,"#bfcee0",true);
   write(capturedAt.toLocaleString("ar",{dateStyle:"medium",timeStyle:"short"}),288,112,16,"#ffffff",true);
-  rounded(1076,48,82,82,18,"#ffffff");
-  if(networkLogo&&networkLogo.naturalWidth>0&&networkLogo.naturalHeight>0){const scale=Math.min(68/networkLogo.naturalWidth,68/networkLogo.naturalHeight),w=networkLogo.naturalWidth*scale,h=networkLogo.naturalHeight*scale;ctx.drawImage(networkLogo,1117-w/2,89-h/2,w,h);}
-  else{const initials=(networkName||"RL").trim().slice(0,2).toUpperCase();ctx.direction="ltr";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 25px Arial, sans-serif";ctx.fillStyle="#0758e9";ctx.fillText(initials,1117,89);}
-  write("شعار الشبكة",1117,147,10,"#bfcee0",true,"left");
+  rounded(1072,45,90,90,20,"#ffffff");ctx.strokeStyle="#d7e4f1";ctx.lineWidth=1;ctx.stroke();
+  if(networkLogo&&networkLogo.naturalWidth>0&&networkLogo.naturalHeight>0){const scale=Math.min(78/networkLogo.naturalWidth,78/networkLogo.naturalHeight),w=networkLogo.naturalWidth*scale,h=networkLogo.naturalHeight*scale;ctx.drawImage(networkLogo,1117-w/2,90-h/2,w,h);}
+  else{const initials=(networkName||"RL").trim().slice(0,2).toUpperCase();ctx.direction="ltr";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 27px Arial, sans-serif";ctx.fillStyle="#0758e9";ctx.fillText(initials,1117,90);}
   const cards=[{label:"سرعة الرفع الآن",value:bitRateLabel(pppoeSpeedRate.upload)},{label:"سرعة التنزيل الآن",value:bitRateLabel(pppoeSpeedRate.download)},{label:"مدة الجلسة",value:Number(line.live_sessions)>0&&line.session_seconds!=null?sessionDurationLabel(line.session_seconds):"لا توجد جلسة نشطة"},{label:"حدود بروفايل الخدمة",value:`تنزيل ${bitRateLabel(pppoeAppliedDownload)} · رفع ${bitRateLabel(pppoeAppliedUpload)}`}];
   cards.forEach((card,index)=>{const x=32+index*286;rounded(x,202,274,126,20,"#ffffff");write(card.label,x+250,244,14,"#64748b",false);write(card.value,x+250,292,index===3?15:19,"#17386d",true);});
   rounded(32,348,1136,330,22,"#ffffff");write("تغير السرعة منذ فتح القياس",1128,391,20,"#17386d",true);
