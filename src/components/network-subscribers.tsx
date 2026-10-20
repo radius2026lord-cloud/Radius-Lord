@@ -609,8 +609,8 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
   rounded(32,30,1136,152,24,"#142d47");
   write("Radius Lord · تقرير استهلاك PPPoE",1060,76,27,"#ffffff",true);
   write(`الشبكة: ${networkName||"Radius Lord"}`,1060,108,16,"#bfcee0",true);
-  if(reportCustomerName)write(reportCustomerName,1060,137,20,"#dce9f6",true);
-  write(`اسم المستخدم: ${line.username}   ·   الباقة: ${line.service_name||"—"}`,1060,reportCustomerName?165:145,14,"#bfcee0");
+  write(`اسم المشترك: ${reportCustomerName||"—"}   ·   اسم اليوزر: ${line.username}`,1060,139,17,"#dce9f6",true);
+  write(`الباقة: ${line.service_name||"—"}`,1060,165,14,"#bfcee0");
   rounded(48,52,260,86,16,"#1d3a58");
   write("وقت التقاط التقرير",288,83,12,"#bfcee0",true);
   write(capturedAt.toLocaleString("ar",{dateStyle:"medium",timeStyle:"short"}),288,112,16,"#ffffff",true);
@@ -618,9 +618,9 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
   if(networkLogo&&networkLogo.naturalWidth>0&&networkLogo.naturalHeight>0){const scale=Math.min(78/networkLogo.naturalWidth,78/networkLogo.naturalHeight),w=networkLogo.naturalWidth*scale,h=networkLogo.naturalHeight*scale;ctx.drawImage(networkLogo,1117-w/2,90-h/2,w,h);}
   else{const initials=(networkName||"RL").trim().slice(0,2).toUpperCase();ctx.direction="ltr";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 27px Arial, sans-serif";ctx.fillStyle="#0758e9";ctx.fillText(initials,1117,90);}
   const cards=[{label:"سرعة الرفع الآن",value:bitRateLabel(pppoeSpeedRate.upload)},{label:"سرعة التنزيل الآن",value:bitRateLabel(pppoeSpeedRate.download)},{label:"مدة الجلسة",value:Number(line.live_sessions)>0&&line.session_seconds!=null?sessionDurationLabel(line.session_seconds):"لا توجد جلسة نشطة"},{label:"حدود بروفايل الخدمة",value:`تنزيل ${bitRateLabel(pppoeAppliedDownload)} · رفع ${bitRateLabel(pppoeAppliedUpload)}`}];
-  cards.forEach((card,index)=>{const x=32+index*286;rounded(x,202,274,126,20,"#ffffff");write(card.label,x+250,244,14,"#64748b",false);write(card.value,x+250,292,index===3?15:19,"#17386d",true);});
-  rounded(32,348,1136,330,22,"#ffffff");write("تغير السرعة منذ فتح القياس",1128,391,20,"#17386d",true);
-  const gx=142,gy=430,gw=968,gh=188,maximum=pppoeSpeedGraphMaximum,latest=pppoeSpeedHistory[pppoeSpeedHistory.length-1]?.at??Date.now(),windowStart=latest-60_000;
+  cards.forEach((card,index)=>{const x=32+index*286;rounded(x,202,274,102,18,"#ffffff");write(card.label,x+250,236,14,"#64748b",false);write(card.value,x+250,270,index===3?15:19,"#17386d",true);});
+  rounded(32,324,1136,354,22,"#ffffff");write("تغير السرعة منذ فتح القياس",1128,367,20,"#17386d",true);
+  const gx=142,gy=405,gw=968,gh=214,maximum=pppoeSpeedGraphMaximum,latest=pppoeSpeedHistory[pppoeSpeedHistory.length-1]?.at??Date.now(),windowStart=latest-60_000;
   ctx.strokeStyle="#e2e8f0";ctx.lineWidth=1;ctx.font="500 13px Arial, sans-serif";ctx.fillStyle="#64748b";ctx.textAlign="right";
   for(let i=0;i<=4;i++){const y=gy+i*gh/4;ctx.beginPath();ctx.moveTo(gx,y);ctx.lineTo(gx+gw,y);ctx.stroke();ctx.fillText(pppoeSpeedAxisLabel(1-i/4),gx-12,y+4);}
   ctx.textAlign="center";ctx.font="500 12px Arial, sans-serif";ctx.fillStyle="#64748b";
