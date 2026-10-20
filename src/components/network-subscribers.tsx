@@ -593,20 +593,29 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  const pppoeSpeedLast=(key:"upload"|"download"|"total")=>{const point=pppoeSpeedHistory[pppoeSpeedHistory.length-1];return point?(key==="total"?point.upload+point.download:point[key]):0;}; const pppoeBoostActive=Boolean(pppoeSpeedLine?.speed_boost_expires_at&&new Date(pppoeSpeedLine.speed_boost_expires_at).getTime()>Date.now());
  const pppoeAppliedUpload=Number(pppoeBoostActive?pppoeSpeedLine?.speed_boost_upload_bps:pppoeSpeedLine?.upload_bps)||0;
  const pppoeAppliedDownload=Number(pppoeBoostActive?pppoeSpeedLine?.speed_boost_download_bps:pppoeSpeedLine?.download_bps)||0;
- const capturePppoeUsageReport=()=>{
+ const capturePppoeUsageReport=async()=>{
   const line=pppoeSpeedLine;if(!line)return;
+  const capturedAt=new Date();
   const canvas=document.createElement("canvas");canvas.width=1200;canvas.height=900;
   const ctx=canvas.getContext("2d");if(!ctx){setPppoeNoticeError("تعذر إنشاء صورة التقرير على هذا المتصفح.");return;}
+  let networkLogo:HTMLImageElement|null=null;
+  try{const response=await fetch(`${endpoint}/logo`,{credentials:"include",cache:"no-store"});if(response.ok){const objectUrl=URL.createObjectURL(await response.blob());networkLogo=await new Promise<HTMLImageElement|null>(resolve=>{const image=document.createElement("img");image.onload=()=>resolve(image);image.onerror=()=>resolve(null);image.src=objectUrl;});URL.revokeObjectURL(objectUrl);}}catch{/* Keep the report usable when no network logo is configured. */}
   const rounded=(x:number,y:number,w:number,h:number,r:number,color:string)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();ctx.fillStyle=color;ctx.fill();};
   const write=(value:string,x:number,y:number,size:number,color:string,bold=false,align:"right"|"left"="right")=>{ctx.direction="rtl";ctx.textAlign=align;ctx.textBaseline="alphabetic";ctx.font=`${bold?700:500} ${size}px Arial, sans-serif`;ctx.fillStyle=color;ctx.fillText(value,x,y);};
   const fmt=(value:number)=>Number(value||0).toLocaleString("ar",{maximumFractionDigits:2});
   ctx.fillStyle="#eef2f6";ctx.fillRect(0,0,canvas.width,canvas.height);
   rounded(32,30,1136,152,24,"#142d47");
-  write("Radius Lord · تقرير استهلاك PPPoE",1128,76,28,"#ffffff",true);
-  write(`الشبكة: ${networkName||"Radius Lord"}`,1128,108,16,"#bfcee0",true);
-  write(line.customer_name||`${detail?.first_name||""} ${detail?.last_name||""}`.trim()||"بيانات المشترك",1128,137,21,"#dce9f6",true);
-  write(`اسم المستخدم: ${line.username}   ·   الباقة: ${line.service_name||"—"}`,1128,165,15,"#bfcee0");
-  write(new Date().toLocaleString("ar",{dateStyle:"medium",timeStyle:"short"}),72,80,16,"#dce9f6",false,"left");
+  write("Radius Lord · تقرير استهلاك PPPoE",1060,76,27,"#ffffff",true);
+  write(`الشبكة: ${networkName||"Radius Lord"}`,1060,108,16,"#bfcee0",true);
+  write(line.customer_name||`${detail?.first_name||""} ${detail?.last_name||""}`.trim()||"بيانات المشترك",1060,137,20,"#dce9f6",true);
+  write(`اسم المستخدم: ${line.username}   ·   الباقة: ${line.service_name||"—"}`,1060,165,14,"#bfcee0");
+  rounded(48,52,260,86,16,"#1d3a58");
+  write("وقت التقاط التقرير",288,83,12,"#bfcee0",true);
+  write(capturedAt.toLocaleString("ar",{dateStyle:"medium",timeStyle:"short"}),288,112,16,"#ffffff",true);
+  rounded(1076,48,82,82,18,"#ffffff");
+  if(networkLogo&&networkLogo.naturalWidth>0&&networkLogo.naturalHeight>0){const scale=Math.min(68/networkLogo.naturalWidth,68/networkLogo.naturalHeight),w=networkLogo.naturalWidth*scale,h=networkLogo.naturalHeight*scale;ctx.drawImage(networkLogo,1117-w/2,89-h/2,w,h);}
+  else{const initials=(networkName||"RL").trim().slice(0,2).toUpperCase();ctx.direction="ltr";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 25px Arial, sans-serif";ctx.fillStyle="#0758e9";ctx.fillText(initials,1117,89);}
+  write("شعار الشبكة",1117,147,10,"#bfcee0",true,"left");
   const cards=[{label:"سرعة الرفع الآن",value:bitRateLabel(pppoeSpeedRate.upload)},{label:"سرعة التنزيل الآن",value:bitRateLabel(pppoeSpeedRate.download)},{label:"مدة الجلسة",value:Number(line.live_sessions)>0&&line.session_seconds!=null?sessionDurationLabel(line.session_seconds):"لا توجد جلسة نشطة"},{label:"حدود بروفايل الخدمة",value:`تنزيل ${bitRateLabel(pppoeAppliedDownload)} · رفع ${bitRateLabel(pppoeAppliedUpload)}`}];
   cards.forEach((card,index)=>{const x=32+index*286;rounded(x,202,274,126,20,"#ffffff");write(card.label,x+250,244,14,"#64748b",false);write(card.value,x+250,292,index===3?15:19,"#17386d",true);});
   rounded(32,348,1136,330,22,"#ffffff");write("تغير السرعة منذ فتح القياس",1128,391,20,"#17386d",true);
@@ -625,7 +634,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
   write(`تنزيل الجلسة: ${bytesLabel(pppoeLiveTraffic.downloadBytes)}`,1128,824,20,"#17386d",true);
   write(`السيرفر: ${pppoeLiveTraffic.serverName||line.nas_name||"—"}`,520,785,16,"#475569",true);
   write(`الحدود: رفع ${bitRateLabel(pppoeAppliedUpload)} · تنزيل ${bitRateLabel(pppoeAppliedDownload)}`,520,824,14,"#64748b",false);
-  canvas.toBlob(blob=>{if(!blob){setPppoeNoticeError("تعذر إنشاء صورة التقرير.");return;}const url=URL.createObjectURL(blob),anchor=document.createElement("a"),stamp=new Date().toISOString().replace(/[:.]/g,"-");anchor.href=url;anchor.download=`pppoe-usage-${line.username}-${stamp}.png`;document.body.appendChild(anchor);anchor.click();anchor.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1500);setPppoeNoticeMessage("تم تنزيل صورة التقرير، ويمكنك إرسالها للزبون.");},"image/png");
+  canvas.toBlob(blob=>{if(!blob){setPppoeNoticeError("تعذر إنشاء صورة التقرير.");return;}const url=URL.createObjectURL(blob),anchor=document.createElement("a"),stamp=capturedAt.toISOString().replace(/[:.]/g,"-");anchor.href=url;anchor.download=`pppoe-usage-${line.username}-${stamp}.png`;document.body.appendChild(anchor);anchor.click();anchor.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1500);setPppoeNoticeMessage("تم تنزيل صورة التقرير، ويمكنك إرسالها للزبون.");},"image/png");
  };
 
  const pppoePackageInfo=(item:PppoePackage)=>{const validity=item.validity_mode==="calendar_monthly"?"شهري حتى بداية الشهر التالي":item.validity_mode==="fixed_day"?`يوم ${item.expiry_day||"—"} من الشهر عند ${String(item.expiry_time||"00:00").slice(0,5)}`:`${item.duration_value||"—"} ${item.duration_unit_name||"وحدة زمن"}`;return `${(Number(item.download_bps)/1e6).toLocaleString("ar")} Mbps تنزيل · ${(Number(item.upload_bps)/1e6).toLocaleString("ar")} Mbps رفع · ${item.quota_bytes?bytesLabel(item.quota_bytes):"حجم غير محدود"} · ${validity} · ${Number(item.simultaneous_sessions).toLocaleString("ar")} جلسة متزامنة`;};
