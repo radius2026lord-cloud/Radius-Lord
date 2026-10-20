@@ -243,7 +243,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
  if(!isIpv4(String(c.serverAddress||''))||!isIpv4(String(tunnel.tunnel_address||'')))fail('NAS_OVPN_SERVER_ADDRESS_INVALID');
  const marker=`Lord_Radius_API_Relay_${Number(scope.environment_id)}_${nasId}`;
  let tcp:{sourceAddress:string;targetAddress:string;elapsedMs:number}|undefined,api:RouterApi|undefined,relayTargetPort=0,directFailure:unknown,stage='direct_probe',relaySourceAddress='',relayGatewayAddress='',relayOvpnInterface='';
- let relayRuleCounters:Array<{kind:string;comment:string;packets:string;bytes:string}>=[];
+ let relayRuleCounters:Array<{kind:string;comment:string;packets:string;bytes:string;chain?:string;action?:string;protocol?:string;srcAddress?:string;dstAddress?:string;dstPort?:string;toAddresses?:string;toPorts?:string;outInterface?:string}>=[];
  try{
   try{
    const directTcp=await probeNasApiTcp(String(tunnel.tunnel_address),port);
@@ -300,11 +300,13 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     }
    };
    const readRelayCounters=async()=>{
-    const counters:Array<{kind:string;comment:string;packets:string;bytes:string}>=[];
+    const counters:Array<{kind:string;comment:string;packets:string;bytes:string;chain?:string;action?:string;protocol?:string;srcAddress?:string;dstAddress?:string;dstPort?:string;toAddresses?:string;toPorts?:string;outInterface?:string}>=[];
     for(const [path,kind] of [['/ip/firewall/nat','nat'],['/ip/firewall/filter','filter']] as const){
-     const rows=await gatewayApi.command(path+'/print',{'.proplist':'.id,comment,packets,bytes'});
+     const properties=kind==='nat'?'.proplist=.id,comment,packets,bytes,chain,action,protocol,src-address,dst-address,dst-port,to-addresses,to-ports,out-interface':'.proplist=.id,comment,packets,bytes';
+     const rows=await gatewayApi.command(path+'/print',{'.proplist':properties.replace('.proplist=','')});
      for(const row of rows)if(typeof row.comment==='string'&&row.comment.startsWith(marker)){
-      counters.push({kind,comment:row.comment,packets:String(row.packets??'0'),bytes:String(row.bytes??'0')});
+      const value=(key:string)=>row[key]===undefined||row[key]===null||row[key]===''?undefined:String(row[key]);
+      counters.push({kind,comment:row.comment,packets:String(row.packets??'0'),bytes:String(row.bytes??'0'),...(kind==='nat'?{chain:value('chain'),action:value('action'),protocol:value('protocol'),srcAddress:value('src-address'),dstAddress:value('dst-address'),dstPort:value('dst-port'),toAddresses:value('to-addresses'),toPorts:value('to-ports'),outInterface:value('out-interface')}:{})});
      }
     }
     return counters;
