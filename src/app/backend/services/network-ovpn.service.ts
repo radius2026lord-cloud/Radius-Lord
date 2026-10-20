@@ -232,44 +232,64 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
  if(sample.version)await app.query('UPDATE lord_nas SET routeros_version=? WHERE id=?',[sample.version,nasId]);
 }
 async function readPppoeLiveTraffic(api:RouterApi,username:string){
- // RouterOS releases and device builds do not expose PPP session counters uniformly.
- // Detect the reported version for diagnostics, then probe actual API capabilities instead
- // of relying on a version string alone (vendors may backport or omit commands).
+ // Ask RouterOS for its version for diagnostics only. Capability checks below determine
+ // the actual data path, so no release number is treated as a compatibility boundary.
  let routerosVersion='غير معروف';
- try{const [resource]=await api.command('/system/resource/print',{'.proplist':'version'});if(resource?.version)routerosVersion=String(resource.version).slice(0,80);}catch{/* Some restricted API users cannot read resource metadata. */}
- const base='name,service,uptime,address,caller-id';
+ try{const [resource]=await api.command('/system/resource/print',{'.proplist':'version'});if(resource?.version)routerosVersion=String(resource.version).slice(0,80);}catch{/* Metadata permission is optional. */}
+ const base='name,service,bytes,uptime,address,caller-id';
  const attempts=[
-  {source:'routeros_api_stats',attrs:{'.proplist':base+',bytes',stats:''},bytes:'pair'},
-  {source:'routeros_api_bytes',attrs:{'.proplist':base+',bytes'},bytes:'pair'},
-  {source:'routeros_api_in_out',attrs:{'.proplist':base+',bytes-in,bytes-out'},bytes:'in-out'},
-  {source:'routeros_api_rx_tx',attrs:{'.proplist':base+',rx-byte,tx-byte'},bytes:'rx-tx'}
+  {source:'routeros_api_ppp_stats',attrs:{'.proplist':base,stats:''}},
+  {source:'routeros_api_ppp_bytes',attrs:{'.proplist':base}}
  ] as const;
+ let sessions:any[]=[];
  let lastError:unknown;
  for(const attempt of attempts){
-  let rows:any[];
-  try{rows=await api.command('/ppp/active/print',attempt.attrs);}
-  catch(error){lastError=error;continue;}
-  const sessions=rows.filter(row=>row.name===username&&String(row.service||'').toLowerCase()==='pppoe');
-  if(!sessions.length)return {connected:false,uploadBytes:'0',downloadBytes:'0',sessionCount:0,sessionSeconds:0,routerosVersion,counterSource:attempt.source};
-  let upload=0n,download=0n,hasCounters=false;
-  for(const session of sessions){
-   if(attempt.bytes==='pair'){
-    const pair=String(session.bytes??'').split('/');
-    if(pair.length===2&&pair.every(value=>/^\d+$/.test(value))){download+=BigInt(pair[0]);upload+=BigInt(pair[1]);hasCounters=true;}
-   }else if(attempt.bytes==='in-out'){
-    const incoming=String(session['bytes-in']??''),outgoing=String(session['bytes-out']??'');
-    if(/^\d+$/.test(incoming)&&/^\d+$/.test(outgoing)){upload+=BigInt(incoming);download+=BigInt(outgoing);hasCounters=true;}
-   }else{
-    const incoming=String(session['rx-byte']??''),outgoing=String(session['tx-byte']??'');
-    if(/^\d+$/.test(incoming)&&/^\d+$/.test(outgoing)){upload+=BigInt(incoming);download+=BigInt(outgoing);hasCounters=true;}
-   }
-  }
-  if(!hasCounters)continue;
-  const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
-  return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource:attempt.source};
+  try{
+   const rows=await api.command('/ppp/active/print',attempt.attrs);
+   sessions=rows.filter(row=>row.name===username&&String(row.service||'').toLowerCase()==='pppoe');
+   if(!sessions.length)return {connected:false,uploadBytes:'0',downloadBytes:'0',sessionCount:0,sessionSeconds:0,routerosVersion,counterSource:attempt.source};
+   if(sessions.some(row=>/^\d+\/\d+$/.test(String(row.bytes||''))))return buildPppoeTraffic(sessions,routerosVersion,attempt.source);
+  }catch(error){lastError=error;}
  }
- if(lastError instanceof Error)throw lastError;
- throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+ // Compatibility path: obtain the live PPPoE interface and its byte counters using
+ // RouterOS API resources. This works even when /ppp/active does not expose "stats".
+ try{
+  const interfaces=await api.command('/interface/pppoe-server/print',{'.proplist':'.id,name,user,remote-address'});
+  const userInterfaces=interfaces.filter(row=>row.user===username&&row['.id']);
+  const matched=userInterfaces.filter(iface=>sessions.some(session=>
+   (session['caller-id']&&String(iface['remote-address']||'').toLowerCase()===String(session['caller-id']).toLowerCase())
+   ||String(iface.name||'')===username
+   ||String(iface.name||'')==='pppoe-'+username
+  ));
+  const selected=matched.length?matched:(sessions.length===1&&userInterfaces.length===1?userInterfaces:[]);
+  if(!selected.length)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+  let upload=0n,download=0n,hasCounters=false;
+  for(const iface of selected){
+   let rows:any[]=[];
+   try{rows=await api.command('/interface/print',{'.proplist':'.id,name,bytes'},['?.id='+iface['.id']]);}
+   catch(error){lastError=error;}
+   let pair=String(rows[0]?.bytes||'').split('/');
+   if(pair.length!==2||!pair.every(value=>/^\d+$/.test(value))){
+    try{rows=await api.command('/interface/print',{'.proplist':'.id,name,bytes',stats:''},['?.id='+iface['.id']]);}
+    catch(error){lastError=error;}
+    pair=String(rows[0]?.bytes||'').split('/');
+   }
+   if(pair.length!==2||!pair.every(value=>/^\d+$/.test(value)))continue;
+   // RouterOS byte pairs are tx/rx from the router perspective: download/upload.
+   download+=BigInt(pair[0]);upload+=BigInt(pair[1]);hasCounters=true;
+  }
+  if(!hasCounters)throw lastError instanceof Error?lastError:new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+  return buildPppoeTraffic(sessions,routerosVersion,'routeros_api_pppoe_interface',upload,download);
+ }catch(error){if(error instanceof Error)throw error;throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');}
+}
+function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:string,uploadValue?:bigint,downloadValue?:bigint){
+ let upload=uploadValue??0n,download=downloadValue??0n;
+ if(uploadValue===undefined||downloadValue===undefined){
+  for(const session of sessions){const pair=String(session.bytes||'').split('/');if(pair.length===2&&pair.every(value=>/^\d+$/.test(value))){download+=BigInt(pair[0]);upload+=BigInt(pair[1]);}}
+ }
+ if(!sessions.length||uploadValue===undefined&&downloadValue===undefined&&sessions.every(session=>!/^\\d+\/\d+$/.test(String(session.bytes||''))))throw new Error('NAS_PPP_ACTIVE_COUNTERS_UNAVAILABLE');
+ const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
+ return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
 export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string){
  const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
