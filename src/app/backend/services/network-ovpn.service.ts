@@ -279,7 +279,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    stage='identify_nas_ovpn_interface';
    const ovpnInterfaces=await gatewayApi.command('/interface/print',{'.proplist':'name,type'});
    const matchingOvpnInterfaces=ovpnInterfaces.filter((item:any)=>item.type==='ovpn-in'&&String(item.name||'').includes(String(tunnel.tunnel_username)));
-   const nasOvpnInterface=matchingOvpnInterfaces.length===1?String(matchingOvpnInterfaces[0].name):'';relayOvpnInterface=nasOvpnInterface||undefined as any;
+   const nasOvpnInterface=matchingOvpnInterfaces.length===1?String(matchingOvpnInterfaces[0].name):'';relayOvpnInterface=nasOvpnInterface;
    const occupied=new Set<number>();
    const addPorts=(raw:string)=>{for(const piece of String(raw||'').split(',')){const range=piece.trim().split('-').map(Number);if(range.length===1&&Number.isInteger(range[0]))occupied.add(range[0]);else if(range.length===2&&range.every(Number.isInteger)&&range[1]-range[0]<2048)for(let p=range[0];p<=range[1];p++)occupied.add(p);}};
    for(const rule of natRules)if(String(rule.protocol||'')==='tcp')addPorts(rule['dst-port']);
