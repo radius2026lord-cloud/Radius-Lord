@@ -330,7 +330,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     stage='install_forward_rule';
     await gatewayApi.command('/ip/firewall/filter/add',{chain:'forward',action:'accept',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),comment:marker+'-allow',...(filterPlaceBefore?{'place-before':filterPlaceBefore}:{})});
     stage='install_srcnat_rule';
-    await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'src-nat',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'to-addresses':String(c.serverAddress),comment:marker+'-src',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
+    await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'src-nat',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),'to-addresses':String(c.serverAddress),comment:marker+'-src',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
     stage='probe_nas_api_relay';
     tcp=await probeNasApiTcp(gatewayReachability.targetAddress,relayPort);
     stage='nas_api_login';
