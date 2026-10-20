@@ -260,7 +260,16 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    relayTargetPort=Number(g.api_port);
    const gatewayHost=await radiusIpv4(String(g.api_host));
    const gatewayReachability=await probeNasApiTcp(gatewayHost,Number(g.api_port));
-   const sourceAddress=gatewayReachability.sourceAddress;
+   // The application host can sit behind NAT. Use the peer address RouterOS
+   // actually sees for this API account rather than the OS-local socket address.
+   stage='identify_gateway_api_peer';
+   const apiSessions=await gatewayApi.command('/user/active/print',{'.proplist':'name,address,via'});
+   const gatewayApiPeers=Array.from(new Set(apiSessions
+    .filter(session=>session.name===String(g.api_username)&&['api','api-ssl'].includes(String(session.via||'')))
+    .map(session=>String(session.address||'').split('/')[0].replace(/:\\d+$/,''))
+    .filter(isIpv4)));
+   if(gatewayApiPeers.length!==1)fail('OVPN_GATEWAY_API_PEER_AMBIGUOUS');
+   const sourceAddress=gatewayApiPeers[0];
    const active=await gatewayApi.command('/ppp/active/print',{'.proplist':'name,address,service'});
    const natRules=await gatewayApi.command('/ip/firewall/nat/print',{'.proplist':'.id,protocol,dst-port,comment'});
    const services=await gatewayApi.command('/ip/service/print',{'.proplist':'name,port'});
@@ -299,7 +308,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    try{
     relayRulesStarted=true;
     stage='install_dstnat_rule';
-    await gatewayApi.command('/ip/firewall/nat/add',{chain:'dstnat',protocol:'tcp','src-address':sourceAddress,'dst-port':String(relayPort),action:'dst-nat','to-addresses':String(tunnel.tunnel_address),'to-ports':String(port),comment:marker+'-dst',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
+    await gatewayApi.command('/ip/firewall/nat/add',{chain:'dstnat',protocol:'tcp','src-address':sourceAddress,'dst-address':gatewayReachability.targetAddress,'dst-port':String(relayPort),action:'dst-nat','to-addresses':String(tunnel.tunnel_address),'to-ports':String(port),comment:marker+'-dst',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
     stage='install_forward_rule';
     await gatewayApi.command('/ip/firewall/filter/add',{chain:'forward',action:'accept',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),comment:marker+'-allow',...(filterPlaceBefore?{'place-before':filterPlaceBefore}:{})});
     stage='install_srcnat_rule';
