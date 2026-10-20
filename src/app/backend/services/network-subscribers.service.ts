@@ -295,7 +295,7 @@ export async function readNetworkPppoeApiTarget(scope:any,customerValue:any,line
   if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
   const customerId=Number(customerValue),lineId=Number(lineValue);
   if(!Number.isSafeInteger(customerId)||customerId<1||!Number.isSafeInteger(lineId)||lineId<1)throw new Error('SUBSCRIBER_INPUT');
-  const [rows]:any=await app.query(`SELECT p.id,p.customer_id,r.current_username username,
+  const [rows]:any=await app.query(`SELECT p.id,p.customer_id,c.first_name,c.last_name,r.current_username username,
     COALESCE(ra.nasipaddress,n.nasname) nas_ip,ra.acctstarttime,ra.acctupdatetime,(SELECT COALESCE(history.acctstoptime,history.acctupdatetime,history.acctstarttime) FROM radacct history WHERE history.username=r.current_username ORDER BY COALESCE(history.acctstoptime,history.acctupdatetime,history.acctstarttime) DESC,history.radacctid DESC LIMIT 1) last_seen,ra.framedipaddress,
     n.id radius_nas_id,l.id nas_id,COALESCE(NULLIF(l.name,''),NULLIF(n.shortname,''),NULLIF(n.nasname,'')) nas_name
    FROM pppoe_accounts p JOIN customers c ON c.id=p.customer_id
@@ -311,7 +311,7 @@ export async function readNetworkPppoeApiTarget(scope:any,customerValue:any,line
    ORDER BY ra.acctupdatetime DESC,ra.radacctid DESC LIMIT 1`,principal?[lineId,customerId]:[lineId,customerId,managerId]);
   const row=rows[0];if(!row)throw new Error('SUBSCRIBER_LINE_NOT_FOUND');
   const connected=Boolean(row.nas_ip&&row.nas_id);
-  return {customerId,lineId,username:String(row.username),connected,nasId:connected?Number(row.nas_id):null,nasIp:row.nas_ip?String(row.nas_ip):null,nasName:row.nas_name?String(row.nas_name):null,sessionStartedAt:row.acctstarttime||null,lastSeen:row.last_seen||row.acctupdatetime||null,framedIp:row.framedipaddress||null};
+  return {customerId,lineId,username:String(row.username),customerName:`${String(row.first_name||"").trim()} ${String(row.last_name||"").trim()}`.trim()||null,connected,nasId:connected?Number(row.nas_id):null,nasIp:row.nas_ip?String(row.nas_ip):null,nasName:row.nas_name?String(row.nas_name):null,sessionStartedAt:row.acctstarttime||null,lastSeen:row.last_seen||row.acctupdatetime||null,framedIp:row.framedipaddress||null};
  });
 }
 
