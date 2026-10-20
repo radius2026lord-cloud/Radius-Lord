@@ -279,8 +279,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    stage='identify_nas_ovpn_interface';
    const ovpnInterfaces=await gatewayApi.command('/interface/print',{'.proplist':'name,type'});
    const matchingOvpnInterfaces=ovpnInterfaces.filter((item:any)=>item.type==='ovpn-in'&&String(item.name||'').includes(String(tunnel.tunnel_username)));
-   if(matchingOvpnInterfaces.length!==1)fail('NAS_OVPN_INTERFACE_AMBIGUOUS');
-   const nasOvpnInterface=String(matchingOvpnInterfaces[0].name);relayOvpnInterface=nasOvpnInterface;
+   const nasOvpnInterface=matchingOvpnInterfaces.length===1?String(matchingOvpnInterfaces[0].name):'';relayOvpnInterface=nasOvpnInterface||undefined as any;
    const occupied=new Set<number>();
    const addPorts=(raw:string)=>{for(const piece of String(raw||'').split(',')){const range=piece.trim().split('-').map(Number);if(range.length===1&&Number.isInteger(range[0]))occupied.add(range[0]);else if(range.length===2&&range.every(Number.isInteger)&&range[1]-range[0]<2048)for(let p=range[0];p<=range[1];p++)occupied.add(p);}};
    for(const rule of natRules)if(String(rule.protocol||'')==='tcp')addPorts(rule['dst-port']);
@@ -329,7 +328,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     stage='install_forward_rule';
     await gatewayApi.command('/ip/firewall/filter/add',{chain:'forward',action:'accept',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'dst-port':String(port),comment:marker+'-allow',...(filterPlaceBefore?{'place-before':filterPlaceBefore}:{})});
     stage='install_srcnat_rule';
-    await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'masquerade',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'out-interface':nasOvpnInterface,comment:marker+'-src',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
+    await gatewayApi.command('/ip/firewall/nat/add',{chain:'srcnat',action:'src-nat',protocol:'tcp','src-address':sourceAddress,'dst-address':String(tunnel.tunnel_address),'to-addresses':String(c.serverAddress),comment:marker+'-src',...(natPlaceBefore?{'place-before':natPlaceBefore}:{})});
     stage='probe_nas_api_relay';
     tcp=await probeNasApiTcp(gatewayReachability.targetAddress,relayPort);
     stage='nas_api_login';
