@@ -48,3 +48,5 @@ next-dev.log
 **/node_modules/
 **/uploads/
 next-dev.log
+
+**/node_modules/
