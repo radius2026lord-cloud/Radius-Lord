@@ -243,9 +243,9 @@ async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
   const rows=await api.command('/ping',{address:String(address),count:'3',interval:'300ms'},[],7000);
   const summary=rows.find(row=>row['avg-rtt']!==undefined||row['packet-loss']!==undefined||row.received!==undefined)||{};
   const samples=rows.map(row=>routerOsTimeMs(row.time)).filter((value):value is number=>value!==null);
-  const receivedRaw=Number(summary.received),received=Number.isFinite(receivedRaw)?receivedRaw:samples.length;
-  const sentRaw=Number(summary.sent),sent=Number.isFinite(sentRaw)&&sentRaw>0?sentRaw:3;
   const averageMs=routerOsTimeMs(summary['avg-rtt'])??(samples.length?samples.reduce((sum,value)=>sum+value,0)/samples.length:null);
+  const receivedRaw=Number(summary.received),received=Number.isFinite(receivedRaw)?receivedRaw:samples.length||(averageMs!==null?1:0);
+  const sentRaw=Number(summary.sent),sent=Number.isFinite(sentRaw)&&sentRaw>0?sentRaw:(samples.length?3:1);
   const lossRaw=summary['packet-loss']===undefined?null:Number.parseFloat(String(summary['packet-loss']));
   const packetLoss=lossRaw!==null&&Number.isFinite(lossRaw)?Math.max(0,Math.min(100,lossRaw)):Math.max(0,Math.min(100,((sent-received)/sent)*100));
   return {status:received>0&&averageMs!==null?'ok' as const:'timeout' as const,averageMs,packetLoss};
