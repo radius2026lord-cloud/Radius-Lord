@@ -28,7 +28,7 @@ import {env} from '../config/env';
 import {db} from '../config/db';
 import {networkScope,withNetwork,validateLocalLicense} from '../services/network-runtime.service';
 import {provisioningKey,decryptProvisioningSecret} from '../services/provisioning-secrets.service';
-import {readNetworkOvpn,createNetworkNas,provisionNetworkNas,networkNasScript,checkNetworkNasApi,nasRadiusClients,markNasRadiusConfigured,setNetworkNasEnabled,refreshNasLinks} from '../services/network-ovpn.service';
+import {readNetworkOvpn,createNetworkNas,provisionNetworkNas,networkNasScript,checkNetworkNasApi,nasRadiusClients,markNasRadiusConfigured,setNetworkNasEnabled,setManagedNasRadiusSecret,refreshNasLinks} from '../services/network-ovpn.service';
 import {readPrivateSetting,applyRadiusDatabase,radiusDatabaseHost} from '../services/radius-provision.service';
 const router=Router();
 const failed=new Map<string,{count:number;until:number}>();
@@ -185,6 +185,7 @@ async function provisionNasRequest(req:Request,res:any,refresh=false){
  if(refresh){await refreshNasLinks(central,app,scope,snapshot);return;}
  const id=req.params.id?Number(req.params.id):await createNetworkNas(app,scope,scope.managerId,snapshot,{name:String(req.body?.name??''),requestId:String(req.body?.requestId??''),vendor:String(req.body?.vendor??'mikrotik'),model:String(req.body?.model??''),radiusServices:Array.isArray(req.body?.radiusServices)?req.body.radiusServices:undefined,location:String(req.body?.location??''),description:String(req.body?.description??''),enabled:req.body?.enabled,apiPort:Number(req.body?.apiPort??8728)});if(!Number.isSafeInteger(id)||id<1)throw new Error('NAS_INPUT_INVALID');
  await provisionNetworkNas(central,app,scope,id,snapshot);
+ await setManagedNasRadiusSecret(app,id);
  await syncNasRadius(central,app,scope,snapshot);
  });return res.json({success:true,message:refresh?'تم تحديث حالة الأنفاق من البوابة.':'تم إنشاء NAS وربطه بخدمة RADIUS. افتح إعداداته لنسخ سكربت الربط الخاص بهذا الجهاز.'});
  }catch(e){return res.status(409).json(nasError(e));}finally{if(locked)await central.query("SELECT RELEASE_LOCK('radius-lord:database-provisioner')");central.release();}
