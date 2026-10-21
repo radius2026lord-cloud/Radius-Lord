@@ -10,7 +10,19 @@ import {inspectRouter,preflightInventory,validateProvision,poolRanges} from './o
 import {encryptProvisioningSecret,decryptProvisioningSecret} from './provisioning-secrets.service';
 const fail=(code:string):never=>{throw new Error(code);};
 // Shared management API identity requested for every MikroTik NAS.
-const managedNasApiUsername='lord',managedNasApiPassword='lord1224';
+const managedNasApiUsername='lord',managedNasApiPassword='lord1224',managedRadiusSecret='lord1224';
+async function nextOvpnUsername(central:PoolConnection,api:RouterApi,gatewayId:number){
+ const [rows]:any=await central.query('SELECT tunnel_username FROM nas_tunnels WHERE ovpn_gateway_id=?',[gatewayId]);
+ const occupied=new Set<string>(rows.map((row:any)=>String(row.tunnel_username||'')));
+ const secrets=await api.command('/ppp/secret/print',{'.proplist':'name'});
+ for(const row of secrets)if(row.name)occupied.add(String(row.name));
+ for(let number=1;number<=999999;number++){const username='lord_'+number;if(!occupied.has(username))return username;}
+ fail('OVPN_USERNAME_POOL_EXHAUSTED');
+}
+const ovpnTunnelComment=(username:string,environmentId:number,nasId:number,slot:number|null)=>{
+ if(/^lord_\\d{1,6}$/.test(username))return 'Radius Lord OVPN '+username;
+ return slot?'Radius Lord env '+environmentId+' nas slot '+slot:'Radius Lord env '+environmentId+' nas '+nasId;
+};
 const ipNumber=(s:string)=>s.split('.').reduce((n,v)=>n*256+Number(v),0);
 const isIpv4=(s:string)=>{const parts=s.split('.');return parts.length===4&&parts.every(part=>/^\d{1,3}$/.test(part)&&Number(part)>=0&&Number(part)<=255);};
 const isPrivateIpv4=(s:string)=>{if(!isIpv4(s))return false;const p=s.split('.').map(Number);return p[0]===10||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168);};
@@ -59,7 +71,7 @@ export async function createNetworkNas(app:mysql.Connection,scope:any,managerId:
  const [existing]:any=await app.query('SELECT id,name FROM lord_nas WHERE radius_nas_id IN (SELECT id FROM nas WHERE shortname=?)',[shortname]);if(existing.length>1||existing[0]&&existing[0].name!==name)fail('NAS_REQUEST_CONFLICT');
  if(existing[0]){const existingId=Number(existing[0].id),encrypted=encryptProvisioningSecret(apiPassword);const [savedCredential]:any=await app.query('UPDATE nas_management_credentials SET username=?,password_encrypted=?,encryption_key_id=?,updated_by=? WHERE lord_nas_id=?',[apiUsername,encrypted,'gateway-key-v1',managerId,existingId]);if(!savedCredential.affectedRows)await app.query('INSERT INTO nas_management_credentials (lord_nas_id,username,password_encrypted,encryption_key_id,updated_by) VALUES (?,?,?,?,?)',[existingId,apiUsername,encrypted,'gateway-key-v1',managerId]);const [apiService]:any=await app.query("SELECT id FROM nas_management_services WHERE lord_nas_id=? AND service_type='api' ORDER BY id LIMIT 1",[existingId]);if(apiService[0])await app.query('UPDATE nas_management_services SET port=?,is_enabled=1 WHERE id=?',[apiPort,apiService[0].id]);else await app.query("INSERT INTO nas_management_services (lord_nas_id,service_type,name,host,port,protocol,is_enabled,description) VALUES (?,'api','MikroTik API',NULL,?,'tcp',1,'Lord_Radius managed RouterOS API service')",[existingId,apiPort]);await app.commit();return existingId;}
  const [count]:any=await app.query('SELECT COUNT(*) count FROM nas');if(snapshot.maxNas!==0&&Number(count[0].count)>=snapshot.maxNas+snapshot.additionalNas)fail('NAS_PLAN_LIMIT_REACHED');
- const [nas]:any=await app.query("INSERT INTO nas (nasname,shortname,type,secret,description) VALUES ('127.0.0.2',?,?,?,'Radius Lord managed OpenVPN')",[shortname,vendor,randomBytes(24).toString('hex')]);
+ const [nas]:any=await app.query("INSERT INTO nas (nasname,shortname,type,secret,description) VALUES ('127.0.0.2',?,?,?,'Radius Lord managed OpenVPN')",[shortname,vendor,managedRadiusSecret]);
  const [local]:any=await app.query("INSERT INTO lord_nas (radius_nas_id,name,vendor,model,radius_services,coa_host,management_host,auth_port,acct_port,coa_port,is_enabled,location,description,created_by) VALUES (?,?,?,?,?,'127.0.0.2','127.0.0.2',?,?,?, ?,?,?,?)",[nas.insertId,name,vendor,model||null,services.join(','),snapshot.authPort,snapshot.accountingPort,3799,input.enabled===false?0:1,location||null,description||null,managerId]);
  await app.query('INSERT INTO nas_management_credentials (lord_nas_id,username,password_encrypted,encryption_key_id,updated_by) VALUES (?,?,?,?,?)',[local.insertId,apiUsername,encryptProvisioningSecret(apiPassword),'gateway-key-v1',managerId]);
  await app.query("INSERT INTO nas_management_services (lord_nas_id,service_type,name,host,port,protocol,is_enabled,description) VALUES (?,'api','MikroTik API',NULL,?,'tcp',1,'Lord_Radius managed RouterOS API service')",[local.insertId,apiPort]);
@@ -89,11 +101,11 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  const occupied=new Set([...reserved.map((r:any)=>r.tunnel_address),...used.map(r=>r.address),...secrets.map(r=>r['remote-address'])]);
  let address='';for(const range of poolRanges(o).split(',')){const [a,b]=range.split('-').map(ipNumber);for(let n=a;n<=b;n++){const candidate=ipString(n);if(!occupied.has(candidate)){address=candidate;break;}}if(address)break;}if(!address)fail('OVPN_POOL_FULL');
  const [slots]:any=await central.query('SELECT reservation_slot FROM nas_tunnels WHERE environment_id=? AND reservation_slot IS NOT NULL',[scope.environment_id]);const usedSlots=new Set(slots.map((r:any)=>Number(r.reservation_slot)));let slot=1;while(usedSlots.has(slot))slot++;
- const username='rl_env_'+scope.environment_id+'_nas_'+nasId;
+ const username=await nextOvpnUsername(central,api,snapshot.gatewayId);
  const [insert]:any=await central.query("INSERT INTO nas_tunnels (environment_id,ovpn_gateway_id,tenant_nas_id,reservation_slot,tunnel_username,tunnel_password_encrypted,tunnel_address,certificate_reference,status) VALUES (?,?,?,?,?,?,?,?,'provisioning')",[scope.environment_id,snapshot.gatewayId,nasId,slot,username,encryptProvisioningSecret(randomBytes(24).toString('base64url')),address,username]);
  [reservations]=await central.query('SELECT * FROM nas_tunnels WHERE id=?',[insert.insertId]);tunnel=reservations[0];
  }
- const username=String(tunnel.tunnel_username),marker=/_slot_\d+$/.test(username)?'Radius Lord env '+scope.environment_id+' nas slot '+tunnel.reservation_slot:'Radius Lord env '+scope.environment_id+' nas '+nasId;
+ const username=String(tunnel.tunnel_username),marker=ovpnTunnelComment(username,Number(scope.environment_id),nasId,tunnel.reservation_slot?Number(tunnel.reservation_slot):null);
  if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username)fail('OVPN_TUNNEL_OWNERSHIP');
  const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);
  if(owned.some(r=>r.comment!==marker||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');
@@ -145,11 +157,11 @@ export async function reserveNetworkNasCapacity(central:PoolConnection,scope:any
    if(!tunnel){
     const [reserved]:any=await central.query('SELECT tunnel_address FROM nas_tunnels WHERE ovpn_gateway_id=?',[snapshot.gatewayId]),used=await api.command('/ip/pool/used/print',{'.proplist':'pool,address'}),secrets=await api.command('/ppp/secret/print',{'.proplist':'remote-address'}),occupied=new Set([...reserved.map((r:any)=>r.tunnel_address),...used.map((r:any)=>r.address),...secrets.map((r:any)=>r['remote-address'])]);let address='';
     for(const range of poolRanges(o).split(',')){const [a,b]=range.split('-').map(ipNumber);for(let n=a;n<=b;n++){const candidate=ipString(n);if(!occupied.has(candidate)){address=candidate;break;}}if(address)break;}if(!address)fail('OVPN_POOL_FULL');
-    const username='rl_env_'+scope.environment_id+'_slot_'+slot,password=encryptProvisioningSecret(randomBytes(24).toString('base64url')),[insert]:any=await central.query("INSERT INTO nas_tunnels (environment_id,ovpn_gateway_id,tenant_nas_id,reservation_slot,tunnel_username,tunnel_password_encrypted,tunnel_address,certificate_reference,status) VALUES (?,?,NULL,?,?,?,?,?,'provisioning')",[scope.environment_id,snapshot.gatewayId,slot,username,password,address,username]);
+    const username=await nextOvpnUsername(central,api,snapshot.gatewayId),password=encryptProvisioningSecret(randomBytes(24).toString('base64url')),[insert]:any=await central.query("INSERT INTO nas_tunnels (environment_id,ovpn_gateway_id,tenant_nas_id,reservation_slot,tunnel_username,tunnel_password_encrypted,tunnel_address,certificate_reference,status) VALUES (?,?,NULL,?,?,?,?,?,'provisioning')",[scope.environment_id,snapshot.gatewayId,slot,username,password,address,username]);
     const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE id=?',[insert.insertId]);tunnel=rows[0];existing.push(tunnel);
    }
-   const username=String(tunnel.tunnel_username),marker='Radius Lord env '+scope.environment_id+' nas slot '+slot;
-   if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username||!/_slot_\d+$/.test(username))fail('OVPN_TUNNEL_OWNERSHIP');
+   const username=String(tunnel.tunnel_username),marker=ovpnTunnelComment(username,Number(scope.environment_id),Number(tunnel.tenant_nas_id||0),slot);
+   if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username||!( /^lord_\d{1,6}$/.test(username)||/_slot_\d+$/.test(username)))fail('OVPN_TUNNEL_OWNERSHIP');
    const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);if(owned.some(r=>r.comment!==marker||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');if(!owned.length)await api.command('/ppp/secret/add',{name:username,password:decryptProvisioningSecret(tunnel.tunnel_password_encrypted),service:'ovpn',profile:o.ppp_profile,'remote-address':tunnel.tunnel_address,'local-address':o.server_tunnel_address,comment:marker});
    let cert=certs.find(r=>r.name===username);if(cert&&(cert['common-name']!==username||!cert['key-usage']?.includes('tls-client')))fail('OVPN_CLIENT_CERT_CONFLICT');if(!cert){await api.command('/certificate/add',{name:username,'common-name':username,'key-size':'2048','days-valid':'825','key-usage':'digital-signature,key-encipherment,tls-client'});cert=(await api.command('/certificate/print',{'.proplist':'.id,name'},['?name='+username]))[0];}if(!cert?.['.id'])fail('OVPN_CLIENT_CERT_REQUIRED');if(!cert.fingerprint)await api.command('/certificate/sign',{'.id':cert['.id'],name:username,ca:ca.name},[],45000);cert=(await api.command('/certificate/print',{'.proplist':'.id,name,fingerprint,private-key,key-usage,expired,revoked,common-name'},['?name='+username]))[0];if(!cert?.fingerprint||!yes(cert['private-key'])||yes(cert.expired)||revoked(cert.revoked))fail('OVPN_CLIENT_CERT_NOT_READY');
    await central.query("UPDATE nas_tunnels SET status='reserved' WHERE id=? AND tenant_nas_id IS NULL",[tunnel.id]);tunnel.status='reserved';count++;
@@ -166,6 +178,11 @@ export async function setNetworkNasEnabled(app:mysql.Connection,nasId:number,ena
  const [result]:any=await app.query('UPDATE lord_nas SET is_enabled=? WHERE id=? AND archived_at IS NULL',[enabled?1:0,nasId]);
  if(!result.affectedRows)fail('NAS_NOT_FOUND');
  return enabled;
+}
+export async function setManagedNasRadiusSecret(app:mysql.Connection,nasId:number){
+ if(!Number.isSafeInteger(nasId)||nasId<1)fail('NAS_INPUT_INVALID');
+ const [result]:any=await app.query('UPDATE nas n JOIN lord_nas l ON l.radius_nas_id=n.id SET n.secret=? WHERE l.id=? AND l.archived_at IS NULL',[managedRadiusSecret,nasId]);
+ if(!result.affectedRows){const [rows]:any=await app.query('SELECT n.id FROM nas n JOIN lord_nas l ON l.radius_nas_id=n.id WHERE l.id=? AND l.archived_at IS NULL',[nasId]);if(!rows[0])fail('NAS_NOT_FOUND');}
 }
 export async function nasRadiusClients(app:mysql.Connection){
  const [rows]:any=await app.query('SELECT l.id,n.nasname address,n.secret FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN nas_ovpn_connections c ON c.nas_id=l.id WHERE l.archived_at IS NULL AND l.is_enabled=1');return rows.map((r:any)=>({name:'rl_nas_'+r.id,address:r.address,secret:r.secret}));
