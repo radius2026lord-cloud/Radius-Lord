@@ -23,7 +23,10 @@ function rateLimit(downloadBps:bigint,uploadBps:bigint){
 
 function remoteCoaScript(rows:CoaSession[]){
  const payload=Buffer.from(JSON.stringify(rows)).toString('base64');
- return `import base64,json,ipaddress,os,re,subprocess,tempfile,concurrent.futures\nitems=json.loads(base64.b64decode('${payload}'))\ndef quoted(value): return '"'+str(value).replace('\\\\','\\\\\\\\').replace('"','\\\\"').replace('\\r','').replace('\\n','')+'"'\ndef send(item):\n try:\n  host=item['host'];port=int(item['port']);session=item['sessionId'];username=item['username'];nas=ipaddress.IPv4Address(item['nasIp']);rate=item['rateLimit']\n  if host.startswith('[') and host.endswith(']'): host=host[1:-1]\n  if not re.fullmatch(r'[A-Za-z0-9._:-]{1,255}',host) or not 1<=port<=65535 or not 1<=len(session)<=64 or not username or any(ch in username for ch in '\\r\\n') or not re.fullmatch(r'[0-9.]+[kKmMgG]?/[0-9.]+[kKmMgG]?',rate) or not item['secret']: return False\n  target=('['+host+']' if ':' in host and not host.startswith('[') else host)+':'+str(port)\n  packet='User-Name = '+quoted(username)+'\\nNAS-IP-Address = '+str(nas)+'\\nAcct-Session-Id = '+quoted(session)+'\\nMikrotik-Rate-Limit = '+quoted(rate)+'\\n'\n  fd,path=tempfile.mkstemp(prefix='rl-coa-',dir='/run')\n  try:\n   os.fchmod(fd,0o600)\n   with os.fdopen(fd,'w') as secret_file: secret_file.write(item['secret'])\n   result=subprocess.run(['/usr/bin/radclient','-r','1','-t','2','-S',path,target,'coa'],input=packet,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=6,check=False)\n   return 'CoA-ACK' in result.stdout\n  finally:\n   try: os.unlink(path)\n   except FileNotFoundError: pass\n except Exception: return False\nwith concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool: results=list(pool.map(send,items))\nprint(json.dumps({'attempted':len(items),'acknowledged':sum(1 for ok in results if ok)}))\n`;
+ return `import base64,json,ipaddress,os,re,subprocess,tempfile,concurrent.futures\nitems=json.loads(base64.b64decode('${payload}'))\ndef quoted(value): return '"'+str(value).replace('\\\\','\\\\\\\\').replace('"','\\\\"').replace('\\r','').replace('\\n','')+'"'\ndef send(item):\n try:\n  host=item['host'];port=int(item['port']);session=item['sessionId'];username=item['username'];nas=ipaddress.IPv4Address(item['nasIp']);rate=item['rateLimit']\n  if host.startswith('[') and host.endswith(']'): host=host[1:-1]\n  if not re.fullmatch(r'[A-Za-z0-9._:-]{1,255}',host) or not 1<=port<=65535 or not 1<=len(session)<=64 or not username or any(ch in username for ch in '\\r\\n') or not re.fullmatch(r'[0-9.]+[kKmMgG]?/[0-9.]+[kKmMgG]?',rate) or not item['secret']: return False\n  target=('['+host+']' if ':' in host and not host.startswith('[') else host)+':'+str(port)\n  packet='User-Name = '+quoted(username)+'\\nNAS-IP-Address = '+str(nas)+'\\nAcct-Session-Id = '+quoted(session)+'\\nMikrotik-Rate-Limit = '+quoted(rate)+'\\n'\n  fd,path=tempfile.mkstemp(prefix='rl-coa-',dir='/run')\n  try:\n   os.fchmod(fd,0o600)\n   with os.fdopen(fd,'w') as secret_file: secret_file.write(item['secret'])\n   result=subprocess.run(['/usr/bin/radclient','-r','1','-t','2','-S',path,target,'coa'],input=packet,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=6,check=False)\n   output=result.stdout or ''
+   status='ack' if 'CoA-ACK' in output else 'nak' if 'CoA-NAK' in output else 'no_reply'
+   cause=next((line.split('=',1)[1].strip()[:80] for line in output.splitlines() if 'Error-Cause' in line and '=' in line),'')
+   return {'status':status,'cause':cause}\n  finally:\n   try: os.unlink(path)\n   except FileNotFoundError: pass\n except Exception: return {'status':'transport_error','cause':''}\nwith concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool: results=list(pool.map(send,items))\nprint(json.dumps({'attempted':len(items),'acknowledged':sum(1 for result in results if result.get('status')=='ack'),'responses':results}))\n`;
 }
 
 async function sendCoa(scope:any,sessions:any[],rateLimit:string){
@@ -38,9 +41,9 @@ async function sendCoa(scope:any,sessions:any[],rateLimit:string){
  if(!radiusAddresses.some((address:any)=>sshAddresses.some((sshAddress:any)=>address.address===sshAddress.address)))throw new Error('PPPOE_SPEED_BOOST_TRANSPORT_UNAVAILABLE');
  const items=sessions.map((row:any)=>({host:String(row.coa_host),port:Number(row.coa_port)||3799,secret:String(row.secret),username:String(row.username),sessionId:String(row.acctsessionid),nasIp:String(row.nasipaddress),rateLimit}));
  const output=await runManagedRadiusScript(Number(runtime.radiusSshServerId),remoteCoaScript(items));
- const result=JSON.parse(output.trim().split(/\r?\n/).at(-1)||'{}'),attempted=Number(result.attempted),acknowledged=Number(result.acknowledged);
- if(!Number.isSafeInteger(attempted)||!Number.isSafeInteger(acknowledged)||attempted!==items.length||acknowledged<0||acknowledged>attempted)throw new Error('PPPOE_SPEED_BOOST_TRANSPORT_UNAVAILABLE');
- return {attempted,acknowledged};
+ const result=JSON.parse(output.trim().split(/\r?\n/).at(-1)||'{}'),attempted=Number(result.attempted),acknowledged=Number(result.acknowledged),responses=Array.isArray(result.responses)?result.responses:[];
+ if(!Number.isSafeInteger(attempted)||!Number.isSafeInteger(acknowledged)||attempted!==items.length||acknowledged<0||acknowledged>attempted||responses.length!==items.length||responses.some((item:any)=>!['ack','nak','no_reply','transport_error'].includes(item?.status)))throw new Error('PPPOE_SPEED_BOOST_TRANSPORT_UNAVAILABLE');
+ return {attempted,acknowledged,responses};
 }
 
 async function getActiveSessions(app:any,username:string){
@@ -60,7 +63,7 @@ export async function startPppoeLineSpeedBoost(scope:any,lineValue:any,input:any
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion);
   if(access.role!=='principal'&&!access.permissions.includes('customers.update'))throw new Error('NETWORK_AUTH');
-  await app.beginTransaction();let coaAttempted=false,username='',originalRate='',boostedRate='';
+  await app.beginTransaction();let username='',originalRate='',boostedRate='',coaAcknowledgedSessions:any[]=[];
   try{
    const [accounts]:any=await app.query(`SELECT p.id,p.radius_identity_id,p.admin_status,r.current_username username,sp.lifecycle,sp.expires_at
     FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
@@ -82,11 +85,11 @@ export async function startPppoeLineSpeedBoost(scope:any,lineValue:any,input:any
    await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Mikrotik-Rate-Limit',':=',?)",[username,boostedRate]);
    const [created]:any=await app.query(`INSERT INTO pppoe_line_speed_boosts(account_id,username,multiplier,download_bps,upload_bps,original_rate_limit,boosted_rate_limit,original_user_reply,started_at,expires_at,created_by)
     VALUES(?,?,NULL,?,?,?,?,?,?,?,?)`,[id,username,downloadBps.toString(),uploadBps.toString(),originalRate,boostedRate,originalOverrides,clock[0].started_at,clock[0].expires_at,scope.managerId]);
-   coaAttempted=true;const result=await sendCoa(scope,sessions,boostedRate);if(result.acknowledged!==result.attempted)throw new Error('PPPOE_SPEED_BOOST_COA_FAILED');
+   const result=await sendCoa(scope,sessions,boostedRate);coaAcknowledgedSessions=sessions.filter((_:any,index:number)=>result.responses[index]?.status==='ack');if(result.acknowledged!==result.attempted){console.warn('[pppoe-speed-boost-coa]',{environmentId:Number(scope.environment_id),lineId:id,attempted:result.attempted,acknowledged:result.acknowledged,responses:result.responses.map((item:any)=>({status:item.status,cause:item.cause}))});throw new Error('PPPOE_SPEED_BOOST_COA_FAILED');}
    const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);
    await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.speed_boost','pppoe_account',?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,account.radius_identity_id,JSON.stringify({downloadBps:downloadBps.toString(),uploadBps:uploadBps.toString(),originalRateLimit:originalRate,boostedRateLimit:boostedRate,startedAt:clock[0].started_at,expiresAt:clock[0].expires_at})]);
    await app.commit();return {success:true,id:Number(created.insertId),rateLimit:boostedRate,expiresAt:clock[0].expires_at};
-  }catch(error){await app.rollback();if(coaAttempted&&originalRate)try{const sessions=await getActiveSessions(app,username);if(sessions.length)await sendCoa(scope,sessions,originalRate);}catch{}throw error;}
+  }catch(error){await app.rollback();if(coaAcknowledgedSessions.length&&originalRate)try{await sendCoa(scope,coaAcknowledgedSessions,originalRate);}catch{}throw error;}
  });
 }
 
