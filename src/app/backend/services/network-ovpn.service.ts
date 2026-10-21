@@ -20,7 +20,7 @@ async function nextOvpnUsername(central:PoolConnection,api:RouterApi,gatewayId:n
  fail('OVPN_USERNAME_POOL_EXHAUSTED');
 }
 const ovpnTunnelComment=(username:string,environmentId:number,nasId:number,slot:number|null)=>{
- if(/^lord_\\d{1,6}$/.test(username))return 'Radius Lord OVPN '+username;
+ if(/^lord_[0-9]{1,6}$.test(username))return 'Radius Lord OVPN '+username;
  return slot?'Radius Lord env '+environmentId+' nas slot '+slot:'Radius Lord env '+environmentId+' nas '+nasId;
 };
 const ipNumber=(s:string)=>s.split('.').reduce((n,v)=>n*256+Number(v),0);
