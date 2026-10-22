@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS radacct (
   PRIMARY KEY (radacctid),
   UNIQUE KEY acctuniqueid (acctuniqueid),
   KEY username (username),
+  KEY idx_radacct_username_live (username,acctstoptime,acctupdatetime,radacctid),
   KEY framedipaddress (framedipaddress),
   KEY framedipv6address (framedipv6address),
   KEY framedipv6prefix (framedipv6prefix),
@@ -149,6 +150,7 @@ CREATE TABLE IF NOT EXISTS radpostauth (
   class varchar(64) default NULL,
   PRIMARY KEY  (id),
   KEY username (username),
+  KEY idx_radpostauth_username_time (username,authdate,id),
   KEY class (class)
 ) ENGINE = INNODB;
 
