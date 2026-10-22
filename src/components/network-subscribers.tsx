@@ -409,6 +409,35 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  const openPppoeUsageHistory=async(line:SubscriberLine)=>{setPppoeUsageHistory({line,sessions:[]});setPppoeUsageHistoryError("");setPppoeUsageHistoryLoading(true);try{const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/usage-history`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحميل سجل استهلاك الخط.");setPppoeUsageHistory({line,sessions:Array.isArray(data.sessions)?data.sessions:[]});}catch(error){setPppoeUsageHistoryError(error instanceof Error?error.message:"تعذر تحميل سجل استهلاك الخط.");}finally{setPppoeUsageHistoryLoading(false);}};
  const openPppoeExpiryEditor=(line:SubscriberLine)=>{setPppoeExpiryLine(line);setPppoeExpiryValue("");if(line.expires_at){try{const parts=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:line.service_timezone||"Asia/Damascus",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(line.expires_at)).filter(part=>part.type!=="literal").map(part=>[part.type,part.value]));setPppoeExpiryValue(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`);}catch{}}};
  const savePppoeExpiry=async()=>{if(!pppoeExpiryLine||!pppoeExpiryValue||pppoeLineBusyId!==null)return;setPppoeLineBusyId(pppoeExpiryLine.id);setPppoeNoticeError("");setPppoeNoticeMessage("");try{const response=await fetch(`${endpoint}/pppoe/lines/${pppoeExpiryLine.id}/expiry`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({expiresAt:pppoeExpiryValue})}),result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تعديل موعد انتهاء الاشتراك.");setPppoeNoticeMessage("تم تحديث تاريخ انتهاء الاشتراك.");setPppoeExpiryLine(null);void load({silent:true});if(detailId===pppoeExpiryLine.customer_id){const refreshedResponse=await fetch(`${endpoint}/subscribers/${detailId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(refreshedResponse.ok){setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}}}catch(error){setPppoeNoticeError(error instanceof Error?error.message:"تعذر تعديل موعد انتهاء الاشتراك.");}finally{setPppoeLineBusyId(null);}};
+ const subscriberPppoeActions=(line:SubscriberLine):Array<{value:string;label:string;icon:LucideIcon;danger?:boolean;iconTileClassName?:string;iconClassName?:string}>=>{
+  const actions:Array<{value:string;label:string;icon:LucideIcon;danger?:boolean;iconTileClassName?:string;iconClassName?:string}>=[
+   {value:"monitor",label:"مراقبة السرعة",icon:Gauge,iconTileClassName:"bg-sky-50 text-sky-700 dark:bg-sky-400/10 dark:text-sky-300"},
+   {value:"history",label:"سجل الاستهلاك",icon:Activity,iconTileClassName:"bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300"},
+   {value:"speed_boost",label:"رفع سرعة مؤقتة",icon:Zap,iconTileClassName:"bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300"},
+   {value:"expiry",label:"تعديل تاريخ الانتهاء",icon:CalendarDays,iconTileClassName:"bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-300"},
+  ];
+  const ended=line.lifecycle==="ended"||line.lifecycle==="cancelled";
+  if(line.lifecycle==="pending")actions.push({value:"activate",label:"بدء الخدمة",icon:CheckCircle2,iconTileClassName:"bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"});
+  else if(!ended&&line.status==="enabled")actions.push({value:"disable",label:"إيقاف الخط",icon:CircleX,iconTileClassName:"bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"});
+  else if(!ended)actions.push({value:"enable",label:"تفعيل الخط",icon:CheckCircle2,iconTileClassName:"bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"});
+  actions.push({value:"renew",label:"تجديد الباقة",icon:CreditCard,iconTileClassName:"bg-teal-50 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300"});
+  if(Number(line.live_sessions)>0)actions.push({value:"disconnect",label:"فصل الجلسة الحالية",icon:WifiOff,iconTileClassName:"bg-orange-50 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300"});
+  if(!ended)actions.push({value:"end",label:"إنهاء الاشتراك",icon:CircleX,iconTileClassName:"bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"});
+  actions.push({value:"archive",label:"حذف الخط",icon:Trash2,danger:true,iconTileClassName:"bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"});
+  return actions;
+ };
+ const dispatchPppoeLineAction=(line:SubscriberLine,action:string)=>{
+  if(action==="monitor"){setPppoeSpeedLine({...line,customer_id:Number(line.customer_id||detail?.id)});return;}
+  if(action==="history"){void openPppoeUsageHistory(line);return;}
+  if(action==="speed_boost"){if(Number(line.live_sessions)<1){setPppoeNoticeWarning("لا يمكن رفع السرعة مؤقتًا؛ الخط غير متصل حاليًا.");return;}openPppoeSpeedBoost(line);return;}
+  if(action==="expiry"){openPppoeExpiryEditor(line);return;}
+  if(action==="activate"||action==="enable"||action==="disable"){void updatePppoeLine(line,action);return;}
+  if(action==="renew"||action==="disconnect"){void runPppoeLineAction(line,action);return;}
+  if(action==="end"){setPppoeEndLine(line);return;}
+  if(action==="archive"){setPppoeArchiveLine(line);}
+ };
+ const dispatchPppoeDetailAction=(line:SubscriberLine,action:string)=>dispatchPppoeLineAction({...line,customer_id:Number(line.customer_id||detail?.id)},action);
+ const dispatchSubscriberPppoeAction=(item:Subscriber,line:SubscriberLine,action:string)=>dispatchPppoeLineAction({...line,customer_id:Number(line.customer_id||item.id),customer_name:line.customer_name||`${item.first_name} ${item.last_name}`.trim()},action);
  const selectedPppoePackage=pppoePackages.find(item=>String(item.package_version_id)===pppoeForm.packageVersionId);
  const filteredDetailLines=useMemo(()=>{
   const query=lineSearch.trim().toLocaleLowerCase();
