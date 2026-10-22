@@ -28,9 +28,9 @@ function TemporarySpeedRemaining({expiresAt}:{expiresAt:string}){
  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),30_000);return()=>window.clearInterval(timer);},[]);
  const expires=Date.parse(expiresAt);if(!Number.isFinite(expires))return null;
  const minutes=Math.max(0,Math.ceil((expires-now)/60_000));
- if(minutes===0)return <span>ينتهي الآن</span>;
+ if(minutes===0)return <span>انتهى الوقت</span>;
  const days=Math.floor(minutes/1440),hours=Math.floor(minutes%1440/60),mins=minutes%60;
- const parts=[days?days.toLocaleString("ar")+" يوم":"",hours?hours.toLocaleString("ar")+" س":"",mins?mins.toLocaleString("ar")+" د":"الآن"].filter(Boolean);
+ const parts=[days?days.toLocaleString("ar")+" يوم":"",hours?hours.toLocaleString("ar")+" س":"",mins?mins.toLocaleString("ar")+" د":""].filter(Boolean);
  return <span>متبقي {parts.join(" ")}</span>;
 }
 type Subscriber = {
