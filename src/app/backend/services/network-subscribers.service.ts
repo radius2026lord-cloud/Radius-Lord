@@ -355,8 +355,17 @@ export async function readNetworkSubscriberDetail(scope:any,value:any,options:{i
     LEFT JOIN connection_methods cm ON cm.id=p.connection_method_id
     LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
     LEFT JOIN pppoe_subscription_usage su ON su.subscription_id=sp.id
-    LEFT JOIN (SELECT username,SUM(acctinputoctets) upload_bytes,SUM(acctoutputoctets) download_bytes FROM radacct GROUP BY username) u ON u.username=r.current_username
-    WHERE p.customer_id=? AND p.archived_at IS NULL ORDER BY p.id DESC`,[id]),
+    LEFT JOIN (
+     SELECT ra.username,SUM(ra.acctinputoctets) upload_bytes,SUM(ra.acctoutputoctets) download_bytes
+     FROM radacct ra
+     WHERE ra.username IN (
+      SELECT ri.current_username FROM pppoe_accounts pa
+      JOIN radius_identities ri ON ri.id=pa.radius_identity_id
+      WHERE pa.customer_id=? AND pa.archived_at IS NULL
+     )
+     GROUP BY ra.username
+    ) u ON u.username=r.current_username
+    WHERE p.customer_id=? AND p.archived_at IS NULL ORDER BY p.id DESC`,[id,id]),
    app.query(`SELECT a.id,r.current_username username,a.status status,p.name service_name,sp.lifecycle,
     COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions,
