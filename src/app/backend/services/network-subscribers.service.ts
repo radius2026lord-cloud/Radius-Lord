@@ -92,6 +92,8 @@ export async function readNetworkSubscribers(scope:any){
     (SELECT b.download_bps FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_download_bps,
     (SELECT b.upload_bps FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_upload_bps,
     COALESCE(pkg.name,(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
+    (SELECT COALESCE(SUM(ra.acctinputoctets),0) FROM radacct ra WHERE ra.username=r.current_username) upload_bytes,
+    (SELECT COALESCE(SUM(ra.acctoutputoctets),0) FROM radacct ra WHERE ra.username=r.current_username) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions
    FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
    LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
@@ -101,6 +103,8 @@ export async function readNetworkSubscribers(scope:any){
   for(const line of pppoeLines){const id=Number(line.customer_id);const group=linesByCustomer.get(id)||[];group.push(line);linesByCustomer.set(id,group);}
   for(const item of items)item.pppoe_lines=linesByCustomer.get(Number(item.id))||[];
   const [hotspotLines]:any=customerIds.length?await app.query(`SELECT sc.customer_id,a.id,r.current_username username,a.status,sp.lifecycle,sp.expires_at,p.name service_name,
+   (SELECT COALESCE(SUM(ra.acctinputoctets),0) FROM radacct ra WHERE ra.username=r.current_username) upload_bytes,
+   (SELECT COALESCE(SUM(ra.acctoutputoctets),0) FROM radacct ra WHERE ra.username=r.current_username) download_bytes,
    (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions
    FROM hotspot_standalone_cards sc JOIN hotspot_accounts a ON a.id=sc.account_id
    JOIN radius_identities r ON r.id=a.radius_identity_id
