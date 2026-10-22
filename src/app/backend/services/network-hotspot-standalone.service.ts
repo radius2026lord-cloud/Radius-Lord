@@ -1,5 +1,6 @@
 import {randomInt} from 'crypto';
 import {withNetwork} from './network-runtime.service';
+import {disconnectPppoeSessions} from './network-radius-disconnect.service';
 import {managerAccess} from './network-manager-access.service';
 const USER={digits:'0123456789',alphanumeric:'abcdefghjkmnpqrstuvwxyz23456789'} as const;
 function invalid(field:string):never{const e:any=new Error('HOTSPOT_STANDALONE_INPUT');e.fields={[field]:'تحقق من القيمة المدخلة.'};throw e;}
@@ -34,7 +35,9 @@ export async function setHotspotStandaloneStatus(scope:any,value:any,statusValue
    const [actor]:any=await app.query("SELECT id,full_name FROM managers WHERE id=?",[scope.managerId]);
    await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,before_data,after_data,result) VALUES(?,?,'manager',?,'hotspot_account',?,?,?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),status==='disabled'?'hotspot.standalone.disable':'hotspot.standalone.enable',id,rows[0].customer_id,rows[0].radius_identity_id,JSON.stringify({status:before}),JSON.stringify({status})]);
   }
-  await app.commit();return {success:true,id,status};
+  await app.commit();let disconnectPending=false,disconnectAttempted=0;
+  if(status==='disabled')try{const result=await disconnectPppoeSessions(scope,app,String(rows[0].username),true,'hotspot');disconnectPending=result.acknowledged<result.attempted;disconnectAttempted=result.attempted;}catch{disconnectPending=true;}
+  return {success:true,id,status,disconnectPending,disconnectAttempted};
  }catch(error){await app.rollback();throw error;}});
 }
 export async function exportHotspotStandalone(scope:any,values:any){return withNetwork(scope,async app=>{await principal(app,scope);if(!Array.isArray(values)||!values.length||values.length>200)invalid('ids');const ids=[...new Set(values.map((v:any)=>integer(v,1,Number.MAX_SAFE_INTEGER,'ids')))];const [items]:any=await app.query("SELECT a.id,CONCAT_WS(' ',c.first_name,c.last_name) customer_name,c.phone,r.current_username username,MAX(CASE WHEN rc.attribute='Cleartext-Password' THEN rc.value END) password,a.login_mode,p.name package_name,v.version_no FROM hotspot_accounts a JOIN hotspot_standalone_cards sc ON sc.account_id=a.id JOIN customers c ON c.id=sc.customer_id JOIN radius_identities r ON r.id=a.radius_identity_id LEFT JOIN radcheck rc ON rc.username=r.current_username LEFT JOIN hotspot_service_periods sp ON sp.live_account_id=a.id LEFT JOIN hotspot_package_versions v ON v.id=sp.package_version_id LEFT JOIN hotspot_packages p ON p.id=v.package_id WHERE a.account_kind='standalone' AND a.archived_at IS NULL AND a.id IN ("+ids.map(()=>'?').join(',')+") GROUP BY a.id,c.first_name,c.last_name,c.phone,r.current_username,a.login_mode,p.name,v.version_no",ids);return {items};});}
