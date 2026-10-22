@@ -330,6 +330,7 @@ CREATE TABLE IF NOT EXISTS activity_log (
   KEY idx_activity_customer_time (customer_id,occurred_at,id),
   KEY idx_activity_actor_time (actor_manager_id,occurred_at,id),
   KEY idx_activity_target_time (target_type,target_id,occurred_at,id),
+  KEY idx_activity_account_time (account_id,occurred_at,id),
   KEY idx_activity_operation (operation_id,id),
   CONSTRAINT fk_activity_actor FOREIGN KEY (actor_manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
   CONSTRAINT fk_activity_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT
