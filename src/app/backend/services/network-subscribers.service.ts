@@ -92,12 +92,15 @@ export async function readNetworkSubscribers(scope:any){
     (SELECT b.download_bps FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_download_bps,
     (SELECT b.upload_bps FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_upload_bps,
     COALESCE(pkg.name,(SELECT rg.groupname FROM radusergroup rg WHERE rg.username=r.current_username ORDER BY rg.priority,rg.id LIMIT 1)) service_name,
+    sp.quota_allowance_bytes,
+    COALESCE(su.upload_bytes,0)+COALESCE(su.download_bytes,0) used_bytes,
     (SELECT COALESCE(SUM(ra.acctinputoctets),0) FROM radacct ra WHERE ra.username=r.current_username) upload_bytes,
     (SELECT COALESCE(SUM(ra.acctoutputoctets),0) FROM radacct ra WHERE ra.username=r.current_username) download_bytes,
     (SELECT COUNT(*) FROM radacct ra WHERE ra.username=r.current_username AND ${liveAccountingSession('ra')}) live_sessions
    FROM pppoe_accounts p JOIN radius_identities r ON r.id=p.radius_identity_id
    LEFT JOIN pppoe_subscriptions sp ON sp.id=(SELECT current_sub.id FROM pppoe_subscriptions current_sub WHERE current_sub.account_id=p.id AND current_sub.service_role='base' ORDER BY current_sub.id DESC LIMIT 1)
    LEFT JOIN pppoe_package_versions pv ON pv.id=sp.package_version_id LEFT JOIN pppoe_packages pkg ON pkg.id=pv.package_id
+   LEFT JOIN pppoe_subscription_usage su ON su.subscription_id=sp.id
    WHERE p.customer_id IN (?) AND p.archived_at IS NULL ORDER BY p.customer_id,p.id DESC`,[customerIds]):[[]];
   const linesByCustomer=new Map<number,any[]>();
   for(const line of pppoeLines){const id=Number(line.customer_id);const group=linesByCustomer.get(id)||[];group.push(line);linesByCustomer.set(id,group);}
