@@ -721,8 +721,8 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
   const pppoeLines=(item.pppoe_lines||[]).filter(line=>!profileFilter||line.service_name===profileFilter);
   const hotspotLines=item.hotspot_lines||[];
   const entries=[
-   ...pppoeLines.map((line,index)=>({kind:"pppoe" as const,line:any:line,number:index+1,total:pppoeLines.length})),
-   ...hotspotLines.map((line,index)=>({kind:"hotspot" as const,line:any:line,number:index+1,total:hotspotLines.length}))
+   ...pppoeLines.map((line,index)=>({kind:"pppoe" as const,line:line as any,number:index+1,total:pppoeLines.length})),
+   ...hotspotLines.map((line,index)=>({kind:"hotspot" as const,line:line as any,number:index+1,total:hotspotLines.length}))
   ];
   if(!entries.length)return <div className="rounded-xl border border-dashed border-[#d9e3ed] bg-[#f8fafc] px-3 py-4 text-center text-xs text-slate-500 dark:border-white/[.10] dark:bg-white/[.025] dark:text-slate-300">لا توجد خطوط مطابقة للفلاتر</div>;
   return <div className="space-y-2">{entries.map(entry=>{
