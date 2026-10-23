@@ -877,7 +877,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
 </div>}
 
 <BulkSelectionBar count={selected.length} noun="مشترك" allSelected={allSelected} onToggleAll={toggleAll} onClearSelection={()=>setSelected([])} show={{activate:true,suspend:true}} handlers={{activate:()=>void bulkStatus("active"),suspend:()=>void bulkStatus("suspended")}}/>
-}{error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+{error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 {loading?<CollectionState loading>جارٍ تحميل المشتركين...</CollectionState>:!filtered.length?<CollectionState>{query||activeFilterCount>0?"لا توجد نتائج مطابقة.":"لا يوجد مشتركين بعد."}</CollectionState>:view==="grid"?<CollectionGrid>{sortedFiltered.flatMap(item=>{
  const pppoeLines=(item.pppoe_lines||[]).filter(line=>!profileFilter||line.service_name===profileFilter);
  const hotspotLines=item.hotspot_lines||[];
