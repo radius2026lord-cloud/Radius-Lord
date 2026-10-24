@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
   Clock3,
   Cpu,
   HardDrive,
@@ -33,6 +34,8 @@ type Nas = {
     uptime: string;
   }>;
 };
+
+type UpcomingDisconnect = { date: string; at: string; count: number };
 
 type Prefs = {
   footer: {
@@ -80,6 +83,7 @@ export default function NetworkStatusFooter({
   const [prefs, setPrefs] = useState(defaults);
   const [nas, setNas] = useState<Nas[]>([]);
   const [nasError, setNasError] = useState(false);
+  const [upcomingDisconnects, setUpcomingDisconnects] = useState<UpcomingDisconnect[]>([]);
   const [selected, setSelected] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [updated, setUpdated] = useState("");
@@ -101,10 +105,15 @@ export default function NetworkStatusFooter({
           cache: "no-store",
           signal: controller.signal,
         }),
+        fetch(`${endpoint}/footer-events`, {
+          credentials: "include",
+          cache: "no-store",
+          signal: controller.signal,
+        }),
       ]);
 
       if (!live) return;
-      const [prefResult, nasResult] = results;
+      const [prefResult, nasResult, eventsResult] = results;
 
       if (prefResult.status === "fulfilled" && prefResult.value.ok) {
         try {
@@ -133,6 +142,15 @@ export default function NetworkStatusFooter({
         }
       } else {
         setNasError(true);
+      }
+
+      if (eventsResult.status === "fulfilled" && eventsResult.value.ok) {
+        try {
+          const data = await eventsResult.value.json();
+          setUpcomingDisconnects(Array.isArray(data.upcomingDisconnects) ? data.upcomingDisconnects : []);
+        } catch {
+          setUpcomingDisconnects([]);
+        }
       }
     }
 
@@ -198,7 +216,20 @@ export default function NetworkStatusFooter({
   const expiry = new Date(expiresAt);
   const expiryLabel = Number.isNaN(expiry.getTime())
     ? "—"
-    : expiry.toLocaleDateString("ar", { day: "numeric", month: "short", year: "numeric" });
+    : expiry.toLocaleDateString("ar-u-ca-gregory", { day: "numeric", month: "short", year: "numeric" });
+  const expiryDays = Number.isNaN(expiry.getTime()) ? null : Math.ceil((expiry.getTime() - now.getTime()) / 86400000);
+  const nextDisconnect = upcomingDisconnects[0];
+  const disconnectLabel = nextDisconnect
+    ? new Intl.DateTimeFormat("ar-u-ca-gregory", { day: "numeric", month: "short" }).format(new Date(`${nextDisconnect.date}T00:00:00`))
+    : "";
+  const scheduleTooltip = [
+    ...upcomingDisconnects.map((event) => `${new Intl.DateTimeFormat("ar-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${event.date}T00:00:00`))}: فصل تلقائي لـ ${event.count} خط PPPoE`),
+    !Number.isNaN(expiry.getTime()) ? `انتهاء اشتراك الشبكة: ${expiryLabel}` : "",
+  ].filter(Boolean).join(" · ");
+  const sampleTimestamp = updated ? new Date(updated).getTime() : Number.NaN;
+  const sampleAgeSeconds = Number.isFinite(sampleTimestamp) ? Math.max(0, Math.floor((now.getTime() - sampleTimestamp) / 1000)) : null;
+  const sampleFreshness = sampleAgeSeconds === null ? "بانتظار العينة" : sampleAgeSeconds < 45 ? "الآن" : sampleAgeSeconds < 3600 ? `منذ ${Math.max(1, Math.floor(sampleAgeSeconds / 60))} د` : sampleAgeSeconds < 86400 ? `منذ ${Math.floor(sampleAgeSeconds / 3600)} س` : `منذ ${Math.floor(sampleAgeSeconds / 86400)} ي`;
+  const sampleStale = sampleAgeSeconds !== null && sampleAgeSeconds > 7 * 60;
 
   const status =
     item?.status === "connected"
@@ -225,7 +256,7 @@ export default function NetworkStatusFooter({
       {prefs.footer.showNas && (
         <section
           aria-label="معلومات جهاز NAS المحدد"
-          className="flex min-w-max shrink-0 items-center gap-1.5 px-1.5 py-0.5"
+          className="flex min-w-max shrink-0 items-center gap-1.5 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 dark:border-white/[.10] dark:bg-[#172b40]"
         >
           <Server className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
           <span className="shrink-0 text-[9px] text-slate-500 dark:text-slate-400">NAS</span>
@@ -234,7 +265,7 @@ export default function NetworkStatusFooter({
           </strong>
           {item && prefs.footer.showStatus && (
             <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${status.tone}`}>
-              <i className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+              <i className={`h-1.5 w-1.5 rounded-full ${status.dot} ${item.status === "connected" ? "motion-safe:animate-pulse" : ""}`} />
               {status.label}
             </span>
           )}
@@ -280,7 +311,24 @@ export default function NetworkStatusFooter({
               )}
             </div>
           )}
+          {item && (
+            <ProjectTooltip label={updated ? `آخر عينة موارد وصلت ${new Date(updated).toLocaleTimeString("ar")} · تُرسل القياسات كل خمس دقائق تقريبًا` : "لم تصل عينة موارد من هذا الجهاز بعد"}>
+              <span className={`flex shrink-0 items-center gap-1 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 text-[9px] dark:border-white/[.10] dark:bg-[#172b40] ${sampleStale ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400"}`}>
+                <Activity className={`h-3 w-3 ${sampleStale ? "text-amber-500" : sampleAgeSeconds === null ? "text-slate-400" : "text-emerald-500"}`} />
+                {sampleFreshness}
+              </span>
+            </ProjectTooltip>
+          )}
         </section>
+      )}
+
+      {scheduleTooltip && (
+        <ProjectTooltip label={scheduleTooltip}>
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 text-[9px] text-slate-600 dark:border-white/[.10] dark:bg-[#172b40] dark:text-slate-200">
+            <CalendarDays className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
+            {nextDisconnect ? <><span>فصل</span><bdi className="font-semibold">{disconnectLabel}</bdi><span>·</span><bdi className="font-semibold tabular-nums">{nextDisconnect.count}</bdi></> : <span>مواعيد الشبكة</span>}
+          </span>
+        </ProjectTooltip>
       )}
 
       {prefs.footer.showClock && (
@@ -292,20 +340,14 @@ export default function NetworkStatusFooter({
       )}
 
       {prefs.footer.showExpiry && (
-        <span className="flex shrink-0 items-center gap-1 text-slate-400">
+        <span className={`flex shrink-0 items-center gap-1 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 text-[9px] dark:border-white/[.10] dark:bg-[#172b40] ${expiryDays !== null && expiryDays < 0 ? "text-rose-700 dark:text-rose-300" : expiryDays !== null && expiryDays <= 14 ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400"}`}>
           <ShieldCheck className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
-          الاشتراك حتى {expiryLabel}
+          <span>انتهاء الشبكة</span>
+          <bdi className="font-semibold">{expiryLabel}</bdi>
+          {expiryDays !== null && <b className="font-semibold">{expiryDays < 0 ? "منتهي" : `${expiryDays} يوم`}</b>}
         </span>
       )}
 
-      {updated && (
-        <ProjectTooltip label={`آخر عينة موارد من الجهاز: ${new Date(updated).toLocaleTimeString("ar")}`}>
-          <span className="hidden shrink-0 items-center gap-1 text-[9px] text-slate-400 xl:flex">
-            <Activity className="h-3 w-3 text-cyan-500" />
-            آخر قراءة
-          </span>
-        </ProjectTooltip>
-      )}
     </div>
   );
 }
