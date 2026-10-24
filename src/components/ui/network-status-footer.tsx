@@ -5,13 +5,11 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
-  CalendarDays,
   Clock3,
   Cpu,
   HardDrive,
   Layers,
   Server,
-  ShieldCheck,
   Users,
 } from "lucide-react";
 import ProjectTooltip from "./project-tooltip";
@@ -35,8 +33,6 @@ type Nas = {
   }>;
 };
 
-type UpcomingDisconnect = { date: string; at: string; count: number };
-
 type Prefs = {
   footer: {
     showNetwork: boolean;
@@ -47,7 +43,6 @@ type Prefs = {
     showUptime: boolean;
     showConnected: boolean;
     showClock: boolean;
-    showExpiry: boolean;
     rotateNas: boolean;
     rotateSeconds: number;
     clock24h: boolean;
@@ -64,7 +59,6 @@ const defaults: Prefs = {
     showUptime: true,
     showConnected: true,
     showClock: true,
-    showExpiry: true,
     rotateNas: false,
     rotateSeconds: 15,
     clock24h: true,
@@ -74,16 +68,13 @@ const defaults: Prefs = {
 export default function NetworkStatusFooter({
   endpoint,
   networkName,
-  expiresAt,
 }: {
   endpoint: string;
   networkName: string;
-  expiresAt: string;
 }) {
   const [prefs, setPrefs] = useState(defaults);
   const [nas, setNas] = useState<Nas[]>([]);
   const [nasError, setNasError] = useState(false);
-  const [upcomingDisconnects, setUpcomingDisconnects] = useState<UpcomingDisconnect[]>([]);
   const [selected, setSelected] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [updated, setUpdated] = useState("");
@@ -105,15 +96,10 @@ export default function NetworkStatusFooter({
           cache: "no-store",
           signal: controller.signal,
         }),
-        fetch(`${endpoint}/footer-events`, {
-          credentials: "include",
-          cache: "no-store",
-          signal: controller.signal,
-        }),
       ]);
 
       if (!live) return;
-      const [prefResult, nasResult, eventsResult] = results;
+      const [prefResult, nasResult] = results;
 
       if (prefResult.status === "fulfilled" && prefResult.value.ok) {
         try {
@@ -144,14 +130,6 @@ export default function NetworkStatusFooter({
         setNasError(true);
       }
 
-      if (eventsResult.status === "fulfilled" && eventsResult.value.ok) {
-        try {
-          const data = await eventsResult.value.json();
-          setUpcomingDisconnects(Array.isArray(data.upcomingDisconnects) ? data.upcomingDisconnects : []);
-        } catch {
-          setUpcomingDisconnects([]);
-        }
-      }
     }
 
     const onPreferences = (event: Event) => {
@@ -206,26 +184,13 @@ export default function NetworkStatusFooter({
 
   useEffect(() => setUpdated(item?.metricsUpdatedAt || ""), [item?.id, item?.metricsUpdatedAt]);
 
-  const time = now.toLocaleTimeString("ar", {
+  const time = now.toLocaleTimeString("ar-u-ca-gregory", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: !prefs.footer.clock24h,
   });
-  const date = now.toLocaleDateString("ar", { day: "numeric", month: "short" });
-  const expiry = new Date(expiresAt);
-  const expiryLabel = Number.isNaN(expiry.getTime())
-    ? "—"
-    : expiry.toLocaleDateString("ar-u-ca-gregory", { day: "numeric", month: "short", year: "numeric" });
-  const expiryDays = Number.isNaN(expiry.getTime()) ? null : Math.ceil((expiry.getTime() - now.getTime()) / 86400000);
-  const nextDisconnect = upcomingDisconnects[0];
-  const disconnectLabel = nextDisconnect
-    ? new Intl.DateTimeFormat("ar-u-ca-gregory", { day: "numeric", month: "short" }).format(new Date(`${nextDisconnect.date}T00:00:00`))
-    : "";
-  const scheduleTooltip = [
-    ...upcomingDisconnects.map((event) => `${new Intl.DateTimeFormat("ar-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${event.date}T00:00:00`))}: فصل تلقائي لـ ${event.count} خط PPPoE`),
-    !Number.isNaN(expiry.getTime()) ? `انتهاء اشتراك الشبكة: ${expiryLabel}` : "",
-  ].filter(Boolean).join(" · ");
+  const date = now.toLocaleDateString("ar-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" });
   const sampleTimestamp = updated ? new Date(updated).getTime() : Number.NaN;
   const sampleAgeSeconds = Number.isFinite(sampleTimestamp) ? Math.max(0, Math.floor((now.getTime() - sampleTimestamp) / 1000)) : null;
   const sampleFreshness = sampleAgeSeconds === null ? "بانتظار العينة" : sampleAgeSeconds < 45 ? "الآن" : sampleAgeSeconds < 3600 ? `منذ ${Math.max(1, Math.floor(sampleAgeSeconds / 60))} د` : sampleAgeSeconds < 86400 ? `منذ ${Math.floor(sampleAgeSeconds / 3600)} س` : `منذ ${Math.floor(sampleAgeSeconds / 86400)} ي`;
@@ -244,7 +209,7 @@ export default function NetworkStatusFooter({
   return (
     <div
       dir="rtl"
-      className="flex h-[42px] min-h-[42px] flex-nowrap items-center gap-x-3 overflow-x-auto overflow-y-hidden rounded-[12px] border border-[#c9dced]/80 bg-[#f9fbfe]/95 px-3 py-1.5 text-[10px] text-slate-600 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-white/10 dark:bg-[#302e33]/95 dark:text-slate-300"
+      className="flex h-[42px] min-h-[42px] flex-nowrap items-center gap-x-3 overflow-x-auto overflow-y-hidden rounded-[12px] border border-[#c9dced]/80 bg-[#f9fbfe]/95 px-3 py-1.5 text-[11px] text-slate-700 shadow-[0_10px_28px_rgba(60,88,116,.09)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-white/10 dark:bg-[#302e33]/95 dark:text-slate-200"
     >
       {prefs.footer.showNetwork && (
         <div className="flex shrink-0 items-center gap-1.5">
@@ -259,13 +224,13 @@ export default function NetworkStatusFooter({
           className="flex min-w-max shrink-0 items-center gap-1.5 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 dark:border-white/[.10] dark:bg-[#172b40]"
         >
           <Server className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
-          <span className="shrink-0 text-[9px] text-slate-500 dark:text-slate-400">NAS</span>
-          <strong className="min-w-0 max-w-32 truncate text-[10px] font-semibold text-[#17386d] dark:text-slate-100">
+          <span className="shrink-0 text-[10px] font-medium text-slate-600 dark:text-slate-300">NAS</span>
+          <strong className="min-w-0 max-w-32 truncate text-[11px] font-semibold text-[#17386d] dark:text-white">
             {item?.name || (nasError ? "تعذر التحميل" : "غير مضاف")}
           </strong>
           {item && prefs.footer.showStatus && (
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${status.tone}`}>
-              <i className={`h-1.5 w-1.5 rounded-full ${status.dot} ${item.status === "connected" ? "motion-safe:animate-pulse" : ""}`} />
+            <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${status.tone}`}>
+              <i className={`h-2 w-2 rounded-full ${status.dot} ${item.status === "connected" ? "motion-safe:animate-pulse motion-reduce:animate-none" : ""}`} />
               {status.label}
             </span>
           )}
@@ -312,9 +277,9 @@ export default function NetworkStatusFooter({
             </div>
           )}
           {item && (
-            <ProjectTooltip label={updated ? `آخر عينة موارد وصلت ${new Date(updated).toLocaleTimeString("ar")} · تُرسل القياسات كل خمس دقائق تقريبًا` : "لم تصل عينة موارد من هذا الجهاز بعد"}>
-              <span className={`flex shrink-0 items-center gap-1 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 text-[9px] dark:border-white/[.10] dark:bg-[#172b40] ${sampleStale ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400"}`}>
-                <Activity className={`h-3 w-3 ${sampleStale ? "text-amber-500" : sampleAgeSeconds === null ? "text-slate-400" : "text-emerald-500"}`} />
+            <ProjectTooltip label={updated ? `آخر عينة موارد وصلت ${new Date(updated).toLocaleTimeString("ar-u-ca-gregory")} · تُرسل القياسات كل خمس دقائق تقريبًا` : "لم تصل عينة موارد من هذا الجهاز بعد"}>
+              <span className={`flex shrink-0 items-center gap-1.5 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2.5 py-1 text-[10px] font-medium dark:border-white/[.10] dark:bg-[#172b40] ${sampleStale ? "text-amber-800 dark:text-amber-200" : "text-slate-700 dark:text-slate-200"}`}>
+                <Activity className={`h-3.5 w-3.5 ${sampleStale ? "text-amber-600 dark:text-amber-300" : sampleAgeSeconds === null ? "text-slate-500 dark:text-slate-300" : "text-emerald-600 dark:text-emerald-300 motion-safe:animate-pulse motion-reduce:animate-none"}`} />
                 {sampleFreshness}
               </span>
             </ProjectTooltip>
@@ -322,30 +287,13 @@ export default function NetworkStatusFooter({
         </section>
       )}
 
-      {scheduleTooltip && (
-        <ProjectTooltip label={scheduleTooltip}>
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 text-[9px] text-slate-600 dark:border-white/[.10] dark:bg-[#172b40] dark:text-slate-200">
-            <CalendarDays className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
-            {nextDisconnect ? <><span>فصل</span><bdi className="font-semibold">{disconnectLabel}</bdi><span>·</span><bdi className="font-semibold tabular-nums">{nextDisconnect.count}</bdi></> : <span>مواعيد الشبكة</span>}
-          </span>
-        </ProjectTooltip>
-      )}
-
       {prefs.footer.showClock && (
-        <div className="mr-auto flex shrink-0 items-center gap-1.5 text-slate-500">
-          <Clock3 className="h-3.5 w-3.5 text-cyan-500" />
-          <bdi className="tabular-nums">{time}</bdi>
-          <span className="hidden sm:inline">· {date}</span>
+        <div aria-label={`الوقت ${time}، التاريخ ${date}`} className="mr-auto flex shrink-0 items-center gap-2 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2.5 py-1 text-slate-700 dark:border-white/[.10] dark:bg-[#172b40] dark:text-slate-100">
+          <Clock3 className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
+          <bdi className="text-[12px] font-semibold tabular-nums tracking-[.02em]">{time}</bdi>
+          <span className="h-4 w-px bg-slate-300 dark:bg-white/20" />
+          <span className="text-[11px] font-medium">{date}</span>
         </div>
-      )}
-
-      {prefs.footer.showExpiry && (
-        <span className={`flex shrink-0 items-center gap-1 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 text-[9px] dark:border-white/[.10] dark:bg-[#172b40] ${expiryDays !== null && expiryDays < 0 ? "text-rose-700 dark:text-rose-300" : expiryDays !== null && expiryDays <= 14 ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400"}`}>
-          <ShieldCheck className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
-          <span>انتهاء الشبكة</span>
-          <bdi className="font-semibold">{expiryLabel}</bdi>
-          {expiryDays !== null && <b className="font-semibold">{expiryDays < 0 ? "منتهي" : `${expiryDays} يوم`}</b>}
-        </span>
       )}
 
     </div>
@@ -366,8 +314,8 @@ function NasMetric({
   return (
     <div className="flex shrink-0 items-center gap-1 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 dark:border-white/[.10] dark:bg-[#172b40]">
       <Icon className={`h-3 w-3 shrink-0 ${tone}`} />
-      <span className="text-[9px] text-slate-500 dark:text-slate-400">{label}</span>
-      <bdi className="max-w-24 truncate text-[10px] font-semibold tabular-nums text-[#17386d] dark:text-slate-100">
+      <span className="text-[10px] font-medium text-slate-600 dark:text-slate-200">{label}</span>
+      <bdi className="max-w-24 truncate text-[11px] font-semibold tabular-nums text-[#17386d] dark:text-white">
         {value}
       </bdi>
     </div>
