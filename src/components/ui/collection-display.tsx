@@ -31,11 +31,11 @@ const bulkTone=(tone:CollectionActionTone="default")=>tone==="danger"?"text-red-
 
 function BulkActionRow({action,close}:{action:CollectionBulkAction;close:()=>void}){const Icon=action.icon;const tone=action.danger?"danger":action.tone;return <button type="button" disabled={action.disabled} onClick={()=>{if(action.disabled)return;close();action.onClick()}} className={`flex min-h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-right text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${bulkTone(tone)}`}><span className="min-w-0 flex-1">{action.label}</span><span className="grid h-5 w-5 shrink-0 place-items-center">{Icon&&<Icon className="h-4 w-4"/>}</span></button>}
 
-export function CollectionBulkActions({label="تطبيق إجراء",items,allSelected,onToggleAll,onClearSelection}:{label?:string;items:CollectionBulkAction[];allSelected?:boolean;onToggleAll:()=>void;onClearSelection:()=>void}){
+export function CollectionBulkActions({label="تطبيق إجراء",items,allSelected,selectAllLabel="تحديد الكل",onToggleAll,onClearSelection}:{label?:string;items:CollectionBulkAction[];allSelected?:boolean;selectAllLabel?:string;onToggleAll:()=>void;onClearSelection:()=>void}){
  const [open,setOpen]=useState(false);const root=useRef<HTMLDivElement>(null);
  useEffect(()=>{if(!open)return;const close=(e:MouseEvent)=>{if(root.current&&!root.current.contains(e.target as Node))setOpen(false)},esc=(e:KeyboardEvent)=>{if(e.key==="Escape")setOpen(false)};document.addEventListener("mousedown",close);document.addEventListener("keydown",esc);return()=>{document.removeEventListener("mousedown",close);document.removeEventListener("keydown",esc)}},[open]);
  const close=()=>setOpen(false);
- const selectAction:CollectionBulkAction={label:allSelected?"إلغاء تحديد الكل":"تحديد الكل",icon:allSelected?X:CheckCheck,tone:"primary",onClick:()=>{close();onToggleAll()}};
+ const selectAction:CollectionBulkAction={label:allSelected?"إلغاء تحديد الكل":selectAllLabel,icon:allSelected?X:CheckCheck,tone:"primary",onClick:()=>{close();onToggleAll()}};
  const clearAction:CollectionBulkAction={label:"إلغاء التحديد",icon:X,tone:"default",onClick:()=>{close();onClearSelection()}};
  return <div ref={root} className="relative inline-flex" dir="rtl">
   <button type="button" aria-expanded={open} onClick={()=>setOpen(v=>!v)} className="flex h-9 items-center gap-2 rounded-[12px] border border-[#bfd4ea] bg-white px-3 text-xs font-semibold text-[#17386d] shadow-sm transition hover:bg-[#edf4fb] dark:border-white/[.12] dark:bg-[#30353d] dark:text-white dark:hover:bg-[#383e48]"><span>{label}</span><ChevronDown className={`h-4 w-4 transition-transform ${open?"rotate-180":""}`}/></button>
