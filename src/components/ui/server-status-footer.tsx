@@ -17,7 +17,7 @@ export default function ServerStatusFooter(){
  const [kind,setKind]=useState<Kind>("database"),[targets,setTargets]=useState<Target[]>([]),[id,setId]=useState(""),[data,setData]=useState<Health|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [now,setNow]=useState(()=>new Date()),[uiPreferences,setUiPreferences]=useState<any>({footer:{showNetwork:true,showNas:true,showStatus:true,showCpu:true,showRam:true,showUptime:true,showConnected:true,showClock:true}});
  const refreshRef=useRef(()=>{});
- useEffect(()=>{let live=true;fetch('/api/admin/platform-settings/ui-preferences',{credentials:'include',cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{if(live&&j?.preferences)setUiPreferences(j.preferences)}).catch(()=>{});return()=>{live=false}},[]);
+ useEffect(()=>{let live=true;const endpoint='/api/admin/platform-settings/ui-preferences';const update=(preferences:any)=>{if(live&&preferences)setUiPreferences(preferences)};fetch(endpoint,{credentials:'include',cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>update(j?.preferences)).catch(()=>{});const onPreferences=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.endpoint===endpoint)update(detail.preferences)};window.addEventListener('rl-ui-preferences-updated',onPreferences);return()=>{live=false;window.removeEventListener('rl-ui-preferences-updated',onPreferences)}},[]);
  useEffect(()=>{const timer=window.setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(timer)},[]);
  useEffect(()=>{try{const saved=localStorage.getItem(storageKey+"-kind");if(saved==="ovpn")setKind(saved);}catch{}},[]);
  useEffect(()=>{

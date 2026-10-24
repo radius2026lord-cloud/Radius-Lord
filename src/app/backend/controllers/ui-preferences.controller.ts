@@ -2,6 +2,23 @@ import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { db } from '../config/db';
 
+let tableReady: Promise<void> | null = null;
+
+function ensurePreferencesTable() {
+  if (!tableReady) {
+    tableReady = db.query(`CREATE TABLE IF NOT EXISTS user_ui_preferences (
+      owner_key VARCHAR(191) NOT NULL,
+      preferences_json JSON NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (owner_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`).then(() => undefined).catch(error => {
+      tableReady = null;
+      throw error;
+    });
+  }
+  return tableReady;
+}
+
 export const defaultUiPreferences = {
   footer: {
     showNetwork: true, showNas: true, showStatus: true, showCpu: true,
@@ -36,6 +53,7 @@ function normalize(input: any) {
 }
 
 async function read(ownerKey: string) {
+  await ensurePreferencesTable();
   const [rows]: any = await db.query('SELECT preferences_json FROM user_ui_preferences WHERE owner_key=? LIMIT 1', [ownerKey]);
   const value = rows?.[0]?.preferences_json;
   if (!value) return defaultUiPreferences;
@@ -43,6 +61,7 @@ async function read(ownerKey: string) {
 }
 
 async function save(ownerKey: string, value: unknown) {
+  await ensurePreferencesTable();
   const preferences = normalize(value);
   await db.query('INSERT INTO user_ui_preferences (owner_key,preferences_json) VALUES (?,?) ON DUPLICATE KEY UPDATE preferences_json=VALUES(preferences_json)', [ownerKey, JSON.stringify(preferences)]);
   return preferences;
@@ -50,12 +69,12 @@ async function save(ownerKey: string, value: unknown) {
 
 export async function getMasterUiPreferences(req: AuthenticatedRequest, res: Response) {
   try { return res.json({ success: true, preferences: await read(`master_admin:${req.auth!.accountId}`) }); }
-  catch { return res.status(503).json({ success: false, message: 'تعذر تحميل تفضيلات الواجهة. تحقق من تطبيق ترقية قاعدة البيانات.' }); }
+  catch (error) { console.error('[ui-preferences] read failed:', (error as any)?.code || error); return res.status(503).json({ success: false, message: 'تعذر تحميل تفضيلات الواجهة. تحقق من اتصال قاعدة البيانات وصلاحيات الحساب.' }); }
 }
 
 export async function saveMasterUiPreferences(req: AuthenticatedRequest, res: Response) {
   try { return res.json({ success: true, preferences: await save(`master_admin:${req.auth!.accountId}`, req.body?.preferences) }); }
-  catch { return res.status(503).json({ success: false, message: 'تعذر حفظ تفضيلات الواجهة. تحقق من تطبيق ترقية قاعدة البيانات.' }); }
+  catch (error) { console.error('[ui-preferences] save failed:', (error as any)?.code || error); return res.status(503).json({ success: false, message: 'تعذر حفظ تفضيلات الواجهة. تحقق من اتصال قاعدة البيانات وصلاحيات الحساب.' }); }
 }
 
 export async function readUiPreferences(ownerKey: string) { return read(ownerKey); }

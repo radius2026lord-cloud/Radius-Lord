@@ -327,6 +327,36 @@ a {
   color: var(--oneui-text);
 }
 
+/* Use the subscribers workspace canvas and card palette on the master home screen. */
+.dark .rl-home-workspace {
+  --oneui-bg: #19171d;
+  --oneui-workspace: #1d1b21;
+  --oneui-surface: #242228;
+  --oneui-surface-2: #2d2a32;
+  --oneui-surface-3: #37343d;
+  --oneui-border: rgba(235, 230, 240, 0.08);
+  --oneui-border-strong: rgba(235, 230, 240, 0.13);
+  --oneui-text: #f1eef4;
+  --oneui-muted: #f1eef4;
+  background-color: var(--oneui-bg) !important;
+  color: var(--oneui-text);
+}
+
+.dark .rl-home-workspace .workspace-frame,
+.dark .rl-home-workspace .workspace-scroll {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.dark .rl-home-workspace .dashboard-main-shell > header > div,
+.dark .rl-home-workspace > aside.dashboard-logout-surface,
+.dark .rl-home-workspace .rl-mobile-sidebar-panel,
+.dark .rl-home-workspace .dashboard-main-shell > footer > div {
+  background-color: var(--oneui-surface) !important;
+  border-color: var(--oneui-border) !important;
+}
+
 .dark .rl-hostinger-subscribers .dashboard-main-shell > header > div,
 .dark .rl-hostinger-subscribers > aside.dashboard-logout-surface,
 .dark .rl-hostinger-subscribers .rl-mobile-sidebar-panel,
