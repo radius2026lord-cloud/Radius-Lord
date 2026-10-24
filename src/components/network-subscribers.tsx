@@ -97,7 +97,7 @@ function SubscriberAutocomplete({endpoint,field,value,onChange,icon:Icon,placeho
 }
 
 
-export default function NetworkSubscribers({endpoint,networkName="",tab="list",onTabChange,canCreate=true,canChangeStatus=true,canVerifyIdentity=true,canViewActivity=true,detailId=null,onOpenSubscriber,onBackToSubscribers,onAddHotspot,canAddPppoe=false}:{endpoint:string;networkName?:string;tab?:"list"|"create";onTabChange:(value:"list"|"create")=>void;canCreate?:boolean;canChangeStatus?:boolean;canVerifyIdentity?:boolean;canViewActivity?:boolean;detailId:number|null;onOpenSubscriber:(id:number)=>void;onBackToSubscribers:()=>void;onAddHotspot?:(id:number)=>void;canAddPppoe?:boolean}){
+export default function NetworkSubscribers({endpoint,networkName="",tab="list",onTabChange,canCreate=true,canChangeStatus=true,canVerifyIdentity=true,canViewActivity=true,detailId=null,onOpenSubscriber,onBackToSubscribers,onAddHotspot,canAddPppoe=false,dashboardFilter="",dashboardTimezone="Asia/Damascus",onClearDashboardFilter}:{endpoint:string;networkName?:string;tab?:"list"|"create";onTabChange:(value:"list"|"create")=>void;canCreate?:boolean;canChangeStatus?:boolean;canVerifyIdentity?:boolean;canViewActivity?:boolean;detailId:number|null;onOpenSubscriber:(id:number)=>void;onBackToSubscribers:()=>void;onAddHotspot?:(id:number)=>void;canAddPppoe?:boolean;dashboardFilter?:string;dashboardTimezone?:string;onClearDashboardFilter?:()=>void}){
  const [items,setItems]=useState<Subscriber[]>([]);
  const [categories,setCategories]=useState<Category[]>([]);
  const [servers,setServers]=useState<SubscriberServer[]>([]);
@@ -111,6 +111,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  const [verificationFilter,setVerificationFilter]=useState<"all"|"verified"|"unverified">("all");
  const [connectionFilter,setConnectionFilter]=useState<"all"|"online"|"offline">("all");
  const [subscriptionFilter,setSubscriptionFilter]=useState<"all"|"expired"|"current">("all");
+ const [createdTodayFilter,setCreatedTodayFilter]=useState(false);
  const [categoryFilter,setCategoryFilter]=useState("");
  const [serverFilter,setServerFilter]=useState("");
  const [profileFilter,setProfileFilter]=useState("");
@@ -123,6 +124,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  const [selectionMode,setSelectionMode]=useState(false);
  const [selectedLineKeys,setSelectedLineKeys]=useState<string[]>([]);
  const [pageSize,setPageSize]=useState<number|"all">(50);
+ useEffect(()=>{setStatusFilter("all");setConnectionFilter("all");setSubscriptionFilter("all");setCreatedTodayFilter(dashboardFilter==='new_today');},[dashboardFilter]);
  const [currentPage,setCurrentPage]=useState(1);
  const [pendingBulkLineAction,setPendingBulkLineAction]=useState<"enable"|"disable"|"disconnect"|"renew"|null>(null);
  const [pendingBulkLineRefs,setPendingBulkLineRefs]=useState<SubscriberLineSelection[]>([]);
@@ -463,14 +465,18 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  ],[servers,items]);
  const profileOptions=useMemo(()=>{const names=Array.from(new Set(items.flatMap(item=>(item.pppoe_lines||[]).map(line=>String(line.service_name||"").trim()).filter(Boolean)))).sort((a,b)=>a.localeCompare(b,"ar"));const iconTileClassName="bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200";return [{value:"",label:"كل البروفايلات",icon:Radio,iconTileClassName},...names.map(name=>({value:name,label:name,hint:`${items.filter(item=>(item.pppoe_lines||[]).some(line=>line.service_name===name)).length.toLocaleString("ar")} مشترك`,icon:Radio,iconTileClassName}))];},[items]);
  const nameOptions=useMemo(()=>{const iconTileClassName="bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200";return [{value:"",label:"كل الأسماء",icon:Users,iconTileClassName},...items.map(item=>({value:String(item.id),label:`${item.first_name} ${item.last_name}`.trim(),hint:item.phone||"ملف المشترك",icon:UserRound,iconTileClassName}))].sort((a,b)=>a.value===""?-1:b.value===""?1:a.label.localeCompare(b.label,"ar"));},[items]);
- const activeFilterCount=Number(statusFilter!=="all")+Number(verificationFilter!=="all")+Number(connectionFilter!=="all")+Number(subscriptionFilter!=="all")+Number(Boolean(nameFilter))+Number(Boolean(categoryFilter))+Number(Boolean(serverFilter))+Number(Boolean(profileFilter));
- const clearSubscriberFilters=()=>{setStatusFilter("all");setVerificationFilter("all");setConnectionFilter("all");setSubscriptionFilter("all");setNameFilter("");setCategoryFilter("");setServerFilter("");setProfileFilter("");};
+ const activeFilterCount=Number(Boolean(dashboardFilter))+Number(statusFilter!=="all")+Number(verificationFilter!=="all")+Number(connectionFilter!=="all")+Number(subscriptionFilter!=="all")+Number(createdTodayFilter&&!dashboardFilter)+Number(Boolean(nameFilter))+Number(Boolean(categoryFilter))+Number(Boolean(serverFilter))+Number(Boolean(profileFilter));
+ const clearSubscriberFilters=()=>{onClearDashboardFilter?.();setStatusFilter("all");setVerificationFilter("all");setConnectionFilter("all");setSubscriptionFilter("all");setCreatedTodayFilter(false);setNameFilter("");setCategoryFilter("");setServerFilter("");setProfileFilter("");};
  const toggleSubscriberFilterPanel=()=>{const next=!filterPanelOpen;setFilterPanelOpen(next);if(!next)return;requestAnimationFrame(()=>requestAnimationFrame(()=>{const panel=document.getElementById("subscriber-filter-panel");if(!panel)return;const behavior=window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";panel.scrollIntoView({behavior,block:"center",inline:"nearest"});}));};
  const selectedName=items.find(item=>String(item.id)===nameFilter);
+ const dashboardFilterLabels:Record<string,string>={connected:"خطوط PPPoE المتصلة",active_disconnected:"خطوط PPPoE المفعّلة غير المتصلة",expired:"خطوط PPPoE منتهية الاشتراك",suspended:"خطوط PPPoE الموقوفة",new_today:"مشتركون أضيفوا اليوم"};
+ const dashboardToken=dashboardFilter?{key:"dashboard",label:dashboardFilterLabels[dashboardFilter]||"تصفية من لوحة التحكم",icon:Activity,clear:()=>onClearDashboardFilter?.()}:null;
  const activeFilterTokens=[
+   ...(dashboardToken?[dashboardToken]:[]),
   ...(statusFilter!=="all"?[{key:"status",label:`التفعيل: ${statusLabel[statusFilter]}`,icon:ShieldCheck,clear:()=>setStatusFilter("all" as const)}]:[]),
   ...(connectionFilter!=="all"?[{key:"connection",label:`الاتصال: ${connectionFilter==="online"?"متصل":"غير متصل"}`,icon:Wifi,clear:()=>setConnectionFilter("all" as const)}]:[]),
   ...(subscriptionFilter!=="all"?[{key:"subscription",label:`الاشتراك: ${subscriptionFilter==="expired"?"منتهي":"ساري"}`,icon:Clock3,clear:()=>setSubscriptionFilter("all" as const)}]:[]),
+  ...(!dashboardFilter&&createdTodayFilter?[{key:"created-today",label:"أُضيف اليوم",icon:CalendarDays,clear:()=>setCreatedTodayFilter(false)}]:[]),
   ...(verificationFilter!=="all"?[{key:"verification",label:`التوثيق: ${verificationFilter==="verified"?"موثق":"غير موثق"}`,icon:BadgeCheck,clear:()=>setVerificationFilter("all" as const)}]:[]),
   ...(categoryFilter?[{key:"category",label:`التصنيف: ${categories.find(category=>String(category.id)===categoryFilter)?.name||"محدد"}`,icon:Tags,clear:()=>setCategoryFilter("")}]:[]),
   ...(serverFilter?[{key:"server",label:`السيرفر: ${servers.find(server=>server.address===serverFilter)?.name||serverFilter}`,icon:Server,clear:()=>setServerFilter("")}]:[]),
@@ -479,10 +485,14 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  ];
  const filtered=useMemo(()=>{
   const q=query.trim().toLowerCase();
-  return items.filter(item=>(!nameFilter||String(item.id)===nameFilter)&&(statusFilter==="all"||item.status===statusFilter)&&(verificationFilter==="all"||(verificationFilter==="verified"?Number(item.identity_verified)===1:Number(item.identity_verified)!==1))&&(connectionFilter==="all"||(connectionFilter==="online"?Number(item.is_online)===1:Number(item.is_online)!==1))&&(subscriptionFilter==="all"||(subscriptionFilter==="expired"?Number(item.has_expired_subscription)===1:Number(item.has_current_subscription)===1))&&(!categoryFilter||(item.category_ids||"").split(",").includes(categoryFilter))&&(!serverFilter||(item.server_addresses||"").split(",").includes(serverFilter))&&(!profileFilter||(item.pppoe_lines||[]).some(line=>line.service_name===profileFilter))&&(!q||[
+  const today=new Intl.DateTimeFormat("en-CA",{timeZone:dashboardTimezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const isToday=(value:string)=>new Intl.DateTimeFormat("en-CA",{timeZone:dashboardTimezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value))===today;
+  const timestamp=(value:unknown)=>{if(!value)return NaN;const text=String(value);return Date.parse(/^\d{4}-\d{2}-\d{2} \d{2}:/.test(text)?text.replace(" ","T")+"Z":text);};
+  const matchesDashboard=(item:Subscriber)=>{if(!dashboardFilter)return true;if(dashboardFilter==="new_today")return isToday(item.created_at);return (item.pppoe_lines||[]).some(line=>{const connected=Number(line.live_sessions||0)>0,expiry=timestamp(line.grace_expires_at||line.expires_at);switch(dashboardFilter){case "connected":return connected;case "active_disconnected":return line.status==="enabled"&&!connected&&(line.lifecycle==="pending"||(line.lifecycle==="active"&&Number.isFinite(expiry)&&expiry>Date.now()));case "expired":return line.status==="enabled"&&(line.lifecycle==="ended"||(["active","pending"].includes(String(line.lifecycle))&&Number.isFinite(expiry)&&expiry<=Date.now()));case "suspended":return line.status==="disabled";default:return true;}});};
+  return items.filter(item=>matchesDashboard(item)&&(!nameFilter||String(item.id)===nameFilter)&&(!createdTodayFilter||isToday(item.created_at))&&(statusFilter==="all"||item.status===statusFilter)&&(verificationFilter==="all"||(verificationFilter==="verified"?Number(item.identity_verified)===1:Number(item.identity_verified)!==1))&&(connectionFilter==="all"||(connectionFilter==="online"?Number(item.is_online)===1:Number(item.is_online)!==1))&&(subscriptionFilter==="all"||(subscriptionFilter==="expired"?Number(item.has_expired_subscription)===1:Number(item.has_current_subscription)===1))&&(!categoryFilter||(item.category_ids||"").split(",").includes(categoryFilter))&&(!serverFilter||(item.server_addresses||"").split(",").includes(serverFilter))&&(!profileFilter||(item.pppoe_lines||[]).some(line=>line.service_name===profileFilter))&&(!q||[
    item.first_name,item.last_name,item.phone,item.address,item.categories,...(item.pppoe_lines||[]).flatMap(line=>[line.username,line.line_name,line.service_name])
   ].some(value=>String(value||"").toLowerCase().includes(q))));
- },[items,query,nameFilter,statusFilter,verificationFilter,connectionFilter,subscriptionFilter,categoryFilter,serverFilter,profileFilter]);
+ },[items,query,nameFilter,statusFilter,verificationFilter,connectionFilter,subscriptionFilter,createdTodayFilter,dashboardTimezone,dashboardFilter,categoryFilter,serverFilter,profileFilter]);
  const refreshSubscriberActivity=async()=>{if(!detailId||!canViewActivity)return;try{const response=await fetch(`${endpoint}/subscribers/${detailId}?activityOffset=0`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok)return;setDetailActivity(Array.isArray(data.activity)?data.activity:[]);setDetailSessions(Array.isArray(data.sessions)?data.sessions:[]);setDetailAuthAttempts(Array.isArray(data.authAttempts)?data.authAttempts:[]);setActivityHasMore(Boolean(data.activityHasMore));setActivityOffset(0);}catch{}};
  const loadOlderSubscriberActivity=async()=>{if(!detailId||!canViewActivity||!activityHasMore||activityPageBusy)return;const nextOffset=activityOffset+100;setActivityPageBusy(true);try{const response=await fetch(`${endpoint}/subscribers/${detailId}?activityOffset=${nextOffset}`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok)return;setDetailActivity(current=>mergeActivityPage(current,Array.isArray(data.activity)?data.activity:[]));setDetailSessions(current=>mergeActivityPage(current,Array.isArray(data.sessions)?data.sessions:[]));setDetailAuthAttempts(current=>mergeActivityPage(current,Array.isArray(data.authAttempts)?data.authAttempts:[]));setActivityOffset(nextOffset);setActivityHasMore(Boolean(data.activityHasMore));}catch{}finally{setActivityPageBusy(false)}};
  const sortedFiltered=useMemo(()=>{
@@ -509,7 +519,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
   const start=(currentPage-1)*pageSize;
   return sortedFiltered.slice(start,start+pageSize);
  },[sortedFiltered,pageSize,currentPage]);
- useEffect(()=>{setCurrentPage(1);setSelectedLineKeys([]);setPendingBulkLineAction(null);setPendingBulkLineRefs([]);},[query,nameFilter,statusFilter,verificationFilter,connectionFilter,subscriptionFilter,categoryFilter,serverFilter,profileFilter]);
+ useEffect(()=>{setCurrentPage(1);setSelectedLineKeys([]);setPendingBulkLineAction(null);setPendingBulkLineRefs([]);},[query,nameFilter,statusFilter,verificationFilter,connectionFilter,subscriptionFilter,createdTodayFilter,categoryFilter,serverFilter,profileFilter]);
  useEffect(()=>{if(currentPage>totalPages)setCurrentPage(totalPages);},[currentPage,totalPages]);
  const sortHeader=(field:typeof sortField,label:string)=>{
   const active=sortField===field;
