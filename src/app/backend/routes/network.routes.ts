@@ -30,6 +30,7 @@ import {networkScope,withNetwork,validateLocalLicense} from '../services/network
 import {provisioningKey,decryptProvisioningSecret} from '../services/provisioning-secrets.service';
 import {readNetworkOvpn,createNetworkNas,provisionNetworkNas,networkNasScript,checkNetworkNasApi,nasRadiusClients,markNasRadiusConfigured,setNetworkNasEnabled,setManagedNasRadiusSecret,refreshNasLinks} from '../services/network-ovpn.service';
 import {readPrivateSetting,applyRadiusDatabase,radiusDatabaseHost} from '../services/radius-provision.service';
+import {readUiPreferences,writeUiPreferences} from '../controllers/ui-preferences.controller';
 const router=Router();
 const failed=new Map<string,{count:number;until:number}>();
 router.use(async(req,res,next)=>{res.setHeader('Cache-Control','no-store');if(req.method!=='GET'&&req.headers.origin&&req.headers.origin!==new URL(env.FRONTEND_URL).origin){try{const hosting=await readHostingPreflight((sql,params)=>db.query(sql,params));if(req.headers.origin!==new URL(hosting.baseUrl).origin)throw new Error();}catch{return res.status(403).json({message:'مصدر الطلب غير مصرح.'});}}next();});
@@ -48,6 +49,16 @@ async function management(req:Request){
  const result={...scope,managerId:Number(token.sub),authVersion:token.authVersion,groupsMode:req.query.groups==='1',archiveMode:req.query.archive==='1'};
  await withNetwork(scope,async app=>{await validateLocalLicense(app,scope);const actor=await managerAccess(app,result.managerId,result.authVersion);try{await managementAccess(app,result,req.method==='POST'?String(req.body?.action).startsWith('group-'):result.groupsMode);}catch(e){await auditNetworkEvent(app,{action:'managers.access',managerId:Number(actor.manager.id),result:'failed',reason:'PERMISSION_DENIED'});throw e;}});return result;
 }
+async function uiPreferencesScope(req:Request){
+ const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});
+ if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
+ const scope=await networkScope(String(req.params.slug));
+ if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub))||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
+ await withNetwork(scope,async app=>{await validateLocalLicense(app,scope);await managerAccess(app,Number(token.sub),token.authVersion);});
+ return {environmentId:Number(scope.environment_id),managerId:Number(token.sub)};
+}
+router.get('/:slug/ui-preferences',async(req,res)=>{try{const owner=await uiPreferencesScope(req);return res.json({success:true,preferences:await readUiPreferences(`network:${owner.environmentId}:${owner.managerId}`)});}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({success:false,message:'تعذر تحميل تفضيلات الواجهة.'});}});
+router.put('/:slug/ui-preferences',async(req,res)=>{try{const owner=await uiPreferencesScope(req);return res.json({success:true,preferences:await writeUiPreferences(`network:${owner.environmentId}:${owner.managerId}`,req.body?.preferences)});}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({success:false,message:'تعذر حفظ تفضيلات الواجهة.'});}});
 router.get('/:slug/activity',async(req,res)=>{try{
  const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub))||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  return res.json(await withNetwork(scope,async app=>{await validateLocalLicense(app,scope);const access=await managerAccess(app,Number(token.sub),token.authVersion);const result=await readNetworkActivity(app,access,req.query);await auditNetworkEvent(app,{action:'activity.view',managerId:Number(token.sub)});return result;}));

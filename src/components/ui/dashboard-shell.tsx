@@ -111,7 +111,7 @@ const masterAdminGroups: NavGroup[] = [
     { label: "نشاط الإدارة", href: "/Dashboard/logs/admin", icon: ShieldCheck },
   ]},
   { label: "الإعدادات", icon: Settings, items: [
-    { label: "تخصيص الصفحة الرئيسية", href: "/Dashboard/settings/homepage", icon: Home },
+    { label: "تخصيص الواجهة", href: "/Dashboard/settings/homepage", icon: Home },
     { label: "إعدادات المنصة", href: "/Dashboard/settings", icon: Settings },
     { label: "الصلاحيات", href: "/Dashboard/settings/permissions", icon: ShieldCheck },
   ]},

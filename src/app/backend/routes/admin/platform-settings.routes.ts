@@ -8,9 +8,12 @@ import { env } from '../../config/env';
 import { getOvpnSettings, updateOvpnSettings, inspectOvpnGateway, applyOvpnGateway, getOvpnGatewayHealth, selectOvpnHealthDashboard } from '../../controllers/ovpn-settings.controller';
 import { Router } from 'express';
 import { getContactPaymentSettingsController, updateContactPaymentSettingsController } from '../../controllers/platform-settings.controller';
+import { getMasterUiPreferences, saveMasterUiPreferences } from '../../controllers/ui-preferences.controller';
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.get('/ui-preferences',getMasterUiPreferences);
+router.put('/ui-preferences',(req,res,next)=>{if(req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر الطلب غير مصرح.'});return next();},saveMasterUiPreferences);
 router.use('/server-readiness',(req,res,next)=>{
  if(req.method!=='GET'&&req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر الطلب غير مصرح.'});
  return next();
