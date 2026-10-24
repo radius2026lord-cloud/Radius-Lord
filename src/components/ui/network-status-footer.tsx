@@ -225,7 +225,7 @@ export default function NetworkStatusFooter({
       {prefs.footer.showNas && (
         <section
           aria-label="معلومات جهاز NAS المحدد"
-          className="flex min-w-max shrink-0 items-center gap-1.5 rounded-[10px] border border-[#d9e5ef] bg-white/75 px-1.5 py-0.5 dark:border-white/[.08] dark:bg-white/[.035]"
+          className="flex min-w-max shrink-0 items-center gap-1.5 px-1.5 py-0.5"
         >
           <Server className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
           <span className="shrink-0 text-[9px] text-slate-500 dark:text-slate-400">NAS</span>
@@ -322,7 +322,7 @@ function NasMetric({
   tone: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5">
+    <div className="flex shrink-0 items-center gap-1 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2 py-0.5 dark:border-white/[.10] dark:bg-[#172b40]">
       <Icon className={`h-3 w-3 shrink-0 ${tone}`} />
       <span className="text-[9px] text-slate-500 dark:text-slate-400">{label}</span>
       <bdi className="max-w-24 truncate text-[10px] font-semibold tabular-nums text-[#17386d] dark:text-slate-100">
