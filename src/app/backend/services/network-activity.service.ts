@@ -13,12 +13,13 @@ function subscriberScope(access:any,alias='c'){
  return {sql:` AND ${alias}.manager_id=?`,params:[access.manager.id]};
 }
 async function readSubscriberActivity(app:any,access:any,input:any,base:any){
- const {cursor,q,result,operation,target,actorId,actorKind,fromDate,toDate,customerId,operations}=base;
+ const {cursor,q,result,operation,target,actorId,actorKind,fromDate,toDate,customerId,sourceType,operations}=base;
  const scope=subscriberScope(access,'c');
  const optionsSql=`SELECT c.id,c.first_name,c.last_name FROM customers c WHERE c.archived_at IS NULL${scope.sql} ORDER BY c.id DESC LIMIT 500`;
  const [subscriberOptions]:any=await app.query(optionsSql,scope.params);
  const clauses:string[]=['1=1'],params:any[]=[];
  if(customerId) {clauses.push('e.customer_id=?');params.push(customerId);}
+ if(sourceType){clauses.push('e.source_type=?');params.push(sourceType);}
  if(operation)clauses.push(operations[operation]);
  if(target){clauses.push('e.target_type=?');params.push(target);}
  if(actorId){clauses.push('e.actor_manager_id=?');params.push(actorId);}
@@ -69,11 +70,11 @@ async function readSubscriberActivity(app:any,access:any,input:any,base:any){
  return {summary:counts[0],timezone:settings[0]?.timezone||'Asia/Damascus',items,nextCursor:rows.length>50?cursor+50:null,subscriberOptions};
 }
 export async function readNetworkActivity(app:any,access:any,input:any){
- const cursor=Number(input.cursor||0),q=String(input.q||'').trim(),result=String(input.result||''),kind=String(input.kind||'system'),operation=String(input.operation||''),target=String(input.target||''),actorId=Number(input.actorId||0),actorKind=String(input.actorKind||''),fromDate=String(input.fromDate||''),toDate=String(input.toDate||''),customerId=Number(input.customerId||0);
+ const cursor=Number(input.cursor||0),q=String(input.q||'').trim(),result=String(input.result||''),kind=String(input.kind||'system'),operation=String(input.operation||''),target=String(input.target||''),actorId=Number(input.actorId||0),actorKind=String(input.actorKind||''),fromDate=String(input.fromDate||''),toDate=String(input.toDate||''),customerId=Number(input.customerId||0),sourceType=String(input.sourceType||'');
  const operations:Record<string,string>={create:"e.action_code REGEXP '([.]|-)create$|[.]issue$'",update:"e.action_code REGEXP '([.]|-)update$|[.]toggle$|[.]password$'",status:"e.action_code REGEXP '[.]status$|[.]enable$|[.]disable$|[.]toggle$'",renew:"e.action_code REGEXP '[.]renew$|[.]expire$'",speed:"e.action_code REGEXP '[.]speed_boost([.]revert)?$'",connection:"e.action_code REGEXP '^subscriber[.]session[.]'",auth:"e.action_code REGEXP '^subscriber[.]auth[.]'",archive:"e.action_code REGEXP '([.]|-)archive$'",restore:"e.action_code REGEXP '([.]|-)restore$'",delete:"e.action_code REGEXP '([.]|-)delete$|[.]cleanup$'",login:"e.action_code='auth.login'",logout:"e.action_code='auth.logout'"};
- if(!Number.isSafeInteger(cursor)||cursor<0||q.length>100||!['','success','failed'].includes(result)||!['system','admin','subscribers'].includes(kind)||operation&&!Object.prototype.hasOwnProperty.call(operations,operation)||target&&!/^[a-z_]{1,64}$/.test(target)||!Number.isSafeInteger(actorId)||actorId<0||!['','manager','system'].includes(actorKind)||!validDate(fromDate)||!validDate(toDate)||fromDate&&toDate&&fromDate>toDate||!Number.isSafeInteger(customerId)||customerId<0||kind!=='subscribers'&&customerId)throw new Error('ACTIVITY_INPUT');
+ if(!Number.isSafeInteger(cursor)||cursor<0||q.length>100||!['','success','failed'].includes(result)||!['system','admin','subscribers'].includes(kind)||operation&&!Object.prototype.hasOwnProperty.call(operations,operation)||target&&!/^[a-z_]{1,64}$/.test(target)||!Number.isSafeInteger(actorId)||actorId<0||!['','manager','system'].includes(actorKind)||!validDate(fromDate)||!validDate(toDate)||fromDate&&toDate&&fromDate>toDate||!Number.isSafeInteger(customerId)||customerId<0||kind!=='subscribers'&&customerId||!['','audit','session','auth'].includes(sourceType)||kind!=='subscribers'&&sourceType)throw new Error('ACTIVITY_INPUT');
  if(access.role!=='principal'&&!access.permissions.includes('activity.view'))throw new Error('NETWORK_AUTH');
- if(kind==='subscribers')return readSubscriberActivity(app,access,input,{cursor,q,result,operation,target,actorId,actorKind,fromDate,toDate,customerId,operations});
+ if(kind==='subscribers')return readSubscriberActivity(app,access,input,{cursor,q,result,operation,target,actorId,actorKind,fromDate,toDate,customerId,sourceType,operations});
  const clauses:string[]=[],params:any[]=[];
  if(access.role!=='principal'){if(access.role==='agent'){clauses.push('(actor_manager_id=? OR actor_manager_id IN (SELECT id FROM managers WHERE parent_agent_manager_id=? AND scope_id=?))');params.push(access.manager.id,access.manager.id,access.manager.scope_id);}else{clauses.push('actor_manager_id=?');params.push(access.manager.id);}}
  const administrative="(action_code REGEXP '^(managers|permission_groups|customers|subscribers|categories|customer_categories|profiles|packages|pppoe|hotspot|lines|sessions|credentials|nas)[.]' AND action_code NOT REGEXP '([.]|-)view$|[.]cleanup$' AND action_code<>'managers.access')";
