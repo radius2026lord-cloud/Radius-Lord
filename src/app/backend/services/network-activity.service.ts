@@ -57,8 +57,10 @@ async function readSubscriberActivity(app:any,access:any,input:any,base:any){
  `;
  const scopeForEvents=access.role==='principal'?'':access.role==='agent'
   ?' AND (c.manager_id=? OR (e.customer_id IS NULL AND e.actor_manager_id IN (SELECT id FROM managers WHERE (id=? OR parent_agent_manager_id=?) AND scope_id=?)))'
+  :access.role==='agent_employee'
+  ?' AND (c.manager_id=? OR c.manager_id IN (SELECT id FROM managers WHERE parent_agent_manager_id=? AND scope_id=?) OR (e.customer_id IS NULL AND e.actor_manager_id IN (SELECT id FROM managers WHERE (id=? OR parent_agent_manager_id=?) AND scope_id=?)))'
   :' AND (c.manager_id=? OR (e.customer_id IS NULL AND e.actor_manager_id=?))';
- const eventScopeParams=access.role==='principal'?[]:access.role==='agent'?[access.manager.id,access.manager.id,access.manager.id,access.manager.scope_id]:[access.manager.id,access.manager.id];
+ const eventScopeParams=access.role==='principal'?[]:access.role==='agent'?[access.manager.id,access.manager.id,access.manager.id,access.manager.scope_id]:access.role==='agent_employee'?[Number(access.manager.parent_agent_manager_id),Number(access.manager.parent_agent_manager_id),access.manager.scope_id,Number(access.manager.parent_agent_manager_id),Number(access.manager.parent_agent_manager_id),access.manager.scope_id]:[access.manager.id,access.manager.id];
  const scoped=`SELECT e.*,CONCAT_WS(' ',e.customer_first_name,e.customer_last_name) customer_name FROM (${union}) e
   LEFT JOIN customers c ON c.id=e.customer_id WHERE ${clauses.join(' AND ')}${scopeForEvents}`;
  const [counts]:any=await app.query(`SELECT COUNT(*) total,COALESCE(SUM(e.result='success'),0) success,COALESCE(SUM(e.result='failed'),0) failed,COUNT(DISTINCT COALESCE(e.actor_manager_id,0)) actors FROM (${scoped}) e`,[...params,...eventScopeParams]);
