@@ -80,8 +80,20 @@ export async function readNetworkActivity(app:any,access:any,input:any){
  if(kind==='subscribers')return readSubscriberActivity(app,access,input,{cursor,q,result,operation,target,actorId,actorKind,fromDate,toDate,customerId,sourceType,operations});
  const clauses:string[]=[],params:any[]=[];
  if(access.role!=='principal'){if(access.role==='agent'){clauses.push('(actor_manager_id=? OR actor_manager_id IN (SELECT id FROM managers WHERE parent_agent_manager_id=? AND scope_id=?))');params.push(access.manager.id,access.manager.id,access.manager.scope_id);}else{clauses.push('actor_manager_id=?');params.push(access.manager.id);}}
- const administrative="(action_code REGEXP '^(managers|permission_groups|customers|subscribers|categories|customer_categories|profiles|packages|pppoe|hotspot|lines|sessions|credentials|nas)[.]' AND action_code NOT REGEXP '([.]|-)view$|[.]cleanup$' AND action_code<>'managers.access')";
- clauses.push(kind==='admin'?administrative:'NOT '+administrative);
+ const subscriberActivity="(action_code REGEXP '^(customers|subscribers)[.]' OR action_code REGEXP '^pppoe[.]line[.]' OR action_code REGEXP '^hotspot[.](account|line)[.]' OR action_code REGEXP '^(lines|sessions)[.]' OR action_code REGEXP '^subscriber[.](session|auth)[.]')";
+ const administrative="(action_code REGEXP '^(managers|permission_groups|categories|customer_categories|profiles|packages|nas|network)[.]' OR action_code REGEXP '^archive[.]policy[.]') AND action_code NOT REGEXP '([.]|-)view
+ if(operation)clauses.push(operations[operation].replace('e.action_code','action_code'));if(target){clauses.push('target_type=?');params.push(target);}if(actorId){clauses.push('actor_manager_id=?');params.push(actorId);}if(actorKind)clauses.push('actor_kind=?');if(fromDate){clauses.push('occurred_at>=?');params.push(fromDate+' 00:00:00');}if(toDate){clauses.push('occurred_at<DATE_ADD(?,INTERVAL 1 DAY)');params.push(toDate+' 00:00:00');}
+ if(q){clauses.push("(LOCATE(?,action_code)>0 OR LOCATE(?,COALESCE(JSON_UNQUOTE(JSON_EXTRACT(actor_snapshot,'$.full_name')),''))>0)");params.push(q,q);}
+ const where=' WHERE '+clauses.join(' AND ');
+ const [counts]:any=await app.query("SELECT COUNT(*) total,COALESCE(SUM(result='success'),0) success,COALESCE(SUM(result='failed'),0) failed,COUNT(DISTINCT COALESCE(actor_manager_id,0)) actors FROM activity_log"+where,params);
+ const pageClauses=[...clauses],pageParams=[...params];if(cursor){pageClauses.push('id<?');pageParams.push(cursor);}if(result){pageClauses.push('result=?');pageParams.push(result);}
+ const [rows]:any=await app.query('SELECT id,customer_id,account_id,actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,before_data,after_data,result,failure_code,request_id,operation_id,occurred_at FROM activity_log'+(pageClauses.length?' WHERE '+pageClauses.join(' AND '):'')+' ORDER BY id DESC LIMIT 51',pageParams);
+ const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');
+ const items=rows.slice(0,50).map((row:any)=>({...row,actor_snapshot:sanitize(json(row.actor_snapshot)),before_data:sanitize(json(row.before_data)),after_data:sanitize(json(row.after_data))}));
+ return {summary:counts[0],timezone:settings[0]?.timezone||'Asia/Damascus',items,nextCursor:rows.length>50?Number(items[items.length-1].id):null};
+}
+ AND action_code<>'managers.access'";
+ clauses.push(kind==='admin'?'('+administrative+' AND NOT '+subscriberActivity+')':'NOT ('+administrative+') AND NOT '+subscriberActivity);
  if(operation)clauses.push(operations[operation].replace('e.action_code','action_code'));if(target){clauses.push('target_type=?');params.push(target);}if(actorId){clauses.push('actor_manager_id=?');params.push(actorId);}if(actorKind)clauses.push('actor_kind=?');if(fromDate){clauses.push('occurred_at>=?');params.push(fromDate+' 00:00:00');}if(toDate){clauses.push('occurred_at<DATE_ADD(?,INTERVAL 1 DAY)');params.push(toDate+' 00:00:00');}
  if(q){clauses.push("(LOCATE(?,action_code)>0 OR LOCATE(?,COALESCE(JSON_UNQUOTE(JSON_EXTRACT(actor_snapshot,'$.full_name')),''))>0)");params.push(q,q);}
  const where=' WHERE '+clauses.join(' AND ');
