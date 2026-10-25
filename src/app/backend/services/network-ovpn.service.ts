@@ -186,6 +186,14 @@ export async function reserveNetworkNasCapacity(central:PoolConnection,scope:any
 export async function markNasRadiusConfigured(app:mysql.Connection){
  await app.query("UPDATE nas_ovpn_connections SET configuration_snapshot=JSON_SET(configuration_snapshot,'$.radiusConfigured',JSON_EXTRACT('true','$')),synced_at=NOW(6)");
 }
+export async function updateNetworkNasDetails(app:mysql.Connection,nasId:number,input:{name?:unknown;model?:unknown;location?:unknown;description?:unknown}){
+ if(!Number.isSafeInteger(nasId)||nasId<1)fail('NAS_INPUT_INVALID');
+ const name=typeof input.name==='string'?input.name.trim():'',model=typeof input.model==='string'?input.model.trim():'',location=typeof input.location==='string'?input.location.trim():'',description=typeof input.description==='string'?input.description.trim():'';
+ if(!name||name.length>150||model.length>100||location.length>150||description.length>200)fail('NAS_DETAILS_INPUT');
+ const [found]:any=await app.query('SELECT id FROM lord_nas WHERE id=? AND archived_at IS NULL',[nasId]);if(!found[0])fail('NAS_NOT_FOUND');
+ await app.query('UPDATE lord_nas SET name=?,model=?,location=?,description=? WHERE id=? AND archived_at IS NULL',[name,model||null,location||null,description||null,nasId]);
+ return {id:nasId,name,model:model||null,location:location||null,description:description||null};
+}
 export async function setNetworkNasEnabled(app:mysql.Connection,nasId:number,enabled:boolean){
  if(!Number.isSafeInteger(nasId)||nasId<1||typeof enabled!=='boolean')fail('NAS_STATUS_INPUT');
  const [result]:any=await app.query('UPDATE lord_nas SET is_enabled=? WHERE id=? AND archived_at IS NULL',[enabled?1:0,nasId]);
@@ -273,18 +281,30 @@ function routerOsTimeMs(raw:unknown):number|null{
  if(matched)return Number.isFinite(total)?total:null;const number=Number(value);return Number.isFinite(number)&&number>=0?number:null;
 }
 async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
- if(!address||!isIpv4(String(address)))return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null};
+ const target=address&&isIpv4(String(address))?String(address):null;
+ if(!target)return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null,reason:'address_missing' as const};
  try{
-  const rows=await api.command('/ping',{address:String(address),count:'3',interval:'300ms'},[],7000);
+  const attrs={address:target,count:'3',interval:'300ms'};
+  let rows:any[];
+  try{rows=await api.command('/tool/ping',attrs,[],9000);}
+  catch(first){
+   const firstMessage=String(first instanceof Error?first.message:first).toLowerCase();
+   if(!/not available|unknown command|no such command|invalid command|غير متاح|غير معروف|لا يوجد أمر/.test(firstMessage))throw first;
+   rows=await api.command('/ping',attrs,[],9000);
+  }
   const summary=rows.find(row=>row['avg-rtt']!==undefined||row['packet-loss']!==undefined||row.received!==undefined)||{};
   const samples=rows.map(row=>routerOsTimeMs(row.time)).filter((value):value is number=>value!==null);
   const averageMs=routerOsTimeMs(summary['avg-rtt'])??(samples.length?samples.reduce((sum,value)=>sum+value,0)/samples.length:null);
   const receivedRaw=Number(summary.received),received=Number.isFinite(receivedRaw)?receivedRaw:samples.length||(averageMs!==null?1:0);
-  const sentRaw=Number(summary.sent),sent=Number.isFinite(sentRaw)&&sentRaw>0?sentRaw:(samples.length?3:1);
+  const sentRaw=Number(summary.sent),sent=Number.isFinite(sentRaw)&&sentRaw>0?sentRaw:(samples.length?3:3);
   const lossRaw=summary['packet-loss']===undefined?null:Number.parseFloat(String(summary['packet-loss']));
   const packetLoss=lossRaw!==null&&Number.isFinite(lossRaw)?Math.max(0,Math.min(100,lossRaw)):Math.max(0,Math.min(100,((sent-received)/sent)*100));
   return {status:received>0&&averageMs!==null?'ok' as const:'timeout' as const,averageMs,packetLoss};
- }catch(error){const message=String(error instanceof Error?error.message:error).toLowerCase();const reason=/permission|not enough|not allowed|denied|policy/.test(message)?'permission' as const:'command_failed' as const;return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null,reason};}
+ }catch(error){
+  const message=String(error instanceof Error?error.message:error).toLowerCase();
+  const reason=/permission|not enough|not allowed|denied|policy/.test(message)?'permission' as const:/not available|unknown command|no such command|invalid command|غير متاح|غير معروف|لا يوجد أمر/.test(message)?'unsupported' as const:'command_failed' as const;
+  return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null,reason};
+ }
 }
 async function addPppoePing(api:RouterApi,traffic:any){
  const ping=traffic.connected?await readPppoeClientPing(api,traffic.framedIp):{status:'offline' as const,averageMs:null as number|null,packetLoss:100 as number};
