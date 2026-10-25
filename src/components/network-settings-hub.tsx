@@ -1,5 +1,5 @@
 "use client";
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {Archive,Building2,PanelsTopLeft,Server,ShieldCheck,Tags,Users,Gauge,Settings} from 'lucide-react';
 import ProjectTabs from '@/components/ui/project-tabs';
 import NetworkCurrencySettings from '@/components/network-currency-settings';
@@ -14,6 +14,7 @@ import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card
 type Tab='network'|'radius'|'system'|'archive';
 export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',canEditFollowUp=false}:{endpoint:string;refresh:number;initialTab?:Tab;canEditFollowUp?:boolean}){
  const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users'),[networkSection,setNetworkSection]=useState('details');
+ useEffect(()=>setTab(initialTab),[initialTab]);
  const descriptions:Record<Tab,string>={network:'بيانات الشبكة ومعلومات التواصل والعملة الافتراضية.',radius:'سياسات المحاسبة ومهلة السماح والخادم المرتبط بخدمة RADIUS.',system:'تفضيلات الواجهة الرئيسية والشريط السفلي والتنبيهات الخاصة بحسابك.',archive:'إدارة السجلات المؤرشفة واستعادتها حسب نوعها.'};
  return <div dir="rtl" className="space-y-4">
   <ProjectInfoCard tone="info" className="!p-4 sm:!p-5">
