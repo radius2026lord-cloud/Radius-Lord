@@ -31,7 +31,7 @@ async function readSubscriberActivity(app:any,access:any,input:any,base:any){
  const union=`
   SELECT a.id,'audit' source_type,COALESCE(a.customer_id,ac.customer_id,IF(a.target_type='customer',a.target_id,NULL)) customer_id,
    c.first_name customer_first_name,c.last_name customer_last_name,
-   COALESCE(JSON_UNQUOTE(JSON_EXTRACT(a.after_data,'$.username')),JSON_UNQUOTE(JSON_EXTRACT(a.before_data,'$.username')),ri.current_username) username,
+   COALESCE(JSON_UNQUOTE(JSON_EXTRACT(a.after_data,'$.username')),JSON_UNQUOTE(JSON_EXTRACT(a.before_data,'$.username')),CONVERT(ri.current_username USING utf8mb4) COLLATE utf8mb4_bin) username,
    a.account_id,a.actor_manager_id,a.actor_snapshot,a.actor_kind,a.action_code,a.target_type,a.target_id,a.before_data,a.after_data,a.result,a.failure_code,a.request_id,a.operation_id,a.occurred_at
   FROM activity_log a
   LEFT JOIN ${ACCOUNT_CUSTOMERS} ac ON ac.identity_id=a.account_id
