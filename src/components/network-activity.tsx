@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {ScrollText,ShieldCheck,Users,CheckCircle2,AlertCircle,Eye,Plus,Pencil,Archive,RotateCcw,Trash2,LogIn,LogOut,UserRound,CalendarClock,ChevronDown} from 'lucide-react';
+import {ScrollText,ShieldCheck,Users,Activity,CheckCircle2,AlertCircle,Eye,Plus,Pencil,Archive,RotateCcw,Trash2,LogIn,LogOut,UserRound,CalendarClock,ChevronDown} from 'lucide-react';
 import {CollectionToolbar,CollectionGrid,CollectionStatusFilters,CollectionState,useCollectionDisplay} from '@/components/ui/collection-display';
 import ProjectInput from '@/components/ui/project-input';
 import ProjectDropdown from '@/components/ui/project-dropdown';
