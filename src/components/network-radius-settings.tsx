@@ -9,13 +9,15 @@ import ProjectTabs from '@/components/ui/project-tabs';
 import FloatingNotice from '@/components/ui/floating-notice';
 type Settings={configured:boolean;serverAddress:string;interimSeconds:number;gracePolicy:string;graceDays:number;version:string};
 type Section='accounting'|'grace'|'server';
-export default function NetworkRadiusSettings({endpoint}:{endpoint:string}){
- const [data,setData]=useState<Settings|null>(null),[section,setSection]=useState<Section>('accounting'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
- useEffect(()=>{let live=true;fetch(endpoint+'/radius-settings',{credentials:'include',cache:'no-store'}).then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.message);if(live)setData(body);}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[endpoint]);
- const save=async()=>{if(!data||busy)return;setBusy(true);setError('');setMessage('');try{const response=await fetch(endpoint+'/radius-settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const body=await response.json();if(!response.ok)throw new Error(body.message);setData(body);setMessage('تم حفظ إعدادات RADIUS.');}catch(e){setError(e instanceof Error?e.message:'تعذر الحفظ.');}finally{setBusy(false);}};
+export default function NetworkRadiusSettings({endpoint,initialSection='accounting'}:{endpoint:string;initialSection?:Section}){
+ const [data,setData]=useState<Settings|null>(null),[savedData,setSavedData]=useState<Settings|null>(null),[section,setSection]=useState<Section>(initialSection),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ useEffect(()=>setSection(initialSection),[initialSection]);
+ useEffect(()=>{let live=true;fetch(endpoint+'/radius-settings',{credentials:'include',cache:'no-store'}).then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.message);if(live){setData(body);setSavedData(body);}}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[endpoint]);
+ const dirty=Boolean(data&&savedData&&JSON.stringify(data)!==JSON.stringify(savedData));
+ const save=async()=>{if(!data||busy)return;setBusy(true);setError('');setMessage('');try{const response=await fetch(endpoint+'/radius-settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const body=await response.json();if(!response.ok)throw new Error(body.message);setData(body);setSavedData(body);setMessage('تم حفظ إعدادات RADIUS.');}catch(e){setError(e instanceof Error?e.message:'تعذر الحفظ.');}finally{setBusy(false);}};
  return <div className="space-y-4">
   <FloatingNotice error={error} message={message} onDismiss={()=>{setError('');setMessage('');}}/>
-  {data?<><ProjectTabs id="radius-setting-sections" value={section} onChange={value=>setSection(value as Section)} items={[
+  {data?<><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-500 dark:text-slate-400">إعدادات خدمة المصادقة والمحاسبة</p><span role="status" className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${dirty?"border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200":"border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/20 dark:bg-emerald-400/10 dark:text-emerald-200"}`}>{dirty?"تعديلات غير محفوظة":"الإعدادات محفوظة"}</span></div><ProjectTabs id="radius-setting-sections" value={section} onChange={value=>setSection(value as Section)} items={[
    {value:'accounting',label:'المحاسبة',icon:Clock,iconClassName:'text-sky-500'},
    {value:'grace',label:'مهلة السماح',icon:ShieldCheck,iconClassName:'text-violet-500'},
    {value:'server',label:'خادم RADIUS',icon:Server,iconClassName:'text-emerald-500'}
