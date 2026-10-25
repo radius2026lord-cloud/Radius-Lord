@@ -155,7 +155,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-type NetworkShellContext={isPrincipal?:boolean;canViewCategories?:boolean;canViewActivity?:boolean;canManageStaff?:boolean;canManageGroups?:boolean;canCreateSubscribers?:boolean;basePath:string;tab:string;profileTab?:string;hotspotTab?:string;subscriberTab?:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
+type NetworkShellContext={isPrincipal?:boolean;canViewCategories?:boolean;canViewActivity?:boolean;canViewSubscriberActivity?:boolean;canManageStaff?:boolean;canManageGroups?:boolean;canCreateSubscribers?:boolean;basePath:string;tab:string;profileTab?:string;hotspotTab?:string;subscriberTab?:string;fullName:string;onLogout:()=>Promise<void>;footer:React.ReactNode};
 export default function DashboardShell({ children,network }: { children: React.ReactNode;network?:NetworkShellContext }) {
   const actualPathname = usePathname();
   const auth = useOptionalAuth();
@@ -167,7 +167,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const pathname=network?(network.tab==='overview'?network.basePath:network.tab==='profiles'?`${network.basePath}?tab=profiles&profileTab=${network.profileTab||'list'}`:network.tab==='hotspot'?`${network.basePath}?tab=hotspot&hotspotTab=${network.hotspotTab||'packages'}`:network.tab==='subscribers'?`${network.basePath}?tab=subscribers${network.subscriberTab==='create'?'&subscriberTab=create':network.subscriberTab==='activity'?'&subscriberTab=activity':''}`:`${network.basePath}?tab=${network.tab}`):actualPathname;
   const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};
   const networkGroups:NavGroup[]=network?[
-   {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users},...(network.canCreateSubscribers?[{label:'إضافة عميل',href:`${network.basePath}?tab=subscribers&subscriberTab=create`,icon:UserPlus}]:[]),...(network.canViewCategories?[{label:'تصنيفات المشتركين',href:`${network.basePath}?tab=categories`,icon:Tags}]:[]),...(network.canViewActivity?[{label:'سجل المشتركين',href:`${network.basePath}?tab=subscribers&subscriberTab=activity`,icon:ScrollText}]:[])]},
+   {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users},...(network.canCreateSubscribers?[{label:'إضافة عميل',href:`${network.basePath}?tab=subscribers&subscriberTab=create`,icon:UserPlus}]:[]),...(network.canViewCategories?[{label:'تصنيفات المشتركين',href:`${network.basePath}?tab=categories`,icon:Tags}]:[]),...(network.canViewSubscriberActivity?[{label:'سجل المشتركين',href:`${network.basePath}?tab=subscribers&subscriberTab=activity`,icon:ScrollText}]:[])]},
    {label:'بروفايلات الخدمة',icon:Gauge,items:[{label:'عرض البروفايلات',href:`${network.basePath}?tab=profiles&profileTab=list`,icon:List},{label:'إنشاء بروفايل',href:`${network.basePath}?tab=profiles&profileTab=create`,icon:PlusCircle},{label:'مضاعفة السرعة',href:`${network.basePath}?tab=profiles&profileTab=double`,icon:ChevronsUp}]},
    {label:'الهوتسبوت',icon:Radio,items:[{label:'الباقات',href:`${network.basePath}?tab=hotspot&hotspotTab=packages`,icon:Layers},{label:'دفعات الكروت',href:`${network.basePath}?tab=hotspot&hotspotTab=batches`,icon:CreditCard},{label:'الحسابات الفردية',href:`${network.basePath}?tab=hotspot&hotspotTab=standalone`,icon:Users}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
