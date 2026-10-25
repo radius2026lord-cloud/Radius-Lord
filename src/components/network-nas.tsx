@@ -93,7 +93,7 @@ export default function NetworkNas({endpoint}:{endpoint:string}){
       <div className="flex min-h-10 items-center gap-2 rounded-xl border border-[#d7e3ef] bg-[#f8fafc] px-2.5 dark:border-white/10 dark:bg-white/[.04]">
        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/[.12] dark:text-blue-300"><Clock3 className="h-4 w-4"/></span>
        <span className="whitespace-nowrap text-[11px] font-semibold text-[#53677d] dark:text-slate-200">التحديث</span>
-       <ProjectDropdown value={String(refreshMinutes)} onChange={value=>setRefreshMinutes(Number(value))} options={nasRefreshOptions} placeholder="اختر فترة" compact disabled={!report?.configured} className="w-[148px]" triggerClassName="!h-9 !rounded-lg !border-[#d7e3ef] !bg-white !text-[11px] !font-semibold !text-[#17386d] dark:!border-white/10 dark:!bg-[#172d43] dark:!text-white"/>
+       <ProjectDropdown hideSelectedHint value={String(refreshMinutes)} onChange={value=>setRefreshMinutes(Number(value))} options={nasRefreshOptions} placeholder="اختر فترة" compact disabled={!report?.configured} className="w-[148px]" triggerClassName="!h-9 !rounded-lg !border-[#d7e3ef] !bg-white !text-[11px] !font-semibold !text-[#17386d] dark:!border-white/10 dark:!bg-[#172d43] dark:!text-white"/>
       </div>
       <ProjectButton variant="secondary" disabled={busy||refreshingWorkspace||!report?.configured} onClick={()=>void refreshWorkspace(true)}>{busy||refreshingWorkspace?<LoaderCircle className="animate-spin"/>:<RefreshCw/>}تحديث الآن</ProjectButton>
      </div>
