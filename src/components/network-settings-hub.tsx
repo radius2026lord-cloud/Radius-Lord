@@ -13,7 +13,7 @@ import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card
 
 type Tab='network'|'radius'|'system'|'archive';
 export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',canEditFollowUp=false}:{endpoint:string;refresh:number;initialTab?:Tab;canEditFollowUp?:boolean}){
- const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users');
+ const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users'),[networkSection,setNetworkSection]=useState('details');
  const descriptions:Record<Tab,string>={network:'بيانات الشبكة ومعلومات التواصل والعملة الافتراضية.',radius:'سياسات المحاسبة ومهلة السماح والخادم المرتبط بخدمة RADIUS.',system:'تفضيلات الواجهة الرئيسية والشريط السفلي والتنبيهات الخاصة بحسابك.',archive:'إدارة السجلات المؤرشفة واستعادتها حسب نوعها.'};
  return <div dir="rtl" className="space-y-4">
   <ProjectInfoCard tone="info" className="!p-4 sm:!p-5">
@@ -26,7 +26,7 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
    {value:'archive',label:'الأرشيف',icon:Archive,iconClassName:'text-amber-500'}
   ]}/>
   <section id={`network-settings-hub-panel-${tab}`} role="tabpanel" aria-labelledby={`network-settings-hub-tab-${tab}`} className="min-w-0">
-   {tab==='network'?<div className="space-y-4"><NetworkSettings endpoint={endpoint} refresh={refresh}/><NetworkCurrencySettings endpoint={endpoint}/></div>
+   {tab==='network'?<div className="space-y-4"><ProjectTabs id="network-setting-sections" value={networkSection} onChange={setNetworkSection} items={[{value:"details",label:"بيانات الشبكة",icon:Building2,iconClassName:"text-sky-500"},{value:"currency",label:"العملة الافتراضية",icon:Settings,iconClassName:"text-amber-500"}]}/><section id={`network-setting-sections-panel-${networkSection}`} role="tabpanel" aria-labelledby={`network-setting-sections-tab-${networkSection}`}>{networkSection==="details"?<NetworkSettings endpoint={endpoint} refresh={refresh}/>:<NetworkCurrencySettings endpoint={endpoint}/>}</section></div>
     :tab==='radius'?<NetworkRadiusSettings endpoint={endpoint}/>
     :tab==='system'?<UiPreferencesPanel endpoint={`${endpoint}/ui-preferences`} followUpEndpoint={`${endpoint}/follow-up-alerts`} canEditFollowUp={canEditFollowUp} network/>
     :<div className="space-y-4"><ProjectTabs id="archive-types" value={kind} onChange={setKind} items={[
