@@ -30,6 +30,7 @@ type Nas = {
     freeMemory: number;
     totalMemory: number;
     uptime: string;
+    radiusPing?: { status: "ok"|"timeout"|"unavailable"|"offline"; averageMs: number|null; targetAddress?: string|null };
   }>;
 };
 
@@ -132,6 +133,8 @@ export default function NetworkStatusFooter({
 
     }
 
+    const onNasLiveUpdate=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.endpoint!==endpoint||!Array.isArray(detail.items))return;const rows:Nas[]=detail.items.filter((item:Nas)=>item.isEnabled);setNas(rows);setNasError(false);setSelected(index=>Math.min(index,Math.max(0,rows.length-1)));};
+
     const onPreferences = (event: Event) => {
       const detail = (event as CustomEvent).detail;
       if (detail?.endpoint === prefEndpoint && detail.preferences) {
@@ -152,6 +155,7 @@ export default function NetworkStatusFooter({
       if (document.visibilityState === "visible") void load();
     };
     window.addEventListener("rl-ui-preferences-updated", onPreferences);
+    window.addEventListener("rl-nas-live-update",onNasLiveUpdate);
     document.addEventListener("visibilitychange", visible);
 
     return () => {
@@ -160,6 +164,7 @@ export default function NetworkStatusFooter({
       clearInterval(timer);
       clearInterval(tick);
       window.removeEventListener("rl-ui-preferences-updated", onPreferences);
+      window.removeEventListener("rl-nas-live-update",onNasLiveUpdate);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [endpoint]);
@@ -181,6 +186,7 @@ export default function NetworkStatusFooter({
       ? Math.round((1 - sample.freeMemory / sample.totalMemory) * 100)
       : null;
   const uptime = sample?.uptime || item?.uptime || null;
+  const ping=sample?.radiusPing,pingMs=ping?.averageMs??null,pingText=ping?.status==="ok"&&pingMs!==null?`${pingMs<1?pingMs.toFixed(2):Math.round(pingMs)} ms`:ping?.status==="timeout"?"فشل":ping?.status==="offline"?"غير متصل":"—",pingTone=ping?.status==="ok"&&pingMs!==null?pingMs<=50?"text-emerald-500":pingMs<=150?"text-amber-500":"text-rose-500":"text-slate-400";
 
   useEffect(() => setUpdated(item?.metricsUpdatedAt || ""), [item?.id, item?.metricsUpdatedAt]);
 
@@ -271,6 +277,7 @@ export default function NetworkStatusFooter({
               {prefs.footer.showUptime && (
                 <NasMetric icon={Clock3} label="التشغيل" value={uptime || "—"} tone="text-sky-500" />
               )}
+              <NasMetric icon={Activity} label="Ping" value={pingText} tone={pingTone} />
               {prefs.footer.showConnected && (
                 <NasMetric icon={Users} label="متصل" value={String(item.connectedAccounts ?? "—")} tone="text-emerald-500" />
               )}
