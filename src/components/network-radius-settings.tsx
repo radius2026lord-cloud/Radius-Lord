@@ -9,9 +9,9 @@ import ProjectTabs from '@/components/ui/project-tabs';
 import FloatingNotice from '@/components/ui/floating-notice';
 type Settings={configured:boolean;serverAddress:string;interimSeconds:number;gracePolicy:string;graceDays:number;version:string};
 type Section='accounting'|'grace'|'server';
-export default function NetworkRadiusSettings({endpoint,initialSection='accounting'}:{endpoint:string;initialSection?:Section}){
+export default function NetworkRadiusSettings({endpoint,initialSection='accounting',navigationVersion=0}:{endpoint:string;initialSection?:Section;navigationVersion?:number}){
  const [data,setData]=useState<Settings|null>(null),[savedData,setSavedData]=useState<Settings|null>(null),[section,setSection]=useState<Section>(initialSection),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
- useEffect(()=>setSection(initialSection),[initialSection]);
+ useEffect(()=>setSection(initialSection),[initialSection,navigationVersion]);
  useEffect(()=>{let live=true;fetch(endpoint+'/radius-settings',{credentials:'include',cache:'no-store'}).then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.message);if(live){setData(body);setSavedData(body);}}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[endpoint]);
  const dirty=Boolean(data&&savedData&&JSON.stringify(data)!==JSON.stringify(savedData));
  const save=async()=>{if(!data||busy)return;setBusy(true);setError('');setMessage('');try{const response=await fetch(endpoint+'/radius-settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const body=await response.json();if(!response.ok)throw new Error(body.message);setData(body);setSavedData(body);setMessage('تم حفظ إعدادات RADIUS.');}catch(e){setError(e instanceof Error?e.message:'تعذر الحفظ.');}finally{setBusy(false);}};
