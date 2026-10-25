@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {Archive,Building2,PanelsTopLeft,Server,ShieldCheck,Tags,Users,Gauge,Settings,Search,Phone,MapPin,Network,Clock,Coins,Activity,Layers,UserRound} from 'lucide-react';
+import {Archive,Building2,PanelsTopLeft,Server,ShieldCheck,Tags,Users,Gauge,Settings,Search,Phone,MapPin,Network,Clock,Coins,Activity,Layers} from 'lucide-react';
 import ProjectTabs from '@/components/ui/project-tabs';
 import ProjectDropdown from '@/components/ui/project-dropdown';
 import NetworkCurrencySettings from '@/components/network-currency-settings';
@@ -36,11 +36,12 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
   {value:'archive-profiles',label:'البروفايلات المؤرشفة',hint:'عرض واستعادة البروفايلات',icon:Gauge,iconClassName:'text-teal-600'}
  ];
  const jumpToSetting=(value:string)=>{setJumpValue('');setJumpRevision(revision=>revision+1);if(value.startsWith('network-')){setTab('network');if(value==='network-currency'){setNetworkSection('currency');return;}setNetworkSection('details');setNetworkDetail(value.slice('network-'.length) as typeof networkDetail);return;}if(value.startsWith('radius-')){setTab('radius');setRadiusSection(value.slice('radius-'.length) as typeof radiusSection);return;}if(value.startsWith('system-')){setTab('system');setSystemSection(value.slice('system-'.length) as typeof systemSection);return;}if(value.startsWith('archive-')){setTab('archive');setKind(value.slice('archive-'.length));}};
+ const titles:Record<Tab,string>={network:'إعدادات الشبكة',radius:'إعدادات RADIUS',system:'إعدادات النظام والواجهة',archive:'الأرشيف'};
  const descriptions:Record<Tab,string>={network:'بيانات الشبكة ومعلومات التواصل والعملة الافتراضية.',radius:'سياسات المحاسبة ومهلة السماح والخادم المرتبط بخدمة RADIUS.',system:'تفضيلات الواجهة الرئيسية والشريط السفلي والتنبيهات الخاصة بحسابك.',archive:'إدارة السجلات المؤرشفة واستعادتها حسب نوعها.'};
  return <div dir="rtl" className="space-y-4">
   <ProjectInfoCard tone="info" className="!p-4 sm:!p-5">
    <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.52fr)]">
-    <div className="flex min-w-0 items-start gap-3"><ProjectCardIcon icon={Settings} tone="info"/><div className="min-w-0"><p className="text-[10px] font-semibold text-sky-700 dark:text-sky-300">مركز إدارة الإعدادات</p><h1 className="mt-1 text-base font-bold text-[#17386d] dark:text-white">إعدادات الشبكة</h1><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-300">{descriptions[tab]}</p></div></div>
+    <div className="flex min-w-0 items-start gap-3"><ProjectCardIcon icon={Settings} tone="info"/><div className="min-w-0"><p className="text-[10px] font-semibold text-sky-700 dark:text-sky-300">مركز إدارة الإعدادات</p><h1 className="mt-1 text-base font-bold text-[#17386d] dark:text-white"{titles[tab]}</h1><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-300">{descriptions[tab]}</p></div></div>
     <div className="min-w-0"><label className="mb-1.5 block text-[10px] font-semibold text-slate-600 dark:text-slate-300">انتقال سريع إلى إعداد</label><ProjectDropdown searchable value={jumpValue} onChange={jumpToSetting} options={quickSettings} icon={Search} placeholder="ابحث عن الإعداد أو اختره" searchPlaceholder="ابحث باسم الإعداد..." fieldStyle/></div>
    </div>
   </ProjectInfoCard>
