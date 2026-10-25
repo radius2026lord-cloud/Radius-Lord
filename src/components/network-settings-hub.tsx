@@ -1,6 +1,6 @@
 "use client";
 import {useState} from 'react';
-import {Archive,Building2,Database,PanelsTopLeft,Server,ShieldCheck,Tags,Users,Gauge,Settings} from 'lucide-react';
+import {Archive,Building2,PanelsTopLeft,Server,ShieldCheck,Tags,Users,Gauge,Settings} from 'lucide-react';
 import ProjectTabs from '@/components/ui/project-tabs';
 import NetworkCurrencySettings from '@/components/network-currency-settings';
 import NetworkProfiles from '@/components/network-profiles';
@@ -25,7 +25,7 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
    {value:'system',label:'النظام والواجهة',icon:PanelsTopLeft,iconClassName:'text-violet-500'},
    {value:'archive',label:'الأرشيف',icon:Archive,iconClassName:'text-amber-500'}
   ]}/>
-  <section id={`network-settings-hub-panel-${tab}`} role="tabpanel" aria-labelledby={`network-settings-hub-tab-${tab}"} className="min-w-0">
+  <section id={`network-settings-hub-panel-${tab}`} role="tabpanel" aria-labelledby={`network-settings-hub-tab-${tab}`} className="min-w-0">
    {tab==='network'?<div className="space-y-4"><NetworkSettings endpoint={endpoint} refresh={refresh}/><NetworkCurrencySettings endpoint={endpoint}/></div>
     :tab==='radius'?<NetworkRadiusSettings endpoint={endpoint}/>
     :tab==='system'?<UiPreferencesPanel endpoint={`${endpoint}/ui-preferences`} followUpEndpoint={`${endpoint}/follow-up-alerts`} canEditFollowUp={canEditFollowUp} network/>
