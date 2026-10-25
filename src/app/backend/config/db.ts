@@ -2,72 +2,66 @@ import mysql from 'mysql2/promise';
 
 import { env } from './env';
 
-let pool: mysql.Pool;
+const pool = mysql.createPool({
+  host: env.DB_HOST,
+  user: env.DB_USER,
+  password: env.DB_PASS,
+  database: env.DB_NAME,
+  port: env.DB_PORT,
+  waitForConnections: true,
+  connectionLimit: 10,
+  maxIdle: 10,
+  idleTimeout: 60_000,
+  queueLimit: 100,
+  connectTimeout: 10_000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
+});
 
-function createPool() {
-  const newPool = mysql.createPool({
-    host: env.DB_HOST,
-    user: env.DB_USER,
-    password: env.DB_PASS,
-    database: env.DB_NAME,
-    port: env.DB_PORT,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+console.log('🔌 MySQL pool created');
+
+// A failed probe must not replace the pool. mysql2's pool discards broken
+// connections and creates replacements as subsequent queries need them.
+void pool.getConnection()
+  .then((connection) => {
+    console.log('✅ Connected to MySQL successfully');
+    connection.release();
+  })
+  .catch((error: NodeJS.ErrnoException) => {
+    console.error('❌ Initial MySQL connection failed:', {
+      code: error.code,
+      message: error.message,
+    });
   });
 
-  console.log('🔌 MySQL pool created');
+const transientConnectionErrors = new Set([
+  'PROTOCOL_CONNECTION_LOST',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EPIPE',
+]);
 
-  // اختبار الاتصال
-  newPool
-    .getConnection()
-    .then((conn) => {
-      console.log('✅ Connected to MySQL successfully');
-      conn.release();
-    })
-    .catch((err) => {
-      console.error('❌ Initial MySQL connection failed:', err);
-    });
-
-  return newPool;
-}
-
-// إنشاء الـ pool
-pool = createPool();
-
-// إعادة الاتصال عند حدوث مشاكل
-async function reconnect() {
-  console.log('♻️ Attempting to reconnect to MySQL...');
-  try {
-    pool = createPool();
-    console.log('✅ Reconnected to MySQL');
-  } catch (err) {
-    console.error('❌ Reconnection failed, retrying in 5 seconds...', err);
-    setTimeout(reconnect, 5000);
-  }
-}
-
-// دالة Query آمنة
 async function safeQuery(sql: string, params?: any[]) {
   try {
     return await pool.query(sql, params);
-  } catch (err: any) {
-    console.error('⚠️ MySQL Query Error:', err.code);
-
-    if (
-      err.code === 'PROTOCOL_CONNECTION_LOST' ||
-      err.code === 'ECONNRESET' ||
-      err.code === 'ECONNREFUSED' ||
-      err.code === 'ETIMEDOUT'
-    ) {
-      reconnect();
+  } catch (error) {
+    const dbError = error as NodeJS.ErrnoException;
+    if (dbError.code && transientConnectionErrors.has(dbError.code)) {
+      // Do not retry arbitrary SQL: a write may have reached MySQL before the
+      // socket reset, so retrying could apply the same change twice.
+      console.error('⚠️ MySQL connection interrupted; the next query will use a fresh pooled connection:', {
+        code: dbError.code,
+        message: dbError.message,
+      });
     }
-
-    throw err;
+    throw error;
   }
 }
 
 export const db = {
   query: safeQuery,
-  get pool(){return pool;},
+  get pool() {
+    return pool;
+  },
 };
