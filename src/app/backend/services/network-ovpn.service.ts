@@ -406,7 +406,7 @@ function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:s
  return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
 export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string){
- const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,ns.radius_server_address,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id LEFT JOIN network_settings ns ON ns.id=1 JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
+ const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,COALESCE(NULLIF(ns.radius_server_address,''),NULLIF(c.radius_server_address,'')) AS ping_radius_server_address,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id LEFT JOIN network_settings ns ON ns.id=1 JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  const row=rows[0];if(!row)fail('NAS_API_NOT_CONFIGURED');if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
  const port=Number(row.port);if(!Number.isInteger(port)||port<1||port>65535)fail('NAS_API_PORT_INVALID');
  const c=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot;
@@ -424,7 +424,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    const directTcp=await probeNasApiTcp(String(tunnel.tunnel_address),port);
    if(isPrivateIpv4(directTcp.sourceAddress)){
     api=await RouterApi.connect({host:String(tunnel.tunnel_address),port,username:String(row.username),password:decryptProvisioningSecret(row.password_encrypted),secure:false});
-    const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.radius_server_address);api.close();api=undefined;
+    const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.ping_radius_server_address);api.close();api=undefined;
     await saveNasApiSample(app,nasId,port,sample,'direct');
     return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,connection:{...directTcp,transport:'direct',login:'ok' as const}};
    }
@@ -513,7 +513,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     api=await RouterApi.connect({host:gatewayReachability.targetAddress,port:relayPort,username:String(row.username),password:decryptProvisioningSecret(row.password_encrypted),secure:false});
     if(monitorUsername){stage='read_pppoe_live_traffic';const traffic=await readPppoeLiveTraffic(api,monitorUsername);return {traffic,relayPort,sourceAddress,targetAddress:gatewayReachability.targetAddress,elapsedMs:tcp.elapsedMs,gatewayId:Number(tunnel.ovpn_gateway_id)};}
     stage='read_nas_api_resources';
-    const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.radius_server_address);
+    const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.ping_radius_server_address);
     return {sample,relayPort,sourceAddress,targetAddress:gatewayReachability.targetAddress,elapsedMs:tcp.elapsedMs,gatewayId:Number(tunnel.ovpn_gateway_id)};
    }catch(error){
     relayFailureStage=stage;
