@@ -15,7 +15,6 @@ import ProjectCheckbox from "@/components/ui/project-checkbox";
 import ProjectFieldNotice from "@/components/ui/project-field-notice";
 import ProjectLocationMap from "@/components/ui/project-location-map";
 import FloatingNotice from "@/components/ui/floating-notice";
-import ProjectTabs from "@/components/ui/project-tabs";
 import NetworkActivity from "@/components/network-activity";
 import SubscriberIdentityImport, { type IdentityDocumentDraft, type IdentityImagesDraft } from "@/components/subscriber-identity-import";
 
@@ -805,7 +804,7 @@ export default function NetworkSubscribers({endpoint,networkName="",tab="list",o
  const identityContactFields=entryMode==="identity"?<section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[.025]" aria-label="بيانات التواصل قبل تصوير الهوية"><h3 className="mb-3 flex items-center gap-2 text-xs font-bold text-[#17386d] dark:text-slate-100"><Phone className="h-4 w-4 text-emerald-600"/>بيانات التواصل</h3><div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-[11px] font-medium">رقم الهاتف *<ProjectInput required type="tel" inputMode="numeric" pattern="[0-9]{1,15}" title="أرقام فقط، بحد أقصى 15 رقمًا" autoComplete="tel" className={inputClass} value={draft.phone} onChange={event=>setField("phone",event.target.value.replace(/\D/g,"").slice(0,15))} maxLength={15}/></label><label data-subscriber-field="address" className="block space-y-1 text-[11px] font-medium">العنوان *<SubscriberAutocomplete endpoint={endpoint} field="address" value={draft.address} onChange={value=>setField("address",value)} icon={MapPin} placeholder="اكتب حرفين لعرض العناوين المحفوظة"/></label></div></section>:null;
 
  return <div className="space-y-3 text-[13px] sm:space-y-4">
-{!detailId&&<ProjectTabs id="subscriber-management" value={tab} onChange={value=>onTabChange(value as "list"|"create"|"activity")} items={[{value:"list",label:"المشتركون",icon:Users,iconClassName:"text-blue-500"},...(canViewActivity?[{value:"activity",label:"سجل المشتركين",icon:Activity,iconClassName:"text-violet-500"}]:[]),...(canCreate?[{value:"create",label:"إضافة مشترك",icon:Plus,iconClassName:"text-emerald-500"}]:[])]}/>}
+
 <FloatingNotice message={subscriberCreatedNotice} onDismiss={()=>setSubscriberCreatedNotice("")}/>
 <FloatingNotice error={pppoeNoticeError} warning={pppoeNoticeWarning} message={pppoeNoticeMessage} onDismiss={()=>{setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");}}/>
 <ProjectDialog open={pppoeOpen} title={createdPppoe?"تم إنشاء خط PPPoE":"إضافة خط PPPoE"} description={createdPppoe?"احفظ بيانات الدخول لإرسالها إلى المشترك.":"سيُربط الخط بملف المشترك المفتوح ويُسند إلى إصدار الباقة الحالي."} onClose={closePppoeDialog} busy={pppoeBusy} maxWidth="max-w-4xl" hostingerStyle compact bodyClassName="!p-2 sm:!p-3" titleClassName="!text-[#202124] dark:!text-white" headerAccessory={<span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#e5e5e8] bg-[#f4f4f5] text-[#0758e9] dark:border-white/[.10] dark:bg-[#172b40] dark:text-blue-300"><Radio className="h-5 w-5" strokeWidth={2}/></span>}>
