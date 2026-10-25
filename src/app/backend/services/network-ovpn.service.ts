@@ -285,13 +285,8 @@ async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
  if(!target)return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null,reason:'address_missing' as const};
  try{
   const attrs={address:target,count:'3',interval:'300ms'};
-  let rows:any[];
-  try{rows=await api.command('/tool/ping',attrs,[],9000);}
-  catch(first){
-   const firstMessage=String(first instanceof Error?first.message:first).toLowerCase();
-   if(!/not available|unknown command|no such command|invalid command|غير متاح|غير معروف|لا يوجد أمر/.test(firstMessage))throw first;
-   rows=await api.command('/ping',attrs,[],9000);
-  }
+  // Native RouterOS API exposes the CLI ping command as /ping (not /tool/ping).
+  const rows:any[]=await api.command('/ping',attrs,[],9000);
   const summary=rows.find(row=>row['avg-rtt']!==undefined||row['packet-loss']!==undefined||row.received!==undefined)||{};
   const samples=rows.map(row=>routerOsTimeMs(row.time)).filter((value):value is number=>value!==null);
   const averageMs=routerOsTimeMs(summary['avg-rtt'])??(samples.length?samples.reduce((sum,value)=>sum+value,0)/samples.length:null);
@@ -302,7 +297,7 @@ async function readPppoeClientPing(api:RouterApi,address:string|null|undefined){
   return {status:received>0&&averageMs!==null?'ok' as const:'timeout' as const,averageMs,packetLoss};
  }catch(error){
   const message=String(error instanceof Error?error.message:error).toLowerCase();
-  const reason=/permission|not enough|not allowed|denied|policy/.test(message)?'permission' as const:/not available|unknown command|no such command|invalid command|غير متاح|غير معروف|لا يوجد أمر/.test(message)?'unsupported' as const:'command_failed' as const;
+  const reason=/permission|not enough|not allowed|denied|policy|الصلاحيات اللازمة|لا يملك الصلاحيات/.test(message)?'permission' as const:/not available|unknown command|no such command|invalid command|غير متاح|غير معروف|لا يوجد أمر/.test(message)?'unsupported' as const:'command_failed' as const;
   return {status:'unavailable' as const,averageMs:null as number|null,packetLoss:null as number|null,reason};
  }
 }
