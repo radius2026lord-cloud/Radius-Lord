@@ -41,7 +41,7 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
  return <div dir="rtl" className="space-y-4">
   <ProjectInfoCard tone="info" className="!p-4 sm:!p-5">
    <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.52fr)]">
-    <div className="flex min-w-0 items-start gap-3"><ProjectCardIcon icon={Settings} tone="info"/><div className="min-w-0"><p className="text-[10px] font-semibold text-sky-700 dark:text-sky-300">مركز إدارة الإعدادات</p><h1 className="mt-1 text-base font-bold text-[#17386d] dark:text-white"{titles[tab]}</h1><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-300">{descriptions[tab]}</p></div></div>
+    <div className="flex min-w-0 items-start gap-3"><ProjectCardIcon icon={Settings} tone="info"/><div className="min-w-0"><p className="text-[10px] font-semibold text-sky-700 dark:text-sky-300">مركز إدارة الإعدادات</p><h1 className="mt-1 text-base font-bold text-[#17386d] dark:text-white">{titles[tab]}</h1><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-300">{descriptions[tab]}</p></div></div>
     <div className="min-w-0"><label className="mb-1.5 block text-[10px] font-semibold text-slate-600 dark:text-slate-300">انتقال سريع إلى إعداد</label><ProjectDropdown searchable value={jumpValue} onChange={jumpToSetting} options={quickSettings} icon={Search} placeholder="ابحث عن الإعداد أو اختره" searchPlaceholder="ابحث باسم الإعداد..." fieldStyle/></div>
    </div>
   </ProjectInfoCard>
