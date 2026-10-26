@@ -9,6 +9,7 @@ export type SubscriberCardTemplate={
  cornerStyle:'rounded'|'square';
  selectedContactPhones:string[];
  contactText:string;
+ networkDescription:string;
  backNote:string;
 };
 const defaults:SubscriberCardTemplate={
@@ -20,6 +21,7 @@ const defaults:SubscriberCardTemplate={
  cornerStyle:'rounded',
  selectedContactPhones:[],
  contactText:'',
+ networkDescription:'',
  backNote:'هذه البطاقة تعريفية خاصة بالمشترك. عند العثور عليها يرجى التواصل مع الشبكة.',
 };
 const allowedColors=new Set(['#0758e9','#1d4ed8','#0f766e','#047857','#6d28d9','#7c3aed','#9333ea','#b45309','#c2410c','#be123c','#9f1239','#334155','#0f172a','#0891b2','#0369a1','#a16207']);
@@ -31,9 +33,9 @@ function normalize(input:any):SubscriberCardTemplate{
  const cornerStyle=value.cornerStyle==='square'?'square':value.cornerStyle==='rounded'?'rounded':null;
  const selectedContactPhones:string[]=Array.isArray(value.selectedContactPhones)?Array.from(new Set<string>(value.selectedContactPhones.filter((phone:unknown):phone is string=>typeof phone==='string').map((phone:string)=>phone.trim()).filter((phone:string)=>Boolean(phone)))):[];
  if(!cornerStyle||selectedContactPhones.length>6)throw new Error('SUBSCRIBER_CARD_INPUT');
- const contactText=String(value.contactText??'').trim(),backNote=String(value.backNote??'').trim();
- if(contactText.length>120||backNote.length>300)throw new Error('SUBSCRIBER_CARD_INPUT');
- return {accentColor,showSubscriberId:value.showSubscriberId,showPhone:value.showPhone,showNetworkContact:value.showNetworkContact,showBackQr:value.showBackQr,cornerStyle,selectedContactPhones,contactText,backNote};
+ const contactText=String(value.contactText??'').trim(),networkDescription=String(value.networkDescription??'').trim(),backNote=String(value.backNote??'').trim();
+ if(contactText.length>120||networkDescription.length>100||backNote.length>300)throw new Error('SUBSCRIBER_CARD_INPUT');
+ return {accentColor,showSubscriberId:value.showSubscriberId,showPhone:value.showPhone,showNetworkContact:value.showNetworkContact,showBackQr:value.showBackQr,cornerStyle,selectedContactPhones,contactText,networkDescription,backNote};
 }
 async function readContactOptions(app:any){
  const [settings]:any=await app.query('SELECT primary_contact_phone phone FROM network_settings WHERE id=1 LIMIT 1');
