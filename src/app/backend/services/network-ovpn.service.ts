@@ -288,7 +288,8 @@ async function readNasApiSample(api:RouterApi){
  try{const health=await api.command('/system/health/print');const entry=health.find(item=>/temperature/i.test(item.name??''));if(entry?.value){const value=Number(String(entry.value).replace(/[^0-9.+-]/g,''));if(Number.isFinite(value))temperature=value;}}catch{/* Some RouterOS boards do not expose health data. */}
  const cpu=Number(resource['cpu-load']),freeMemory=Number(resource['free-memory']),totalMemory=Number(resource['total-memory']);
  if(!Number.isFinite(cpu)||!Number.isFinite(freeMemory)||!Number.isFinite(totalMemory)||totalMemory<=0||freeMemory<0||freeMemory>totalMemory)fail('NAS_API_INVALID_RESPONSE');
- return {receivedAt:new Date().toISOString(),cpu,freeMemory,totalMemory,temperature,version:String(resource.version||'').slice(0,40),board:String(resource['board-name']||'').slice(0,100),uptime:String(resource.uptime||'').slice(0,40)};
+ const radiusClients=await readRadiusClientDiagnostics(api);
+ return {receivedAt:new Date().toISOString(),cpu,freeMemory,totalMemory,temperature,version:String(resource.version||'').slice(0,40),board:String(resource['board-name']||'').slice(0,100),uptime:String(resource.uptime||'').slice(0,40),radiusClients};
 }
 async function syncNasTimezone(api:RouterApi,timezone:string){
  const configured=String(timezone||'Asia/Damascus').trim();
