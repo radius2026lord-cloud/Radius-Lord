@@ -29,7 +29,7 @@ function normalize(input:any):SubscriberCardTemplate{
  if(!allowedColors.has(accentColor))throw new Error('SUBSCRIBER_CARD_INPUT');
  for(const key of ['showSubscriberId','showPhone','showNetworkContact','showBackQr'])if(typeof value[key]!=='boolean')throw new Error('SUBSCRIBER_CARD_INPUT');
  const cornerStyle=value.cornerStyle==='square'?'square':value.cornerStyle==='rounded'?'rounded':null;
- const selectedContactPhones=Array.isArray(value.selectedContactPhones)?Array.from(new Set(value.selectedContactPhones.filter((phone:any)=>typeof phone==='string').map((phone:string)=>phone.trim()).filter(Boolean))):[];
+ const selectedContactPhones:string[]=Array.isArray(value.selectedContactPhones)?Array.from(new Set<string>(value.selectedContactPhones.filter((phone:unknown):phone is string=>typeof phone==='string').map((phone:string)=>phone.trim()).filter((phone:string)=>Boolean(phone)))):[];
  if(!cornerStyle||selectedContactPhones.length>6)throw new Error('SUBSCRIBER_CARD_INPUT');
  const contactText=String(value.contactText??'').trim(),backNote=String(value.backNote??'').trim();
  if(contactText.length>120||backNote.length>300)throw new Error('SUBSCRIBER_CARD_INPUT');
