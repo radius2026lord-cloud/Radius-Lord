@@ -1,4 +1,4 @@
-import {db} from '../config/db';
+import {withNetwork,validateLocalLicense} from './network-runtime.service';
 
 export type SubscriberCardTemplate={
  accentColor:string;
@@ -27,19 +27,33 @@ function normalize(input:any):SubscriberCardTemplate{
  return {accentColor,showSubscriberId:value.showSubscriberId,showPhone:value.showPhone,showNetworkContact:value.showNetworkContact,contactText,backNote};
 }
 export async function readSubscriberCardTemplate(scope:any){
- const [rows]:any=await db.query('SELECT template_json,is_approved,updated_at FROM network_subscriber_card_templates WHERE environment_id=? LIMIT 1',[scope.environment_id]);
- const row=rows[0];
- let template=defaults;
- if(row?.template_json){try{template={...defaults,...(typeof row.template_json==='string'?JSON.parse(row.template_json):row.template_json)};}catch{template=defaults;}}
- return {template,approved:Boolean(row?.is_approved),updatedAt:row?.updated_at||null};
+ return withNetwork(scope,async app=>{
+  await validateLocalLicense(app,scope);
+  const [rows]:any=await app.query('SELECT template_json,is_approved,updated_at FROM network_subscriber_card_templates WHERE id=1 LIMIT 1');
+  const row=rows[0];
+  let template=defaults;
+  if(row?.template_json){try{template={...defaults,...(typeof row.template_json==='string'?JSON.parse(row.template_json):row.template_json)};}catch{template=defaults;}}
+  return {template,approved:Boolean(row?.is_approved),updatedAt:row?.updated_at||null};
+ });
 }
 export async function saveSubscriberCardTemplate(scope:any,input:any){
  const template=normalize(input?.template);
  if(typeof input?.approve!=='boolean')throw new Error('SUBSCRIBER_CARD_INPUT');
  const approved=input.approve;
- await db.query(`INSERT INTO network_subscriber_card_templates(environment_id,template_json,is_approved,approved_by,approved_at)
- VALUES(?,?,?,?,IF(?,CURRENT_TIMESTAMP(3),NULL))
- ON DUPLICATE KEY UPDATE template_json=VALUES(template_json),is_approved=VALUES(is_approved),approved_by=VALUES(approved_by),approved_at=VALUES(approved_at),updated_at=CURRENT_TIMESTAMP(3)`,
- [scope.environment_id,JSON.stringify(template),approved?1:0,approved?scope.managerId:null,approved?1:0]);
- return readSubscriberCardTemplate(scope);
+ return withNetwork(scope,async app=>{
+  await validateLocalLicense(app,scope);
+  await app.beginTransaction();
+  try{
+   await app.query(`INSERT INTO network_subscriber_card_templates(id,template_json,is_approved,approved_by,approved_at)
+    VALUES(1,?,?,?,IF(?,CURRENT_TIMESTAMP(3),NULL))
+    ON DUPLICATE KEY UPDATE template_json=VALUES(template_json),is_approved=VALUES(is_approved),approved_by=VALUES(approved_by),approved_at=VALUES(approved_at),updated_at=CURRENT_TIMESTAMP(3)`,
+    [JSON.stringify(template),approved?1:0,approved?scope.managerId:null,approved?1:0]);
+   await app.commit();
+  }catch(error){await app.rollback();throw error;}
+  const [rows]:any=await app.query('SELECT template_json,is_approved,updated_at FROM network_subscriber_card_templates WHERE id=1 LIMIT 1');
+  const row=rows[0];
+  let saved=defaults;
+  if(row?.template_json){try{saved={...defaults,...(typeof row.template_json==='string'?JSON.parse(row.template_json):row.template_json)};}catch{saved=defaults;}}
+  return {template:saved,approved:Boolean(row?.is_approved),updatedAt:row?.updated_at||null};
+ });
 }
