@@ -13,9 +13,10 @@ import UiPreferencesPanel from '@/components/settings/ui-preferences-panel';
 import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card';
 
 type Tab='network'|'radius'|'system'|'archive';
-export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',canEditFollowUp=false}:{endpoint:string;refresh:number;initialTab?:Tab;canEditFollowUp?:boolean}){
+export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',initialNetworkDetail='general',canEditFollowUp=false}:{endpoint:string;refresh:number;initialTab?:Tab;initialNetworkDetail?:'general'|'contact'|'location'|'areas'|'time'|'private';canEditFollowUp?:boolean}){
  const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users'),[networkSection,setNetworkSection]=useState('details'),[networkDetail,setNetworkDetail]=useState<'general'|'contact'|'location'|'areas'|'time'|'private'>('general'),[radiusSection,setRadiusSection]=useState<'accounting'|'grace'|'server'>('accounting'),[systemSection,setSystemSection]=useState<'footer'|'homepage'|'alerts'>('footer'),[jumpValue,setJumpValue]=useState(''),[jumpRevision,setJumpRevision]=useState(0);
  useEffect(()=>setTab(initialTab),[initialTab]);
+ useEffect(()=>setNetworkDetail(initialNetworkDetail),[initialNetworkDetail]);
  const quickSettings=[
   {value:'network-general',label:'بيانات الشبكة العامة',hint:'اسم الشبكة والوصف والترخيص',icon:Building2,iconClassName:'text-sky-600'},
   {value:'network-contact',label:'بيانات التواصل',hint:'البريد وأرقام الهاتف',icon:Phone,iconClassName:'text-teal-600'},
