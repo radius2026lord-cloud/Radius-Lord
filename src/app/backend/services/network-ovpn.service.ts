@@ -253,6 +253,34 @@ export async function networkNasScript(central:PoolConnection,app:mysql.Connecti
 }
 // Verify the RouterOS API over the NAS tunnel and refresh its resource snapshot.
 // Tunnel presence alone is deliberately not treated as proof that API works.
+async function readRadiusClientDiagnostics(api:RouterApi){
+ const checkedAt=new Date().toISOString();
+ let incoming:{accept:boolean;port:number;vrf:string|null}|null=null;
+ try{
+  const [row]=await api.command('/radius/incoming/print',{'.proplist':'accept,port,vrf'});
+  if(row)incoming={accept:['yes','true'].includes(String(row.accept||'').toLowerCase()),port:Number(row.port)||1700,vrf:row.vrf||null};
+ }catch{/* Older RouterOS releases or limited API policies may not expose this menu. */}
+ let clients:any[]=[];
+ try{clients=await api.command('/radius/print',{'.proplist':'.id,address,service,authentication-port,accounting-port,disabled,comment'});}catch{return {status:'unavailable' as const,checkedAt,reason:'تعذر قراءة قائمة خوادم RADIUS عبر API.',incoming,clients:[]};}
+ const readCount=(row:any,key:string):number|null=>{const value=Number(row?.[key]);return Number.isFinite(value)&&value>=0?value:null;};
+ const results=[];
+ for(const client of clients.slice(0,8)){
+  const id=String(client['.id']||'');
+  let monitor:any=null,reason:string|undefined;
+  if(!id)reason='معرّف خادم RADIUS غير متاح.';
+  else if(['yes','true'].includes(String(client.disabled||'').toLowerCase()))reason='إعداد خادم RADIUS معطّل.';
+  else try{
+   const rows=await api.command('/radius/monitor',{numbers:id,once:''},[],5000);
+   monitor=rows[0]||null;
+   if(!monitor)reason='لم يُرجع RouterOS عدادات للمراقبة.';
+  }catch(error){
+   const message=String(error instanceof Error?error.message:error).toLowerCase();
+   reason=/permission|not enough|not permitted|الصلاحيات/.test(message)?'صلاحية قراءة عدادات RADIUS غير متاحة لحساب API.':'أمر مراقبة RADIUS غير متاح في هذا الإصدار أو لم يُرجع بيانات.';
+  }
+  results.push({address:String(client.address||''),service:String(client.service||''),authenticationPort:Number(client['authentication-port'])||1812,accountingPort:Number(client['accounting-port'])||1813,comment:String(client.comment||''),disabled:['yes','true'].includes(String(client.disabled||'').toLowerCase()),status:monitor?'ok' as const:'unavailable' as const,reason:reason||null,pending:readCount(monitor,'pending'),requests:readCount(monitor,'requests'),accepts:readCount(monitor,'accepts'),rejects:readCount(monitor,'rejects'),resends:readCount(monitor,'resends'),timeouts:readCount(monitor,'timeouts'),badReplies:readCount(monitor,'bad-replies'),lastRequestRtt:String(monitor?.['last-request-rtt']||'')||null});
+ }
+ return {status:results.some(item=>item.status==='ok')?'ok' as const:results.length?'unavailable' as const:'not_configured' as const,checkedAt,incoming,clients:results};
+}
 async function readNasApiSample(api:RouterApi){
  const [resource]=await api.command('/system/resource/print',{'.proplist':'cpu-load,free-memory,total-memory,version,board-name,uptime'});
  if(!resource)fail('NAS_API_EMPTY_RESPONSE');
