@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useState} from 'react';
 import Link from 'next/link';
-import {ScrollText,ShieldCheck,Users,Activity,CheckCircle2,AlertCircle,Eye,Plus,Pencil,Archive,RotateCcw,Trash2,LogIn,LogOut,UserRound,CalendarClock,CalendarDays,Wifi,WifiOff,KeyRound,RefreshCw,X,ListFilter,SlidersHorizontal,ChevronDown} from 'lucide-react';
+import {ScrollText,ShieldCheck,Users,Activity,CheckCircle2,AlertCircle,Eye,Plus,Pencil,Archive,RotateCcw,Trash2,LogIn,LogOut,UserRound,CalendarClock,CalendarDays,Server,Wifi,WifiOff,KeyRound,RefreshCw,X,ListFilter,SlidersHorizontal,ChevronDown} from 'lucide-react';
 import {CollectionToolbar,CollectionGrid,CollectionStatusFilters,CollectionState,useCollectionDisplay} from '@/components/ui/collection-display';
 import ProjectInput from '@/components/ui/project-input';
 import ProjectDropdown from '@/components/ui/project-dropdown';
