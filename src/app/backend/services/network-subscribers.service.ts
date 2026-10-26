@@ -322,6 +322,22 @@ export async function readNetworkPppoeApiTarget(scope:any,customerValue:any,line
  });
 }
 
+export async function recordNetworkSubscriberCardPrint(scope:any,value:any){
+ return withNetwork(scope,async app=>{
+  const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
+  if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
+  const id=Number(value);
+  if(!Number.isSafeInteger(id)||id<1)throw new Error('SUBSCRIBER_INPUT');
+  const [rows]:any=await app.query(`SELECT id FROM customers WHERE id=? AND archived_at IS NULL ${principal?'':'AND manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
+  if(!rows[0])throw new Error('SUBSCRIBER_NOT_FOUND');
+  const snapshot=JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role});
+  const after=JSON.stringify({cardFormat:'ID-1',sides:'front_and_back',action:'print_requested'});
+  await app.query(`INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,after_data,result)
+   VALUES(?,?,'manager','subscribers.card.print','customer',?,?,?,'success')`,[scope.managerId,snapshot,id,id,after]);
+  return {success:true};
+ });
+}
+
 export async function readNetworkSubscriberDetail(scope:any,value:any,options:{includeActivity?:boolean;activityOffset?:number}={}){
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
