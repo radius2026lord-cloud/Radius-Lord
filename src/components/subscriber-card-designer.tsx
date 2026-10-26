@@ -20,6 +20,7 @@ export type SubscriberCardTemplate = {
   backNote: string;
 };
 export type SubscriberCardPerson = { id:number; first_name:string; last_name:string; phone:string|null };
+type CardStyle = CSSProperties & {"--rl-card-accent":string};
 
 const defaults:SubscriberCardTemplate = {
   accentColor:"#0758e9",
@@ -39,7 +40,7 @@ const colors = [
 
 function CardFace({template,networkName,endpoint,person,qrValue,side}:{template:SubscriberCardTemplate;networkName:string;endpoint:string;person?:SubscriberCardPerson|null;qrValue:string;side:"front"|"back"}){
  const [logoMissing,setLogoMissing]=useState(false);
- return <article className={`rl-subscriber-card rl-subscriber-card-${side}`} style={{"--rl-card-accent":template.accentColor} as CSSProperties} dir="rtl">
+ return <article className={`rl-subscriber-card rl-subscriber-card-${side}`} style={{"--rl-card-accent":template.accentColor} as CardStyle} dir="rtl">
   {side==="front"?<><header className="rl-card-brand"><span className="rl-card-logo">{!logoMissing?<Image src={`${endpoint}/logo`} alt="" width={64} height={64} unoptimized onError={()=>setLogoMissing(true)}/>:<ImageIcon aria-hidden="true"/>}</span><span className="rl-card-network"><b>{networkName||"اسم الشبكة"}</b><small>بطاقة تعريف مشترك</small></span><span className="rl-card-mark"><ShieldCheck/></span></header><div className="rl-card-front-content"><div className="rl-card-details"><p className="rl-card-eyebrow">بيانات المشترك</p><h2>{person?`${person.first_name} ${person.last_name}`:"الاسم الأول والكنية"}</h2>{template.showSubscriberId&&<p className="rl-card-field"><span>#</span><bdi>{person?person.id.toLocaleString("ar"):"0000"}</bdi></p>}{template.showPhone&&<p className="rl-card-field"><Phone/><bdi dir="ltr">{person?.phone||"رقم الهاتف"}</bdi></p>}</div><div className="rl-card-qr"><QRCodeSVG value={qrValue||"subscriber-card-preview"} size={92} level="M" marginSize={2} bgColor="#ffffff" fgColor="#10243a"/><small>امسح لفتح الملف</small></div></div>{template.showNetworkContact&&template.contactText.trim()&&<footer className="rl-card-contact">{template.contactText}</footer>}</>:<><header className="rl-card-back-heading"><span className="rl-card-mark"><BadgeCheck/></span><div><b>{networkName||"اسم الشبكة"}</b><small>معلومات التواصل</small></div></header><div className="rl-card-back-note">{template.backNote||"ملاحظات الشبكة"}</div><div className="rl-card-back-contact">{template.contactText.trim()||"أضف وسيلة تواصل الشبكة من إعدادات التصميم."}</div><div className="rl-card-qr-hint"><QRCodeSVG value={qrValue||"subscriber-card-preview"} size={48} level="M" marginSize={1}/><span>رمز آمن يفتح ملف المشترك بعد تسجيل الدخول</span></div><footer className="rl-card-back-footer">لا تحتوي البطاقة على الرقم الوطني أو بيانات الدخول.</footer></>}
  </article>;
 }
