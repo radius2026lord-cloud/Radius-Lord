@@ -10,6 +10,7 @@ import {readPrivateSetting,savePrivateSetting,applyRadiusDatabase,radiusDatabase
 import {validLimits} from './subscription-environment.service';
 import {licenseSignature,validateLocalLicense} from './network-runtime.service';
 import {saveNetworkOvpn,createNetworkNas,provisionNetworkNas,reserveNetworkNasCapacity,nasRadiusClients,markNasRadiusConfigured,purchasedNasCapacity,radiusIpv4} from './network-ovpn.service';
+import {syncRadiusOvpnRoutes} from './radius-ovpn-routes.service';
 import {readHostingPreflight} from './hosting-preflight.service';
 type Step=(code:string,operation:()=>Promise<void>,alwaysRun?:boolean)=>Promise<void>;
 const fail=(code:string)=>{throw new Error(code);};
@@ -44,6 +45,7 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
   const [principal]:any=await app.query("SELECT id FROM managers WHERE manager_type='principal' AND archived_at IS NULL");if(!principal[0])fail('NETWORK_PRINCIPAL_REQUIRED');
   const nasId=await createNetworkNas(app,scope,Number(principal[0].id),snapshot,{name:'الخادم الأول',requestId:'initial_nas_v1'});
   await provisionNetworkNas(central,app,scope,nasId,snapshot);
+  await syncRadiusOvpnRoutes(central,Number(radiusConfig.sshServerId));
   const nasCapacity=limits.maxNas===0?0:limits.maxNas+scope.additionalNas;
   await reserveNetworkNasCapacity(central,scope,snapshot,nasCapacity);
  },true);

@@ -23,14 +23,14 @@ async function config(req:AuthenticatedRequest):Promise<{id:number|null;settings
  let saved:any;
  if(id){const [rows]=await db.query('SELECT * FROM ovpn_gateways WHERE id=?',[id]);saved=(rows as any[])[0];if(!saved)throw new Error('الخادم غير موجود.');}
  const old=saved?JSON.parse(saved.settings_json):{};
- const host=typeof b.api_host==='string'?b.api_host.trim():'',username=typeof b.api_username==='string'?b.api_username.trim():'',name=typeof b.name==='string'?b.name.trim():'',port=Number(b.api_port);
- if(!name||name.length>100||!username||username.length>100||(!isIP(host)&&!/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(host))||!Number.isInteger(port)||port<1||port>65535||typeof b.api_tls!=='boolean')throw new Error('أدخل اسم الخادم وعنوان API وبيانات الاتصال الصحيحة.');
+ const host=typeof b.api_host==='string'?b.api_host.trim():'',username=typeof b.api_username==='string'?b.api_username.trim():'',name=typeof b.name==='string'?b.name.trim():'',port=Number(b.api_port),radius_route_next_hop=typeof b.radius_route_next_hop==='string'?b.radius_route_next_hop.trim():String(old.radius_route_next_hop||'').trim();
+ if(!name||name.length>100||!username||username.length>100||(!isIP(host)&&!/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(host))||!Number.isInteger(port)||port<1||port>65535||typeof b.api_tls!=='boolean'||radius_route_next_hop&&isIP(radius_route_next_hop)!==4)throw new Error('أدخل اسم الخادم وعنوان API وبيانات الاتصال الصحيحة، أو عنوان قفزة IPv4 صالحًا.');
  if(b.api_password!==undefined&&(typeof b.api_password!=='string'||b.api_password.length>512))throw new Error('كلمة المرور غير صالحة.');
  const same=old.api_host===host&&old.api_port===port&&old.api_username===username&&old.api_tls===b.api_tls;
  const password=b.api_password||(same&&saved?.api_password_encrypted?decrypt(saved.api_password_encrypted):'');
  if(!password)throw new Error('أدخل كلمة المرور؛ بيانات الاتصال الجديدة تحتاج فحصًا جديدًا.');
  key();
- return {id,settings:{...old,...(same?{}:{enabled:false,provision_state:'draft'}),name,api_host:host,api_port:port,api_username:username,api_tls:b.api_tls},connection:{host,port,username,password,secure:b.api_tls}};
+ return {id,settings:{...old,...(same?{}:{enabled:false,provision_state:'draft'}),name,api_host:host,api_port:port,api_username:username,api_tls:b.api_tls,radius_route_next_hop},connection:{host,port,username,password,secure:b.api_tls}};
 }
 async function persist(req:AuthenticatedRequest,id:number|null,settings:Settings,password:string,description:string){
  const connection=await db.pool.getConnection();
