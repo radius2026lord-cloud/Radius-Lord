@@ -164,7 +164,7 @@ async function syncNasRadius(central:any,app:any,scope:any,snapshot:any){
  const state=await readPrivateSetting('environment_runtime','environment_'+scope.environment_id);if(!state||state.tenantId!==Number(scope.tenant_id)||state.subscriptionId!==Number(scope.subscription_id)||state.radiusServerId!==snapshot.radiusServerId)throw new Error('NAS_RADIUS_SCOPE');
  const [configs]:any=await central.query("SELECT setting_value FROM platform_settings WHERE id=? AND setting_group='free_radius'",[snapshot.radiusServerId]);if(!configs[0])throw new Error('RADIUS_NOT_FOUND');const radius=JSON.parse(configs[0].setting_value);
  const [servers]:any=await central.query('SELECT * FROM database_servers WHERE id=?',[scope.database_server_id]);if(!servers[0]||servers[0].tls_required||Number(radius.sshServerId)!==Number(state.radiusSshServerId))throw new Error('NAS_RADIUS_SCOPE');
- await syncRadiusOvpnRoutes(central,Number(radius.sshServerId));
+ await syncRadiusOvpnRoutes(central,Number(radius.sshServerId),Number(scope.environment_id));
  await applyRadiusDatabase({sshServerId:radius.sshServerId,radiusHost:radius.host,databaseHost:await radiusDatabaseHost(servers[0],radius.host),databasePort:Number(servers[0].port),databaseName:scope.db_name,username:scope.radius_username,password:decryptProvisioningSecret(scope.radius_password_encrypted),authPort:state.authPort,accountingPort:state.accountingPort,name:'rl_env_'+scope.environment_id,secret:decryptProvisioningSecret(state.radiusSecretEncrypted),clients:await nasRadiusClients(app)});
  await markNasRadiusConfigured(app);
 }
