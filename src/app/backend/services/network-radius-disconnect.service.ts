@@ -29,7 +29,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
   try{
    central=await db.pool.getConnection();
    for(const nasId of nasIds){
-    const targets=usernames.length?usernames:Array.from(new Set(rows.map((row:any)=>String(row.username||'').trim()).filter(Boolean)));
+    const targets:string[]=usernames.length?usernames:Array.from(new Set<string>(rows.map((row:any)=>String(row.username||'').trim()).filter((username:string)=>Boolean(username))));
     for(const username of targets){
      try{
       const result:any=await checkNetworkNasApi(central,app,nasId,scope,undefined,{username,service:serviceKind});
