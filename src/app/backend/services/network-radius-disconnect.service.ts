@@ -2,6 +2,7 @@ import {lookup} from 'dns/promises';
 import {db} from '../config/db';
 import {readPrivateSetting} from './radius-provision.service';
 import {runManagedRadiusScript} from './ssh-terminal.service';
+import {checkNetworkNasApi} from './network-ovpn.service';
 
 type DisconnectResult={attempted:number;acknowledged:number};
 
@@ -14,12 +15,28 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  const usernames=Array.from(new Set((Array.isArray(usernameValue)?usernameValue:[usernameValue]).map(value=>String(value||'').trim()).filter(Boolean))).slice(0,100);
  const usernameFilter=usernames.length?`AND ra.username IN (${usernames.map(()=>'?').join(',')})`:'';
  const serviceKind=serviceKindValue==='hotspot'?'hotspot':'ppp';
- const [rows]:any=await app.query(`SELECT DISTINCT ra.username,ra.acctsessionid,ra.nasipaddress,COALESCE(NULLIF(l.coa_host,''),ra.nasipaddress) coa_host,COALESCE(NULLIF(l.coa_port,0),3799) coa_port,n.secret
+ const [rows]:any=await app.query(`SELECT DISTINCT l.id nasId,ra.username,ra.acctsessionid,ra.nasipaddress,COALESCE(NULLIF(l.coa_host,''),ra.nasipaddress) coa_host,COALESCE(NULLIF(l.coa_port,0),3799) coa_port,n.secret
   FROM radacct ra LEFT JOIN radcheck rc ON rc.username=ra.username AND rc.attribute='Auth-Type' AND rc.value='Reject'
   JOIN nas n ON n.nasname=ra.nasipaddress JOIN lord_nas l ON l.radius_nas_id=n.id
   WHERE ra.acctstoptime IS NULL AND ra.acctsessionid<>'' ${usernameFilter} AND (?=1 OR rc.id IS NOT NULL) AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0
   ORDER BY ra.username,ra.acctsessionid LIMIT 100`,[...usernames,force?1:0,serviceKind]);
  if(!rows.length)return {attempted:0,acknowledged:0};
+ // Prefer the authenticated RouterOS API path through the managed OVPN gateway.
+ // This closes the actual active session even when RADIUS Disconnect-ACK is lost.
+ let central:any;
+ try{
+  central=await db.pool.getConnection();
+  const groups=new Map<string,{nasId:number;username:string}>();
+  for(const row of rows)groups.set(Number(row.nasId)+':'+row.username,{nasId:Number(row.nasId),username:String(row.username)});
+  let attempted=0,acknowledged=0;
+  for(const group of groups.values()){
+   const result=await checkNetworkNasApi(central,app,group.nasId,scope,undefined,{username:group.username,service:serviceKind});
+   attempted+=Number(result.attempted)||0;acknowledged+=Number(result.acknowledged)||0;
+  }
+  return {attempted,acknowledged};
+ }catch{
+  // Retain standard RADIUS DM as a fallback if NAS API or gateway relay is unavailable.
+ }finally{central?.release();}
  const runtime=await readPrivateSetting('environment_runtime','environment_'+Number(scope.environment_id));
  if(!runtime||Number(runtime.tenantId)!==Number(scope.tenant_id)||Number(runtime.subscriptionId)!==Number(scope.subscription_id)||!Number.isSafeInteger(Number(runtime.radiusServerId))||Number(runtime.radiusServerId)<1||!Number.isSafeInteger(Number(runtime.radiusSshServerId))||Number(runtime.radiusSshServerId)<1)throw new Error('RADIUS_DISCONNECT_TRANSPORT_UNAVAILABLE');
  const [configs]:any=await db.query("SELECT setting_value FROM platform_settings WHERE id=? AND setting_group='free_radius'",[runtime.radiusServerId]);
