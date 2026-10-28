@@ -521,7 +521,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
  let tcp:{sourceAddress:string;targetAddress:string;elapsedMs:number}|undefined,api:RouterApi|undefined,relayTargetPort=0,directFailure:unknown,stage='direct_probe',relaySourceAddress='',relayGatewayAddress='',relayOvpnInterface='';
  let relayRuleCounters:Array<{kind:string;comment:string;packets:string;bytes:string;chain?:string;action?:string;protocol?:string;srcAddress?:string;dstAddress?:string;dstPort?:string;toAddresses?:string;toPorts?:string;outInterface?:string}>=[];
  try{
-  if(!monitorUsername&&!sessionAction){
+  if(!monitorUsername){
   try{
    const directTcp=await probeNasApiTcp(String(tunnel.tunnel_address),port);
    if(isPrivateIpv4(directTcp.sourceAddress)){
