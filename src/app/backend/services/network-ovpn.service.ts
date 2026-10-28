@@ -506,7 +506,16 @@ function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:s
  const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
  return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
-async function removeActiveNasSessions(api:RouterApi,action:{username:string;service:'ppp'|'hotspot'}){const ppp=action.service==='ppp',path=ppp?'/ppp/active':'/ip/hotspot/active',key=ppp?'name':'user',sessions=await api.command(path+'/print',{'.proplist':'.id,'+key},['?'+key+'='+action.username]);let acknowledged=0;for(const session of sessions){if(!session['.id'])continue;await api.command(path+'/remove',{'.id':session['.id']});acknowledged++;}return {attempted:sessions.length,acknowledged};}
+async function removeActiveNasSessions(api:RouterApi,action:{username:string;service:'ppp'|'hotspot'}){
+ const ppp=action.service==='ppp',path=ppp?'/ppp/active':'/ip/hotspot/active',key=ppp?'name':'user',query=['?'+key+'='+action.username];
+ const sessions=await api.command(path+'/print',{'.proplist':'.id,'+key},query);
+ for(const session of sessions)if(session['.id'])await api.command(path+'/remove',{'.id':session['.id']});
+ // Verify against RouterOS active-session table; an accepted API command alone
+ // is not proof that the user was disconnected.
+ const remaining=await api.command(path+'/print',{'.proplist':'.id,'+key},query),remainingIds=new Set(remaining.map((session:any)=>String(session['.id']||'')));
+ const acknowledged=sessions.filter((session:any)=>session['.id']&&!remainingIds.has(String(session['.id']))).length;
+ return {attempted:sessions.length,acknowledged};
+}
 export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string,sessionAction?:{username:string;service:'ppp'|'hotspot'}){
  const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,COALESCE(NULLIF(ns.radius_server_address,''),NULLIF(c.radius_server_address,'')) AS ping_radius_server_address,ns.timezone network_timezone,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id LEFT JOIN network_settings ns ON ns.id=1 JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  const row=rows[0];if(!row)fail('NAS_API_NOT_CONFIGURED');if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
