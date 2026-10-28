@@ -411,7 +411,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  };
  const runPppoeLineAction=async(line:SubscriberLine,action:"renew"|"disconnect"|"archive"|"end")=>{
   const customerId=Number(line.customer_id||detail?.id);if(!customerId||line.kind!=="pppoe"||pppoeLineBusyId!==null)return;
-  let succeeded=false;if(action==="disconnect")setDisconnectFeedback(null);setPppoeLineBusyId(line.id);setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");
+  let succeeded=false;if(action==="disconnect")setDisconnectFeedback({tone:"info",title:"جارٍ طرد الجلسة",message:"جارٍ الاتصال بـ NAS وإزالة جلسة PPPoE النشطة."});setPppoeLineBusyId(line.id);setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");
   try{
    const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/${action}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:"{}"});
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء على خط PPPoE.");
