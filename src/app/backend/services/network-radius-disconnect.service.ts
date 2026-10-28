@@ -26,6 +26,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  const nasFilter=hasSelectedNas?' AND n.id=?':'';
  const [nasRows]:any=await app.query("SELECT DISTINCT l.id FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN nas_ovpn_connections c ON c.nas_id=l.id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' AND ms.is_enabled=1 WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0"+nasFilter+" ORDER BY l.id LIMIT 100",hasSelectedNas?[serviceKind,selectedRadiusNasId]:[serviceKind]);
  const nasIds=Array.from(new Set([...nasRows.map((row:any)=>Number(row.id)),...(hasSelectedNas?[]:rows.map((row:any)=>Number(row.nasId)))] )).filter((id:number)=>Number.isSafeInteger(id)&&id>0);
+ if(hasSelectedNas&&!nasRows.length&&!rows.length)throw new Error('NAS_API_DISCONNECT_FAILED');
  let apiAttempted=0,apiAcknowledged=0,apiFailures=0,central:any;
  if(nasIds.length){
   try{
