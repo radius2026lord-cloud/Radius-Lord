@@ -506,7 +506,8 @@ function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:s
  const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
  return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
-export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string){
+async function removeActiveNasSessions(api:RouterApi,action:{username:string;service:'ppp'|'hotspot'}){const ppp=action.service==='ppp',path=ppp?'/ppp/active':'/ip/hotspot/active',key=ppp?'name':'user',sessions=await api.command(path+'/print',{'.proplist':'.id,'+key},['?'+key+'='+action.username]);let acknowledged=0;for(const session of sessions){if(!session['.id'])continue;await api.command(path+'/remove',{'.id':session['.id']});acknowledged++;}return {attempted:sessions.length,acknowledged};}
+export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string,sessionAction?:{username:string;service:'ppp'|'hotspot'}){
  const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,COALESCE(NULLIF(ns.radius_server_address,''),NULLIF(c.radius_server_address,'')) AS ping_radius_server_address,ns.timezone network_timezone,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id LEFT JOIN network_settings ns ON ns.id=1 JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  const row=rows[0];if(!row)fail('NAS_API_NOT_CONFIGURED');if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
  const port=Number(row.port);if(!Number.isInteger(port)||port<1||port>65535)fail('NAS_API_PORT_INVALID');
@@ -520,11 +521,12 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
  let tcp:{sourceAddress:string;targetAddress:string;elapsedMs:number}|undefined,api:RouterApi|undefined,relayTargetPort=0,directFailure:unknown,stage='direct_probe',relaySourceAddress='',relayGatewayAddress='',relayOvpnInterface='';
  let relayRuleCounters:Array<{kind:string;comment:string;packets:string;bytes:string;chain?:string;action?:string;protocol?:string;srcAddress?:string;dstAddress?:string;dstPort?:string;toAddresses?:string;toPorts?:string;outInterface?:string}>=[];
  try{
-  if(!monitorUsername){
+  if(!monitorUsername&&!sessionAction){
   try{
    const directTcp=await probeNasApiTcp(String(tunnel.tunnel_address),port);
    if(isPrivateIpv4(directTcp.sourceAddress)){
     api=await RouterApi.connect({host:String(tunnel.tunnel_address),port,username:String(row.username),password:decryptProvisioningSecret(row.password_encrypted),secure:false});
+    if(sessionAction){const removed=await removeActiveNasSessions(api,sessionAction);api.close();api=undefined;return {...removed,transport:'direct' as const};}
     const timezoneSync=await syncNasTimezone(api,String(row.network_timezone||'Asia/Damascus'));const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.ping_radius_server_address);sample.timezoneSync=timezoneSync;api.close();api=undefined;
     await saveNasApiSample(app,nasId,port,sample,'direct');
     return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,timezoneSync:sample.timezoneSync,connection:{...directTcp,transport:'direct',login:'ok' as const}};
@@ -612,6 +614,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     tcp=await probeNasApiTcp(gatewayReachability.targetAddress,relayPort);
     stage='nas_api_login';
     api=await RouterApi.connect({host:gatewayReachability.targetAddress,port:relayPort,username:String(row.username),password:decryptProvisioningSecret(row.password_encrypted),secure:false});
+    if(sessionAction){stage='disconnect_nas_active_session';const removed=await removeActiveNasSessions(api,sessionAction);return {...removed,relayPort,sourceAddress,targetAddress:gatewayReachability.targetAddress,elapsedMs:tcp.elapsedMs,gatewayId:Number(tunnel.ovpn_gateway_id)};}
     if(monitorUsername){stage='read_pppoe_live_traffic';const traffic=await readPppoeLiveTraffic(api,monitorUsername);return {traffic,relayPort,sourceAddress,targetAddress:gatewayReachability.targetAddress,elapsedMs:tcp.elapsedMs,gatewayId:Number(tunnel.ovpn_gateway_id)};}
     stage='read_nas_api_resources';
     const timezoneSync=await syncNasTimezone(api,String(row.network_timezone||'Asia/Damascus'));const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.ping_radius_server_address);sample.timezoneSync=timezoneSync;
@@ -631,6 +634,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     }
    }
   });
+  if(sessionAction)return {...result,apiPort:port,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:result.transport||'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
   if(monitorUsername)return {apiPort:port,checkedAt:new Date().toISOString(),traffic:result.traffic,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
   const sample=result.sample;
   if(typeof sample==='undefined')throw new Error('NAS_API_INVALID_RESPONSE');
@@ -640,8 +644,8 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
   const [current]:any=await app.query('SELECT configuration_snapshot FROM nas_ovpn_connections WHERE nas_id=?',[nasId]);
   const raw=error instanceof Error?error.message:'NAS_API_UNKNOWN',osCode=String((error as NodeJS.ErrnoException)?.code||''),errorName=error instanceof Error?error.name:'UnknownError',code=raw==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'NAS_API_LOGIN_FAILED':raw.startsWith('فشل الأمر /ppp/active/print:')?'NAS_PPP_ACTIVE_STATS_FAILED':/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'API_CONNECTION_FAILED',rawDiagnostics=tcp?{...tcp}:((error as Error&{diagnostics?:any}).diagnostics||{}),diagnostics={...rawDiagnostics,targetPort:relayTargetPort||undefined,relayPort:relayTargetPort||undefined,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,transport:'ovpn_gateway_relay',stage,failureCode:code,errorName,...(raw.startsWith('فشل الأمر /ppp/active/print:')?{errorSummary:String((error as Error&{routerMessage?:string}).routerMessage||raw).slice(0,220)}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{}),directFailure:directFailure instanceof Error&&/^[A-Z][A-Z0-9_]{1,63}$/.test(directFailure.message)?directFailure.message:'DIRECT_PATH_FAILED',login:code==='NAS_API_LOGIN_FAILED'?'failed':stage==='read_nas_api_resources'?'authenticated':'not-tested'};
   const safeErrorSummary=error instanceof Error&&/^فشل الأمر \/ip\/firewall\/(?:nat|filter)\/(?:add|remove|print): [^\r\n]{1,180}$/.test(error.message)?error.message:undefined;
-  if(!monitorUsername)console.error('[nas-api-check]',{environmentId:Number(scope.environment_id),nasId,stage,code,errorName,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,...(safeErrorSummary?{errorSummary:safeErrorSummary}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{})});
-  if(!monitorUsername&&current[0]){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code,transport:'ovpn_gateway_relay',connection:diagnostics};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
+  if(!monitorUsername&&!sessionAction)console.error('[nas-api-check]',{environmentId:Number(scope.environment_id),nasId,stage,code,errorName,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,...(safeErrorSummary?{errorSummary:safeErrorSummary}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{})});
+  if(!monitorUsername&&!sessionAction&&current[0]){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code,transport:'ovpn_gateway_relay',connection:diagnostics};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
   const failure=new Error(code);(failure as Error&{diagnostics?:typeof diagnostics}).diagnostics=diagnostics;throw failure;
  }finally{api?.close();}
 }
