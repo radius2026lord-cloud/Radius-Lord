@@ -22,7 +22,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
   ORDER BY ra.username,ra.acctsessionid LIMIT 100`,[...usernames,force?1:0,serviceKind]);
  // RADIUS accounting can lag or be missing; use every enabled NAS for this service
  // so an active RouterOS session is still discoverable by its live API table.
- const [nasRows]:any=await app.query("SELECT id FROM lord_nas WHERE archived_at IS NULL AND is_enabled=1 AND FIND_IN_SET(?,radius_services)>0 ORDER BY id LIMIT 100",[serviceKind]);
+ const [nasRows]:any=await app.query("SELECT DISTINCT l.id FROM lord_nas l JOIN nas_ovpn_connections c ON c.nas_id=l.id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' AND ms.is_enabled=1 WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0 ORDER BY l.id LIMIT 100",[serviceKind]);
  const nasIds=Array.from(new Set([...nasRows.map((row:any)=>Number(row.id)),...rows.map((row:any)=>Number(row.nasId))])).filter((id:number)=>Number.isSafeInteger(id)&&id>0);
  let apiAttempted=0,apiAcknowledged=0,apiFailures=0,central:any;
  if(nasIds.length){
@@ -44,7 +44,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  // a session, continue to standard RADIUS Disconnect-Request using radacct IDs.
  if(apiAcknowledged>0)return {attempted:apiAttempted,acknowledged:apiAcknowledged};
  if(!rows.length){
-  if(nasIds.length&&apiFailures===nasIds.length*(usernames.length||1))throw new Error('NAS_API_DISCONNECT_FAILED');
+  if(nasIds.length&&apiFailures>0)throw new Error('NAS_API_DISCONNECT_FAILED');
   return {attempted:apiAttempted,acknowledged:apiAcknowledged};
  }
  const runtime=await readPrivateSetting('environment_runtime','environment_'+Number(scope.environment_id));
