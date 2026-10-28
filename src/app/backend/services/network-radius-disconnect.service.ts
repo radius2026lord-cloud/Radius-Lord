@@ -17,7 +17,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  const [rows]:any=await app.query(`SELECT DISTINCT ra.username,ra.acctsessionid,ra.nasipaddress,COALESCE(NULLIF(l.coa_host,''),ra.nasipaddress) coa_host,COALESCE(NULLIF(l.coa_port,0),3799) coa_port,n.secret
   FROM radacct ra LEFT JOIN radcheck rc ON rc.username=ra.username AND rc.attribute='Auth-Type' AND rc.value='Reject'
   JOIN nas n ON n.nasname=ra.nasipaddress JOIN lord_nas l ON l.radius_nas_id=n.id
-  WHERE ra.acctstoptime IS NULL AND COALESCE(ra.acctupdatetime,ra.acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE AND ra.acctsessionid<>'' ${usernameFilter} AND (?=1 OR rc.id IS NOT NULL) AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0
+  WHERE ra.acctstoptime IS NULL AND ra.acctsessionid<>'' ${usernameFilter} AND (?=1 OR rc.id IS NOT NULL) AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0
   ORDER BY ra.username,ra.acctsessionid LIMIT 100`,[...usernames,force?1:0,serviceKind]);
  if(!rows.length)return {attempted:0,acknowledged:0};
  const runtime=await readPrivateSetting('environment_runtime','environment_'+Number(scope.environment_id));
