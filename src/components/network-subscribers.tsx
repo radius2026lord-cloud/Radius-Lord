@@ -415,10 +415,20 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   try{
    const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/${action}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:"{}"});
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء على خط PPPoE.");
+   if(action==="disconnect"){
+    const attempted=Number(result.attempted)||0,acknowledged=Number(result.acknowledged)||0;
+    if(result.disconnectPending)setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:`أكّد NAS طرد ${acknowledged} من ${attempted} جلسة. لم يُعلن النجاح.`});
+    else if(attempted===0)setDisconnectFeedback({tone:"info",title:"لا توجد جلسة نشطة",message:"لم يجد NAS جلسة PPPoE نشطة بهذا الاسم وقت الطلب."});
+    else if(acknowledged>0)setDisconnectFeedback({tone:"success",title:"تم طرد الجلسة",message:`أكد NAS إزالة ${acknowledged} من ${attempted} جلسة نشطة.`});
+    else setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:"لم يؤكد NAS إزالة أي جلسة نشطة."});
+    succeeded=true;
+    if(detailId===customerId)void(async()=>{try{const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(refreshedResponse.ok){setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}}catch{/* Keep the disconnect result visible even if the detail refresh fails. */}})();
+    else void load({silent:true});
+    return;
+   }
    if(detailId===customerId){const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(!refreshedResponse.ok)throw new Error(refreshed.message||"تم تنفيذ الإجراء، لكن تعذر إعادة تحميل بيانات المشترك.");setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}else void load({silent:true});
    succeeded=true;
-   if(action==="disconnect"){const attempted=Number(result.attempted)||0,acknowledged=Number(result.acknowledged)||0;if(result.disconnectPending)setDisconnectFeedback({tone:"warning",title:"لم يتأكد فصل الجلسة",message:`أكّد NAS فصل ${acknowledged} من ${attempted} جلسة. لم يُعتبر الفصل ناجحًا.`});else if(attempted===0)setDisconnectFeedback({tone:"info",title:"لا توجد جلسة نشطة",message:"لم يعثر NAS على جلسة PPPoE نشطة لهذا الخط وقت تنفيذ الطلب."});else setDisconnectFeedback({tone:"success",title:"تم فصل الجلسة",message:`أكّد NAS فصل ${acknowledged} من ${attempted} جلسة.`});}
-   else setPppoeNoticeMessage(action==="renew"?"تم تجديد الباقة وبدأت دورة اشتراك جديدة.":action==="archive"?"تم حذف الخط من القائمة وأُرشف مع الاحتفاظ بسجل الاشتراكات.":"تم إنهاء الاشتراك وإيقاف تسجيل الدخول.");
+   setPppoeNoticeMessage(action==="renew"?"تم تجديد الباقة وبدأت دورة اشتراك جديدة.":action==="archive"?"تم حذف الخط من القائمة وأُرشف مع الاحتفاظ بسجل الاشتراكات.":"تم إنهاء الاشتراك وإيقاف تسجيل الدخول.");
   }catch(error){const message=error instanceof Error?error.message:"تعذر تنفيذ الإجراء على خط PPPoE.";if(action==="disconnect")setDisconnectFeedback({tone:"danger",title:"تعذر فصل الجلسة",message});else setPppoeNoticeError(message);}
   finally{setPppoeLineBusyId(null);if(action==="archive"&&succeeded)setPppoeArchiveLine(null);if(action==="end"&&succeeded)setPppoeEndLine(null);}
  };
@@ -450,7 +460,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   else if(!ended&&line.status==="enabled")actions.push({value:"disable",label:"إيقاف الخط",icon:CircleX,iconTileClassName:"bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"});
   else if(!ended)actions.push({value:"enable",label:"تفعيل الخط",icon:CheckCircle2,iconTileClassName:"bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"});
   actions.push({value:"renew",label:"تجديد الباقة",icon:CreditCard,iconTileClassName:"bg-teal-50 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300"});
-  if(Number(line.live_sessions)>0)actions.push({value:"disconnect",label:"فصل الجلسة الحالية",icon:WifiOff,iconTileClassName:"bg-orange-50 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300"});
+  actions.push({value:"disconnect",label:"طرد الجلسة النشطة",icon:WifiOff,iconTileClassName:"bg-orange-50 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300"});
   if(!ended)actions.push({value:"end",label:"إنهاء الاشتراك",icon:CircleX,iconTileClassName:"bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"});
   actions.push({value:"archive",label:"حذف الخط",icon:Trash2,danger:true,iconTileClassName:"bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"});
   return actions;
