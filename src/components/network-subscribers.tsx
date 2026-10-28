@@ -416,7 +416,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء على خط PPPoE.");
    if(detailId===customerId){const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(!refreshedResponse.ok)throw new Error(refreshed.message||"تم تنفيذ الإجراء، لكن تعذر إعادة تحميل بيانات المشترك.");setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}else void load({silent:true});
    succeeded=true;
-   if(result.disconnectPending)setPppoeNoticeWarning("تم حفظ الإجراء، لكن لم يصل تأكيد فصل الجلسة الحالية. سيعيد النظام المحاولة تلقائيًا.");
+   if(result.disconnectPending)setPppoeNoticeWarning(action==="disconnect"?`أُرسل طلب الفصل إلى NAS لكن لم يصل تأكيده (${Number(result.acknowledged)||0} من ${Number(result.attempted)||0}). لم يتأكد فصل الجلسة بعد؛ افحص استقبال Disconnect على NAS ومنفذ UDP 3799.`:"تم حفظ الإجراء، لكن لم يصل تأكيد فصل الجلسة الحالية من NAS. افحص استقبال Disconnect ومنفذ UDP 3799.");
    else if(action==="disconnect"&&Number(result.attempted)===0)setPppoeNoticeMessage("لا توجد جلسة متصلة لهذا الخط حاليًا.");
    else setPppoeNoticeMessage(action==="renew"?"تم تجديد الباقة وبدأت دورة اشتراك جديدة.":action==="archive"?"تم حذف الخط من القائمة وأُرشف مع الاحتفاظ بسجل الاشتراكات.":action==="end"?"تم إنهاء الاشتراك وإيقاف تسجيل الدخول.":"تم فصل جلسة الخط.");
   }catch(error){setPppoeNoticeError(error instanceof Error?error.message:"تعذر تنفيذ الإجراء على خط PPPoE.");}
