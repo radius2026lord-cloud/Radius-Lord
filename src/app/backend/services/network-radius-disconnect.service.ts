@@ -30,7 +30,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
   for(const row of rows)groups.set(Number(row.nasId)+':'+row.username,{nasId:Number(row.nasId),username:String(row.username)});
   let attempted=0,acknowledged=0;
   for(const group of groups.values()){
-   const result=await checkNetworkNasApi(central,app,group.nasId,scope,undefined,{username:group.username,service:serviceKind});
+   const result:any=await checkNetworkNasApi(central,app,group.nasId,scope,undefined,{username:group.username,service:serviceKind});
    attempted+=Number(result.attempted)||0;acknowledged+=Number(result.acknowledged)||0;
   }
   return {attempted,acknowledged};
