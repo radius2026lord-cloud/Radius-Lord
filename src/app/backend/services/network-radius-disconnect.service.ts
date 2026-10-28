@@ -20,23 +20,33 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
   JOIN nas n ON n.nasname=ra.nasipaddress JOIN lord_nas l ON l.radius_nas_id=n.id
   WHERE ra.acctstoptime IS NULL AND ra.acctsessionid<>'' ${usernameFilter} AND (?=1 OR rc.id IS NOT NULL) AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0
   ORDER BY ra.username,ra.acctsessionid LIMIT 100`,[...usernames,force?1:0,serviceKind]);
- if(!rows.length)return {attempted:0,acknowledged:0};
- // Prefer the authenticated RouterOS API path through the managed OVPN gateway.
- // This closes the actual active session even when RADIUS Disconnect-ACK is lost.
- let central:any;
- try{
-  central=await db.pool.getConnection();
-  const groups=new Map<string,{nasId:number;username:string}>();
-  for(const row of rows)groups.set(Number(row.nasId)+':'+row.username,{nasId:Number(row.nasId),username:String(row.username)});
-  let attempted=0,acknowledged=0;
-  for(const group of groups.values()){
-   const result:any=await checkNetworkNasApi(central,app,group.nasId,scope,undefined,{username:group.username,service:serviceKind});
-   attempted+=Number(result.attempted)||0;acknowledged+=Number(result.acknowledged)||0;
-  }
-  return {attempted,acknowledged};
- }catch{
-  // Retain standard RADIUS DM as a fallback if NAS API or gateway relay is unavailable.
- }finally{central?.release();}
+ // RADIUS accounting can lag or be missing; use every enabled NAS for this service
+ // so an active RouterOS session is still discoverable by its live API table.
+ const [nasRows]:any=await app.query("SELECT id FROM lord_nas WHERE archived_at IS NULL AND is_enabled=1 AND FIND_IN_SET(?,radius_services)>0 ORDER BY id LIMIT 100",[serviceKind]);
+ const nasIds=Array.from(new Set([...nasRows.map((row:any)=>Number(row.id)),...rows.map((row:any)=>Number(row.nasId))])).filter((id:number)=>Number.isSafeInteger(id)&&id>0);
+ let apiAttempted=0,apiAcknowledged=0,apiFailures=0,central:any;
+ if(nasIds.length){
+  try{
+   central=await db.pool.getConnection();
+   for(const nasId of nasIds){
+    const targets=usernames.length?usernames:Array.from(new Set(rows.map((row:any)=>String(row.username||'').trim()).filter(Boolean)));
+    for(const username of targets){
+     try{
+      const result:any=await checkNetworkNasApi(central,app,nasId,scope,undefined,{username,service:serviceKind});
+      apiAttempted+=Number(result.attempted)||0;apiAcknowledged+=Number(result.acknowledged)||0;
+     }catch{apiFailures++;}
+    }
+   }
+  }catch{apiFailures+=Math.max(1,nasIds.length);}
+  finally{central?.release();}
+ }
+ // A confirmed live API removal is authoritative. If API did not find/remove
+ // a session, continue to standard RADIUS Disconnect-Request using radacct IDs.
+ if(apiAcknowledged>0)return {attempted:apiAttempted,acknowledged:apiAcknowledged};
+ if(!rows.length){
+  if(nasIds.length&&apiFailures===nasIds.length*(usernames.length||1))throw new Error('NAS_API_DISCONNECT_FAILED');
+  return {attempted:apiAttempted,acknowledged:apiAcknowledged};
+ }
  const runtime=await readPrivateSetting('environment_runtime','environment_'+Number(scope.environment_id));
  if(!runtime||Number(runtime.tenantId)!==Number(scope.tenant_id)||Number(runtime.subscriptionId)!==Number(scope.subscription_id)||!Number.isSafeInteger(Number(runtime.radiusServerId))||Number(runtime.radiusServerId)<1||!Number.isSafeInteger(Number(runtime.radiusSshServerId))||Number(runtime.radiusSshServerId)<1)throw new Error('RADIUS_DISCONNECT_TRANSPORT_UNAVAILABLE');
  const [configs]:any=await db.query("SELECT setting_value FROM platform_settings WHERE id=? AND setting_group='free_radius'",[runtime.radiusServerId]);
