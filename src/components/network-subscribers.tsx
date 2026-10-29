@@ -417,9 +417,9 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء على خط PPPoE.");
    if(action==="disconnect"){
     const attempted=Number(result.attempted)||0,acknowledged=Number(result.acknowledged)||0;
-    if(result.disconnectPending)setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:`أكّد NAS طرد ${acknowledged} من ${attempted} جلسة. لم يُعلن النجاح.`});
+    if(result.disconnectPending)setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:result.transport==="radius"?`أُرسل طلب RADIUS وأُقرّ ${acknowledged} من ${attempted} طلب. لم يُتحقق من اختفاء الجلسة عبر API؛ لم يُعلن نجاح الطرد.`:`تأكدت إزالة ${acknowledged} من ${attempted} جلسة، لكن لم يكتمل الفصل أو فحص جميع الأجهزة. راجع اتصال NAS وصلاحيات API.`});
     else if(attempted===0)setDisconnectFeedback({tone:"info",title:"لا توجد جلسة نشطة",message:"لم يجد NAS جلسة PPPoE نشطة بهذا الاسم وقت الطلب."});
-    else if(acknowledged>0)setDisconnectFeedback({tone:"success",title:"تم طرد الجلسة",message:`أكد NAS إزالة ${acknowledged} من ${attempted} جلسة نشطة.`});
+    else if(acknowledged>0&&result.verified===true)setDisconnectFeedback({tone:"success",title:"تم طرد الجلسة",message:`أكد NAS إزالة ${acknowledged} من ${attempted} جلسة نشطة. قد يتصل جهاز المشترك مجددًا بجلسة جديدة.`});
     else setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:"لم يؤكد NAS إزالة أي جلسة نشطة."});
     succeeded=true;
     if(detailId===customerId)void(async()=>{try{const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(refreshedResponse.ok){setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}}catch{/* Keep the disconnect result visible even if the detail refresh fails. */}})();
@@ -476,7 +476,8 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   if(action==="archive"){setPppoeArchiveLine(line);}
  };
  const dispatchPppoeDetailAction=(line:SubscriberLine,action:string)=>dispatchPppoeLineAction({...line,customer_id:Number(line.customer_id||detail?.id)},action);
- const dispatchSubscriberPppoeAction=(item:Subscriber,line:SubscriberLine,action:string)=>dispatchPppoeLineAction({...line,customer_id:Number(line.customer_id||item.id),customer_name:line.customer_name||`${item.first_name} ${item.last_name}`.trim()},action);
+ // List summaries do not carry the detail API's kind discriminator.
+ const dispatchSubscriberPppoeAction=(item:Subscriber,line:SubscriberLine,action:string)=>dispatchPppoeLineAction({...line,kind:"pppoe",customer_id:Number(line.customer_id||item.id),customer_name:line.customer_name||`${item.first_name} ${item.last_name}`.trim()},action);
  const selectedPppoePackage=pppoePackages.find(item=>String(item.package_version_id)===pppoeForm.packageVersionId);
  const filteredDetailLines=useMemo(()=>{
   const query=lineSearch.trim().toLocaleLowerCase();
@@ -598,11 +599,15 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   try{
    for(const ref of refs){
     try{
-     if(action==="disconnect"&&Number(ref.line.live_sessions)<1)continue;
      const path=ref.kind==="pppoe"?`${endpoint}/pppoe/lines/${ref.line.id}/${action==="enable"&&ref.line.lifecycle==="pending"?"activate":action==="enable"||action==="disable"?"status":action}`:`${endpoint}/hotspot/standalone/${ref.line.id}/status`;
      const body=action==="enable"||action==="disable"?JSON.stringify({status:action==="enable"?"enabled":"disabled"}):"{}";
      const response=await fetch(path,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:action==="enable"&&ref.kind==="pppoe"&&ref.line.lifecycle==="pending"?"{}":body});
-     const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء.");succeeded++;
+      const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء.");
+      if(action==="disconnect"){
+       if(result.disconnectPending||result.verified!==true)throw new Error("لم يتأكد طرد الجلسة من NAS.");
+       if(Number(result.attempted)===0)continue;
+      }
+      succeeded++;
     }catch(error){failures.push(`${ref.line.username}: ${error instanceof Error?error.message:"تعذر التنفيذ"}`);}
    }
    if(succeeded)await load({silent:true});
@@ -1083,3 +1088,4 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  </ProjectDialog>
 </div>;
 }
+

@@ -179,8 +179,9 @@ export async function disconnectPppoeLine(scope:any,value:any){
  return withNetwork(scope,async app=>{await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
   const [rows]:any=await app.query("SELECT a.id,a.radius_identity_id,a.allowed_nas_id,r.current_username username FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id WHERE a.id=? AND a.archived_at IS NULL LIMIT 1",[id]);const row=rows[0];if(!row)throw new Error('PPPOE_LINE_UNAVAILABLE');
   const result=await disconnectPppoeSessions(scope,app,String(row.username),true,'ppp',row.allowed_nas_id==null?null:Number(row.allowed_nas_id));const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);
-  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.disconnect','pppoe_account',?,?,?,'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.radius_identity_id,JSON.stringify(result)]);
-  return {success:true,id,...result,disconnectPending:result.acknowledged<result.attempted};
+  const disconnectPending=result.acknowledged<result.attempted||(result.attempted>0&&!result.verified)||(result.apiFailures||0)>0;
+  await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.line.disconnect','pppoe_account',?,?,?,?)",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.radius_identity_id,JSON.stringify(result),disconnectPending?'failed':'success']);
+  return {success:!disconnectPending,id,...result,disconnectPending};
  });
 }
 
@@ -281,3 +282,4 @@ export async function processPppoeLifecycle(scope:any){
   return changed;
  });
 }
+

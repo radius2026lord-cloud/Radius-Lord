@@ -4,7 +4,7 @@ import {readPrivateSetting} from './radius-provision.service';
 import {runManagedRadiusScript} from './ssh-terminal.service';
 import {checkNetworkNasApi} from './network-ovpn.service';
 
-type DisconnectResult={attempted:number;acknowledged:number};
+type DisconnectResult={attempted:number;acknowledged:number;verified:boolean;transport:'api'|'radius'|'none';apiFailures?:number};
 
 function remoteDisconnectScript(rows:any[]){
  const payload=Buffer.from(JSON.stringify(rows.map(row=>({host:String(row.coa_host),port:Number(row.coa_port)||3799,secret:String(row.secret),username:String(row.username),sessionId:String(row.acctsessionid),nasIp:String(row.nasipaddress)})))).toString('base64');
@@ -26,8 +26,16 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  const nasFilter=hasSelectedNas?' AND n.id=?':'';
  const [nasRows]:any=await app.query("SELECT DISTINCT l.id FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN nas_ovpn_connections c ON c.nas_id=l.id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' AND ms.is_enabled=1 WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0"+nasFilter+" ORDER BY l.id LIMIT 100",hasSelectedNas?[serviceKind,selectedRadiusNasId]:[serviceKind]);
  const nasIds=Array.from(new Set([...nasRows.map((row:any)=>Number(row.id)),...(hasSelectedNas?[]:rows.map((row:any)=>Number(row.nasId)))] )).filter((id:number)=>Number.isSafeInteger(id)&&id>0);
- if(hasSelectedNas&&!nasRows.length&&!rows.length)throw new Error('NAS_API_DISCONNECT_FAILED');
+ if(hasSelectedNas&&!nasRows.length&&!rows.length)throw new Error('NAS_API_NOT_CONFIGURED');
  let apiAttempted=0,apiAcknowledged=0,apiFailures=0,central:any;
+ const failureCodes:string[]=[];
+ const recordFailure=(error:unknown,nasId?:number)=>{
+  apiFailures++;
+  const raw=error instanceof Error?error.message:'',code=/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'NAS_API_DISCONNECT_FAILED';
+  failureCodes.push(code);
+  const stage=String((error as {diagnostics?:{stage?:string}}|null)?.diagnostics?.stage||'');
+  console.error('[nas-session-disconnect]',{environmentId:Number(scope.environment_id),nasId,code,...(/^[a-z_]{1,64}$/.test(stage)?{stage}:{})});
+ };
  if(nasIds.length){
   try{
    central=await db.pool.getConnection();
@@ -35,20 +43,27 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
     const targets:string[]=usernames.length?usernames:Array.from(new Set<string>(rows.map((row:any)=>String(row.username||'').trim()).filter((username:string)=>Boolean(username))));
     for(const username of targets){
      try{
-      const result:any=await checkNetworkNasApi(central,app,nasId,scope,undefined,{username,service:serviceKind});
-      apiAttempted+=Number(result.attempted)||0;apiAcknowledged+=Number(result.acknowledged)||0;
-     }catch{apiFailures++;}
+      const result=await checkNetworkNasApi(central,app,nasId,scope,undefined,{username,service:serviceKind});
+      if(!('attempted' in result)||!('acknowledged' in result))throw new Error('NAS_API_DISCONNECT_RESPONSE_INVALID');
+      const attempted=Number(result.attempted),acknowledged=Number(result.acknowledged);
+      if(!Number.isSafeInteger(attempted)||!Number.isSafeInteger(acknowledged)||attempted<0||acknowledged<0||acknowledged>attempted)throw new Error('NAS_API_DISCONNECT_RESPONSE_INVALID');
+      apiAttempted+=attempted;apiAcknowledged+=acknowledged;
+     }catch(error){recordFailure(error,nasId);}
     }
    }
-  }catch{apiFailures+=Math.max(1,nasIds.length);}
+  }catch(error){recordFailure(error);}
   finally{central?.release();}
  }
  // A confirmed live API removal is authoritative. If API did not find/remove
  // a session, continue to standard RADIUS Disconnect-Request using radacct IDs.
- if(apiAcknowledged>0)return {attempted:apiAttempted,acknowledged:apiAcknowledged};
+ if(apiAcknowledged>0)return {attempted:apiAttempted,acknowledged:apiAcknowledged,verified:apiAcknowledged===apiAttempted&&apiFailures===0,transport:'api',apiFailures};
  if(!rows.length){
-  if(nasIds.length&&apiFailures>0)throw new Error('NAS_API_DISCONNECT_FAILED');
-  return {attempted:apiAttempted,acknowledged:apiAcknowledged};
+  if(apiFailures>0){
+   const actionable=['NAS_API_PERMISSION_DENIED','NAS_API_LOGIN_FAILED','OVPN_GATEWAY_BUSY','NAS_OVPN_TUNNEL_NOT_CONNECTED'];
+   throw new Error(actionable.find(code=>failureCodes.includes(code))||'NAS_API_DISCONNECT_FAILED');
+  }
+  if(force&&usernames.length&&!nasIds.length)throw new Error('NAS_API_NOT_CONFIGURED');
+  return {attempted:apiAttempted,acknowledged:apiAcknowledged,verified:nasIds.length>0,transport:nasIds.length?'api':'none'};
  }
  const runtime=await readPrivateSetting('environment_runtime','environment_'+Number(scope.environment_id));
  if(!runtime||Number(runtime.tenantId)!==Number(scope.tenant_id)||Number(runtime.subscriptionId)!==Number(scope.subscription_id)||!Number.isSafeInteger(Number(runtime.radiusServerId))||Number(runtime.radiusServerId)<1||!Number.isSafeInteger(Number(runtime.radiusSshServerId))||Number(runtime.radiusSshServerId)<1)throw new Error('RADIUS_DISCONNECT_TRANSPORT_UNAVAILABLE');
@@ -63,5 +78,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  const result=JSON.parse(output.trim().split(/\r?\n/).at(-1)||'{}');
  const attempted=Number(result.attempted),acknowledged=Number(result.acknowledged);
  if(!Number.isSafeInteger(attempted)||!Number.isSafeInteger(acknowledged)||attempted!==rows.length||acknowledged<0||acknowledged>attempted)throw new Error('RADIUS_DISCONNECT_RESPONSE_INVALID');
- return {attempted,acknowledged};
+ // An ACK accepts the request; only the live API check proves session removal.
+ return {attempted,acknowledged,verified:false,transport:'radius',apiFailures};
 }
+
