@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect,useId,useRef,useState} from "react";
-import {CalendarDays,X} from "lucide-react";
+import {CalendarDays,Clock3,X} from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDialog from "@/components/ui/project-dialog";
@@ -41,7 +41,7 @@ function localNow(timeZone?:string){
 }
 
 export default function ProjectDateTimeInput({value,onChange,mode="datetime",timeZone,disabled=false,required=false,id,className="",invalid=false,onValidityChange}:{value:string;onChange:(value:string)=>void;mode?:Mode;timeZone?:string;disabled?:boolean;required?:boolean;id?:string;className?:string;invalid?:boolean;onValidityChange?:(valid:boolean)=>void}){
- const clock24h=useClock24h(),generatedId=useId(),input=useRef<HTMLInputElement|null>(null);
+ const clock24h=useClock24h(),generatedId=useId(),input=useRef<HTMLInputElement|null>(null),sectionInputs=useRef<(HTMLInputElement|null)[]>([]);
  const [period,setPeriod]=useState<"am"|"pm">(()=>Number((mode==="time"?value:value.slice(11)).slice(0,2))>=12?"pm":"am");
  const fieldId=id||generatedId,lastEmitted=useRef(value),lastClock=useRef(clock24h);
  const [text,setText]=useState(()=>formatLocalDateTime(value,clock24h,mode)),[error,setError]=useState(""),[open,setOpen]=useState(false),[picker,setPicker]=useState("");
@@ -69,33 +69,43 @@ export default function ProjectDateTimeInput({value,onChange,mode="datetime",tim
  const setSection=(index:number,value:string)=>{
   const values=[...sections],next=digits(value).replace(/\D/g,"").slice(0,lengths[index]),isYear=mode==="datetime"&&index===2;
   const upper=mode==="datetime"&&index===0?dayLimit:mode==="datetime"&&index===1?12:index===sections.length-1?59:clock24h?23:12;
-  if(next&&(isYear?next.length===4&&(Number(next)<1900||Number(next)>9998):Number(next)>upper||next.length===2&&Number(next)<(mode==="datetime"&&index<2||!clock24h&&index===sections.length-2?1:0)))return;
+  if(next&&(isYear?next.length===4&&(Number(next)<1900||Number(next)>9998):Number(next)>upper||next.length===2&&Number(next)<(mode==="datetime"&&index<2||!clock24h&&index===sections.length-2?1:0))){setError(isYear?"السنة من 1900 إلى 9998.":mode==="datetime"&&index===1?"الشهر من 01 إلى 12.":mode==="datetime"&&index===0?`هذا الشهر يقبل الأيام من 01 إلى ${dayLimit}.`:`الحد الأعلى لهذه الخانة ${upper}.`);return false;}
   values[index]=next;
   const clearDay=mode==="datetime"&&(index===1||index===2&&next.length===4)&&Number(values[0])>maxDay(values[1],values[2]);
   if(clearDay)values[0]="";
-  change(compose(values));if(clearDay)setError("اختر يومًا مناسبًا للشهر والسنة المحددين.");
+  change(compose(values));if(clearDay)setError("اختر يومًا مناسبًا للشهر والسنة المحددين.");return true;
  };
- const monthNames=["كانون الثاني","شباط","آذار","نيسان","أيار","حزيران","تموز","آب","أيلول","تشرين الأول","تشرين الثاني","كانون الأول"];
+
+ const labels=mode==="datetime"?["اليوم","الشهر","السنة","الساعة","الدقيقة"]:["الساعة","الدقيقة"];
+ const placeholders=mode==="datetime"?["DD","MM","YYYY","HH","mm"]:["HH","mm"];
+ const focusSection=(index:number)=>{sectionInputs.current[index]?.focus();sectionInputs.current[index]?.select();};
+ const segment=(index:number)=><ProjectInput key={index} ref={element=>{sectionInputs.current[index]=element;if(index===0)input.current=element;}} id={index===0?fieldId:`${fieldId}-${index}`} type="text" inputMode="numeric" dir="ltr" autoComplete="off" aria-label={labels[index]} aria-describedby={`${fieldId}-format`} aria-invalid={invalid||Boolean(error)} value={sections[index]} required={required} disabled={disabled} maxLength={lengths[index]} placeholder={placeholders[index]} onFocus={event=>event.currentTarget.select()} onChange={event=>{const next=digits(event.target.value).replace(/\D/g,"");if(setSection(index,next)&&next.length===lengths[index]&&index<sections.length-1)focusSection(index+1);}} onBlur={event=>{const current=digits(event.currentTarget.value);if(current.length===1&&lengths[index]===2)setSection(index,pad(Number(current)));}} onKeyDown={event=>{
+  if(["/",":"," "].includes(event.key)||event.key==="Enter"&&index<sections.length-1){event.preventDefault();event.stopPropagation();const current=digits(event.currentTarget.value);if(current.length===1&&lengths[index]===2)setSection(index,pad(Number(current)));focusSection(Math.min(index+1,sections.length-1));}
+  else if(event.key==="Backspace"&&!event.currentTarget.value&&index>0){event.preventDefault();focusSection(index-1);}
+  else if(event.key==="ArrowRight"&&event.currentTarget.selectionEnd===event.currentTarget.value.length&&index<sections.length-1){event.preventDefault();focusSection(index+1);}
+  else if(event.key==="ArrowLeft"&&event.currentTarget.selectionStart===0&&index>0){event.preventDefault();focusSection(index-1);}
+  else if(event.key==="ArrowUp"||event.key==="ArrowDown"){event.preventDefault();event.stopPropagation();const step=event.key==="ArrowUp"?1:-1,current=Number(sections[index]||0);if(current+step>=0)setSection(index,String(current+step).padStart(lengths[index],"0"));}
+ }} className={`!h-11 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-0 !text-center !text-base !font-semibold tabular-nums focus:!bg-blue-50 focus:!ring-2 focus:!ring-blue-200 dark:focus:!bg-blue-400/10 dark:focus:!ring-blue-400/30 ${lengths[index]===4?"!w-[54px]":"!w-[30px]"}`}/>;
+ const paste=(event:React.ClipboardEvent<HTMLDivElement>)=>{
+  const pasted=digits(event.clipboardData.getData("text")).trim(),iso=parseLocalDateTime(pasted,clock24h,mode)||parseLocalDateTime(pasted,!clock24h,mode);
+  if(iso){event.preventDefault();select(iso);return;}
+  const match=mode==="datetime"?/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(pasted):null;
+  if(match&&validDay(Number(match[3]),Number(match[2]),Number(match[1]))){event.preventDefault();change(compose([pad(Number(match[1])),pad(Number(match[2])),match[3],hours,minutes]));focusSection(3);}
+ };
+ const frame=`flex min-w-0 items-center justify-center gap-0.5 rounded-[14px] border bg-white px-2 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 dark:bg-[#203247] dark:focus-within:ring-blue-400/15 ${invalid||error?"border-amber-500 dark:border-amber-400":"border-[#d7e3ef] dark:border-white/10"}`;
  useEffect(()=>{if(valid)setError("");},[valid]);
  const hour=Number(picker.slice(11,13))||0,minute=picker.slice(14,16)||"00",today=open?localNow(timeZone).slice(0,10):"";
  const setHour=(next:number)=>setPicker(old=>old.slice(0,11)+pad(next)+old.slice(13));
  return <>
   <div className="min-w-0 space-y-1.5">
-   <div className="flex min-w-0 items-start gap-2">
-    <div role="group" aria-label={mode==="datetime"?"التاريخ والوقت":"الوقت"} className={`min-w-0 flex-1 rounded-[14px] border bg-[#f9fbfe] p-3 sm:p-4 dark:bg-[#26384a] ${invalid||error?"border-amber-500 dark:border-amber-400":"border-[#d7e3ef] dark:border-white/10"} ${className}`}>
-
-     {mode==="datetime"&&<div className="mb-3 grid grid-cols-[1fr_1fr_1.25fr_36px] gap-2">
-      <div><p className="mb-1 text-[11px]">اليوم</p><ProjectDropdown fieldStyle nowrapLabel triggerClassName="!h-11 !px-1 !gap-1" disabled={disabled} value={day} placeholder="اليوم" onChange={value=>setSection(0,value)} options={Array.from({length:dayLimit},(_,i)=>({value:pad(i+1),label:pad(i+1)}))}/></div>
-      <div><p className="mb-1 text-[11px]">الشهر</p><ProjectDropdown fieldStyle nowrapLabel hideSelectedHint triggerClassName="!h-11 !px-1 !gap-1" disabled={disabled} value={month} placeholder="الشهر" onChange={value=>setSection(1,value)} options={monthNames.map((label,i)=>({value:pad(i+1),label:pad(i+1),hint:label}))}/></div>
-      <label className="min-w-0 text-[11px]" htmlFor={fieldId}>السنة<ProjectInput ref={input} id={fieldId} dir="ltr" type="text" inputMode="numeric" autoComplete="off" required={required} disabled={disabled} aria-invalid={invalid||Boolean(error)} aria-describedby={`${fieldId}-format`} value={year} maxLength={4} placeholder="YYYY" onFocus={event=>event.currentTarget.select()} onChange={event=>setSection(2,event.target.value)} onBlur={()=>{if(text&&!parsed)setError("أكمل الموعد بالصيغة الموضحة.");}} className="mt-1 !h-11 !px-2 !text-center !text-sm"/></label>
-      <div className="self-end"><ProjectTooltip label="اختيار التاريخ والوقت"><ProjectButton variant="secondary" size="icon" className="!h-11 !w-9 !rounded-xl" disabled={disabled} aria-label="اختيار التاريخ والوقت" onClick={event=>{event.preventDefault();setPicker(parsed||localNow(timeZone));setOpen(true);}}><CalendarDays className="h-4 w-4"/></ProjectButton></ProjectTooltip></div>
-     </div>}
-     <div className={`grid gap-2 border-t border-slate-200/70 pt-3 dark:border-white/10 ${clock24h?"grid-cols-2":"grid-cols-3"}`}>
-      {[sections.length-2,sections.length-1].map((index,i)=><label key={index} className="min-w-0 text-[11px]">{i===0?"الساعة":"الدقيقة"}<ProjectInput ref={mode==="time"&&i===0?input:undefined} id={mode==="time"&&i===0?fieldId:undefined} dir="ltr" type="text" inputMode="numeric" autoComplete="off" required={required} disabled={disabled} aria-label={i===0?"الساعة":"الدقيقة"} value={sections[index]} maxLength={2} placeholder={i===0?"HH":"mm"} onFocus={event=>event.currentTarget.select()} onChange={event=>setSection(index,event.target.value)} onBlur={event=>{const current=digits(event.currentTarget.value);if(current.length===1)setSection(index,pad(Number(current)));}} className="mt-1 !h-11 !px-2 !text-center !text-sm"/></label>)}
-      {!clock24h&&<div><p className="mb-1 text-[11px]">الفترة</p><ProjectDropdown fieldStyle disabled={disabled} value={period} onChange={value=>{const next=value==="pm"?"pm":"am";setPeriod(next);change(compose(sections,next));}} options={[{value:"am",label:"صباحًا"},{value:"pm",label:"مساءً"}]}/></div>}
-     </div>
-    </div>
-
+   <div onPaste={paste} className={`grid min-w-0 gap-3 ${mode==="datetime"?"grid-cols-[repeat(auto-fit,minmax(min(100%,210px),1fr))]":"grid-cols-1"} ${className}`}>
+    {mode==="datetime"&&<div className="min-w-0 space-y-1.5"><p className="text-xs font-semibold">التاريخ</p><div className={frame} dir="ltr" role="group" aria-label="اليوم والشهر والسنة">
+     {segment(0)}<span aria-hidden="true" className="px-0.5 text-base text-slate-400">/</span>{segment(1)}<span aria-hidden="true" className="px-0.5 text-base text-slate-400">/</span>{segment(2)}
+     <ProjectTooltip label="اختيار التاريخ والوقت"><ProjectButton variant="ghost" size="icon" className="!h-9 !w-8 !shrink-0 !rounded-lg !text-blue-600 dark:!text-blue-300" disabled={disabled} aria-label="اختيار التاريخ والوقت" onClick={event=>{event.preventDefault();setPicker(parsed||localNow(timeZone));setOpen(true);}}><CalendarDays className="h-4 w-4"/></ProjectButton></ProjectTooltip>
+    </div></div>}
+    <div className="min-w-0 space-y-1.5"><p className="flex items-center gap-1.5 text-xs font-semibold"><Clock3 className="h-3.5 w-3.5 text-slate-400"/>الوقت</p><div className="flex min-w-0 items-center gap-1.5"><div className={`${frame} flex-1`} dir="ltr" role="group" aria-label="الساعة والدقيقة">
+     {segment(sections.length-2)}<span aria-hidden="true" className="px-1 text-lg text-slate-400">:</span>{segment(sections.length-1)}
+    </div>{!clock24h&&<ProjectDropdown disabled={disabled} fieldStyle triggerClassName="!h-[46px]" className="!w-[66px] !shrink-0" nowrapLabel value={period} onChange={value=>{const next=value==="pm"?"pm":"am";setPeriod(next);change(compose(sections,next));}} options={[{value:"am",label:"ص"},{value:"pm",label:"م"}]}/>}</div></div>
    </div>
    {!required&&text&&<ProjectButton variant="ghost" className="!h-8 !text-xs" disabled={disabled} onClick={()=>change("")}><X className="h-3 w-3"/>مسح الموعد</ProjectButton>}
    <p id={`${fieldId}-format`} className="text-[11px] font-normal text-slate-500 dark:text-slate-300">{hint}</p>
