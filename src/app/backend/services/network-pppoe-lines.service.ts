@@ -1,3 +1,4 @@
+import {syncPppoeExpiration} from './pppoe-expiration-policy';
 import {createEquipmentStationForPppoe} from './network-equipment.service';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
@@ -127,8 +128,7 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
    const activationAt=expiresAt<=createdAt?null:sqlTimestamp(createdAt);
    await app.query('UPDATE pppoe_subscriptions SET lifecycle=?,activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?',[lifecycle,activationAt,sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
    if(lifecycle==='active'){
-    const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-createdAt.getTime())/1000));
-    await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(timeout)]);
+    await syncPppoeExpiration(app,username);
    }else{
     await app.query("UPDATE pppoe_subscriptions SET ended_at=UTC_TIMESTAMP(6) WHERE id=?",[subscription.insertId]);
     await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
@@ -136,8 +136,7 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
   }else if(service.starts_at==='creation'||service.validity_mode==='calendar_monthly'){
    const expiresAt=pppoeExpiry(createdAt,service,serviceTimezone),graceEnds=graceDays?new Date(expiresAt.getTime()+graceDays*86400000):expiresAt;
    await app.query("UPDATE pppoe_subscriptions SET lifecycle='active',activated_at=?,expires_at=?,grace_expires_at=? WHERE id=?",[sqlTimestamp(createdAt),sqlTimestamp(expiresAt),graceDays?sqlTimestamp(graceEnds):null,subscription.insertId]);
-   const timeout=Math.max(1,Math.ceil((graceEnds.getTime()-Date.now())/1000));
-   await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(timeout)]);
+   await syncPppoeExpiration(app,username);
    lifecycle=graceEnds.getTime()<=Date.now()?'ended':'active';
    if(lifecycle==='ended'){
     await app.query("UPDATE pppoe_subscriptions SET lifecycle='ended',ended_at=UTC_TIMESTAMP(6) WHERE id=?",[subscription.insertId]);
@@ -152,3 +151,4 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
  }catch(error:any){if(error&&typeof error==='object')error.pppoeStage=stage;if(!sharedConnection)await app.rollback();throw error;}};
  return sharedConnection?create(sharedConnection):withNetwork(scope,create);
 }
+

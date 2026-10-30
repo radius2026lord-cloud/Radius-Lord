@@ -1,3 +1,5 @@
+import {queuePppoeReauthentication,processPppoeRadiusJobs} from './pppoe-radius-jobs.service';
+import {syncPppoeExpiration} from './pppoe-expiration-policy';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
 import {disconnectPppoeSessions} from './network-radius-disconnect.service';
@@ -60,11 +62,7 @@ async function markRejected(app:any,username:string,reject:boolean){
  if(reject)await app.query("INSERT INTO radcheck(username,attribute,op,value) VALUES(?,'Auth-Type',':=','Reject')",[username]);
  if(reject)await app.query("DELETE FROM radreply WHERE username=? AND attribute='Session-Timeout'",[username]);
 }
-async function setSessionTimeout(app:any,username:string,end:Date){
- const seconds=Math.max(1,Math.ceil((end.getTime()-Date.now())/1000));
- await app.query("DELETE FROM radreply WHERE username=? AND attribute='Session-Timeout'",[username]);
- await app.query("INSERT INTO radreply(username,attribute,op,value) VALUES(?,'Session-Timeout',':=',?)",[username,String(seconds)]);
-}
+
 function radiusRate(value:any){const n=BigInt(String(value)),g=BigInt(1000000000),m=BigInt(1000000),k=BigInt(1000);if(n%g===BigInt(0))return n/g+'G';if(n%m===BigInt(0))return n/m+'M';if(n%k===BigInt(0))return n/k+'k';return String(n);}
 async function applyReducedSpeed(app:any,row:any,username:string,service:any){
  const group='rlr_'+String(row.id);
@@ -98,7 +96,7 @@ async function recordActivation(app:any,sub:any,username:string,startedAt:Date,z
  }
  await app.query("UPDATE pppoe_subscriptions SET lifecycle='active',activated_at=?,expires_at=?,grace_expires_at=? WHERE id=? AND lifecycle='pending'",[sqlDate(startedAt),sqlDate(expiresAt),graceDays?sqlDate(graceEnds):null,sub.id]);
  await markRejected(app,username,false);
- await setSessionTimeout(app,username,graceEnds);
+ await syncPppoeExpiration(app,username);
  return {lifecycle:'active',expiresAt:sqlDate(expiresAt),graceExpiresAt:graceDays?sqlDate(graceEnds):null};
 }
 
@@ -136,7 +134,7 @@ export async function setPppoeLineStatus(scope:any,value:any,statusValue:any){
   await app.query('UPDATE pppoe_accounts SET admin_status=? WHERE id=?',[status,id]);
   const keepLocked=status==='disabled'||due||row.lifecycle!=='active'&&row.starts_at!=='first_connection';
   await markRejected(app,row.username,keepLocked);
-  if(status==='enabled'&&!due&&row.lifecycle==='active')await setSessionTimeout(app,row.username,dateValue(row.grace_expires_at||row.expires_at));
+  if(status==='enabled'&&!due&&row.lifecycle==='active')await syncPppoeExpiration(app,row.username);
   const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);
   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,before_data,after_data,result) VALUES(?,?,'manager',?,'pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),status==='disabled'?'pppoe.line.disable':'pppoe.line.enable',id,row.radius_identity_id,JSON.stringify({status:row.admin_status}),JSON.stringify({status})]);
   await app.commit();let disconnectPending=false;if(status==='disabled')try{const result=await disconnectPppoeSessions(scope,app,row.username);disconnectPending=result.acknowledged<result.attempted;}catch{disconnectPending=true;}return {success:true,id,status,disconnectPending};
@@ -167,7 +165,7 @@ export async function renewPppoeLine(scope:any,value:any){
   const [created]:any=await app.query("INSERT INTO pppoe_subscriptions(account_id,package_version_id,service_role,parent_subscription_id,created_by,event_type,previous_subscription_id,renewal_mode,base_price_snapshot,offer_price_snapshot,offer_ends_at_snapshot,effective_price_snapshot,currency_code,is_gift_snapshot,grace_source_snapshot,grace_days_snapshot,effective_service_snapshot,quota_allowance_bytes,lifecycle,activated_at,expires_at,grace_expires_at) VALUES(?,?,'base',NULL,?,'renewal',?,'normal',?,?,?,?,?,?,?,?,?,?,'active',?,?,?)",[accountId,profile.package_version_id,scope.managerId,old.subscription_id,basePrice,offerPrice,offerActive?profile.offer_ends_at:null,effectivePrice,profile.currency_code,gifted?1:0,graceSource,effectiveGraceDays,JSON.stringify(service),quota,sqlDate(activatedAt),sqlDate(expiresAt),effectiveGraceDays?sqlDate(effectiveGraceEnds):null]);
   await app.query('INSERT INTO pppoe_subscription_usage(subscription_id,upload_bytes,download_bytes) VALUES(?,0,0)',[created.insertId]);
   await app.query('DELETE FROM radusergroup WHERE username=?',[username]);await app.query('INSERT INTO radusergroup(username,groupname,priority) VALUES(?,?,1)',[username,profile.radius_group_name]);
-  const keepLocked=old.admin_status!=='enabled';await markRejected(app,username,keepLocked);if(!keepLocked)await setSessionTimeout(app,username,effectiveGraceEnds);
+  const keepLocked=old.admin_status!=='enabled';await markRejected(app,username,keepLocked);if(!keepLocked)await syncPppoeExpiration(app,username);
   const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);
   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,before_data,after_data,result) VALUES(?,?,'manager','pppoe.line.renew','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),accountId,identityId,JSON.stringify({subscriptionId:Number(old.subscription_id),lifecycle:old.lifecycle,expiresAt:old.expires_at}),JSON.stringify({subscriptionId:Number(created.insertId),packageVersionId:Number(profile.package_version_id),packageName:profile.name,versionNo:Number(profile.version_no),lifecycle:'active',expiresAt:sqlDate(expiresAt)})]);
   await app.commit();try{const result=await disconnectPppoeSessions(scope,app,username,true);disconnectPending=result.acknowledged<result.attempted;}catch{disconnectPending=true;}
@@ -200,9 +198,10 @@ export async function updatePppoeLineExpiry(scope:any,value:any,input:any){
   const expiry=parsePppoeLocalDateTime(input?.expiresAt,zone);const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) now_utc');if(expiry<=dateValue(clock[0].now_utc))throw new Error('PPPOE_LINE_EXPIRY_INVALID');
   const [rows]:any=await app.query("SELECT a.id,a.admin_status,a.radius_identity_id,r.current_username username,s.id subscription_id,s.lifecycle,s.expires_at,s.grace_expires_at,s.grace_source_snapshot,s.grace_days_snapshot FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscriptions s ON s.id=(SELECT latest.id FROM pppoe_subscriptions latest WHERE latest.account_id=a.id AND latest.service_role='base' ORDER BY latest.id DESC LIMIT 1) WHERE a.id=? AND a.archived_at IS NULL FOR UPDATE",[id]);const row=rows[0];if(!row)throw new Error('PPPOE_LINE_UNAVAILABLE');if(row.lifecycle!=='active')throw new Error('PPPOE_LINE_EXPIRY_UNAVAILABLE');
   const graceDays=row.grace_source_snapshot==='global'?Math.max(0,Number(settings[0]?.global_grace_days||0)):Math.max(0,Number(row.grace_days_snapshot||0));const grace=graceDays?new Date(expiry.getTime()+graceDays*86400000):null;
-  await app.query('UPDATE pppoe_subscriptions SET expires_at=?,grace_expires_at=? WHERE id=?',[sqlDate(expiry),grace?sqlDate(grace):null,row.subscription_id]);if(row.admin_status==='enabled')await setSessionTimeout(app,row.username,grace||expiry);await markRejected(app,row.username,row.admin_status!=='enabled');
+  await app.query('UPDATE pppoe_subscriptions SET expires_at=?,grace_expires_at=? WHERE id=?',[sqlDate(expiry),grace?sqlDate(grace):null,row.subscription_id]);if(row.admin_status==='enabled')await syncPppoeExpiration(app,row.username);await markRejected(app,row.username,row.admin_status!=='enabled');
   const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,before_data,after_data,result) VALUES(?,?,'manager','pppoe.subscription.expiry.update','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.radius_identity_id,JSON.stringify({expiresAt:row.expires_at,graceExpiresAt:row.grace_expires_at}),JSON.stringify({expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,timezone:zone})]);
-  await app.commit();return {success:true,id,expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,serviceTimezone:zone};
+  await queuePppoeReauthentication(app,String(row.username));
+  await app.commit();let sessionSyncPending=false;try{await processPppoeRadiusJobs(scope,app);const [pending]:any=await app.query("SELECT 1 FROM pppoe_radius_jobs j JOIN radacct ra ON ra.radacctid=j.radacctid WHERE ra.username=? AND ra.acctstoptime IS NULL AND j.acknowledged_at IS NULL LIMIT 1",[row.username]);sessionSyncPending=pending.length>0;}catch{sessionSyncPending=true;}return {success:true,id,sessionSyncPending,expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,serviceTimezone:zone};
  }catch(error){await app.rollback();throw error;}});
 }
 
@@ -233,11 +232,15 @@ export async function archivePppoeLine(scope:any,value:any){
 
 export async function processPppoeLifecycle(scope:any){
  return withNetwork(scope,async app=>{
+  const lockName='rl-pppoe-lifecycle:'+Number(scope.environment_id);
+  const [lock]:any=await app.query('SELECT GET_LOCK(?,0) acquired',[lockName]);
+  if(Number(lock[0]?.acquired)!==1)return 0;
+  try{
   let changed=0;const forceDisconnectUsers=new Set<string>();
   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');const zone=settings[0]?.timezone||'Asia/Damascus';
   const [firstConnections]:any=await app.query("SELECT s.id,a.id account_id,a.radius_identity_id,r.current_username username,MIN(ra.acctstarttime) first_started FROM pppoe_subscriptions s JOIN pppoe_accounts a ON a.id=s.account_id JOIN radius_identities r ON r.id=a.radius_identity_id JOIN radacct ra ON ra.username=r.current_username WHERE s.lifecycle='pending' AND s.service_role='base' AND a.admin_status='enabled' AND a.archived_at IS NULL AND JSON_UNQUOTE(JSON_EXTRACT(s.effective_service_snapshot,'$.starts_at'))='first_connection' AND NOT EXISTS(SELECT 1 FROM radcheck rc WHERE rc.username=r.current_username AND rc.attribute='Auth-Type' AND rc.value='Reject') GROUP BY s.id,a.id,a.radius_identity_id,r.current_username ORDER BY s.id LIMIT 25");
   for(const row of firstConnections){await app.beginTransaction();try{const [locked]:any=await app.query("SELECT * FROM pppoe_subscriptions WHERE id=? AND lifecycle='pending' FOR UPDATE",[row.id]);if(locked[0]){const activated=await recordActivation(app,locked[0],row.username,dateValue(row.first_started),zone);if(activated.lifecycle==='active')forceDisconnectUsers.add(row.username);await systemEvent(app,activated.lifecycle==='active'?'pppoe.line.first_connection':'pppoe.line.expire',Number(row.account_id),Number(row.radius_identity_id),{lifecycle:activated.lifecycle,expiresAt:activated.expiresAt});changed++;}await app.commit();}catch(error){await app.rollback();throw error;}}
-  const [firstAuthSessions]:any=await app.query("SELECT DISTINCT r.current_username username FROM pppoe_subscriptions s JOIN pppoe_accounts a ON a.id=s.account_id JOIN radius_identities r ON r.id=a.radius_identity_id JOIN radacct ra ON ra.username=r.current_username AND ra.acctstoptime IS NULL AND COALESCE(ra.acctupdatetime,ra.acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE WHERE s.lifecycle='active' AND s.service_role='base' AND JSON_UNQUOTE(JSON_EXTRACT(s.effective_service_snapshot,'$.starts_at'))='first_connection' AND ra.acctstarttime<=s.activated_at AND a.admin_status='enabled' AND a.archived_at IS NULL");
+  const [firstAuthSessions]:any=await app.query("SELECT DISTINCT r.current_username username FROM pppoe_subscriptions s JOIN pppoe_accounts a ON a.id=s.account_id JOIN radius_identities r ON r.id=a.radius_identity_id JOIN radacct ra ON ra.username=r.current_username AND ra.acctstoptime IS NULL AND COALESCE(ra.acctupdatetime,ra.acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE WHERE s.lifecycle='active' AND s.service_role='base' AND JSON_UNQUOTE(JSON_EXTRACT(s.effective_service_snapshot,'$.starts_at'))='first_connection' AND ra.acctstarttime<=s.activated_at AND a.admin_status='enabled' AND a.archived_at IS NULL LIMIT 100");
   for(const row of firstAuthSessions)forceDisconnectUsers.add(String(row.username));
   const quotaCursorKey=String(scope.tenant_id)+':'+String(scope.environment_id),quotaCursor=quotaCursors.get(quotaCursorKey)||0;
   let [quotaLines]:any=await app.query("SELECT s.id,s.account_id,s.package_version_id,s.activated_at,s.quota_allowance_bytes,s.effective_service_snapshot,a.radius_identity_id,r.current_username username,COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes FROM pppoe_subscriptions s JOIN pppoe_accounts a ON a.id=s.account_id JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscription_usage u ON u.subscription_id=s.id WHERE s.lifecycle='active' AND s.service_role='base' AND s.quota_allowance_bytes IS NOT NULL AND a.admin_status='enabled' AND a.archived_at IS NULL AND s.id>? ORDER BY s.id LIMIT 100",[quotaCursor]);
@@ -277,10 +280,11 @@ export async function processPppoeLifecycle(scope:any){
   for(const row of pending){await app.beginTransaction();try{const [locked]:any=await app.query("SELECT * FROM pppoe_subscriptions WHERE id=? AND lifecycle='pending' FOR UPDATE",[row.id]);if(locked[0]){const service=typeof locked[0].effective_service_snapshot==='string'?JSON.parse(locked[0].effective_service_snapshot):locked[0].effective_service_snapshot;const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) AS now_utc');const expiry=pppoeExpiry(row.created_at,service,zone),graceDays=Number(row.grace_days_snapshot||0),end=graceDays?new Date(expiry.getTime()+graceDays*86400000):expiry;if(end<=dateValue(clock[0].now_utc)){await app.query("UPDATE pppoe_subscriptions SET lifecycle='ended',ended_at=UTC_TIMESTAMP(6) WHERE id=?",[row.id]);await markRejected(app,row.username,true);await systemEvent(app,'pppoe.line.expire',Number(row.account_id),Number(row.radius_identity_id),{subscriptionId:Number(row.id),lifecycle:'ended'});changed++;}}await app.commit();}catch(error){await app.rollback();throw error;}}
   const [expired]:any=await app.query("SELECT s.id,s.account_id,a.radius_identity_id,r.current_username username FROM pppoe_subscriptions s JOIN pppoe_accounts a ON a.id=s.account_id JOIN radius_identities r ON r.id=a.radius_identity_id WHERE s.lifecycle='active' AND s.service_role='base' AND COALESCE(s.grace_expires_at,s.expires_at)<=UTC_TIMESTAMP(6) ORDER BY s.expires_at,s.id LIMIT 50");
   for(const row of expired){await app.beginTransaction();try{const [locked]:any=await app.query("SELECT id FROM pppoe_subscriptions WHERE id=? AND lifecycle='active' AND COALESCE(grace_expires_at,expires_at)<=UTC_TIMESTAMP(6) FOR UPDATE",[row.id]);if(locked[0]){await app.query("UPDATE pppoe_subscriptions SET lifecycle='ended',ended_at=UTC_TIMESTAMP(6) WHERE id=?",[row.id]);await markRejected(app,row.username,true);await systemEvent(app,'pppoe.line.expire',Number(row.account_id),Number(row.radius_identity_id),{subscriptionId:Number(row.id),lifecycle:'ended'});changed++;}await app.commit();}catch(error){await app.rollback();throw error;}}
-  if(forceDisconnectUsers.size)try{await disconnectPppoeSessions(scope,app,Array.from(forceDisconnectUsers),true);}catch{}
-  try{await disconnectPppoeSessions(scope,app);}catch{}
+  await processPppoeRadiusJobs(scope,app,Array.from(forceDisconnectUsers));
   return changed;
+  }finally{await app.query('SELECT RELEASE_LOCK(?)',[lockName]);}
  });
 }
+
 
 

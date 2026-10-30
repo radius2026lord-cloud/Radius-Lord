@@ -723,3 +723,27 @@ INSERT INTO permissions(code,name_ar,module,principal_only) VALUES
 ('nas.script.generate','توليد سكربت NAS','nas',1),
 ('network.settings.manage','إدارة إعدادات الشبكة','network',1)
 ON DUPLICATE KEY UPDATE code=VALUES(code);
+
+
+-- Automatic session reauthentication outbox.
+CREATE TABLE pppoe_radius_jobs (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+ radacctid BIGINT NOT NULL,
+ reason ENUM('expiry','reauth') NOT NULL,
+ revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
+ attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+ next_attempt_at DATETIME(6) NOT NULL,
+ acknowledged_at DATETIME(6) NULL,
+ PRIMARY KEY(id),
+ UNIQUE KEY uq_ppp_radius_job_session(radacctid),
+ KEY idx_ppp_radius_job_due(next_attempt_at,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE pppoe_radius_job_state (
+ id TINYINT UNSIGNED NOT NULL,
+ scan_cursor BIGINT NOT NULL DEFAULT 0,
+ cleanup_cursor BIGINT NOT NULL DEFAULT 0,
+ PRIMARY KEY(id),
+ CONSTRAINT chk_ppp_radius_job_state_singleton CHECK(id=1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT IGNORE INTO pppoe_radius_job_state(id,scan_cursor) VALUES(1,0);
