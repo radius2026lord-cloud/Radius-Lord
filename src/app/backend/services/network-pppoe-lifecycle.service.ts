@@ -195,7 +195,11 @@ export async function updatePppoeLineExpiry(scope:any,value:any,input:any){
  return withNetwork(scope,async app=>{await app.beginTransaction();try{
   await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
   const [settings]:any=await app.query('SELECT timezone,grace_policy,global_grace_days FROM network_settings WHERE id=1');const zone=String(settings[0]?.timezone||'Asia/Damascus');
-  const expiry=parsePppoeLocalDateTime(input?.expiresAt,zone);const [clock]:any=await app.query('SELECT UTC_TIMESTAMP(6) now_utc');if(expiry<=dateValue(clock[0].now_utc))throw new Error('PPPOE_LINE_EXPIRY_INVALID');
+  const expiry=parsePppoeLocalDateTime(input?.expiresAt,zone);
+  // Compare UTC values in SQL; mysql2 may otherwise interpret a UTC DATETIME
+  // using the backend host's local timezone before JavaScript sees it.
+  const [clock]:any=await app.query("SELECT CAST(? AS DATETIME(6))>UTC_TIMESTAMP(6) is_future,DATE_FORMAT(UTC_TIMESTAMP(6),'%Y-%m-%dT%H:%i:%sZ') now_utc",[sqlDate(expiry)]);
+  if(Number(clock[0]?.is_future)!==1)throw Object.assign(new Error('PPPOE_LINE_EXPIRY_PAST'),{serverNow:String(clock[0]?.now_utc||''),timezone:zone});
   const [rows]:any=await app.query("SELECT a.id,a.admin_status,a.radius_identity_id,r.current_username username,s.id subscription_id,s.lifecycle,s.expires_at,s.grace_expires_at,s.grace_source_snapshot,s.grace_days_snapshot FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscriptions s ON s.id=(SELECT latest.id FROM pppoe_subscriptions latest WHERE latest.account_id=a.id AND latest.service_role='base' ORDER BY latest.id DESC LIMIT 1) WHERE a.id=? AND a.archived_at IS NULL FOR UPDATE",[id]);const row=rows[0];if(!row)throw new Error('PPPOE_LINE_UNAVAILABLE');if(row.lifecycle!=='active')throw new Error('PPPOE_LINE_EXPIRY_UNAVAILABLE');
   const graceDays=row.grace_source_snapshot==='global'?Math.max(0,Number(settings[0]?.global_grace_days||0)):Math.max(0,Number(row.grace_days_snapshot||0));const grace=graceDays?new Date(expiry.getTime()+graceDays*86400000):null;
   await app.query('UPDATE pppoe_subscriptions SET expires_at=?,grace_expires_at=? WHERE id=?',[sqlDate(expiry),grace?sqlDate(grace):null,row.subscription_id]);if(row.admin_status==='enabled')await syncPppoeExpiration(app,row.username);await markRejected(app,row.username,row.admin_status!=='enabled');
