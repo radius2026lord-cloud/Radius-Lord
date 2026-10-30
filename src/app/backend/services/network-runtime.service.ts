@@ -3,6 +3,26 @@ import {createHmac,timingSafeEqual} from 'crypto';
 import {db} from '../config/db';
 import {decryptProvisioningSecret,provisioningKey} from './provisioning-secrets.service';
 let connections=0;
+type ConnectionWaiter={grant:()=>void;timer:ReturnType<typeof setTimeout>};
+const connectionWaiters:ConnectionWaiter[]=[];
+// Queue short bursts from page reloads without increasing database concurrency.
+async function acquireNetworkConnection(){
+ if(connections<24){connections++;return;}
+ if(connectionWaiters.length>=96)throw new Error('NETWORK_CONNECTIONS_BUSY');
+ await new Promise<void>((resolve,reject)=>{
+  const waiter:ConnectionWaiter={grant:resolve,timer:setTimeout(()=>{
+   const index=connectionWaiters.indexOf(waiter);
+   if(index>=0)connectionWaiters.splice(index,1);
+   reject(new Error('NETWORK_CONNECTIONS_BUSY'));
+  },15000)};
+  connectionWaiters.push(waiter);
+ });
+}
+function releaseNetworkConnection(){
+ const waiter=connectionWaiters.shift();
+ if(waiter){clearTimeout(waiter.timer);waiter.grant();}
+ else connections--;
+}
 export async function networkScope(slug:string,provisioning=false){
  if(!/^network-[a-f0-9]{24}$/.test(slug))throw new Error('NETWORK_NOT_AVAILABLE');
  const [rows]:any=await db.query(`SELECT t.id tenant_id,t.slug,t.name,t.status tenant_status,t.license_number,e.id environment_id,e.status environment_status,d.*,ds.host database_host,ds.port database_port,ds.tls_required,ds.tls_ca_reference,s.id subscription_id,s.status subscription_status,s.expires_at,l.status license_status FROM tenants t JOIN tenant_environments e ON e.tenant_id=t.id JOIN tenant_databases d ON d.id=e.tenant_database_id AND d.tenant_id=t.id JOIN database_servers ds ON ds.id=d.database_server_id JOIN subscription_licenses l ON l.tenant_id=t.id JOIN subscriptions s ON s.id=l.subscription_id AND s.tenant_id=t.id WHERE t.slug=? AND t.archived_at IS NULL AND e.archived_at IS NULL AND ds.archived_at IS NULL AND ds.status='active' AND d.status='active' AND d.credentials_state='ready'`,[slug]);
@@ -25,8 +45,8 @@ export async function validateLocalLicense(connection:mysql.Connection,scope:any
  return license;
 }
 export async function withNetwork<T>(scope:any,operation:(connection:mysql.Connection)=>Promise<T>):Promise<T>{
- if(connections>=24)throw new Error('NETWORK_CONNECTIONS_BUSY');connections++;let connection:mysql.Connection|undefined;
+ await acquireNetworkConnection();let connection:mysql.Connection|undefined;
  try{connection=await mysql.createConnection({host:scope.database_host,port:scope.database_port,user:scope.db_username,password:decryptProvisioningSecret(scope.app_password_encrypted),database:scope.db_name,connectTimeout:8000,...(scope.tls_required?{ssl:{rejectUnauthorized:true}}:{})});
  const [name]:any=await connection.query({sql:'SELECT DATABASE() name',timeout:5000});if(name[0]?.name!==scope.db_name)throw new Error('NETWORK_DATABASE_SCOPE');return await operation(connection);
- }finally{await connection?.end().catch(()=>{});connections--;}
+ }finally{await connection?.end().catch(()=>{});releaseNetworkConnection();}
 }
