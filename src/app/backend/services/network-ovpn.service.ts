@@ -506,14 +506,18 @@ function buildPppoeTraffic(sessions:any[],routerosVersion:string,counterSource:s
  const uptime=String(sessions[0].uptime||''),clock=uptime.match(/(?:^|d)(\d{1,3}):(\d{2}):(\d{2})$/),units=Array.from(uptime.matchAll(/(\d+)(w|d|h|m|s)/g));let sessionSeconds=clock?Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]):0;for(const match of units){const factor=match[2]==='w'?604800:match[2]==='d'?86400:match[2]==='h'?3600:match[2]==='m'?60:1;sessionSeconds+=Number(match[1])*factor;}
  return {connected:true,uploadBytes:upload.toString(),downloadBytes:download.toString(),sessionCount:sessions.length,sessionSeconds,uptime:uptime||null,framedIp:sessions[0].address||null,callingStation:sessions[0]['caller-id']||null,routerosVersion,counterSource};
 }
-async function removeActiveNasSessions(api:RouterApi,action:{username:string;service:'ppp'|'hotspot';inspectOnly?:boolean}){
+type NasSessionAction={username:string;service:'ppp'|'hotspot';onLocated?:()=>void};
+
+async function removeActiveNasSessions(api:RouterApi,action:NasSessionAction){
  const ppp=action.service==='ppp',path=ppp?'/ppp/active':'/ip/hotspot/active',key=ppp?'name':'user';
  const readMatches=async()=>{
   const active=await api.command(path+'/print',{'.proplist':ppp?'.id,name,service,session-id':'.id,user'});
   return active.filter((session:any)=>String(session[key]||'')===action.username&&(!ppp||String(session.service||'').toLowerCase()==='pppoe'));
  };
  const sessions=await readMatches();
- if(action.inspectOnly)return {attempted:sessions.length,acknowledged:0,remaining:sessions.length};
+ if(!sessions.length)return {attempted:0,acknowledged:0,remaining:0};
+ // Discovery and removal share this authenticated connection and session snapshot.
+ action.onLocated?.();
  let removalFailure:unknown;
  for(const session of sessions){
   const id=String(session['.id']||'');
@@ -533,7 +537,7 @@ async function removeActiveNasSessions(api:RouterApi,action:{username:string;ser
  if(removalFailure&&acknowledged===0)throw removalFailure;
  return {attempted:sessions.length,acknowledged,remaining:remaining.length};
 }
-export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string,sessionAction?:{username:string;service:'ppp'|'hotspot';inspectOnly?:boolean}){
+export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string,sessionAction?:NasSessionAction){
  const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,COALESCE(NULLIF(ns.radius_server_address,''),NULLIF(c.radius_server_address,'')) AS ping_radius_server_address,ns.timezone network_timezone,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id LEFT JOIN network_settings ns ON ns.id=1 JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  const row=rows[0];if(!row)fail('NAS_API_NOT_CONFIGURED');if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
  const port=Number(row.port);if(!Number.isInteger(port)||port<1||port>65535)fail('NAS_API_PORT_INVALID');
@@ -653,7 +657,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     api?.close();api=undefined;
     if(relayRulesStarted){
      const operationStage=relayFailureStage||stage;
-     try{relayRuleCounters=await readRelayCounters();}catch{/* Preserve the original failure; always attempt to remove relay rules. */}
+     if(!sessionAction||relayFailureStage)try{relayRuleCounters=await readRelayCounters();}catch{/* Preserve the original failure; always attempt to remove relay rules. */}
      await cleanup();
      // Cleanup uses stage for its own diagnostics; restore the failed operation
      // stage after successful cleanup so the UI/log identify where forwarding stopped.
@@ -714,6 +718,7 @@ export async function removeNetworkTunnels(central:PoolConnection,environmentId:
  }
 }
 export async function radiusIpv4(host:string){return (await lookup(host,{family:4})).address;}
+
 
 
 

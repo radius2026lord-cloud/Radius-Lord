@@ -56,17 +56,18 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
    if(locateFirst){
     for(const nasId of nasIds){
      try{
-      const probe=await checkNetworkNasApi(central,app,nasId,scope,undefined,{username:usernames[0],service:serviceKind,inspectOnly:true});
-      if(sessionCounts(probe).attempted===0)continue;
-     }catch(error){recordFailure(error,nasId);continue;}
-     locatedNasId=nasId;
-     // Other NAS failures are discovery failures, not failures to kick this session.
-     apiFailures=0;failureCodes.length=0;
-     try{
-      const result=await checkNetworkNasApi(central,app,nasId,scope,undefined,{username:usernames[0],service:serviceKind});
+      const result=await checkNetworkNasApi(central,app,nasId,scope,undefined,{
+       username:usernames[0],service:serviceKind,
+       onLocated:()=>{
+        locatedNasId=nasId;
+        // Other NAS failures do not change the result for the located session.
+        apiFailures=0;failureCodes.length=0;
+       }
+      });
       const counts=sessionCounts(result);
+      if(counts.attempted===0)continue;
       locatedResult={...counts,verified:counts.acknowledged===counts.attempted,transport:'api',apiFailures:0,nasId};
-     }catch(error){recordFailure(error,nasId);}
+     }catch(error){recordFailure(error,nasId);if(locatedNasId===undefined)continue;}
      break;
     }
    }else{
@@ -113,5 +114,6 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  // An ACK accepts the request; only the live API check proves session removal.
  return {attempted,acknowledged,verified:false,transport:'radius',apiFailures};
 }
+
 
 
