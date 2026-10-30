@@ -1,4 +1,6 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
+
 import ProjectLoading from "@/components/ui/project-loading";
 
 import { useEffect, useState } from "react";
@@ -27,6 +29,8 @@ type Customer = {
 const labels = { active: "نشط", suspended: "معلّق", disabled: "معطّل" } as const;
 
 export default function CustomerDetailsPage() {
+ const clock24h=useClock24h();
+
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -148,9 +152,9 @@ export default function CustomerDetailsPage() {
         <div className="rl-surface rounded-[22px] bg-white p-4 shadow-[0_8px_22px_rgba(58,84,112,.07)] dark:border-white/[.07] dark:bg-[#0d243b]">
           <h3 className="mb-4 text-sm font-semibold text-[#17386d] dark:text-[#d8d2dc]">نشاط الحساب</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            <Info icon={Clock3} label="آخر تسجيل دخول" value={formatDateTime(customer.lastLoginAt)} />
-            <Info icon={CalendarDays} label="تاريخ إنشاء الحساب" value={formatDateTime(customer.createdAt)} />
-            <Info icon={CalendarDays} label="آخر تحديث" value={formatDateTime(customer.updatedAt)} />
+            <Info icon={Clock3} label="آخر تسجيل دخول" value={formatDateTime(customer.lastLoginAt,clock24h)} />
+            <Info icon={CalendarDays} label="تاريخ إنشاء الحساب" value={formatDateTime(customer.createdAt,clock24h)} />
+            <Info icon={CalendarDays} label="آخر تحديث" value={formatDateTime(customer.updatedAt,clock24h)} />
           </div>
         </div>
       </section>
@@ -164,7 +168,7 @@ export default function CustomerDetailsPage() {
         <div className="space-y-2">{recentActivity.map((item) => <div key={item.id} className="rl-surface-soft ui-state-enter flex flex-col gap-2 rounded-[16px] bg-[#f9fbfe] p-3 dark:bg-white/[.035] sm:flex-row sm:items-center">
           <span className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium ${activityTone[item.actionCode] ?? "bg-slate-100 text-slate-600 dark:bg-white/[.08] dark:text-slate-300"}`}>{item.actionName}</span>
           <div className="min-w-0 flex-1"><div className="truncate text-xs font-medium text-slate-650 dark:text-slate-200">{item.description || "عملية إدارية"}</div><div className="mt-1 text-[10px] text-slate-400">بواسطة {item.adminName || item.adminUsername || "النظام"}</div></div>
-          <div className="shrink-0 text-[10px] text-slate-400">{formatDateTime(item.createdAt)}</div>
+          <div className="shrink-0 text-[10px] text-slate-400">{formatDateTime(item.createdAt,clock24h)}</div>
         </div>)}</div>}
       </section>
 
@@ -185,7 +189,7 @@ function StateCard({ children }: { children: React.ReactNode }) {
   return <div className="rl-surface rounded-[22px] bg-white p-8 text-center text-sm text-slate-500 dark:border-white/[.07] dark:bg-[#0d243b] dark:text-slate-400">{children}</div>;
 }
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null,clock24h:boolean=true) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("ar", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ar", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" ,hour12:!clock24h}).format(new Date(value));
 }

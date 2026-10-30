@@ -1,4 +1,6 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
+
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -31,6 +33,8 @@ type Subscription = {
 };
 
 export default function SubscriptionDetailsPage(){
+ const clock24h=useClock24h();
+
   const {id}=useParams<{id:string}>();
   const router=useRouter();
   const [detailsSection,setDetailsSection]=useState<"plan"|"history"|"technical"|null>(null),[optionsOpen,setOptionsOpen]=useState(false);
@@ -95,7 +99,7 @@ export default function SubscriptionDetailsPage(){
       <div className="grid gap-3 sm:grid-cols-3">
         <ProjectInfoCard tone={["paid","completed"].includes(item.status)?"success":"warning"}><div className="flex items-center gap-2"><ProjectCardIcon icon={CreditCard} tone={["paid","completed"].includes(item.status)?"success":"warning"}/><h2 className="text-xs font-semibold">الدفع</h2></div><p className="mt-3 text-sm font-bold">{paymentLabel(item.status)}</p><p className="mt-1 text-xs text-slate-500"><bdi>{item.totalAmount} {item.currency}</bdi></p></ProjectInfoCard>
         <ProjectInfoCard tone={item.environment.status==="ready"&&!item.environment.archived?"success":item.environment.job?.status==="failed"?"warning":"pending"}><div className="flex items-center gap-2"><ProjectCardIcon icon={Server} tone="connections"/><h2 className="text-xs font-semibold">البيئة</h2></div><p className="mt-3 text-sm font-bold">{environmentLabel(item.environment,item.status)}</p><p className="mt-1 text-xs text-slate-500">{item.deploymentName||"الاستضافة غير محفوظة"}</p></ProjectInfoCard>
-        <ProjectInfoCard tone={item.environment.subscriptionStatus==="active"&&!item.environment.archived?"success":"pending"}><div className="flex items-center gap-2"><ProjectCardIcon icon={CalendarClock} tone="memory"/><h2 className="text-xs font-semibold">فترة الاشتراك</h2></div><p className="mt-3 text-sm font-bold">{item.environment.archived?"التشغيل متوقف":item.environment.startsAt?`بدأت ${formatDate(item.environment.startsAt)}`:"تبدأ بعد جاهزية البيئة"}</p><p className="mt-1 text-xs text-slate-500">{item.environment.expiresAt?`تنتهي ${formatDate(item.environment.expiresAt)}`:`المدة: ${item.durationMonths} شهر`}</p></ProjectInfoCard>
+        <ProjectInfoCard tone={item.environment.subscriptionStatus==="active"&&!item.environment.archived?"success":"pending"}><div className="flex items-center gap-2"><ProjectCardIcon icon={CalendarClock} tone="memory"/><h2 className="text-xs font-semibold">فترة الاشتراك</h2></div><p className="mt-3 text-sm font-bold">{item.environment.archived?"التشغيل متوقف":item.environment.startsAt?`بدأت ${formatDate(item.environment.startsAt,clock24h)}`:"تبدأ بعد جاهزية البيئة"}</p><p className="mt-1 text-xs text-slate-500">{item.environment.expiresAt?`تنتهي ${formatDate(item.environment.expiresAt,clock24h)}`:`المدة: ${item.durationMonths} شهر`}</p></ProjectInfoCard>
       </div>
       <Panel title="الخطوة التالية">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -126,8 +130,8 @@ export default function SubscriptionDetailsPage(){
       <ProjectCardDetails open={detailsSection==='plan'}><div className="space-y-3 pt-1">{item.environment.registered&&<Panel title="هوية الشبكة والرخصة"><dl className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="الشبكة">{item.environment.networkName||"—"}</Field>
           <Field label="رقم الرخصة"><bdi className="font-mono">{item.environment.licenseNumber||"—"}</bdi></Field>
-          <Field label="بداية الاشتراك">{item.environment.startsAt?formatDate(item.environment.startsAt):"بعد جاهزية البيئة"}</Field>
-          <Field label="انتهاء الاشتراك">{formatDate(item.environment.expiresAt||null)}</Field>
+          <Field label="بداية الاشتراك">{item.environment.startsAt?formatDate(item.environment.startsAt,clock24h):"بعد جاهزية البيئة"}</Field>
+          <Field label="انتهاء الاشتراك">{formatDate(item.environment.expiresAt||null,clock24h)}</Field>
         </dl></Panel>}<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Panel title="الخطة المختارة">
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-[18px] bg-gradient-to-l from-blue-50 to-indigo-50/50 p-4 dark:from-blue-500/10 dark:to-indigo-500/5">
@@ -149,7 +153,7 @@ export default function SubscriptionDetailsPage(){
         </Panel>
       </div><ProjectButton variant="back" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق التفاصيل</ProjectButton></div></ProjectCardDetails>
       <ProjectCardDetails open={detailsSection==='history'}><div className="space-y-3 pt-1">{detailsSection==='history'&&<SubscriptionPaymentHistory orderId={item.id}/>}<ProjectButton variant="back" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق السجل</ProjectButton></div></ProjectCardDetails>
-      <ProjectCardDetails open={detailsSection==='technical'}><Panel title="التشخيص الفني">{item.environment.registered&&<div className="mt-4 rounded-[14px] border border-slate-100 p-3 dark:border-white/10"><p className="flex items-center gap-2 text-sm font-semibold"><Database className={item.environment.health?.databaseStatus==="healthy"?"text-emerald-500":"text-amber-500"}/>اتصال قاعدة بيانات البيئة</p><p className="mt-2 text-xs text-slate-500">{item.environment.health?.databaseStatus==="healthy"?"آخر قراءة مسجلة: الاتصال سليم":item.environment.health?.databaseStatus==="unavailable"?"فشل اتصال البيئة بقاعدة البيانات؛ يحتاج إلى معالجة":item.environment.health?.databaseStatus==="degraded"?"آخر قراءة مسجلة: الاتصال يحتاج مراجعة":"لم يصل تحقق فعلي من اتصال البيئة بعد"}</p><p className="mt-1 text-xs text-slate-400">اسم القاعدة: <bdi>{item.environment.health?.databaseName||"لم تُنشأ بعد"}</bdi> · وقت آخر تقرير: {formatDate(item.environment.health?.reportedAt||null)}</p></div>}{!item.environment.registered&&<p className="text-xs text-slate-500">تظهر قراءات الاتصال بعد تسجيل البيئة وتجهيز مواردها.</p>}{item.environment.job&&!item.environment.archived&&<ProjectButton variant="secondary" className="mt-3" onClick={()=>setProgressOpen(true)}><Layers/>عرض نتائج المراحل</ProjectButton>}<ProjectButton variant="back" className="mt-3 ms-2" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق التشخيص</ProjectButton></Panel></ProjectCardDetails>
+      <ProjectCardDetails open={detailsSection==='technical'}><Panel title="التشخيص الفني">{item.environment.registered&&<div className="mt-4 rounded-[14px] border border-slate-100 p-3 dark:border-white/10"><p className="flex items-center gap-2 text-sm font-semibold"><Database className={item.environment.health?.databaseStatus==="healthy"?"text-emerald-500":"text-amber-500"}/>اتصال قاعدة بيانات البيئة</p><p className="mt-2 text-xs text-slate-500">{item.environment.health?.databaseStatus==="healthy"?"آخر قراءة مسجلة: الاتصال سليم":item.environment.health?.databaseStatus==="unavailable"?"فشل اتصال البيئة بقاعدة البيانات؛ يحتاج إلى معالجة":item.environment.health?.databaseStatus==="degraded"?"آخر قراءة مسجلة: الاتصال يحتاج مراجعة":"لم يصل تحقق فعلي من اتصال البيئة بعد"}</p><p className="mt-1 text-xs text-slate-400">اسم القاعدة: <bdi>{item.environment.health?.databaseName||"لم تُنشأ بعد"}</bdi> · وقت آخر تقرير: {formatDate(item.environment.health?.reportedAt||null,clock24h)}</p></div>}{!item.environment.registered&&<p className="text-xs text-slate-500">تظهر قراءات الاتصال بعد تسجيل البيئة وتجهيز مواردها.</p>}{item.environment.job&&!item.environment.archived&&<ProjectButton variant="secondary" className="mt-3" onClick={()=>setProgressOpen(true)}><Layers/>عرض نتائج المراحل</ProjectButton>}<ProjectButton variant="back" className="mt-3 ms-2" onClick={()=>setDetailsSection(null)}><ArrowRight/>إغلاق التشخيص</ProjectButton></Panel></ProjectCardDetails>
       </section>
 
     </>}
@@ -157,7 +161,7 @@ export default function SubscriptionDetailsPage(){
 }
 function Panel({title,children}:{title:string;children:ReactNode}){return <section className="rl-surface min-w-0 rounded-[22px] bg-white p-4 sm:p-5 dark:bg-[#0d243b]"><h2 className="mb-4 text-sm font-semibold text-[#17386d] dark:text-slate-200">{title}</h2>{children}</section>}
 function Field({label,children}:{label:string;children:ReactNode}){return <div className="min-w-0"><dt className="text-[11px] text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 break-words text-xs font-semibold text-[#17386d] [overflow-wrap:anywhere] dark:text-slate-200">{children}</dd></div>}
-function formatDate(value:string|null){if(!value)return "—";const date=new Date(value);return Number.isNaN(date.getTime())?"—":new Intl.DateTimeFormat("ar",{dateStyle:"medium",timeStyle:"short"}).format(date)}
+function formatDate(value:string|null,clock24h:boolean=true){if(!value)return "—";const date=new Date(value);return Number.isNaN(date.getTime())?"—":new Intl.DateTimeFormat("ar",{dateStyle:"medium",timeStyle:"short",hour12:!clock24h}).format(date)}
 
 function formatLimit(value:number){return value===0?"غير محدود":new Intl.NumberFormat("ar").format(value)}
 

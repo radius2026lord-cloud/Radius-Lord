@@ -5,6 +5,7 @@ import "./dashboard-entry.css";
 import "./sidebar-motion.css";
 
 import { ThemeProvider } from "next-themes";
+import {ProjectClockProvider} from "@/components/ui/project-clock-provider";
 import DashboardShell from "@/components/ui/dashboard-shell";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { cookies } from "next/headers";
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="dashboard-enter">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
-            <DashboardShell>{children}</DashboardShell>
+            <ProjectClockProvider endpoint="/api/admin/platform-settings/ui-preferences"><DashboardShell>{children}</DashboardShell></ProjectClockProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

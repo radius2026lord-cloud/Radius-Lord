@@ -1,4 +1,6 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
+
 import { useEffect, useRef, useState } from "react";
 import { Activity, Clock, ShieldCheck, Server, Cpu, HardDrive, MemoryStick, RefreshCw, Thermometer } from "lucide-react";
 import ProjectResourceMetric from "@/components/ui/project-resource-metric";
@@ -9,6 +11,8 @@ type Health={resource:Record<string,string>;temperatures:Array<{name:string;valu
 function bytes(value?:string){if(!value)return null;const n=Number(value);if(!Number.isFinite(n)||n<0)return null;return n;}
 function size(value:number|null){if(value===null)return "غير متاح";return value>=1073741824?`${(value/1073741824).toFixed(2)} GiB`:`${(value/1048576).toFixed(1)} MiB`;}
 export default function OvpnHealthCard({gatewayId,gatewayName}:{gatewayId:number;gatewayName?:string}){
+ const clock24h=useClock24h();
+
  const [data,setData]=useState<Health|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  const refreshRef=useRef<()=>void>(()=>{});
  useEffect(()=>{
@@ -32,7 +36,7 @@ export default function OvpnHealthCard({gatewayId,gatewayName}:{gatewayId:number
  {error&&<p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
  <div className={`mt-3 grid gap-3 ${data?.temperatures.length?"sm:grid-cols-2 xl:grid-cols-4":"md:grid-cols-3"}`}>{metrics.filter(metric=>metric.name!=="الحرارة"||Boolean(data?.temperatures.length)).map(metric=><ProjectResourceMetric key={metric.name} {...metric} refreshing={busy} stale={Boolean(error)}/>)}</div>
  <div className="mt-3 grid gap-3 rounded-[18px] bg-[#f4f8fd] p-3 text-xs dark:bg-white/[.03] sm:grid-cols-2 xl:grid-cols-4">
- {[{label:"مدة التشغيل",value:r.uptime||"غير متاحة",icon:Clock,color:"text-emerald-500"},{label:"RouterOS",value:r.version||"غير متاح",icon:ShieldCheck,color:"text-violet-500"},{label:"الجهاز",value:r['board-name']||"غير متاح",icon:Server,color:"text-cyan-500"},{label:"آخر قراءة",value:data?new Date(data.checked_at).toLocaleString("ar"):"—",icon:RefreshCw,color:"text-blue-500"}].map(({label,value,icon:Icon,color})=><div key={label} className="flex min-w-0 items-start gap-2"><Icon aria-hidden="true" className={`mt-0.5 h-4 w-4 shrink-0 ${color}`}/><div className="min-w-0"><p className="text-slate-500 dark:text-slate-400">{label}</p><p className="mt-1 break-words font-medium text-slate-700 dark:text-slate-200"><bdi>{value}</bdi></p></div></div>)}
+ {[{label:"مدة التشغيل",value:r.uptime||"غير متاحة",icon:Clock,color:"text-emerald-500"},{label:"RouterOS",value:r.version||"غير متاح",icon:ShieldCheck,color:"text-violet-500"},{label:"الجهاز",value:r['board-name']||"غير متاح",icon:Server,color:"text-cyan-500"},{label:"آخر قراءة",value:data?new Date(data.checked_at).toLocaleString("ar",{hour12:!clock24h}):"—",icon:RefreshCw,color:"text-blue-500"}].map(({label,value,icon:Icon,color})=><div key={label} className="flex min-w-0 items-start gap-2"><Icon aria-hidden="true" className={`mt-0.5 h-4 w-4 shrink-0 ${color}`}/><div className="min-w-0"><p className="text-slate-500 dark:text-slate-400">{label}</p><p className="mt-1 break-words font-medium text-slate-700 dark:text-slate-200"><bdi>{value}</bdi></p></div></div>)}
  </div>
  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">الحالة تخص اتصال API وموارد الخادم.</p>
  </section>;

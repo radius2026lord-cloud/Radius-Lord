@@ -1,4 +1,6 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -59,17 +61,19 @@ export default function AdminActivityPage(){
   </div>
 }
 function LogCard({log,open,onToggle,row=false}:{log:AuditLog;open:boolean;onToggle:()=>void;row?:boolean}){
+ const clock24h=useClock24h();
+
   const changes=log.metadata?.changes??{}; return <article className="rl-surface rounded-[20px] bg-white dark:bg-[#0d243b]">
     <button type="button" onClick={onToggle} className={`flex w-full gap-3 p-3 text-right sm:p-4 ${row?"items-center":"flex-col"}`} dir="rtl">
       <span className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${actionTone[log.actionCode]??actionTone.LOGOUT}`}>{log.actionName}</span>
-      <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{log.entityName||log.description||`${log.entityTypeName} #${log.entityId??"—"}`}</div><div className="mt-1 text-[11px] text-slate-400">بواسطة {log.adminName||log.adminUsername||"النظام"} · {formatDate(log.createdAt)}</div></div>
+      <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{log.entityName||log.description||`${log.entityTypeName} #${log.entityId??"—"}`}</div><div className="mt-1 text-[11px] text-slate-400">بواسطة {log.adminName||log.adminUsername||"النظام"} · {formatDate(log.createdAt,clock24h)}</div></div>
       {open?<ChevronUp className="h-4 w-4 text-slate-400"/>:<ChevronDown className="h-4 w-4 text-slate-400"/>}
     </button>
     {open&&<div className="ui-state-enter border-t border-[#c4d3e2] p-4 dark:border-white/[.13]" dir="rtl">
       <div className="rl-surface-soft grid overflow-hidden rounded-[16px] bg-[#f9fbfe] dark:bg-white/[.035] sm:grid-cols-2 xl:grid-cols-4">
         <DetailInfo icon={UserRound} label="المنفّذ" value={log.adminName||log.adminUsername||"—"}/>
         <DetailInfo icon={ShieldCheck} label="العنصر" value={`${log.entityTypeName} #${log.entityId??"—"}`}/>
-        <DetailInfo icon={CalendarClock} label="التاريخ والوقت" value={formatDate(log.createdAt)}/>
+        <DetailInfo icon={CalendarClock} label="التاريخ والوقت" value={formatDate(log.createdAt,clock24h)}/>
         <DetailInfo icon={Globe2} label="عنوان IP" value={log.ipAddress||"—"} ltr last/>
       </div>
       {Object.keys(changes).length>0&&<div className="mt-4"><div className="mb-2 text-xs font-semibold text-[#17386d] dark:text-slate-200">التغييرات</div><div className="space-y-2">{Object.entries(changes).map(([field,v]:any)=><div key={field} className="rl-surface-soft rounded-[14px] bg-[#f9fbfe] p-3 dark:bg-white/[.035]"><div className="text-[11px] text-slate-400">{fieldLabel[field]||field}</div><div className="mt-2 grid gap-2 sm:grid-cols-2"><Info label="قبل" value={String(v.before??"—")}/><Info label="بعد" value={String(v.after??"—")}/></div></div>)}</div></div>}
@@ -78,4 +82,4 @@ function LogCard({log,open,onToggle,row=false}:{log:AuditLog;open:boolean;onTogg
 }
 function DetailInfo({icon:Icon,label,value,ltr=false,last=false}:{icon:typeof UserRound;label:string;value:string;ltr?:boolean;last?:boolean}){return <div className={`flex min-w-0 items-center gap-3 p-3.5 sm:p-4 ${last?"":"border-b border-[#d5e0eb] dark:border-white/[.08] sm:[&:nth-child(odd)]:border-l xl:border-b-0 xl:border-l"}`}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#e9f2ff] text-[#397bd5] dark:bg-[#173554] dark:text-[#8fc0ff]"><Icon className="h-4 w-4"/></span><div className="min-w-0 flex-1"><div className="text-[10px] text-slate-400">{label}</div><div className="allow-text-selection mt-1 truncate text-xs font-medium text-slate-700 dark:text-slate-200" dir={ltr?"ltr":"rtl"} title={value}>{value}</div></div></div>}
 function Info({label,value,ltr=false}:{label:string;value:string;ltr?:boolean}){return <div><div className="text-[10px] text-slate-400">{label}</div><div className="allow-text-selection mt-1 truncate text-xs font-medium text-slate-600 dark:text-slate-300" dir={ltr?"ltr":"rtl"}>{value}</div></div>}
-function formatDate(value:string){return new Intl.DateTimeFormat("ar",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(value))}
+function formatDate(value:string,clock24h:boolean=true){return new Intl.DateTimeFormat("ar",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:!clock24h}).format(new Date(value))}

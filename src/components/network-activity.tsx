@@ -1,4 +1,5 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
 import {useEffect,useState} from 'react';
 import Link from 'next/link';
 import {ScrollText,ShieldCheck,Users,Activity,CheckCircle2,AlertCircle,Eye,Plus,Pencil,Archive,RotateCcw,Trash2,LogIn,LogOut,UserRound,CalendarClock,CalendarDays,Server,Wifi,WifiOff,KeyRound,RefreshCw,X,ListFilter,SlidersHorizontal,ChevronDown} from 'lucide-react';
@@ -35,12 +36,12 @@ function NasRadiusSummary({event}:{event:Event}){
 }
 
 export default function NetworkActivity({endpoint,kind='system',basePath}:{endpoint:string;kind?:LogKind;basePath:string}){
+ const clock24h=useClock24h();
  const {view,setView}=useCollectionDisplay<number>('network-'+kind+'-logs','row');
  const [summary,setSummary]=useState({total:0,success:0,failed:0,actors:0}),[operation,setOperation]=useState(''),[actorKind,setActorKind]=useState(''),[customerId,setCustomerId]=useState(''),[sourceType,setSourceType]=useState(''),[nasId,setNasId]=useState('');
  const [subscriberOptions,setSubscriberOptions]=useState<SubscriberOption[]>([]),[nasOptions,setNasOptions]=useState<NasOption[]>([]),[items,setItems]=useState<Event[]>([]),[q,setQ]=useState(''),[result,setResult]=useState(''),[period,setPeriod]=useState('all'),[fromDate,setFromDate]=useState(''),[toDate,setToDate]=useState('');
- const [cursors,setCursors]=useState<number[]>([0]),[next,setNext]=useState<number|null>(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<Event|null>(null),[revision,setRevision]=useState(0),[timezone,setTimezone]=useState('Asia/Damascus'),[clock24h,setClock24h]=useState(true),[filterPanelOpen,setFilterPanelOpen]=useState(false);
+ const [cursors,setCursors]=useState<number[]>([0]),[next,setNext]=useState<number|null>(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<Event|null>(null),[revision,setRevision]=useState(0),[timezone,setTimezone]=useState('Asia/Damascus'),[filterPanelOpen,setFilterPanelOpen]=useState(false);
  const cursor=cursors[cursors.length-1];
- useEffect(()=>{let live=true;const prefEndpoint=`${endpoint}/ui-preferences`;const apply=(value:any)=>{if(live&&typeof value?.footer?.clock24h==="boolean")setClock24h(value.footer.clock24h);};const load=()=>fetch(prefEndpoint,{credentials:'include',cache:'no-store'}).then(response=>response.ok?response.json():null).then(body=>apply(body?.preferences)).catch(()=>{});const updated=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.endpoint===prefEndpoint&&detail.preferences)apply(detail.preferences);};void load();window.addEventListener('rl-ui-preferences-updated',updated);return()=>{live=false;window.removeEventListener('rl-ui-preferences-updated',updated);};},[endpoint]);
  const resetPage=()=>setCursors([0]);
  useEffect(()=>{if(kind!=='system'&&nasId){setNasId('');setCursors([0]);}},[kind,nasId]);
  const selectPeriod=(value:string)=>{

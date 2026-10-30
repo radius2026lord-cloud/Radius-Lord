@@ -1,4 +1,6 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
+
 
 import { useEffect, useState } from "react";
 import {
@@ -73,6 +75,8 @@ export default function NetworkStatusFooter({
   endpoint: string;
   networkName: string;
 }) {
+ const clock24h=useClock24h();
+
   const [prefs, setPrefs] = useState(defaults);
   const [nas, setNas] = useState<Nas[]>([]);
   const [networkTimezone, setNetworkTimezone] = useState("Asia/Damascus");
@@ -196,7 +200,7 @@ export default function NetworkStatusFooter({
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: !prefs.footer.clock24h,
+    hour12: !clock24h,
     timeZone: networkTimezone,
   });
   const date = now.toLocaleDateString("ar-u-ca-gregory", { day: "numeric", month: "long", year: "numeric", timeZone: networkTimezone });
@@ -287,7 +291,7 @@ export default function NetworkStatusFooter({
             </div>
           )}
           {item && (
-            <ProjectTooltip label={updated ? `آخر عينة موارد وصلت ${new Date(updated).toLocaleTimeString("ar-u-ca-gregory",{timeZone:networkTimezone,hour12:!prefs.footer.clock24h})} · تُرسل القياسات كل خمس دقائق تقريبًا` : "لم تصل عينة موارد من هذا الجهاز بعد"}>
+            <ProjectTooltip label={updated ? `آخر عينة موارد وصلت ${new Date(updated).toLocaleTimeString("ar-u-ca-gregory",{timeZone:networkTimezone,hour12:!clock24h})} · تُرسل القياسات كل خمس دقائق تقريبًا` : "لم تصل عينة موارد من هذا الجهاز بعد"}>
               <span className={`flex shrink-0 items-center gap-1.5 rounded-full border border-[#e5e5e8] bg-[#f4f4f5] px-2.5 py-1 text-[10px] font-medium dark:border-white/[.10] dark:bg-[#172b40] ${sampleStale ? "text-amber-800 dark:text-amber-200" : "text-slate-700 dark:text-slate-200"}`}>
                 <Activity className={`h-3.5 w-3.5 ${sampleStale ? "text-amber-600 dark:text-amber-300" : sampleAgeSeconds === null ? "text-slate-500 dark:text-slate-300" : "text-emerald-600 dark:text-emerald-300 motion-safe:animate-pulse motion-reduce:animate-none"}`} />
                 {sampleFreshness}

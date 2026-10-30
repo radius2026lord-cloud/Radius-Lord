@@ -14,7 +14,7 @@ import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card
 
 type Tab='network'|'radius'|'system'|'archive';
 export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',initialNetworkDetail='general',canEditFollowUp=false}:{endpoint:string;refresh:number;initialTab?:Tab;initialNetworkDetail?:'general'|'contact'|'location'|'areas'|'time'|'private';canEditFollowUp?:boolean}){
- const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users'),[networkSection,setNetworkSection]=useState('details'),[networkDetail,setNetworkDetail]=useState<'general'|'contact'|'location'|'areas'|'time'|'private'>('general'),[radiusSection,setRadiusSection]=useState<'accounting'|'grace'|'server'>('accounting'),[systemSection,setSystemSection]=useState<'footer'|'homepage'|'alerts'>('footer'),[jumpValue,setJumpValue]=useState(''),[jumpRevision,setJumpRevision]=useState(0);
+ const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users'),[networkSection,setNetworkSection]=useState('details'),[networkDetail,setNetworkDetail]=useState<'general'|'contact'|'location'|'areas'|'time'|'private'>('general'),[radiusSection,setRadiusSection]=useState<'accounting'|'grace'|'server'>('accounting'),[systemSection,setSystemSection]=useState<'footer'|'homepage'|'alerts'|'datetime'>('footer'),[jumpValue,setJumpValue]=useState(''),[jumpRevision,setJumpRevision]=useState(0);
  useEffect(()=>setTab(initialTab),[initialTab]);
  useEffect(()=>setNetworkDetail(initialNetworkDetail),[initialNetworkDetail]);
  const quickSettings=[
@@ -28,6 +28,7 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
   {value:'radius-accounting',label:'محاسبة RADIUS',hint:'فترة تحديث المحاسبة',icon:Clock,iconClassName:'text-sky-600'},
   {value:'radius-grace',label:'مهلة السماح',hint:'سياسة السماح العامة أو حسب الباقة',icon:ShieldCheck,iconClassName:'text-violet-600'},
   {value:'radius-server',label:'خادم RADIUS',hint:'الخادم المرتبط بالخدمة',icon:Server,iconClassName:'text-emerald-600'},
+  {value:'system-datetime',label:'صيغة الوقت 12 أو 24 ساعة',icon:Clock},
   {value:'system-footer',label:'تخصيص الشريط السفلي',hint:'مؤشرات NAS والوقت',icon:Server,iconClassName:'text-sky-600'},
   {value:'system-homepage',label:'تخصيص الصفحة الرئيسية',hint:'إظهار البطاقات والاختصارات',icon:Layers,iconClassName:'text-violet-600'},
   {value:'system-alerts',label:'تنبيهات متابعة المشتركين',hint:'حدود انتهاء الاشتراك والاستهلاك',icon:Activity,iconClassName:'text-amber-600'},

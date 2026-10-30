@@ -1,4 +1,6 @@
 "use client";
+import {useClock24h} from "@/components/ui/project-clock-provider";
+
 import {useEffect,useRef,useState} from "react";
 import {Database,Server,RefreshCw,Cpu,MemoryStick,Network,Clock3,Layers} from "lucide-react";
 import ProjectButton from "./project-button";
@@ -14,6 +16,8 @@ const storageKey="radius-lord-footer";
 function percentage(value:unknown){const n=Number(value);return value!==undefined&&value!==null&&Number.isFinite(n)?Math.max(0,Math.min(100,n)):null;}
 
 export default function ServerStatusFooter(){
+ const clock24h=useClock24h();
+
  const [kind,setKind]=useState<Kind>("database"),[targets,setTargets]=useState<Target[]>([]),[id,setId]=useState(""),[data,setData]=useState<Health|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [now,setNow]=useState(()=>new Date()),[uiPreferences,setUiPreferences]=useState<any>({footer:{showNetwork:true,showNas:true,showStatus:true,showCpu:true,showRam:true,showUptime:true,showConnected:true,showClock:true}});
  const refreshRef=useRef(()=>{});
@@ -57,7 +61,7 @@ export default function ServerStatusFooter(){
    {kind==="database"?<>{uiPreferences.footer.showConnected&&<Info icon={Network} tone="text-blue-500" label="الاتصالات" value={`${data?.metrics?.Threads_connected??"—"} / ${data?.maxConnections??"—"}`}/>}<Info icon={Layers} tone="text-cyan-500" label="قواعد الشبكات" value={String(data?.networkDatabases??"—")}/></>:<>{uiPreferences.footer.showCpu&&<Metric label="CPU" value={cpu}/>}{uiPreferences.footer.showRam&&<Metric label="RAM" value={ram}/>}{uiPreferences.footer.showUptime&&resource.uptime&&<Info icon={Clock3} tone="text-sky-500" label="مدة التشغيل" value={String(resource.uptime)}/>}</>}
   </div>
   {uiPreferences.footer.showStatus&&<ProjectTooltip label={error||"تُقرأ حالة MySQL أو API للخادم المحدد؛ تُحدّث كل 30 ثانية"}><span role="status" className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 ${error?"bg-amber-100/70 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200":data?"bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300":"bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-300"}`}><span className={`h-2 w-2 rounded-full ${error?"bg-amber-500":data?"bg-emerald-500":"bg-slate-400"}`}/>{status}</span></ProjectTooltip>}
-  <span className="flex items-center gap-1.5 text-slate-500"><Clock3 className="h-3.5 w-3.5 text-cyan-500"/><bdi>{now.toLocaleTimeString("ar",{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:!uiPreferences.footer.clock24h})}</bdi></span>
+  <span className="flex items-center gap-1.5 text-slate-500"><Clock3 className="h-3.5 w-3.5 text-cyan-500"/><bdi>{now.toLocaleTimeString("ar",{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:!clock24h})}</bdi></span>
   <ProjectTooltip label="تحديث حالة الخادم"><ProjectButton variant="ghost" size="icon" disabled={!id||busy} aria-label="تحديث حالة الخادم" className="h-7 w-7" onClick={()=>refreshRef.current()}><RefreshCw className={busy?"motion-safe:animate-spin":""}/></ProjectButton></ProjectTooltip>
  </div>;
 }
