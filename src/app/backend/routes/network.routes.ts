@@ -150,9 +150,11 @@ router.get('/:slug/subscribers/:id/identity-images/:side',async(req,res)=>{try{c
 router.get('/:slug/subscribers',async(req,res)=>{try{return res.json(await readNetworkSubscribers(await categoryScope(req)));}catch(e){
  const error=e as {message?:string;code?:string},auth=error.message==='NETWORK_AUTH';
  const retryable=error.message==='NETWORK_CONNECTIONS_BUSY'||['ETIMEDOUT','ECONNREFUSED','ECONNRESET','EPIPE','PROTOCOL_CONNECTION_LOST','PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR','ER_CON_COUNT_ERROR','ER_TOO_MANY_USER_CONNECTIONS','ER_LOCK_WAIT_TIMEOUT','POOL_CLOSED'].includes(error.code||'');
+ const userLimit=error.code==='ER_USER_LIMIT_REACHED';
+ const resource=error.message?.match(/\b(max_questions|max_updates|max_connections|max_user_connections)\b/)?.[1];
  const schema=['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes(error.code||'');
- if(!auth)console.error('[subscribers-list-load]',{code:error.code||(/^[A-Z][A-Z0-9_]{2,80}$/.test(error.message||'')?error.message:'UNKNOWN'),kind:schema?'schema':retryable?'connection':'query'});
- return res.status(auth?401:503).json({message:auth?subscriberMessage(e):schema?'تعذر تحميل المشتركين: تحتاج قاعدة الشبكة إلى ترقية مخطط البيانات.':retryable?'تعذر الاتصال بقاعدة بيانات الشبكة مؤقتًا. أعد المحاولة.':'تعذر تحميل قائمة المشتركين حاليًا. أعد المحاولة.',retryable});
+ if(!auth)console.error('[subscribers-list-load]',{code:error.code||(/^[A-Z][A-Z0-9_]{2,80}$/.test(error.message||'')?error.message:'UNKNOWN'),kind:userLimit?'user-limit':schema?'schema':retryable?'connection':'query',...(resource?{resource}:{})});
+ return res.status(auth?401:503).json({message:auth?subscriberMessage(e):userLimit?'بلغ مستخدم قاعدة البيانات الحد المسموح به. يلزم مراجعة حدود المستخدم على خادم MySQL.':schema?'تعذر تحميل المشتركين: تحتاج قاعدة الشبكة إلى ترقية مخطط البيانات.':retryable?'تعذر الاتصال بقاعدة بيانات الشبكة مؤقتًا. أعد المحاولة.':'تعذر تحميل قائمة المشتركين حاليًا. أعد المحاولة.',retryable});
 }});
 router.post('/:slug/subscribers',async(req,res)=>{try{const scope=await categoryScope(req);const action=String(req.body?.action||'create');if(action==='status')return res.json(await setNetworkSubscriberStatus(scope,req.body));if(action==='identity-verify')return res.json(await verifyNetworkSubscriberIdentity(scope,req.body));return res.status(201).json(await createNetworkSubscriber(scope,req.body));}catch(e){const code=(e as Error).message;const schemaError=['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes((e as any).code);return res.status(schemaError?503:code==='NETWORK_AUTH'?401:code==='SUBSCRIBER_NOT_FOUND'?404:code==='SUBSCRIBER_INPUT'||code==='SUBSCRIBER_NATIONAL_NUMBER_INVALID'?422:409).json({message:subscriberMessage(e),fields:(e as any).fields||{}});}});
 
