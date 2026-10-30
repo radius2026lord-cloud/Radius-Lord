@@ -85,7 +85,7 @@ export async function readNetworkSubscribers(scope:any){
    FROM customers c ${where} ORDER BY c.id DESC LIMIT 500`,params);
   const customerIds=items.map((item:any)=>Number(item.id));
   const [pppoeLines]:any=customerIds.length?await app.query(`SELECT p.customer_id,p.id,p.line_name,r.current_username username,
-   p.admin_status status,sp.lifecycle,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.starts_at')) starts_at,sp.expires_at,sp.grace_expires_at,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
+   p.admin_status status,sp.lifecycle,JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.starts_at')) starts_at,DATE_FORMAT(sp.expires_at,'%Y-%m-%dT%H:%i:%sZ') expires_at,DATE_FORMAT(sp.grace_expires_at,'%Y-%m-%dT%H:%i:%sZ') grace_expires_at,COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')),'null'),''),(SELECT timezone FROM network_settings WHERE id=1),'Asia/Damascus') service_timezone,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.download_bps')) download_bps,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.upload_bps')) upload_bps,
     (SELECT b.expires_at FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_expires_at,
@@ -353,8 +353,8 @@ export async function readNetworkSubscriberDetail(scope:any,value:any,options:{i
    WHERE c.id=? AND c.archived_at IS NULL ${principal?'':'AND c.manager_id=?'} LIMIT 1`,principal?[id]:[id,managerId]);
   const customer=customers[0];if(!customer)throw new Error('SUBSCRIBER_NOT_FOUND');
   const [[pppoe],[hotspot]]:any=await Promise.all([
-   app.query(`SELECT p.id,r.current_username username,p.line_name,p.address,p.latitude,p.longitude,p.distribution_box_serial,p.distribution_box_description,COALESCE(ed.vendor,p.station_vendor) station_vendor,COALESCE(INET_NTOA(ed.management_ipv4),p.station_ip_address) station_ip_address,p.station_device_id,ed.name station_device_name,p.admin_status status,st.name service_type_name,cm.name connection_method_name,cm.code connection_method_code,sp.lifecycle,sp.expires_at,sp.grace_expires_at,sp.quota_allowance_bytes,
-    JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')) service_timezone,
+   app.query(`SELECT p.id,r.current_username username,p.line_name,p.address,p.latitude,p.longitude,p.distribution_box_serial,p.distribution_box_description,COALESCE(ed.vendor,p.station_vendor) station_vendor,COALESCE(INET_NTOA(ed.management_ipv4),p.station_ip_address) station_ip_address,p.station_device_id,ed.name station_device_name,p.admin_status status,st.name service_type_name,cm.name connection_method_name,cm.code connection_method_code,sp.lifecycle,DATE_FORMAT(sp.expires_at,'%Y-%m-%dT%H:%i:%sZ') expires_at,DATE_FORMAT(sp.grace_expires_at,'%Y-%m-%dT%H:%i:%sZ') grace_expires_at,sp.quota_allowance_bytes,
+    COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.timezone')),'null'),''),(SELECT timezone FROM network_settings WHERE id=1),'Asia/Damascus') service_timezone,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.download_bps')) download_bps,
     JSON_UNQUOTE(JSON_EXTRACT(sp.effective_service_snapshot,'$.upload_bps')) upload_bps,
     (SELECT b.expires_at FROM pppoe_line_speed_boosts b WHERE b.account_id=p.id AND b.status='active' AND b.expires_at>UTC_TIMESTAMP(6) ORDER BY b.id DESC LIMIT 1) speed_boost_expires_at,

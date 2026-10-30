@@ -41,24 +41,43 @@ function localNow(timeZone?:string){
 }
 
 export default function ProjectDateTimeInput({value,onChange,mode="datetime",timeZone,disabled=false,required=false,id,className="",invalid=false,onValidityChange}:{value:string;onChange:(value:string)=>void;mode?:Mode;timeZone?:string;disabled?:boolean;required?:boolean;id?:string;className?:string;invalid?:boolean;onValidityChange?:(valid:boolean)=>void}){
- const clock24h=useClock24h(),generatedId=useId(),input=useRef<HTMLInputElement>(null);
+ const clock24h=useClock24h(),generatedId=useId(),input=useRef<HTMLInputElement|null>(null),partsRef=useRef<(HTMLInputElement|null)[]>([]);
+ const [period,setPeriod]=useState<"am"|"pm">(()=>Number((mode==="time"?value:value.slice(11)).slice(0,2))>=12?"pm":"am");
  const fieldId=id||generatedId,lastEmitted=useRef(value),lastClock=useRef(clock24h);
  const [text,setText]=useState(()=>formatLocalDateTime(value,clock24h,mode)),[error,setError]=useState(""),[open,setOpen]=useState(false),[picker,setPicker]=useState("");
  const hint=mode==="datetime"?`يوم/شهر/سنة — ساعة:دقيقة${clock24h?" (24 ساعة)":" ص/م"}`:`ساعة:دقيقة${clock24h?" (24 ساعة)":" ص/م"}`;
  useEffect(()=>{
-  if(value!==lastEmitted.current||clock24h!==lastClock.current){setText(formatLocalDateTime(value,clock24h,mode));setError("");lastEmitted.current=value;lastClock.current=clock24h;}
+  if(value!==lastEmitted.current||clock24h!==lastClock.current){setText(formatLocalDateTime(value,clock24h,mode));setPeriod(Number((mode==="time"?value:value.slice(11)).slice(0,2))>=12?"pm":"am");setError("");lastEmitted.current=value;lastClock.current=clock24h;}
  },[value,clock24h,mode]);
  const parsed=parseLocalDateTime(text,clock24h,mode),valid=Boolean(parsed)||!text&&!required;
  useEffect(()=>{input.current?.setCustomValidity(valid?"":"أكمل التاريخ والوقت بالصيغة الموضحة.");onValidityChange?.(valid);},[valid,onValidityChange]);
  useEffect(()=>{if(disabled)setOpen(false);},[disabled]);
  const change=(next:string)=>{setText(next);setError("");const iso=parseLocalDateTime(next,clock24h,mode)||"";lastEmitted.current=iso;onChange(iso);};
- const select=(iso:string)=>{lastEmitted.current=iso;onChange(iso);setText(formatLocalDateTime(iso,clock24h,mode));setError("");setOpen(false);input.current?.focus();};
+ const select=(iso:string)=>{setPeriod(Number((mode==="time"?iso:iso.slice(11)).slice(0,2))>=12?"pm":"am");lastEmitted.current=iso;onChange(iso);setText(formatLocalDateTime(iso,clock24h,mode));setError("");setOpen(false);input.current?.focus();};
+ // Each numeric section is editable; separators are ordinary text nodes.
+ const dateText=mode==="datetime"?text.split(" ")[0]||"":"",timeText=mode==="datetime"?text.split(" ")[1]||"":text.split(" ")[0]||"";
+ const [day="",month="",year=""]=dateText.split("/"),[hours="",minutes=""]=timeText.split(":");
+ const sections=mode==="datetime"?[day,month,year,hours,minutes]:[hours,minutes];
+ const labels=mode==="datetime"?["اليوم","الشهر","السنة","الساعة","الدقيقة"]:["الساعة","الدقيقة"];
+ const placeholders=mode==="datetime"?["DD","MM","YYYY","HH","mm"]:["HH","mm"];
+ const lengths=mode==="datetime"?[2,2,4,2,2]:[2,2];
+ const compose=(values:string[],nextPeriod=period)=>{
+  if(values.every(value=>!value))return "";
+  const date=mode==="datetime"?`${values[0]}/${values[1]}/${values[2]} `:"",offset=mode==="datetime"?3:0;
+  return date+`${values[offset]}:${values[offset+1]}`+(clock24h?"":nextPeriod==="pm"?" م":" ص");
+ };
+ const setSection=(index:number,value:string)=>{const values=[...sections];values[index]=digits(value).replace(/\D/g,"").slice(0,lengths[index]);change(compose(values));};
+ const focusPart=(index:number)=>{partsRef.current[index]?.focus();partsRef.current[index]?.select();};
+ useEffect(()=>{if(valid)setError("");},[valid]);
  const hour=Number(picker.slice(11,13))||0,minute=picker.slice(14,16)||"00",today=open?localNow(timeZone).slice(0,10):"";
  const setHour=(next:number)=>setPicker(old=>old.slice(0,11)+pad(next)+old.slice(13));
  return <>
   <div className="min-w-0 space-y-1.5">
    <div className="flex min-w-0 items-center gap-2">
-    <ProjectInput ref={input} id={fieldId} type="text" dir="ltr" autoComplete="off" value={text} required={required} disabled={disabled} maxLength={mode==="datetime"?19:8} placeholder={mode==="datetime"?(clock24h?"DD/MM/YYYY HH:mm":"DD/MM/YYYY hh:mm ص/م"):(clock24h?"HH:mm":"hh:mm ص/م")} aria-invalid={invalid||Boolean(error)} aria-describedby={`${fieldId}-format${error?` ${fieldId}-error`:""}`} onChange={event=>change(digits(event.target.value))} onBlur={()=>{if(text&&!parsed)setError("أكمل الموعد بالصيغة الموضحة.");}} className={`min-w-0 flex-1 ${className}`}/>
+    <div role="group" aria-label={mode==="datetime"?"التاريخ والوقت":"الوقت"} dir="ltr" className={`flex min-w-0 flex-1 flex-wrap items-center justify-center gap-x-1 gap-y-1 rounded-[14px] border bg-[#f9fbfe] px-2 dark:bg-[#26384a] ${invalid||error?"border-amber-500 dark:border-amber-400":"border-[#d7e3ef] dark:border-white/10"} ${className}`} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null)&&text&&!parsed)setError("أكمل الموعد بالصيغة الموضحة.");}} onPaste={event=>{const pasted=event.clipboardData.getData("text"),iso=parseLocalDateTime(pasted,clock24h,mode)||parseLocalDateTime(pasted,!clock24h,mode);if(iso){event.preventDefault();setPeriod(Number((mode==="time"?iso:iso.slice(11)).slice(0,2))>=12?"pm":"am");change(formatLocalDateTime(iso,clock24h,mode));}}}>
+     {sections.map((part,index)=><span key={labels[index]} className="inline-flex items-center gap-1"><ProjectInput ref={element=>{partsRef.current[index]=element;if(index===0)input.current=element;}} id={index===0?fieldId:`${fieldId}-${index}`} aria-label={labels[index]} aria-describedby={`${fieldId}-format${error?` ${fieldId}-error`:""}`} aria-invalid={invalid||Boolean(error)} type="text" inputMode="numeric" dir="ltr" autoComplete="off" value={part} required={required&&index===0} disabled={disabled} maxLength={lengths[index]} placeholder={placeholders[index]} onFocus={event=>event.currentTarget.select()} onChange={event=>{const next=digits(event.target.value).replace(/\D/g,"");setSection(index,next);if(next.length>=lengths[index]&&index<sections.length-1)focusPart(index+1);}} onBlur={event=>{const current=digits(event.currentTarget.value);if(current.length===1&&lengths[index]===2)setSection(index,pad(Number(current)));}} onKeyDown={event=>{if(["/",":"," "].includes(event.key)||event.key==="Enter"&&index<sections.length-1){event.preventDefault();event.stopPropagation();if(part.length===1&&lengths[index]===2)setSection(index,pad(Number(part)));focusPart(Math.min(index+1,sections.length-1));}else if(event.key==="Backspace"&&!part&&index>0){event.preventDefault();focusPart(index-1);}else if(event.key==="ArrowLeft"&&event.currentTarget.selectionStart===0&&index>0){event.preventDefault();focusPart(index-1);}else if(event.key==="ArrowRight"&&event.currentTarget.selectionEnd===part.length&&index<sections.length-1){event.preventDefault();focusPart(index+1);}}} className={`!h-11 !border-0 !bg-transparent !px-0 !text-center !text-sm tabular-nums focus:!ring-2 ${lengths[index]===4?"!w-[52px]":"!w-[29px]"}`}/>{index<sections.length-1&&<span aria-hidden="true" className={mode==="datetime"&&index===2?"w-2":"text-slate-400"}>{mode==="datetime"&&index<2?"/":mode==="datetime"&&index===2?"":":"}</span>}</span>)}
+     {!clock24h&&<ProjectDropdown disabled={disabled} compact className="!w-[62px]" value={period} onChange={value=>{const next=value==="pm"?"pm":"am";setPeriod(next);change(compose(sections,next));}} options={[{value:"am",label:"ص"},{value:"pm",label:"م"}]}/>}
+    </div>
     {mode==="datetime"&&<ProjectTooltip label="اختيار التاريخ والوقت"><ProjectButton variant="secondary" size="icon" disabled={disabled} aria-label="اختيار التاريخ والوقت" onClick={event=>{event.preventDefault();setPicker(parsed||localNow(timeZone));setOpen(true);}}><CalendarDays className="h-4 w-4"/></ProjectButton></ProjectTooltip>}
    </div>
    <p id={`${fieldId}-format`} className="text-[11px] font-normal text-slate-500 dark:text-slate-300">{hint}</p>
