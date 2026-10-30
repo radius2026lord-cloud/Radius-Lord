@@ -197,7 +197,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  const [pppoeNoticeError,setPppoeNoticeError]=useState("");
  const [pppoeNoticeMessage,setPppoeNoticeMessage]=useState("");
  const [pppoeNoticeWarning,setPppoeNoticeWarning]=useState("");
- const [disconnectFeedback,setDisconnectFeedback]=useState<{tone:"success"|"warning"|"danger"|"info";title:string;message:string}|null>(null);
+ const [pendingDisconnectLine,setPendingDisconnectLine]=useState<SubscriberLine|null>(null);
  const [pppoePackages,setPppoePackages]=useState<PppoePackage[]>([]);
  const [pppoeLineBusyId,setPppoeLineBusyId]=useState<number|null>(null);
  const [pppoeArchiveLine,setPppoeArchiveLine]=useState<SubscriberLine|null>(null);
@@ -411,16 +411,16 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  };
  const runPppoeLineAction=async(line:SubscriberLine,action:"renew"|"disconnect"|"archive"|"end")=>{
   const customerId=Number(line.customer_id||detail?.id);if(!customerId||line.kind!=="pppoe"||pppoeLineBusyId!==null)return;
-  let succeeded=false;if(action==="disconnect")setDisconnectFeedback({tone:"info",title:"جارٍ طرد الجلسة",message:"جارٍ الاتصال بـ NAS وإزالة جلسة PPPoE النشطة."});setPppoeLineBusyId(line.id);setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");
+  let succeeded=false;setPppoeLineBusyId(line.id);setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");
   try{
    const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/${action}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:"{}"});
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء على خط PPPoE.");
    if(action==="disconnect"){
     const attempted=Number(result.attempted)||0,acknowledged=Number(result.acknowledged)||0;
-    if(result.disconnectPending)setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:result.transport==="radius"?`أُرسل طلب RADIUS وأُقرّ ${acknowledged} من ${attempted} طلب. لم يُتحقق من اختفاء الجلسة عبر API؛ لم يُعلن نجاح الطرد.`:`تأكدت إزالة ${acknowledged} من ${attempted} جلسة، لكن لم يكتمل الفصل أو فحص جميع الأجهزة. راجع اتصال NAS وصلاحيات API.`});
-    else if(attempted===0)setDisconnectFeedback({tone:"info",title:"لا توجد جلسة نشطة",message:"لم يجد NAS جلسة PPPoE نشطة بهذا الاسم وقت الطلب."});
-    else if(acknowledged>0&&result.verified===true)setDisconnectFeedback({tone:"success",title:"تم طرد الجلسة",message:`أكد NAS إزالة ${acknowledged} من ${attempted} جلسة نشطة. قد يتصل جهاز المشترك مجددًا بجلسة جديدة.`});
-    else setDisconnectFeedback({tone:"warning",title:"لم يتأكد طرد الجلسة",message:"لم يؤكد NAS إزالة أي جلسة نشطة."});
+    if(result.disconnectPending)setPppoeNoticeWarning("لم يتأكد قطع الجلسة. راجع اتصال السيرفر ثم أعد المحاولة.");
+    else if(attempted===0)setPppoeNoticeWarning("لا توجد جلسة نشطة لهذا الخط حاليًا.");
+    else if(acknowledged===attempted&&result.verified===true)setPppoeNoticeMessage("تم قطع الجلسة بنجاح.");
+    else setPppoeNoticeWarning("لم يتأكد قطع الجلسة من السيرفر.");
     succeeded=true;
     if(detailId===customerId)void(async()=>{try{const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(refreshedResponse.ok){setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}}catch{/* Keep the disconnect result visible even if the detail refresh fails. */}})();
     else void load({silent:true});
@@ -429,8 +429,8 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
    if(detailId===customerId){const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(!refreshedResponse.ok)throw new Error(refreshed.message||"تم تنفيذ الإجراء، لكن تعذر إعادة تحميل بيانات المشترك.");setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}else void load({silent:true});
    succeeded=true;
    setPppoeNoticeMessage(action==="renew"?"تم تجديد الباقة وبدأت دورة اشتراك جديدة.":action==="archive"?"تم حذف الخط من القائمة وأُرشف مع الاحتفاظ بسجل الاشتراكات.":"تم إنهاء الاشتراك وإيقاف تسجيل الدخول.");
-  }catch(error){const message=error instanceof Error?error.message:"تعذر تنفيذ الإجراء على خط PPPoE.";if(action==="disconnect")setDisconnectFeedback({tone:"danger",title:"تعذر فصل الجلسة",message});else setPppoeNoticeError(message);}
-  finally{setPppoeLineBusyId(null);if(action==="archive"&&succeeded)setPppoeArchiveLine(null);if(action==="end"&&succeeded)setPppoeEndLine(null);}
+  }catch(error){const message=error instanceof Error?error.message:"تعذر تنفيذ الإجراء على خط PPPoE.";setPppoeNoticeError(message);}
+  finally{setPppoeLineBusyId(null);if(action==="disconnect")setPendingDisconnectLine(null);if(action==="archive"&&succeeded)setPppoeArchiveLine(null);if(action==="end"&&succeeded)setPppoeEndLine(null);}
  };
  const savePppoeSpeedBoost=async()=>{
   const line=pppoeSpeedBoostLine;if(!line||pppoeLineBusyId!==null)return;
@@ -471,7 +471,8 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   if(action==="speed_boost"){if(Number(line.live_sessions)<1){setPppoeNoticeWarning("لا يمكن رفع السرعة مؤقتًا؛ الخط غير متصل حاليًا.");return;}openPppoeSpeedBoost(line);return;}
   if(action==="expiry"){openPppoeExpiryEditor(line);return;}
   if(action==="activate"||action==="enable"||action==="disable"){void updatePppoeLine(line,action);return;}
-  if(action==="renew"||action==="disconnect"){void runPppoeLineAction(line,action);return;}
+  if(action==="disconnect"){if(pppoeLineBusyId===null)setPendingDisconnectLine(line);return;}
+  if(action==="renew"){void runPppoeLineAction(line,action);return;}
   if(action==="end"){setPppoeEndLine(line);return;}
   if(action==="archive"){setPppoeArchiveLine(line);}
  };
@@ -829,7 +830,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
 <FloatingNotice message={subscriberCreatedNotice} onDismiss={()=>setSubscriberCreatedNotice("")}/>
 <SubscriberCardPrintDialog open={printCardOpen} onClose={()=>setPrintCardOpen(false)} endpoint={endpoint} basePath={basePath} networkName={networkName} person={detail?{id:detail.id,first_name:detail.first_name,last_name:detail.last_name,phone:detail.phone}:null}/>
 <FloatingNotice error={pppoeNoticeError} warning={pppoeNoticeWarning} message={pppoeNoticeMessage} onDismiss={()=>{setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");}}/>
- <ProjectDialog open={Boolean(disconnectFeedback)} title={disconnectFeedback?.title||"نتيجة فصل الجلسة"} description="نتيجة طلب الفصل من جهاز NAS." onClose={()=>setDisconnectFeedback(null)} hostingerStyle compact maxWidth="max-w-md" headerAccessory={<ProjectCardIcon icon={disconnectFeedback?.tone==="success"?Wifi:disconnectFeedback?.tone==="danger"?WifiOff:CircleX} tone={disconnectFeedback?.tone||"info"}/>} footer={<ProjectButton onClick={()=>setDisconnectFeedback(null)}><Check/>حسنًا</ProjectButton>}>{disconnectFeedback&&<ProjectInfoCard tone={disconnectFeedback.tone} className="!p-4"><p role={disconnectFeedback.tone==="danger"||disconnectFeedback.tone==="warning"?"alert":"status"} className="text-sm leading-6">{disconnectFeedback.message}</p></ProjectInfoCard>}</ProjectDialog>
+ <ProjectDialog open={pendingDisconnectLine!==null} title="تأكيد قطع الجلسة" description="سيُحدد السيرفر المتصل به الحساب، ثم تُقطع جلسته الحالية." onClose={()=>setPendingDisconnectLine(null)} busy={pppoeLineBusyId!==null} hostingerStyle compact maxWidth="max-w-md" footer={<><ProjectButton variant="secondary" disabled={pppoeLineBusyId!==null} onClick={()=>setPendingDisconnectLine(null)}>إلغاء</ProjectButton><ProjectButton disabled={pppoeLineBusyId!==null||!pendingDisconnectLine} onClick={()=>pendingDisconnectLine&&void runPppoeLineAction(pendingDisconnectLine,"disconnect")}><WifiOff/>{pppoeLineBusyId!==null?"جارٍ قطع الجلسة…":"تأكيد القطع"}</ProjectButton></>}><p className="text-sm leading-6">هل تريد قطع الجلسة الحالية للحساب <bdi dir="ltr" className="font-mono">{pendingDisconnectLine?.username}</bdi>؟</p></ProjectDialog>
 <ProjectDialog open={pppoeOpen} title={createdPppoe?"تم إنشاء خط PPPoE":"إضافة خط PPPoE"} description={createdPppoe?"احفظ بيانات الدخول لإرسالها إلى المشترك.":"سيُربط الخط بملف المشترك المفتوح ويُسند إلى إصدار الباقة الحالي."} onClose={closePppoeDialog} busy={pppoeBusy} maxWidth="max-w-4xl" hostingerStyle compact bodyClassName="!p-2 sm:!p-3" titleClassName="!text-[#202124] dark:!text-white" headerAccessory={<span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#e5e5e8] bg-[#f4f4f5] text-[#0758e9] dark:border-white/[.10] dark:bg-[#172b40] dark:text-blue-300"><Radio className="h-5 w-5" strokeWidth={2}/></span>}>
  {createdPppoe?<div className="space-y-4"><div className="rounded-[20px] border border-[#e4e4e7] bg-white p-4 dark:border-white/[.12] dark:bg-[#0d243b]"><div className="flex items-center gap-2 text-sm font-semibold text-[#202124] dark:text-slate-100"><CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-300"/>أُنشئ الخط وربط بالمشترك {detail?.first_name} {detail?.last_name}</div><p className="mt-1 text-xs text-[#5f6368] dark:text-slate-300">{createdPppoe.line_name||createdPppoe.package_name} · الباقة: {createdPppoe.package_name} · الإصدار {createdPppoe.version_no}</p><p className="mt-1 text-[10px] text-amber-700 dark:text-amber-200">{createdPppoe.lifecycle==="active"?"الاشتراك نشط وفق سياسة الباقة.":createdPppoe.lifecycle==="ended"?"انتهت صلاحية الاشتراك.":"الاشتراك بانتظار بدء الخدمة أو أول اتصال."}</p></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-[18px] border border-[#e4e4e7] bg-white p-4 dark:border-white/[.10] dark:bg-[#0d243b]"><p className="text-xs text-[#5f6368] dark:text-slate-400">اسم المستخدم</p><p dir="ltr" className="mt-2 break-all font-mono text-lg font-semibold text-[#202124] dark:text-white">{createdPppoe.username}</p></div><div className="rounded-[18px] border border-[#e4e4e7] bg-white p-4 dark:border-white/[.10] dark:bg-[#0d243b]"><p className="text-xs text-[#5f6368] dark:text-slate-400">كلمة المرور</p><p dir="ltr" className="mt-2 break-all font-mono text-lg font-semibold text-[#202124] dark:text-white">{createdPppoe.password}</p></div></div><div className="flex flex-wrap justify-end gap-2"><ProjectButton variant="secondary" onClick={()=>void copyCreatedPppoe()}>{pppoeCopied?<Check/>:<Copy/>}{pppoeCopied?"تم النسخ":"نسخ بيانات الدخول"}</ProjectButton><ProjectButton onClick={closePppoeDialog}><Check/>تم</ProjectButton></div></div>:<form id="subscriber-pppoe-form" autoComplete="off" noValidate onSubmit={createPppoe} className="space-y-2" onKeyDown={event=>{if(event.key!=="Enter"||event.nativeEvent.isComposing)return;if(event.target===pppoeUsernameRef.current){event.preventDefault();pppoePasswordRef.current?.focus();return;}if(event.target===pppoePasswordRef.current){event.preventDefault();if(pppoeStep<3)void continuePppoeStep();else event.currentTarget.requestSubmit();}}}>
  <style jsx global>{`@keyframes pppoeStepReveal{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}.pppoe-step-panel{animation:pppoeStepReveal 260ms cubic-bezier(.2,.8,.25,1) both}@media(prefers-reduced-motion:reduce){.pppoe-step-panel{animation:none}}`}</style>
@@ -1088,4 +1089,5 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  </ProjectDialog>
 </div>;
 }
+
 
