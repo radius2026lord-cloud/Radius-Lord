@@ -3,12 +3,14 @@ import {sendRadiusDisconnectRows} from './network-radius-disconnect.service';
 // Outbox entries target an accounting session, never every NAS or a username
 // alone. INSERT IGNORE prevents a still-open accounting row from being retried
 // every worker tick after its Disconnect-ACK.
-export async function queuePppoeReauthentication(app:any,username:string){
- await app.query(`INSERT INTO pppoe_radius_jobs(radacctid,reason,next_attempt_at)
-  SELECT radacctid,'reauth',UTC_TIMESTAMP(6) FROM radacct
-  WHERE username=? AND acctstoptime IS NULL AND acctsessionid<>''
-  ON DUPLICATE KEY UPDATE reason='reauth',revision=revision+1,attempts=0,next_attempt_at=UTC_TIMESTAMP(6),acknowledged_at=NULL`,[username]);
-}
+// Old versions queued a reauthentication after a date edit. Do not transmit
+// these jobs after upgrade; changing a future date now affects SQL only.
+const legacyDateJob=`j.reason='reauth' AND COALESCE((SELECT ev.action_code
+ FROM activity_log ev JOIN pppoe_accounts ppp_account ON ppp_account.id=ev.target_id
+ JOIN radius_identities identity_row ON identity_row.id=ppp_account.radius_identity_id
+ WHERE ev.target_type='pppoe_account' AND identity_row.current_username=ra.username
+  AND ev.action_code IN ('pppoe.subscription.expiry.update','pppoe.line.first_connection','pppoe.line.quota_reduce')
+ ORDER BY ev.id DESC LIMIT 1),'')='pppoe.subscription.expiry.update'`;
 
 export async function processPppoeRadiusJobs(scope:any,app:any,forcedUsers:string[]=[]){
  const lockName='rl-pppoe-jobs:'+Number(scope.environment_id);
@@ -37,7 +39,7 @@ export async function processPppoeRadiusJobs(scope:any,app:any,forcedUsers:strin
   const ids=cleanup.map((row:any)=>String(row.id));
   await app.query(`DELETE j FROM pppoe_radius_jobs j LEFT JOIN radacct ra ON ra.radacctid=j.radacctid
    WHERE j.id IN (${ids.map(()=>'?').join(',')}) AND (ra.radacctid IS NULL OR ra.acctstoptime IS NOT NULL OR (j.reason='expiry' AND NOT EXISTS(
-    SELECT 1 FROM radcheck rc WHERE rc.username=ra.username AND rc.attribute='Auth-Type' AND rc.value='Reject')))`,ids);
+    SELECT 1 FROM radcheck rc WHERE rc.username=ra.username AND rc.attribute='Auth-Type' AND rc.value='Reject')) OR (${legacyDateJob}))`,ids);
  }
  await app.query('UPDATE pppoe_radius_job_state SET cleanup_cursor=? WHERE id=1',[cleanup.length?String(cleanup.at(-1).id):'0']);
  const [jobs]:any=await app.query(`SELECT j.id,j.revision,j.attempts,j.radacctid,ra.username,ra.acctsessionid,ra.nasipaddress,
@@ -45,7 +47,7 @@ export async function processPppoeRadiusJobs(scope:any,app:any,forcedUsers:strin
   FROM pppoe_radius_jobs j JOIN radacct ra ON ra.radacctid=j.radacctid
   JOIN nas n ON n.nasname=ra.nasipaddress JOIN lord_nas l ON l.radius_nas_id=n.id
   WHERE ra.acctstoptime IS NULL AND l.is_enabled=1 AND l.archived_at IS NULL AND FIND_IN_SET('ppp',l.radius_services)>0
-   AND j.next_attempt_at<=UTC_TIMESTAMP(6)
+   AND j.next_attempt_at<=UTC_TIMESTAMP(6) AND NOT (${legacyDateJob})
    AND (j.reason<>'expiry' OR EXISTS(SELECT 1 FROM radcheck rc WHERE rc.username=ra.username AND rc.attribute='Auth-Type' AND rc.value='Reject'))
   ORDER BY j.next_attempt_at,j.id LIMIT 100`);
  if(!jobs.length)return;

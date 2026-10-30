@@ -40,13 +40,15 @@ as part of preparing this source change.
 
 ## Editing an expiry while connected
 
-The date change, Expiration mirror, and session-specific outbox entry commit
-in one transaction. A RADIUS Disconnect-Request then makes the existing
-session reauthenticate and receive the current deadline. This intentionally
-causes a brief reconnect after a date edit; it avoids assuming that every NAS
-interprets a CoA Session-Timeout in the same way. An unsuccessful request
-remains in the database across backend restarts and the UI reports it pending.
-An ACK is recorded as request acceptance, not proof of Accounting-Stop.
+Editing the date updates the subscription and its absolute `radcheck.Expiration`
+in one transaction. It sends no Disconnect, CoA, or reauthentication request.
+The next login receives the new deadline. An already connected NAS session
+retains its previously installed timer until it reconnects; changing the SQL
+record alone cannot change a timer already installed on the router.
+
+Legacy reauthentication jobs created by an expiry edit are cancelled. The
+worker also excludes such legacy jobs before sending. Normal expiry, quota,
+and manual-removal processing keep their existing behavior.
 
 ## Background limits
 

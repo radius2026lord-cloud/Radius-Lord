@@ -1,4 +1,4 @@
-import {queuePppoeReauthentication,processPppoeRadiusJobs} from './pppoe-radius-jobs.service';
+import {processPppoeRadiusJobs} from './pppoe-radius-jobs.service';
 import {syncPppoeExpiration} from './pppoe-expiration-policy';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
@@ -192,7 +192,11 @@ export async function readPppoeLineUsageHistory(scope:any,value:any){
 }
 
 export async function updatePppoeLineExpiry(scope:any,value:any,input:any){
- return withNetwork(scope,async app=>{await app.beginTransaction();try{
+ return withNetwork(scope,async app=>{
+  const lockName='rl-pppoe-jobs:'+Number(scope.environment_id);
+  const [lock]:any=await app.query('SELECT GET_LOCK(?,0) acquired',[lockName]);
+  if(Number(lock[0]?.acquired)!==1)throw new Error('PPPOE_LINE_EXPIRY_BUSY');
+  try{await app.beginTransaction();try{
   await principal(app,scope);const id=Number(value);if(!Number.isSafeInteger(id)||id<1)throw new Error('PPPOE_LINE_INPUT');
   const [settings]:any=await app.query('SELECT timezone,grace_policy,global_grace_days FROM network_settings WHERE id=1');
   const [rows]:any=await app.query("SELECT a.id,a.admin_status,a.radius_identity_id,r.current_username username,s.id subscription_id,s.lifecycle,DATE_FORMAT(s.expires_at,'%Y-%m-%dT%H:%i:%sZ') expires_at,DATE_FORMAT(s.grace_expires_at,'%Y-%m-%dT%H:%i:%sZ') grace_expires_at,NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(s.effective_service_snapshot,'$.timezone')),'null'),'') service_timezone,s.grace_source_snapshot,s.grace_days_snapshot FROM pppoe_accounts a JOIN radius_identities r ON r.id=a.radius_identity_id JOIN pppoe_subscriptions s ON s.id=(SELECT latest.id FROM pppoe_subscriptions latest WHERE latest.account_id=a.id AND latest.service_role='base' ORDER BY latest.id DESC LIMIT 1) WHERE a.id=? AND a.archived_at IS NULL FOR UPDATE",[id]);const row=rows[0];if(!row)throw new Error('PPPOE_LINE_UNAVAILABLE');if(row.lifecycle!=='active')throw new Error('PPPOE_LINE_EXPIRY_UNAVAILABLE');
@@ -205,9 +209,11 @@ export async function updatePppoeLineExpiry(scope:any,value:any,input:any){
   const graceDays=row.grace_source_snapshot==='global'?Math.max(0,Number(settings[0]?.global_grace_days||0)):Math.max(0,Number(row.grace_days_snapshot||0));const grace=graceDays?new Date(expiry.getTime()+graceDays*86400000):null;
   await app.query('UPDATE pppoe_subscriptions SET expires_at=?,grace_expires_at=? WHERE id=?',[sqlDate(expiry),grace?sqlDate(grace):null,row.subscription_id]);if(row.admin_status==='enabled')await syncPppoeExpiration(app,row.username);await markRejected(app,row.username,row.admin_status!=='enabled');
   const [actor]:any=await app.query('SELECT id,full_name FROM managers WHERE id=?',[scope.managerId]);await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,account_id,before_data,after_data,result) VALUES(?,?,'manager','pppoe.subscription.expiry.update','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:actor[0]?.id,full_name:actor[0]?.full_name}),id,row.radius_identity_id,JSON.stringify({expiresAt:row.expires_at,graceExpiresAt:row.grace_expires_at}),JSON.stringify({expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,timezone:zone})]);
-  await queuePppoeReauthentication(app,String(row.username));
-  await app.commit();let sessionSyncPending=false;try{await processPppoeRadiusJobs(scope,app);const [pending]:any=await app.query("SELECT 1 FROM pppoe_radius_jobs j JOIN radacct ra ON ra.radacctid=j.radacctid WHERE ra.username=? AND ra.acctstoptime IS NULL AND j.acknowledged_at IS NULL LIMIT 1",[row.username]);sessionSyncPending=pending.length>0;}catch{sessionSyncPending=true;}return {success:true,id,sessionSyncPending,expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,serviceTimezone:zone};
- }catch(error){await app.rollback();throw error;}});
+  // Date editing updates persistence and the next Access-Accept only.
+  // Never send a Disconnect/CoA merely because a future date was edited.
+  await app.query("DELETE j FROM pppoe_radius_jobs j JOIN radacct ra ON ra.radacctid=j.radacctid WHERE ra.username=? AND j.reason='reauth'",[row.username]);
+  await app.commit();return {success:true,id,expiresAt:sqlDate(expiry),graceExpiresAt:grace?sqlDate(grace):null,serviceTimezone:zone};
+ }catch(error){await app.rollback();throw error;}}finally{await app.query('SELECT RELEASE_LOCK(?)',[lockName]);}});
 }
 
 export async function endPppoeSubscription(scope:any,value:any){
