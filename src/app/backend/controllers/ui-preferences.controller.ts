@@ -2,6 +2,17 @@ import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { db } from '../config/db';
 
+const homepageShortcutIds=['add-subscriber','subscribers','profiles','servers'] as const;
+type HomepageShortcutId=typeof homepageShortcutIds[number];
+type HomepageShortcut={id:HomepageShortcutId;enabled:boolean};
+const defaultHomepageShortcuts:HomepageShortcut[]=homepageShortcutIds.map(id=>({id,enabled:true}));
+function normalizeHomepageShortcuts(input:unknown):HomepageShortcut[]{
+ const result:HomepageShortcut[]=[];
+ if(Array.isArray(input))for(const entry of input){if(entry&&homepageShortcutIds.includes(entry.id)&&!result.some(item=>item.id===entry.id))result.push({id:entry.id,enabled:typeof entry.enabled==='boolean'?entry.enabled:true});}
+ for(const id of homepageShortcutIds)if(!result.some(item=>item.id===id))result.push({id,enabled:true});
+ return result;
+}
+
 let tableReady: Promise<void> | null = null;
 
 function ensurePreferencesTable() {
@@ -27,7 +38,7 @@ export const defaultUiPreferences = {
   },
   homepage: {
     showOverview: true, showLicense: true, showExpiry: true,
-    showShortcuts: true, showActivity: true,
+    showShortcuts: true, showActivity: true, shortcuts: defaultHomepageShortcuts,
   },
 };
 
@@ -47,7 +58,7 @@ function normalize(input: any) {
     homepage: {
       showOverview: bool(h.showOverview, true), showLicense: bool(h.showLicense, true),
       showExpiry: bool(h.showExpiry, true), showShortcuts: bool(h.showShortcuts, true),
-      showActivity: bool(h.showActivity, true),
+      showActivity: bool(h.showActivity, true), shortcuts: normalizeHomepageShortcuts(h.shortcuts),
     },
   };
 }
@@ -84,3 +95,4 @@ let followUpTableReady:Promise<void>|null=null;
 async function ensureFollowUpTable(){if(!followUpTableReady)followUpTableReady=db.query(`CREATE TABLE IF NOT EXISTS network_followup_alert_settings (environment_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,expiry_days TINYINT UNSIGNED NOT NULL DEFAULT 7,quota_percent TINYINT UNSIGNED NOT NULL DEFAULT 80,updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`).then(()=>undefined).catch(error=>{followUpTableReady=null;throw error;});return followUpTableReady;}
 export async function readNetworkFollowUpSettings(environmentId:number){await ensureFollowUpTable();const [rows]:any=await db.query('SELECT expiry_days expiryDays,quota_percent quotaPercent FROM network_followup_alert_settings WHERE environment_id=?',[environmentId]);return {expiryDays:Number(rows?.[0]?.expiryDays??7),quotaPercent:Number(rows?.[0]?.quotaPercent??80)};}
 export async function writeNetworkFollowUpSettings(environmentId:number,input:any){const expiryDays=Number(input?.expiryDays),quotaPercent=Number(input?.quotaPercent);if(!Number.isInteger(expiryDays)||expiryDays<1||expiryDays>30||!Number.isInteger(quotaPercent)||quotaPercent<50||quotaPercent>99)throw new Error('FOLLOWUP_SETTINGS_INPUT');await ensureFollowUpTable();await db.query('INSERT INTO network_followup_alert_settings(environment_id,expiry_days,quota_percent) VALUES(?,?,?) ON DUPLICATE KEY UPDATE expiry_days=VALUES(expiry_days),quota_percent=VALUES(quota_percent)',[environmentId,expiryDays,quotaPercent]);return {expiryDays,quotaPercent};}
+

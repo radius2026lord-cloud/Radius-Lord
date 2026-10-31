@@ -1,4 +1,5 @@
 "use client";
+import type {HomepageShortcutId} from "@/lib/homepage-shortcuts";
 import {useEffect,useState} from 'react';
 import {Archive,Building2,PanelsTopLeft,Server,ShieldCheck,Tags,Users,Gauge,Settings,Search,Phone,MapPin,Network,Clock,Coins,Activity,Layers} from 'lucide-react';
 import ProjectTabs from '@/components/ui/project-tabs';
@@ -13,7 +14,7 @@ import UiPreferencesPanel from '@/components/settings/ui-preferences-panel';
 import {ProjectInfoCard,ProjectCardIcon} from '@/components/ui/project-info-card';
 
 type Tab='network'|'radius'|'system'|'archive';
-export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',initialNetworkDetail='general',canEditFollowUp=false}:{endpoint:string;refresh:number;initialTab?:Tab;initialNetworkDetail?:'general'|'contact'|'location'|'areas'|'time'|'private';canEditFollowUp?:boolean}){
+export default function NetworkSettingsHub({endpoint,refresh,initialTab='network',initialNetworkDetail='general',canEditFollowUp=false,availableShortcutIds}:{endpoint:string;availableShortcutIds?:readonly HomepageShortcutId[];refresh:number;initialTab?:Tab;initialNetworkDetail?:'general'|'contact'|'location'|'areas'|'time'|'private';canEditFollowUp?:boolean}){
  const [tab,setTab]=useState<Tab>(initialTab),[kind,setKind]=useState('users'),[networkSection,setNetworkSection]=useState('details'),[networkDetail,setNetworkDetail]=useState<'general'|'contact'|'location'|'areas'|'time'|'private'>('general'),[radiusSection,setRadiusSection]=useState<'accounting'|'grace'|'server'>('accounting'),[systemSection,setSystemSection]=useState<'footer'|'homepage'|'alerts'|'datetime'>('footer'),[jumpValue,setJumpValue]=useState(''),[jumpRevision,setJumpRevision]=useState(0);
  useEffect(()=>setTab(initialTab),[initialTab]);
  useEffect(()=>setNetworkDetail(initialNetworkDetail),[initialNetworkDetail]);
@@ -56,7 +57,7 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
   <section id={`network-settings-hub-panel-${tab}`} role="tabpanel" aria-labelledby={`network-settings-hub-tab-${tab}`} className="min-w-0">
    {tab==='network'?<div className="space-y-4"><ProjectTabs id="network-setting-sections" value={networkSection} onChange={setNetworkSection} items={[{value:"details",label:"بيانات الشبكة",icon:Building2,iconClassName:"text-sky-500"},{value:"currency",label:"العملة الافتراضية",icon:Settings,iconClassName:"text-amber-500"}]}/><section id={`network-setting-sections-panel-${networkSection}`} role="tabpanel" aria-labelledby={`network-setting-sections-tab-${networkSection}`}>{networkSection==="details"?<NetworkSettings endpoint={endpoint} refresh={refresh} initialTab={networkDetail} navigationVersion={jumpRevision}/>:<NetworkCurrencySettings endpoint={endpoint}/>}</section></div>
     :tab==='radius'?<NetworkRadiusSettings endpoint={endpoint} initialSection={radiusSection} navigationVersion={jumpRevision}/>
-    :tab==='system'?<UiPreferencesPanel endpoint={`${endpoint}/ui-preferences`} followUpEndpoint={`${endpoint}/follow-up-alerts`} canEditFollowUp={canEditFollowUp} initialSection={systemSection} navigationVersion={jumpRevision} network/>
+    :tab==='system'?<UiPreferencesPanel availableShortcutIds={availableShortcutIds} endpoint={`${endpoint}/ui-preferences`} followUpEndpoint={`${endpoint}/follow-up-alerts`} canEditFollowUp={canEditFollowUp} initialSection={systemSection} navigationVersion={jumpRevision} network/>
     :<div className="space-y-4"><ProjectTabs id="archive-types" value={kind} onChange={setKind} items={[
       {value:'users',label:'المستخدمون المؤرشفون',icon:Users,iconClassName:'text-sky-500'},
       {value:'groups',label:'المجموعات المؤرشفة',icon:ShieldCheck,iconClassName:'text-violet-500'},
@@ -66,3 +67,4 @@ export default function NetworkSettingsHub({endpoint,refresh,initialTab='network
   </section>
  </div>;
 }
+
