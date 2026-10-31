@@ -135,6 +135,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  const [servers,setServers]=useState<SubscriberServer[]>([]);
  const [loading,setLoading]=useState(true);
  const [refreshing,setRefreshing]=useState(false);
+ const [listRecovering,setListRecovering]=useState(false);
  const listRequest=useRef<{endpoint:string;controller:AbortController}|null>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
@@ -309,29 +310,33 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   listRequest.current?.controller.abort();
   const request={endpoint,controller:new AbortController()},signal=request.controller.signal;
   listRequest.current=request;
+  const pause=(milliseconds:number)=>new Promise<void>(resolve=>{
+   const finish=()=>{window.clearTimeout(timer);signal.removeEventListener("abort",finish);resolve();};
+   const timer=window.setTimeout(finish,milliseconds);
+   signal.addEventListener("abort",finish,{once:true});if(signal.aborted)finish();
+  });
   if(!silent)setLoading(true);
-  setRefreshing(true);setError("");
+  setRefreshing(true);setError("");setListRecovering(false);
   try{
-   for(let attempt=0;attempt<2;attempt++){
+   for(let attempt=0;!signal.aborted;attempt++){
+    if(!navigator.onLine){setListRecovering(true);await pause(30_000);continue;}
     try{
      const response=await fetch(endpoint+"/subscribers",{credentials:"include",cache:"no-store",signal});
      const data=await response.json().catch(()=>null);
-     if(!response.ok){
-      if(attempt===0&&data?.retryable){await new Promise(resolve=>window.setTimeout(resolve,500));if(signal.aborted)return;continue;}
-      throw new Error(data?.message||"تعذر تحميل المشتركين. أعد المحاولة.");
-     }
+     if(!response.ok)throw Object.assign(new Error(data?.message||"تعذر تحميل المشتركين."),{retryable:data?.retryable===true&&[429,503].includes(response.status)});
      if(signal.aborted||listRequest.current!==request)return;
      if(!data||!Array.isArray(data.items))throw new Error("تعذر قراءة قائمة المشتركين. أعد المحاولة.");
-     setItems(data.items);setCategories(data.categories||[]);setServers(data.servers||[]);
+     setItems(data.items);setCategories(data.categories||[]);setServers(data.servers||[]);setError("");setListRecovering(false);
      return;
     }catch(e){
      if(signal.aborted)return;
-     if(attempt===0&&e instanceof TypeError){await new Promise(resolve=>window.setTimeout(resolve,500));if(signal.aborted)return;continue;}
-     throw e;
+     if(!(e instanceof TypeError)&&!(e as {retryable?:boolean})?.retryable)throw e;
+     setListRecovering(true);
+     await pause(document.hidden?30_000:Math.min(30_000,1000*2**Math.min(attempt,5))+Math.floor(Math.random()*250));
     }
    }
-  }catch(e){if(!signal.aborted&&listRequest.current===request)setError(e instanceof Error?e.message:"تعذر تحميل المشتركين.");}
-  finally{if(listRequest.current===request){listRequest.current=null;setLoading(false);setRefreshing(false);}}
+  }catch(e){if(!signal.aborted&&listRequest.current===request){setListRecovering(false);setError(e instanceof Error?e.message:"تعذر تحميل المشتركين.");}}
+  finally{if(listRequest.current===request){listRequest.current=null;if(!signal.aborted){setLoading(false);setRefreshing(false);}}}
  };
  useEffect(()=>{void load();const timer=!detailId&&tab==="list"?window.setInterval(()=>void load({silent:true}),30_000):null;return()=>{if(timer!==null)window.clearInterval(timer);listRequest.current?.controller.abort();};},[endpoint,detailId,tab]);
  useEffect(()=>{if(!detailId)return;let live=true;const timer=window.setInterval(async()=>{try{const response=await fetch(`${endpoint}/subscribers/${detailId}?activity=0`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok||!live)return;setDetail(data.item||null);setDetailLines(Array.isArray(data.accounts)?data.accounts:[]);}catch{}},30_000);return()=>{live=false;window.clearInterval(timer);};},[endpoint,detailId]);
@@ -1061,8 +1066,9 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
 
 {selectionMode&&filteredLineSelections.length>=2&&selectedLineSelections.length<2&&<section className="ui-state-enter flex flex-wrap items-center justify-between gap-2 rounded-[16px] border border-violet-200 bg-violet-50/80 px-3 py-2.5 text-xs dark:border-violet-300/15 dark:bg-violet-400/[.06]" dir="rtl"><span className="inline-flex items-center gap-2 text-violet-900 dark:text-violet-100"><ListChecks className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300"/><span>توجد {filteredLineSelections.length.toLocaleString("ar")} خطوط مطابقة؛ يمكنك تحديدها كلها لتنفيذ إجراء جماعي.</span></span><button type="button" disabled={busy} onClick={toggleAllFiltered} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-violet-300 bg-white px-3 font-semibold text-violet-800 transition hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400 disabled:opacity-50 dark:border-violet-300/20 dark:bg-[#172b40] dark:text-violet-200 dark:hover:bg-violet-400/[.12]"><CheckCircle2 className="h-4 w-4"/>تحديد كل النتائج</button></section>}
 {selectionMode&&selectedLineSelections.length>=2&&<CollectionSelectionBar count={selectedLineSelections.length} noun="خط" onClear={()=>setSelectedLineKeys([])}><CollectionBulkActions label="إجراءات النتائج المطابقة" allSelected={allFilteredSelected} selectAllLabel="تحديد كل النتائج المطابقة" onToggleAll={toggleAllFiltered} onClearSelection={()=>setSelectedLineKeys([])} items={bulkLineActions.map(action=>({label:action.label,icon:action.icon,tone:action.value==="disable"?"danger":action.value==="enable"?"success":action.value==="renew"?"primary":"warning",disabled:busy,onClick:()=>queueBulkLineAction(action.value as "enable"|"disable"|"disconnect"|"renew",selectedLineSelections,"selected")}))}/></CollectionSelectionBar>}
+{listRecovering&&items.length>0&&<ProjectInfoCard tone="pending" className="p-3"><p role="status" aria-live="polite" className="flex items-center gap-2 text-xs"><RefreshCw className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none"/>جارٍ استعادة الاتصال وتحديث المشتركين تلقائيًا…</p></ProjectInfoCard>}
 {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-{loading?<CollectionState loading>جارٍ تحميل المشتركين...</CollectionState>:error&&!items.length?<CollectionState>تعذر تحميل قائمة المشتركين. اضغط «تحديث» لإعادة المحاولة.</CollectionState>:!filtered.length?<CollectionState>{query||activeFilterCount>0?"لا توجد نتائج مطابقة.":"لا يوجد مشتركين بعد."}</CollectionState>:view==="grid"?<CollectionGrid>{visibleSubscribers.flatMap(item=>{
+{loading&&!items.length?<CollectionState loading>{listRecovering?"جارٍ استعادة الاتصال تلقائيًا…":"جارٍ تحميل المشتركين..."}</CollectionState>:error&&!items.length?<CollectionState>تعذر تحميل قائمة المشتركين. اضغط «تحديث» لإعادة المحاولة.</CollectionState>:!filtered.length?<CollectionState>{query||activeFilterCount>0?"لا توجد نتائج مطابقة.":"لا يوجد مشتركين بعد."}</CollectionState>:view==="grid"?<CollectionGrid>{visibleSubscribers.flatMap(item=>{
  const pppoeLines=(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent));
  const hotspotLines=item.hotspot_lines||[];
  const entries=[

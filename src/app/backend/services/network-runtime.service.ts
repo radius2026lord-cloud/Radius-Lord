@@ -34,7 +34,7 @@ function networkPool(scope:any){
   if(!idle)throw new Error('NETWORK_CONNECTIONS_BUSY');
   networkPools.delete(idle[0]);void idle[1].pool.end().catch(()=>{});
  }
- const entry:NetworkPool={users:0,pool:mysql.createPool({host:scope.database_host,port:scope.database_port,user:scope.db_username,password:decryptProvisioningSecret(scope.app_password_encrypted),database:scope.db_name,connectTimeout:8000,connectionLimit:4,maxIdle:1,idleTimeout:60000,waitForConnections:true,queueLimit:24,enableKeepAlive:true,...(scope.tls_required?{ssl:{rejectUnauthorized:true}}:{})})};
+ const entry:NetworkPool={users:0,pool:mysql.createPool({host:scope.database_host,port:scope.database_port,user:scope.db_username,password:decryptProvisioningSecret(scope.app_password_encrypted),database:scope.db_name,connectTimeout:8000,connectionLimit:2,maxIdle:1,idleTimeout:60000,waitForConnections:true,queueLimit:24,enableKeepAlive:true,...(scope.tls_required?{ssl:{rejectUnauthorized:true}}:{})})};
  networkPools.set(key,entry);return entry;
 }
 export async function networkScope(slug:string,provisioning=false){
@@ -62,7 +62,16 @@ export async function withNetwork<T>(scope:any,operation:(connection:mysql.Conne
  await acquireNetworkConnection();let connection:mysql.PoolConnection|undefined,entry:NetworkPool|undefined;
  try{
   entry=networkPool(scope);entry.users++;
-  connection=await entry.pool.getConnection();
+  // Retry connection acquisition only; never replay an operation or transaction.
+  for(let attempt=0;;attempt++){
+   try{connection=await entry.pool.getConnection();break;}
+   catch(error){
+    const value=error as {code?:string;message?:string};
+    const occupied=value.code==='ER_TOO_MANY_USER_CONNECTIONS'||value.code==='ER_USER_LIMIT_REACHED'&&/\bmax_user_connections\b/.test(value.message||'');
+    if(!occupied||attempt>=3)throw error;
+    await new Promise(resolve=>setTimeout(resolve,250*2**attempt+Math.floor(Math.random()*150)));
+   }
+  }
   const [name]:any=await connection.query({sql:'SELECT DATABASE() name',timeout:5000});
   if(name[0]?.name!==scope.db_name)throw new Error('NETWORK_DATABASE_SCOPE');
   return await operation(connection);

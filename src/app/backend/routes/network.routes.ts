@@ -150,7 +150,8 @@ router.get('/:slug/subscribers/:id/pppoe-lines/:lineId/traffic',async(req,res)=>
 router.get('/:slug/subscribers/:id/identity-images/:side',async(req,res)=>{try{const bytes=await readNetworkSubscriberIdentityImage(await categoryScope(req),req.params.id,req.params.side);res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff');return res.type('image/webp').send(bytes);}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:code==='SUBSCRIBER_IMAGE_NOT_FOUND'?404:422).json({message:code==='SUBSCRIBER_IMAGE_NOT_FOUND'?'صورة الهوية غير متاحة.':'تعذر عرض صورة الهوية أو لا تملك صلاحية الوصول إليها.'});}});
 router.get('/:slug/subscribers',async(req,res)=>{try{return res.json(await readNetworkSubscribers(await categoryScope(req)));}catch(e){
  const error=e as {message?:string;code?:string},auth=error.message==='NETWORK_AUTH';
- const retryable=error.message==='NETWORK_CONNECTIONS_BUSY'||['ETIMEDOUT','ECONNREFUSED','ECONNRESET','EPIPE','PROTOCOL_CONNECTION_LOST','PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR','ER_CON_COUNT_ERROR','ER_TOO_MANY_USER_CONNECTIONS','ER_LOCK_WAIT_TIMEOUT','POOL_CLOSED'].includes(error.code||'');
+ const concurrentLimit=error.code==='ER_USER_LIMIT_REACHED'&&/\bmax_user_connections\b/.test(error.message||'');
+ const retryable=concurrentLimit||error.message==='NETWORK_CONNECTIONS_BUSY'||['ETIMEDOUT','ECONNREFUSED','ECONNRESET','EPIPE','PROTOCOL_CONNECTION_LOST','PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR','ER_CON_COUNT_ERROR','ER_TOO_MANY_USER_CONNECTIONS','ER_LOCK_WAIT_TIMEOUT','POOL_CLOSED'].includes(error.code||'');
  const userLimit=error.code==='ER_USER_LIMIT_REACHED';
  const resource=error.message?.match(/\b(max_questions|max_updates|max_connections|max_user_connections)\b/)?.[1];
  const schema=['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes(error.code||'');
