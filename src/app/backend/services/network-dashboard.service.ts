@@ -1,3 +1,5 @@
+import {readNetworkNasItems} from './network-nas-snapshot.service';
+
 function zonedParts(value:Date,timeZone:string){
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(value);
  return Object.fromEntries(parts.filter(part=>part.type!=='literal').map(part=>[part.type,Number(part.value)])) as Record<string,number>;
@@ -13,17 +15,27 @@ export async function readNetworkDashboardOverview(app:any){
  const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');
  const timeZone=String(settings[0]?.timezone||'Asia/Damascus');
  const today=zonedParts(new Date(),timeZone),start=localMidnightUtc(today.year,today.month,today.day,timeZone),nextDate=new Date(Date.UTC(today.year,today.month-1,today.day+1)),end=localMidnightUtc(nextDate.getUTCFullYear(),nextDate.getUTCMonth()+1,nextDate.getUTCDate(),timeZone);
+ // Display classification mirrors subscriber state priority; this does not change enforcement.
  const [rows]:any=await app.query(`
-  SELECT COUNT(*) totalLines,
-   COALESCE(SUM(live.username IS NOT NULL),0) connected,
-   COALESCE(SUM(a.admin_status='enabled' AND live.username IS NULL AND (sub.lifecycle='active' AND COALESCE(sub.grace_expires_at,sub.expires_at)>UTC_TIMESTAMP(6) OR sub.lifecycle='pending')),0) activeDisconnected,
-   COALESCE(SUM(a.admin_status='enabled' AND (sub.lifecycle='ended' OR sub.lifecycle IN('active','pending') AND COALESCE(sub.grace_expires_at,sub.expires_at)<=UTC_TIMESTAMP(6))),0) expired,
-   COALESCE(SUM(a.admin_status='disabled'),0) suspended
-  FROM pppoe_accounts a
-  JOIN radius_identities r ON r.id=a.radius_identity_id
-  LEFT JOIN pppoe_subscriptions sub ON sub.id=(SELECT s.id FROM pppoe_subscriptions s WHERE s.account_id=a.id AND s.service_role='base' ORDER BY s.id DESC LIMIT 1)
-  LEFT JOIN (SELECT username FROM radacct WHERE acctstoptime IS NULL AND COALESCE(acctupdatetime,acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE GROUP BY username) live ON live.username=r.current_username
-  WHERE a.archived_at IS NULL`);
+  SELECT COUNT(*) totalLines,COALESCE(SUM(connected),0) connected,
+   COALESCE(SUM(connected=0 AND state='online'),0) activeDisconnected,
+   COALESCE(SUM(state='expired'),0) expired,COALESCE(SUM(state='disabled'),0) suspended,
+   COALESCE(SUM(state='pending'),0) pending,COALESCE(SUM(state='quota'),0) quotaExhausted
+  FROM (
+   SELECT live.username IS NOT NULL connected,
+    CASE WHEN c.status='suspended' OR a.admin_status='disabled' THEN 'disabled'
+     WHEN sub.lifecycle='cancelled' THEN 'cancelled'
+     WHEN COALESCE(sub.grace_expires_at,sub.expires_at)<=UTC_TIMESTAMP(6) OR sub.lifecycle='ended' THEN 'expired'
+     WHEN sub.lifecycle='pending' THEN 'pending'
+     WHEN sub.quota_allowance_bytes>0 AND COALESCE(su.upload_bytes,0)+COALESCE(su.download_bytes,0)>=sub.quota_allowance_bytes THEN 'quota'
+     ELSE 'online' END state
+   FROM pppoe_accounts a JOIN customers c ON c.id=a.customer_id
+   JOIN radius_identities r ON r.id=a.radius_identity_id
+   LEFT JOIN pppoe_subscriptions sub ON sub.id=(SELECT s.id FROM pppoe_subscriptions s WHERE s.account_id=a.id AND s.service_role='base' ORDER BY s.id DESC LIMIT 1)
+   LEFT JOIN pppoe_subscription_usage su ON su.subscription_id=sub.id
+   LEFT JOIN (SELECT username FROM radacct WHERE acctstoptime IS NULL AND COALESCE(acctupdatetime,acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE GROUP BY username) live ON live.username=r.current_username
+   WHERE a.archived_at IS NULL AND c.archived_at IS NULL
+  ) states`);
  const [newRows]:any=await app.query("SELECT COUNT(*) newCustomersToday FROM customers c WHERE c.archived_at IS NULL AND c.created_at>=? AND c.created_at<? AND EXISTS(SELECT 1 FROM pppoe_accounts p WHERE p.customer_id=c.id AND p.archived_at IS NULL)",[sqlDate(start),sqlDate(end)]);
  const [expiringSoon]:any=await app.query(`SELECT c.id customerId,CONCAT_WS(' ',c.first_name,c.last_name) customerName,p.id lineId,COALESCE(NULLIF(p.line_name,''),r.current_username) lineName,r.current_username username,sp.expires_at effectiveExpiry,TIMESTAMPDIFF(DAY,UTC_TIMESTAMP(),sp.expires_at) daysRemaining
   FROM pppoe_accounts p JOIN customers c ON c.id=p.customer_id JOIN radius_identities r ON r.id=p.radius_identity_id JOIN pppoe_subscriptions sp ON sp.id=(SELECT s.id FROM pppoe_subscriptions s WHERE s.account_id=p.id AND s.service_role='base' ORDER BY s.id DESC LIMIT 1)
@@ -46,9 +58,10 @@ export async function readNetworkDashboardOverview(app:any){
   ORDER BY al.id DESC LIMIT 8`);
  const [nasSummary]:any=await app.query("SELECT COUNT(*) enabledNas,COALESCE(SUM(activity_status<>'recent' OR last_seen_at IS NULL OR last_seen_at<UTC_TIMESTAMP(6)-INTERVAL 90 SECOND),0) nasIssueCount FROM lord_nas WHERE archived_at IS NULL AND is_enabled=1");
  const [nasRows]:any=await app.query("SELECT id,name,activity_status,last_seen_at FROM lord_nas WHERE archived_at IS NULL AND is_enabled=1 AND (activity_status<>'recent' OR last_seen_at IS NULL OR last_seen_at<UTC_TIMESTAMP(6)-INTERVAL 90 SECOND) ORDER BY CASE activity_status WHEN 'stale' THEN 0 ELSE 1 END,id LIMIT 5");
- const [nasTelemetryRows]:any=await app.query("SELECT l.id,l.name,l.vendor,l.model,l.routeros_version,l.activity_status,l.last_seen_at,c.tunnel_address,c.configuration_snapshot,ms.port api_port,ms.is_enabled api_enabled,(SELECT COUNT(DISTINCT ra.username) FROM radacct ra WHERE ra.nasipaddress=c.tunnel_address AND ra.acctstoptime IS NULL AND COALESCE(ra.acctupdatetime,ra.acctstarttime)>=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE) connected_accounts FROM lord_nas l LEFT JOIN nas_ovpn_connections c ON c.nas_id=l.id LEFT JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE l.archived_at IS NULL AND l.is_enabled=1 ORDER BY l.id");
- const nasOverview=nasTelemetryRows.map((row:any)=>{let config:any={};try{config=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot||{};}catch{}const latest=config.telemetryLatest&&typeof config.telemetryLatest==='object'?config.telemetryLatest:null,metrics=Array.isArray(config.telemetrySamples)?config.telemetrySamples.slice(-12):[],lastSeenAt=row.last_seen_at?new Date(row.last_seen_at).toISOString():null;return {id:Number(row.id),name:row.name,vendor:row.vendor,model:row.model??null,routerosVersion:row.routeros_version??latest?.version??null,boardName:latest?.board??row.model??null,uptime:latest?.uptime??null,address:row.tunnel_address??null,apiPort:row.api_port?Number(row.api_port):null,apiEnabled:Number(row.api_enabled)===1,status:row.activity_status==='recent'&&row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<90000?'connected':row.activity_status==='stale'?'disconnected':'awaiting_link',lastSeenAt,connectedAccounts:Number(row.connected_accounts||0),metrics,metricsUpdatedAt:latest?.receivedAt??null,apiLastCheck:config.apiLastCheck??null};});
+ const nasItems=await readNetworkNasItems(app);
+ const nasOverview=nasItems.filter((nas:any)=>nas.isEnabled);
  const summary={...rows[0],...nasSummary[0],newCustomersToday:Number(newRows[0]?.newCustomersToday||0),timezone:timeZone};
- for(const key of ['totalLines','connected','activeDisconnected','expired','suspended','newCustomersToday','enabledNas','nasIssueCount'])summary[key]=Number(summary[key]||0);
+ for(const key of ['totalLines','connected','activeDisconnected','expired','suspended','pending','quotaExhausted','newCustomersToday','enabledNas','nasIssueCount'])summary[key]=Number(summary[key]||0);
  return {summary,activity,nasAlerts:nasRows.map((row:any)=>({id:Number(row.id),name:row.name,status:row.activity_status,lastSeenAt:row.last_seen_at})),nasOverview,followUpAlerts:{expiring:expiringSoon.map((row:any)=>({...row,customerId:Number(row.customerId),lineId:Number(row.lineId),daysRemaining:Number(row.daysRemaining)})),quota:quotaNear.map((row:any)=>({...row,customerId:Number(row.customerId),lineId:Number(row.lineId),quotaBytes:String(row.quotaBytes),usedBytes:String(row.usedBytes),usedPercent:Number(row.usedPercent)}))}};
 }
+

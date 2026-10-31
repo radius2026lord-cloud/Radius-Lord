@@ -1,4 +1,5 @@
 "use client";
+import {lineStatePalette} from "@/lib/line-state-palette";
 import {useClock24h} from "@/components/ui/project-clock-provider";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -52,17 +53,15 @@ type Subscriber = {
   is_online?:boolean|number; has_current_subscription?:boolean|number; has_expired_subscription?:boolean|number;
   payment_code?:string; identity_verified:boolean|number; pppoe_lines?:SubscriberPppoeLine[];hotspot_lines?:SubscriberHotspotLine[];
 };
-function dashboardPppoeLineMatches(line:SubscriberPppoeLine,filter:string,expiryDays=7,quotaPercent=80){
+function dashboardPppoeLineMatches(line:SubscriberPppoeLine,filter:string,expiryDays=7,quotaPercent=80,accountSuspended=false){
  if(!filter||filter==="new_today"||filter==="total_lines")return true;
- const value=line.grace_expires_at||line.expires_at;
- const text=String(value||"");
- const expiry=value?Date.parse(/^\d{4}-\d{2}-\d{2} \d{2}:/.test(text)?text.replace(" ","T")+"Z":text):NaN;
- const connected=Number(line.live_sessions||0)>0;
  switch(filter){
-  case "connected":return connected;
-  case "active_disconnected":return line.status==="enabled"&&!connected&&(line.lifecycle==="pending"||(line.lifecycle==="active"&&Number.isFinite(expiry)&&expiry>Date.now()));
-  case "expired":return line.status==="enabled"&&(line.lifecycle==="ended"||(["active","pending"].includes(String(line.lifecycle))&&Number.isFinite(expiry)&&expiry<=Date.now()));
-  case "suspended":return line.status==="disabled";
+  case "connected":return quickLineMatches(line,"connected",accountSuspended);
+  case "active_disconnected":return quickLineMatches(line,"disconnected",accountSuspended);
+  case "expired":return quickLineMatches(line,"expired",accountSuspended);
+  case "suspended":return quickLineMatches(line,"disabled",accountSuspended);
+  case "pending":return quickLineMatches(line,"pending",accountSuspended);
+  case "quota_exhausted":return quickLineMatches(line,"quota",accountSuspended);
   case "expiring_soon":{const end=line.expires_at?Date.parse(String(line.expires_at).replace(/^([0-9-]+) ([0-9:]+)$/,"$1T$2Z")):NaN;return line.status==="enabled"&&["active","pending"].includes(String(line.lifecycle))&&Number.isFinite(end)&&end>Date.now()&&end<=Date.now()+expiryDays*86400000;}
   case "quota_approaching":{const quota=Number(line.quota_allowance_bytes||0),used=Number(line.used_bytes||0);return line.status==="enabled"&&["active","pending"].includes(String(line.lifecycle))&&quota>0&&used/quota*100>=quotaPercent;}
   default:return true;
@@ -95,14 +94,6 @@ const blank:Draft={firstName:"",lastName:"",phone:"",address:"",notes:"",categor
 const statusLabel={active:"مفعّل",suspended:"غير مفعّل"} as const;
 type AvailabilityLine=Pick<SubscriberLine,"status"|"live_sessions">&Partial<Pick<SubscriberLine,"lifecycle"|"starts_at"|"expires_at"|"grace_expires_at"|"quota_allowance_bytes"|"used_bytes">>;
 type QuickLineFilter="all"|"connected"|"disconnected"|"pending"|"disabled"|"expired"|"quota";
-const lineStatePalette={
- connected:{ink:"text-emerald-700 dark:text-emerald-300",card:"!border-emerald-300 !bg-emerald-100 dark:!border-emerald-400/40 dark:!bg-[#064e3b]",active:"!border-emerald-500 ring-emerald-500/25",id:"border-emerald-500 bg-emerald-100 text-emerald-950 dark:border-emerald-400 dark:bg-[#064e3b] dark:text-emerald-100",icon:"bg-emerald-200 text-emerald-950 dark:bg-emerald-500 dark:text-emerald-100"},
- online:{ink:"text-blue-700 dark:text-blue-200",card:"!border-blue-300 !bg-blue-100 dark:!border-blue-400/40 dark:!bg-[#1e3a8a]",active:"!border-blue-500 ring-blue-500/25",id:"border-blue-500 bg-blue-100 text-blue-950 dark:border-blue-400 dark:bg-[#1e3a8a] dark:text-blue-100",icon:"bg-blue-300 text-blue-950 dark:bg-blue-500 dark:text-blue-100"},
- pending:{ink:"text-violet-700 dark:text-violet-300",card:"!border-violet-300 !bg-violet-100 dark:!border-violet-400/40 dark:!bg-[#4c1d95]",active:"!border-violet-500 ring-violet-500/25",id:"border-violet-500 bg-violet-100 text-violet-950 dark:border-violet-400 dark:bg-[#4c1d95] dark:text-violet-100",icon:"bg-violet-200 text-violet-950 dark:bg-violet-500 dark:text-violet-100"},
- disabled:{ink:"text-red-700 dark:text-red-300",card:"!border-red-300 !bg-red-100 dark:!border-red-400/40 dark:!bg-[#7f1d1d]",active:"!border-red-500 ring-red-500/25",id:"border-red-500 bg-red-100 text-red-950 dark:border-red-400 dark:bg-[#7f1d1d] dark:text-red-100",icon:"bg-red-200 text-red-950 dark:bg-red-500 dark:text-red-100"},
- expired:{ink:"text-amber-800 dark:text-amber-300",card:"!border-amber-300 !bg-amber-100 dark:!border-amber-400/40 dark:!bg-[#78350f]",active:"!border-amber-500 ring-amber-500/25",id:"border-amber-500 bg-amber-100 text-amber-950 dark:border-amber-400 dark:bg-[#78350f] dark:text-amber-100",icon:"bg-amber-200 text-amber-950 dark:bg-amber-500 dark:text-amber-950"},
- quota:{ink:"text-orange-700 dark:text-orange-300",card:"!border-orange-300 !bg-orange-100 dark:!border-orange-400/40 dark:!bg-[#7c2d12]",active:"!border-orange-500 ring-orange-500/25",id:"border-orange-500 bg-orange-100 text-orange-950 dark:border-orange-400 dark:bg-[#7c2d12] dark:text-orange-100",icon:"bg-orange-200 text-orange-950 dark:bg-orange-500 dark:text-orange-100"}
-} as const;
 const quickLineOptions=[
  {value:"all",label:"كل الخطوط",icon:ListChecks,tone:"text-slate-600 dark:text-slate-300",card:"!border-slate-200 !bg-white dark:!border-white/15 dark:!bg-[#10243a]",active:"!border-slate-400 ring-slate-400/25"},
  {value:"connected",label:"متصل",icon:Wifi,tone:lineStatePalette.connected.ink,card:lineStatePalette.connected.card,active:lineStatePalette.connected.active},
@@ -674,7 +665,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  const clearSubscriberFilters=()=>{setQuickLineFilter("all");onClearDashboardFilter?.();setStatusFilter("all");setVerificationFilter("all");setConnectionFilter("all");setSubscriptionFilter("all");setCreatedTodayFilter(false);setNameFilter("");setCategoryFilter("");setServerFilter("");setProfileFilter("");};
  const toggleSubscriberFilterPanel=()=>{const next=!filterPanelOpen;setFilterPanelOpen(next);if(!next)return;requestAnimationFrame(()=>requestAnimationFrame(()=>{const panel=document.getElementById("subscriber-filter-panel");if(!panel)return;const behavior=window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";panel.scrollIntoView({behavior,block:"center",inline:"nearest"});}));};
  const selectedName=items.find(item=>String(item.id)===nameFilter);
- const dashboardFilterLabels:Record<string,string>={total_lines:"مشتركو PPPoE",connected:"خطوط PPPoE المتصلة",active_disconnected:"خطوط PPPoE المفعّلة غير المتصلة",expired:"خطوط PPPoE منتهية الاشتراك",suspended:"خطوط PPPoE الموقوفة",expiring_soon:"اشتراكات قاربت على الانتهاء",quota_approaching:"باقات قاربت على الاستهلاك",new_today:"مشتركون أضيفوا اليوم"};
+ const dashboardFilterLabels:Record<string,string>={total_lines:"مشتركو PPPoE",connected:"خطوط PPPoE المتصلة",active_disconnected:"خطوط PPPoE المفعّلة غير المتصلة",expired:"خطوط PPPoE منتهية الاشتراك",suspended:"خطوط PPPoE الموقوفة",pending:"خطوط PPPoE غير المفعّلة",quota_exhausted:"خطوط PPPoE التي نفد حجمها",expiring_soon:"اشتراكات قاربت على الانتهاء",quota_approaching:"باقات قاربت على الاستهلاك",new_today:"مشتركون أضيفوا اليوم"};
  const dashboardToken=dashboardFilter?{key:"dashboard",label:dashboardFilterLabels[dashboardFilter]||"تصفية من لوحة التحكم",icon:Activity,clear:()=>onClearDashboardFilter?.()}:null;
  const activeFilterTokens=[
   ...(quickLineFilter!=="all"?[{key:"quick-line",label:"حالة الخط: "+quickLineOptions.find(option=>option.value===quickLineFilter)?.label,icon:ListFilter,clear:()=>setQuickLineFilter("all")}]:[]),
@@ -693,13 +684,13 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   const q=query.trim().toLowerCase();
   const today=new Intl.DateTimeFormat("en-CA",{timeZone:dashboardTimezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const isToday=(value:string)=>new Intl.DateTimeFormat("en-CA",{timeZone:dashboardTimezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value))===today;
-  const matchesDashboard=(item:Subscriber)=>{if(!dashboardFilter)return true;if(dashboardFilter==="new_today")return Boolean(item.pppoe_lines?.length)&&isToday(item.created_at);if(dashboardFilter==="total_lines")return Boolean(item.pppoe_lines?.length);return (item.pppoe_lines||[]).some(line=>dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent));};
-  return items.filter(item=>matchesDashboard(item)&&(!nameFilter||String(item.id)===nameFilter)&&(!createdTodayFilter||isToday(item.created_at))&&(statusFilter==="all"||item.status===statusFilter)&&(verificationFilter==="all"||(verificationFilter==="verified"?Number(item.identity_verified)===1:Number(item.identity_verified)!==1))&&(connectionFilter==="all"||(connectionFilter==="online"?Number(item.is_online)===1:Number(item.is_online)!==1))&&(subscriptionFilter==="all"||(subscriptionFilter==="expired"?Number(item.has_expired_subscription)===1:Number(item.has_current_subscription)===1))&&(!categoryFilter||(item.category_ids||"").split(",").includes(categoryFilter))&&(!serverFilter||(item.server_addresses||"").split(",").includes(serverFilter))&&(!profileFilter||(item.pppoe_lines||[]).some(line=>line.service_name===profileFilter&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent)))&&(!q||[
+  const matchesDashboard=(item:Subscriber)=>{if(!dashboardFilter)return true;if(dashboardFilter==="new_today")return Boolean(item.pppoe_lines?.length)&&isToday(item.created_at);if(dashboardFilter==="total_lines")return Boolean(item.pppoe_lines?.length);return (item.pppoe_lines||[]).some(line=>dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,item.status==="suspended"));};
+  return items.filter(item=>matchesDashboard(item)&&(!nameFilter||String(item.id)===nameFilter)&&(!createdTodayFilter||isToday(item.created_at))&&(statusFilter==="all"||item.status===statusFilter)&&(verificationFilter==="all"||(verificationFilter==="verified"?Number(item.identity_verified)===1:Number(item.identity_verified)!==1))&&(connectionFilter==="all"||(connectionFilter==="online"?Number(item.is_online)===1:Number(item.is_online)!==1))&&(subscriptionFilter==="all"||(subscriptionFilter==="expired"?Number(item.has_expired_subscription)===1:Number(item.has_current_subscription)===1))&&(!categoryFilter||(item.category_ids||"").split(",").includes(categoryFilter))&&(!serverFilter||(item.server_addresses||"").split(",").includes(serverFilter))&&(!profileFilter||(item.pppoe_lines||[]).some(line=>line.service_name===profileFilter&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,item.status==="suspended")))&&(!q||[
    item.first_name,item.last_name,item.phone,item.address,item.categories,...(item.pppoe_lines||[]).flatMap(line=>[line.username,line.line_name,line.service_name])
   ].some(value=>String(value||"").toLowerCase().includes(q))));
  },[items,query,nameFilter,statusFilter,verificationFilter,connectionFilter,subscriptionFilter,createdTodayFilter,dashboardTimezone,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,categoryFilter,serverFilter,profileFilter]);
  const quickCandidateLines=(item:Subscriber):AvailabilityLine[]=>[
-  ...(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent)),
+  ...(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,item.status==="suspended")),
   ...(!profileFilter?item.hotspot_lines||[]:[])
  ];
  const quickLineCounts=useMemo(()=>{
@@ -754,7 +745,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  });
  const lineSelectionKey=(kind:"pppoe"|"hotspot",id:number)=>`${kind}:${id}`;
  const lineSelectionsFor=(item:Subscriber):SubscriberLineSelection[]=>[
-  ...(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent)&&quickLineMatches(line,quickLineFilter,item.status==="suspended")).map(line=>({key:lineSelectionKey("pppoe",line.id),item,kind:"pppoe" as const,line:{...line,kind:"pppoe",customer_id:item.id,customer_name:`${item.first_name} ${item.last_name}`.trim()} as unknown as SubscriberLine})),
+  ...(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,item.status==="suspended")&&quickLineMatches(line,quickLineFilter,item.status==="suspended")).map(line=>({key:lineSelectionKey("pppoe",line.id),item,kind:"pppoe" as const,line:{...line,kind:"pppoe",customer_id:item.id,customer_name:`${item.first_name} ${item.last_name}`.trim()} as unknown as SubscriberLine})),
   ...(!profileFilter?(item.hotspot_lines||[]).filter(line=>quickLineMatches(line,quickLineFilter,item.status==="suspended")).map(line=>({key:lineSelectionKey("hotspot",line.id),item,kind:"hotspot" as const,line:{...line,kind:"hotspot",customer_id:item.id,customer_name:`${item.first_name} ${item.last_name}`.trim()} as unknown as SubscriberLine})):[])
  ];
  const visibleLineSelections=visibleSubscribers.flatMap(lineSelectionsFor);
@@ -1001,7 +992,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   return Number(item.is_online)===1?"connected":"online";
  };
  const subscriberLinesView=(item:Subscriber)=>{
-  const pppoeLines=(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent)&&quickLineMatches(line,quickLineFilter,item.status==="suspended"));
+  const pppoeLines=(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,item.status==="suspended")&&quickLineMatches(line,quickLineFilter,item.status==="suspended"));
   const hotspotLines=(item.hotspot_lines||[]).filter(line=>!profileFilter&&quickLineMatches(line,quickLineFilter,item.status==="suspended"));
   const entries=[
    ...pppoeLines.map((line,index)=>({kind:"pppoe" as const,line:line as any,number:index+1,total:pppoeLines.length})),
@@ -1238,7 +1229,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
 {listRecovering&&items.length>0&&<ProjectInfoCard tone="pending" className="p-3"><p role="status" aria-live="polite" className="flex items-center gap-2 text-xs"><RefreshCw className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none"/>جارٍ استعادة الاتصال وتحديث المشتركين تلقائيًا…</p></ProjectInfoCard>}
 {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 {loading&&!items.length?<CollectionState loading>{listRecovering?"جارٍ استعادة الاتصال تلقائيًا…":"جارٍ تحميل المشتركين..."}</CollectionState>:error&&!items.length?<CollectionState>تعذر تحميل قائمة المشتركين. اضغط «تحديث» لإعادة المحاولة.</CollectionState>:!filtered.length?<CollectionState>{query||activeFilterCount>0?"لا توجد نتائج مطابقة.":"لا يوجد مشتركين بعد."}</CollectionState>:view==="grid"?<CollectionGrid>{visibleSubscribers.flatMap(item=>{
- const pppoeLines=(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent)&&quickLineMatches(line,quickLineFilter,item.status==="suspended"));
+ const pppoeLines=(item.pppoe_lines||[]).filter(line=>(!profileFilter||line.service_name===profileFilter)&&dashboardPppoeLineMatches(line,dashboardFilter,dashboardExpiryDays,dashboardQuotaPercent,item.status==="suspended")&&quickLineMatches(line,quickLineFilter,item.status==="suspended"));
  const hotspotLines=(item.hotspot_lines||[]).filter(line=>!profileFilter&&quickLineMatches(line,quickLineFilter,item.status==="suspended"));
  const entries=[
   ...pppoeLines.map((line,index)=>({kind:"pppoe" as const,line,index:index+1,total:pppoeLines.length})),
@@ -1329,5 +1320,6 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  </ProjectDialog>
 </div>;
 }
+
 
 
