@@ -137,6 +137,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
  const [refreshing,setRefreshing]=useState(false);
  const [listRecovering,setListRecovering]=useState(false);
  const listRequest=useRef<{endpoint:string;controller:AbortController}|null>(null);
+ const lineRevision=useRef(0),lineContext=useRef({endpoint,detailId});lineContext.current={endpoint,detailId};
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
  const [query,setQuery]=useState("");
@@ -344,7 +345,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   finally{if(listRequest.current===request){listRequest.current=null;if(!signal.aborted){setLoading(false);setRefreshing(false);}}}
  };
  useEffect(()=>{void load();const timer=!detailId&&tab==="list"?window.setInterval(()=>void load({silent:true}),30_000):null;return()=>{if(timer!==null)window.clearInterval(timer);listRequest.current?.controller.abort();};},[endpoint,detailId,tab]);
- useEffect(()=>{if(!detailId)return;let live=true;const timer=window.setInterval(async()=>{try{const response=await fetch(`${endpoint}/subscribers/${detailId}?activity=0`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok||!live)return;setDetail(data.item||null);setDetailLines(Array.isArray(data.accounts)?data.accounts:[]);}catch{}},30_000);return()=>{live=false;window.clearInterval(timer);};},[endpoint,detailId]);
+ useEffect(()=>{if(!detailId)return;let live=true;const timer=window.setInterval(async()=>{const revision=lineRevision.current;try{const response=await fetch(`${endpoint}/subscribers/${detailId}?activity=0`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok||!live||lineRevision.current!==revision)return;setDetail(data.item||null);setDetailLines(Array.isArray(data.accounts)?data.accounts:[]);}catch{}},30_000);return()=>{live=false;window.clearInterval(timer);};},[endpoint,detailId]);
  useEffect(()=>{if(!detailId||!canViewActivity||detailTab!=="activity")return;let live=true;const timer=window.setInterval(async()=>{try{const response=await fetch(`${endpoint}/subscribers/${detailId}`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok||!live)return;setDetailActivity(current=>mergeActivityPage(current,Array.isArray(data.activity)?data.activity:[]));setDetailSessions(current=>mergeActivityPage(current,Array.isArray(data.sessions)?data.sessions:[]));setDetailAuthAttempts(current=>mergeActivityPage(current,Array.isArray(data.authAttempts)?data.authAttempts:[]));if(activityOffset===0)setActivityHasMore(Boolean(data.activityHasMore));}catch{}},60_000);return()=>{live=false;window.clearInterval(timer);};},[endpoint,detailId,detailTab,canViewActivity,activityOffset]);
 
  const openHotspotDialog=async()=>{
@@ -452,12 +453,34 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   try{
    const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/${action==="activate"?"activate":"status"}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:action==="activate"?"{}":JSON.stringify({status:action==="enable"?"enabled":"disabled"})});
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تحديث خط PPPoE.");
-   if(detailId===customerId){const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(!refreshedResponse.ok)throw new Error(refreshed.message||"تم تحديث الخط، لكن تعذر إعادة تحميل بيانات المشترك.");setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}else void load({silent:true});
+   applyLineResult(line,{...(result.status?{status:result.status}:{}),...(result.lifecycle?{lifecycle:result.lifecycle}:{}),...(result.expiresAt?{expires_at:utcResultDate(result.expiresAt)}:{}),...(result.graceExpiresAt?{grace_expires_at:utcResultDate(result.graceExpiresAt)}:{})});void refreshLineResult(customerId);
    if(action==="activate"&&result.lifecycle==="ended")setPppoeNoticeWarning("انتهت صلاحية الخط قبل تفعيله.");
    else if(action==="disable"&&result.disconnectPending)setPppoeNoticeWarning("أُوقف تسجيل الدخول الجديد، لكن لم يصل تأكيد فصل الجلسة الحالية. سيعيد النظام المحاولة تلقائيًا.");
    else setPppoeNoticeMessage(result.awaitingFirstConnection?"تم إتاحة الحساب؛ تبدأ الصلاحية عند أول اتصال ناجح.":action==="activate"?"تم بدء الخدمة واحتساب موعد الانتهاء.":action==="disable"?"تم إيقاف خط PPPoE.":"تم تفعيل خط PPPoE.");
   }catch(error){setPppoeNoticeError(error instanceof Error?error.message:"تعذر تحديث خط PPPoE.");}
   finally{setPppoeLineBusyId(null);}
+ };
+ const utcResultDate=(value:string|null|undefined)=>value?(/[zZ]|[+-]\d\d:\d\d$/.test(value)?value:value.replace(" ","T")+"Z"):null;
+ const applyLineResult=(line:SubscriberLine,patch:Partial<SubscriberPppoeLine>,remove=false)=>{
+  if(lineContext.current.endpoint!==endpoint)return;
+  lineRevision.current++;
+  listRequest.current?.controller.abort();listRequest.current=null;
+  setLoading(false);setRefreshing(false);setListRecovering(false);
+  const customerId=Number(line.customer_id||detail?.id);
+  setItems(current=>current.map(item=>Number(item.id)!==customerId?item:{...item,pppoe_count:remove?Math.max(0,Number(item.pppoe_count)-1):item.pppoe_count,pppoe_lines:(item.pppoe_lines||[]).filter(entry=>!remove||Number(entry.id)!==Number(line.id)).map(entry=>Number(entry.id)===Number(line.id)?{...entry,...patch}:entry)}));
+  if(Number(lineContext.current.detailId)===customerId)setDetailLines(current=>current.filter(entry=>!remove||entry.kind!=="pppoe"||Number(entry.id)!==Number(line.id)).map(entry=>entry.kind==="pppoe"&&Number(entry.id)===Number(line.id)?{...entry,...patch}:entry));
+ };
+ const refreshLineResult=async(customerId:number)=>{
+  if(lineContext.current.endpoint!==endpoint)return;
+  if(Number(lineContext.current.detailId)!==customerId){void load({silent:true});return;}
+  const revision=lineRevision.current;
+  try{const response=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),body=await response.json();
+   if(response.ok&&lineContext.current.endpoint===endpoint&&Number(lineContext.current.detailId)===customerId&&lineRevision.current===revision){setDetail(body.item||detail);setDetailLines(Array.isArray(body.accounts)?body.accounts:[]);}
+  }catch{/* The committed result remains visible; the existing refresh handles recovery. */}
+ };
+ const showAppliedResult=(message:string,result:{applicationStatus?:string;disconnectPending?:boolean})=>{
+  if(result.disconnectPending||result.applicationStatus==="pending"){setPppoeNoticeWarning(message+" حُفظ التغيير، والتطبيق ينتظر إعادة اتصال الخط.");return;}
+  setPppoeNoticeMessage(message+(result.applicationStatus==="reconnect_requested"?" طُلبت إعادة اتصال الجلسة لتطبيق الإعدادات.":result.applicationStatus==="next_login"?" تُطبّق الإعدادات عند الاتصال القادم.":""));
  };
  const runPppoeLineAction=async(line:SubscriberLine,action:"renew"|"disconnect"|"archive"|"end",renewal?:{mode:"package"|"manual";expiresAt?:string;expectedSubscriptionId?:number})=>{
   const customerId=Number(line.customer_id||detail?.id);if(!customerId||line.kind!=="pppoe"||pppoeLineBusyId!==null)return;
@@ -465,7 +488,7 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   try{
    const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/${action}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(renewal||{})});
    const result=await response.json();if(!response.ok)throw new Error(result.message||"تعذر تنفيذ الإجراء على خط PPPoE.");
-   if(action==="renew"){succeeded=true;setRenewLine(null);setPppoeNoticeMessage("تم تجديد الباقة وبدأت دورة اشتراك جديدة.");}
+   if(action==="renew"){succeeded=true;applyLineResult(line,result.lineUpdate||{});setRenewLine(null);showAppliedResult("تم تجديد الباقة.",result);void refreshLineResult(customerId);return;}
    if(action==="disconnect"){
     const attempted=Number(result.attempted)||0,acknowledged=Number(result.acknowledged)||0;
     if(result.disconnectPending)setPppoeNoticeWarning("لم يتأكد قطع الجلسة. راجع اتصال السيرفر ثم أعد المحاولة.");
@@ -477,9 +500,8 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
     else void load({silent:true});
     return;
    }
-   if(detailId===customerId){const refreshedResponse=await fetch(`${endpoint}/subscribers/${customerId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(!refreshedResponse.ok)throw new Error(refreshed.message||"تم تنفيذ الإجراء، لكن تعذر إعادة تحميل بيانات المشترك.");setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}else void load({silent:true});
-   succeeded=true;
-   setPppoeNoticeMessage(action==="renew"?"تم تجديد الباقة وبدأت دورة اشتراك جديدة.":action==="archive"?"تم حذف الخط من القائمة وأُرشف مع الاحتفاظ بسجل الاشتراكات.":"تم إنهاء الاشتراك وإيقاف تسجيل الدخول.");
+   applyLineResult(line,action==="end"?{lifecycle:"ended"}:{},action==="archive");
+   succeeded=true;showAppliedResult(action==="archive"?"تم حذف الخط من القائمة وأُرشف مع الاحتفاظ بسجل الاشتراكات.":"تم إنهاء الاشتراك وإيقاف تسجيل الدخول.",result);void refreshLineResult(customerId);
   }catch(error){const message=error instanceof Error?error.message:"تعذر تنفيذ الإجراء على خط PPPoE.";if(action==="renew"){if(succeeded)setPppoeNoticeWarning("تم التجديد، لكن تعذر تحديث العرض. اضغط تحديث.");else setRenewError(message);}else setPppoeNoticeError(message);}
   finally{setPppoeLineBusyId(null);if(action==="disconnect")setPendingDisconnectLine(null);if(action==="archive"&&succeeded)setPppoeArchiveLine(null);if(action==="end"&&succeeded)setPppoeEndLine(null);}
  };
@@ -489,16 +511,16 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   try{
    const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/speed-boost`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({downloadMbps:Number(pppoeSpeedBoostDownload),uploadMbps:Number(pppoeSpeedBoostUpload),durationValue:Number(pppoeSpeedBoostDuration),durationUnit:pppoeSpeedBoostUnit})}),result=await response.json();
    if(!response.ok)throw new Error(result.message||"تعذر رفع سرعة الخط مؤقتًا.");
+   applyLineResult(line,{speed_boost_expires_at:utcResultDate(result.expiresAt),speed_boost_download_bps:String(Number(pppoeSpeedBoostDownload)*1_000_000),speed_boost_upload_bps:String(Number(pppoeSpeedBoostUpload)*1_000_000)});
    setPppoeSpeedBoostLine(null);setPppoeNoticeMessage(`تم تطبيق تنزيل ${pppoeSpeedBoostDownload} Mbps ورفع ${pppoeSpeedBoostUpload} Mbps حتى ${detailDate(result.expiresAt)} دون فصل الجلسة.`);
-   if(detailId===line.customer_id){const refreshedResponse=await fetch(`${endpoint}/subscribers/${line.customer_id}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(refreshedResponse.ok){setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}}
-   void load({silent:true});
+   void refreshLineResult(Number(line.customer_id||detail?.id));
   }catch(error){setPppoeNoticeError(error instanceof Error?error.message:"تعذر رفع سرعة الخط مؤقتًا.");}
   finally{setPppoeLineBusyId(null);}
  };
  const openPppoeSpeedBoost=(line:SubscriberLine)=>{setPppoeSpeedBoostLine(line);setPppoeSpeedBoostDownload(line.download_bps?String(Number(line.download_bps)/1_000_000):"");setPppoeSpeedBoostUpload(line.upload_bps?String(Number(line.upload_bps)/1_000_000):"");setPppoeSpeedBoostDuration("30");setPppoeSpeedBoostUnit("minute");};
  const openPppoeUsageHistory=async(line:SubscriberLine)=>{setPppoeUsageHistory({line,sessions:[]});setPppoeUsageHistoryError("");setPppoeUsageHistoryLoading(true);try{const response=await fetch(`${endpoint}/pppoe/lines/${line.id}/usage-history`,{credentials:"include",cache:"no-store"}),data=await response.json();if(!response.ok)throw new Error(data.message||"تعذر تحميل سجل استهلاك الخط.");setPppoeUsageHistory({line,sessions:Array.isArray(data.sessions)?data.sessions:[]});}catch(error){setPppoeUsageHistoryError(error instanceof Error?error.message:"تعذر تحميل سجل استهلاك الخط.");}finally{setPppoeUsageHistoryLoading(false);}};
  const openPppoeExpiryEditor=(line:SubscriberLine)=>{setPppoeExpiryLine(line);setPppoeExpiryError("");setPppoeExpiryValue("");if(line.expires_at){try{const parts=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:line.service_timezone||"Asia/Damascus",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(line.expires_at)).filter(part=>part.type!=="literal").map(part=>[part.type,part.value]));setPppoeExpiryValue(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`);}catch{}}};
- const savePppoeExpiry=async()=>{if(!pppoeExpiryLine||!pppoeExpiryValue||pppoeLineBusyId!==null)return;if(!pppoeExpiryValid)return;setPppoeExpiryError("");setPppoeLineBusyId(pppoeExpiryLine.id);setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");try{const response=await fetch(`${endpoint}/pppoe/lines/${pppoeExpiryLine.id}/expiry`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({expiresAt:pppoeExpiryValue})}),result=await response.json();if(!response.ok){if(["PPPOE_LINE_EXPIRY_INVALID","PPPOE_LINE_EXPIRY_PAST"].includes(result.code)){setPppoeExpiryError(result.message);return;}throw new Error(result.message||"تعذر تعديل موعد انتهاء الاشتراك.");}if(result.sessionSyncPending)setPppoeNoticeWarning("تم حفظ تاريخ الانتهاء. إعادة مصادقة الجلسة الحالية قيد المحاولة تلقائيًا.");else setPppoeNoticeMessage("تم تحديث تاريخ انتهاء الاشتراك.");setPppoeExpiryLine(null);void load({silent:true});if(detailId===pppoeExpiryLine.customer_id){const refreshedResponse=await fetch(`${endpoint}/subscribers/${detailId}`,{credentials:"include",cache:"no-store"}),refreshed=await refreshedResponse.json();if(refreshedResponse.ok){setDetail(refreshed.item||detail);setDetailLines(Array.isArray(refreshed.accounts)?refreshed.accounts:[]);}}}catch(error){setPppoeNoticeError(error instanceof Error?error.message:"تعذر تعديل موعد انتهاء الاشتراك.");}finally{setPppoeLineBusyId(null);}};
+ const savePppoeExpiry=async()=>{if(!pppoeExpiryLine||!pppoeExpiryValue||pppoeLineBusyId!==null)return;if(!pppoeExpiryValid)return;setPppoeExpiryError("");setPppoeLineBusyId(pppoeExpiryLine.id);setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");try{const response=await fetch(`${endpoint}/pppoe/lines/${pppoeExpiryLine.id}/expiry`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({expiresAt:pppoeExpiryValue})}),result=await response.json();if(!response.ok){if(["PPPOE_LINE_EXPIRY_INVALID","PPPOE_LINE_EXPIRY_PAST"].includes(result.code)){setPppoeExpiryError(result.message);return;}throw new Error(result.message||"تعذر تعديل موعد انتهاء الاشتراك.");}applyLineResult(pppoeExpiryLine,result.lineUpdate||{expires_at:utcResultDate(result.expiresAt),grace_expires_at:utcResultDate(result.graceExpiresAt)});setPppoeNoticeMessage("تم حفظ تاريخ الانتهاء؛ تستخدمه الاتصالات القادمة.");setPppoeExpiryLine(null);void refreshLineResult(Number(pppoeExpiryLine.customer_id||detail?.id));}catch(error){setPppoeNoticeError(error instanceof Error?error.message:"تعذر تعديل موعد انتهاء الاشتراك.");}finally{setPppoeLineBusyId(null);}};
  const closeRenewal=()=>{if(pppoeLineBusyId!==null)return;renewRequest.current++;setRenewLine(null);setRenewLoading(false);};
  const openRenewal=async(line:SubscriberLine)=>{
   if(pppoeLineBusyId!==null)return;
@@ -528,10 +550,9 @@ export default function NetworkSubscribers({endpoint,basePath,networkName="",tab
   setPppoeLineBusyId(profileLine.id);setProfileError("");setPppoeNoticeError("");setPppoeNoticeWarning("");setPppoeNoticeMessage("");
   try{const response=await fetch(`${endpoint}/pppoe/lines/${profileLine.id}/profile`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({packageVersionId:Number(profileVersion),expectedSubscriptionId:profileChoices.subscriptionId,mode:profileApplyMode})}),data=await response.json();
    if(!response.ok)throw new Error(data.message||"تعذر تغيير بروفايل الخط.");
-   setProfileLine(null);setPppoeNoticeMessage("تم تغيير بروفايل الخط إلى "+data.packageName+".");
-   if(data.disconnectPending)setPppoeNoticeWarning("تم حفظ البروفايل، لكن لم تتأكد إعادة اتصال الجلسة لتطبيقه.");
-   void load({silent:true});
-   if(detailId===profileLine.customer_id){try{const r=await fetch(`${endpoint}/subscribers/${detailId}`,{credentials:"include",cache:"no-store"}),body=await r.json();if(r.ok){setDetail(body.item||detail);setDetailLines(Array.isArray(body.accounts)?body.accounts:[]);}}catch{setPppoeNoticeWarning("تم تغيير البروفايل؛ تعذر تحديث عرض التفاصيل.");}}
+   applyLineResult(profileLine,data.lineUpdate||{});
+   setProfileLine(null);showAppliedResult("تم تغيير البروفايل إلى "+data.packageName+".",data);
+   void refreshLineResult(Number(profileLine.customer_id||detail?.id));
   }catch(error){setProfileError(error instanceof Error?error.message:"تعذر تغيير البروفايل.");}
   finally{setPppoeLineBusyId(null);}
  };
