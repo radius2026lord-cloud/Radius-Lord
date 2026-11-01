@@ -36,3 +36,9 @@ Reference workflow: Labeljoy 6 official field panel, layout wizard and image-exp
 The imported-template path opens one editor rather than the separate sheet/elements/approval stages. A top ribbon groups File (artwork, JSON, template name, package binding), Insert (fields, logo, text and configured contacts), Format (selected field styling and position), and Page layout (paper distribution and print-size guidance). All controls stay above the shared card canvas. Selecting a field on the card opens Format after pointer release, preserving drag coordinates during the gesture.
 
 Sheet preview toggles within the same page; draft save and approval stay in the editor header. The internal design path keeps its established stages. The renderer, print dimensions, revision checks, credential policy and approved-template behavior are unchanged. No schema changes.
+
+## Live sheet canvas
+
+Imported artwork now opens directly as an editable A4/A5 sheet with the configured rows, columns, card size, margins and gaps. For example, the ten-card layout renders exactly two columns and five rows. Drag-and-drop resolves the specific card under the pointer, and converts its local coordinates into shared template positions. Every card updates immediately from that single design; the editor never writes account data. Dropping in paper margins or gaps does nothing.
+
+The initial scale fits both the available width and a viewport-relative height, with explicit zoom available for detail editing. Grid overlays, selection outlines and editor zoom stay outside the print path. QR preview is generated once and reused across the sheet. Ribbon tabs and field icons use distinct semantic colors without icon background boxes. The separate read-only sheet-preview toggle is replaced by this always-visible live sheet.
