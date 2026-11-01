@@ -9,7 +9,7 @@ function token(n:number,alphabet:string){let s='';for(let i=0;i<n;i++)s+=alphabe
 function rate(v:any){const n=BigInt(String(v));if(n%1000000000n===0n)return n/1000000000n+'G';if(n%1000000n===0n)return n/1000000n+'M';if(n%1000n===0n)return n/1000n+'k';return String(n);}
 async function principal(app:any,scope:any){const a=await managerAccess(app,scope.managerId,scope.authVersion);if(a.role!=='principal')throw new Error('NETWORK_AUTH');}
 async function ensureGroup(app:any,v:any){const [r]:any=await app.query("SELECT id FROM radgroupreply WHERE groupname=? AND attribute='Mikrotik-Rate-Limit' LIMIT 1",[v.radius_group_name]);if(!r.length)await app.query("INSERT INTO radgroupreply(groupname,attribute,op,value) VALUES(?,'Mikrotik-Rate-Limit','=',?)",[v.radius_group_name,rate(v.upload_bps)+'/'+rate(v.download_bps)]);const [s]:any=await app.query("SELECT id FROM radgroupcheck WHERE groupname=? AND attribute='Simultaneous-Use' LIMIT 1",[v.radius_group_name]);if(!s.length)await app.query("INSERT INTO radgroupcheck(groupname,attribute,op,value) VALUES(?,'Simultaneous-Use',':=',?)",[v.radius_group_name,String(v.simultaneous_sessions)]);}
-const packagesSql="SELECT p.id package_id,p.name,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_packages p JOIN hotspot_package_versions v ON v.id=(SELECT x.id FROM hotspot_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1) JOIN time_units t ON t.id=v.duration_unit_id WHERE p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL ORDER BY p.id DESC";
+const packagesSql="SELECT p.id package_id,p.name,p.login_mode,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_packages p JOIN hotspot_package_versions v ON v.id=(SELECT x.id FROM hotspot_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1) JOIN time_units t ON t.id=v.duration_unit_id WHERE p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL ORDER BY p.id DESC";
 export async function searchHotspotStandaloneCustomers(scope:any,value:any,customerValue?:any){return withNetwork(scope,async app=>{await principal(app,scope);const customerId=customerValue==null||customerValue===''?null:integer(customerValue,1,Number.MAX_SAFE_INTEGER,'customerId');if(customerId){const [items]:any=await app.query("SELECT id,first_name,last_name,phone FROM customers WHERE id=? AND archived_at IS NULL",[customerId]);return {items};}const s=String(value??'').trim().slice(0,100),like='%'+s+'%';const [items]:any=await app.query("SELECT id,first_name,last_name,phone FROM customers WHERE archived_at IS NULL AND (?='' OR first_name LIKE ? OR last_name LIKE ? OR CONCAT_WS(' ',first_name,last_name) LIKE ? OR phone LIKE ?) ORDER BY id DESC LIMIT 100",[s,like,like,like,like]);return {items};});}
 export async function readHotspotStandalone(scope:any){return withNetwork(scope,async app=>{await principal(app,scope);const [[items],[packages]]:any=await Promise.all([app.query("SELECT a.id,a.status,a.login_mode,a.bind_first_mac,a.created_at,r.current_username username,c.id customer_id,c.first_name,c.last_name,c.phone,sp.lifecycle,sp.expires_at,sp.price_snapshot,sp.currency_code,sp.is_gift,COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,COALESCE(u.used_seconds,0) used_seconds,sp.quota_allowance_bytes,p.name package_name,v.version_no FROM hotspot_accounts a JOIN hotspot_standalone_cards sc ON sc.account_id=a.id JOIN customers c ON c.id=sc.customer_id JOIN radius_identities r ON r.id=a.radius_identity_id LEFT JOIN hotspot_service_periods sp ON sp.live_account_id=a.id LEFT JOIN hotspot_package_versions v ON v.id=sp.package_version_id LEFT JOIN hotspot_packages p ON p.id=v.package_id LEFT JOIN hotspot_period_usage u ON u.period_id=sp.id WHERE a.account_kind='standalone' AND a.archived_at IS NULL ORDER BY a.id DESC LIMIT 200"),app.query(packagesSql,[scope.managerId])]);return {items,packages};});}
 export async function readHotspotStandaloneAccount(scope:any,value:any){
@@ -48,7 +48,10 @@ export async function createHotspotStandalone(scope:any,input:any){
    await principal(app,scope);
    const customerId=integer(input.customerId,1,Number.MAX_SAFE_INTEGER,'customerId');
    const versionId=integer(input.packageVersionId,1,Number.MAX_SAFE_INTEGER,'packageVersionId');
-   const mode=String(input.loginMode);
+   const [vs]:any=await app.query("SELECT p.id package_id,p.name package_name,p.login_mode,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_package_versions v JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE v.id=? AND p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL AND v.id=(SELECT x.id FROM hotspot_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1) FOR UPDATE",[versionId,scope.managerId]);
+   const v=vs[0];
+   if(!v)throw new Error('HOTSPOT_STANDALONE_PACKAGE_UNAVAILABLE');
+   const mode=String(v.login_mode);if(input.expectedLoginMode!==undefined&&input.expectedLoginMode!==mode)invalid('loginMode');
    if(!['code','username_password'].includes(mode)||typeof input.isGift!=='boolean'||typeof input.bindFirstMac!=='boolean')invalid('loginMode');
    const manualUsername=input.username!==undefined&&input.username!==null;
    let username='',password='',identityId=0;
@@ -56,13 +59,11 @@ export async function createHotspotStandalone(scope:any,input:any){
     username=String(input.username).trim().toLowerCase();
     if(!/^[a-z0-9_.@-]{1,64}$/.test(username))invalid('username');
     password=mode==='code'?username:String(input.password??'');
-    if(mode==='username_password'&&(Array.from(password).length>15||/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u.test(password)))invalid('password');
+    if(mode==='username_password'&&(!password||Array.from(password).length>15||/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u.test(password)))invalid('password');
    }
    const [cs]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE",[customerId]);
    if(!cs[0])throw new Error('HOTSPOT_STANDALONE_CUSTOMER_UNAVAILABLE');
-   const [vs]:any=await app.query("SELECT p.id package_id,p.name package_name,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_package_versions v JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE v.id=? AND p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL AND v.id=(SELECT x.id FROM hotspot_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1) FOR UPDATE",[versionId,scope.managerId]);
-   const v=vs[0];
-   if(!v)throw new Error('HOTSPOT_STANDALONE_PACKAGE_UNAVAILABLE');
+
    if(manualUsername){
     const [created]:any=await app.query("INSERT INTO radius_identities(service_kind) VALUES('hotspot')");
     identityId=Number(created.insertId);
@@ -110,3 +111,4 @@ export async function createHotspotStandalone(scope:any,input:any){
   }catch(error){await app.rollback();throw error;}
  });
 }
+

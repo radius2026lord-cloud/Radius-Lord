@@ -17,7 +17,7 @@ function normalize(v:any){
  return {templates,defaultId:String(v.defaultId),packageTemplates};
 }
 function decode(row:any){return row?normalize(typeof row.library_json==='string'?JSON.parse(row.library_json):row.library_json):defaultLibrary;}
-export async function readHotspotCardTemplates(scope:any){return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);const [rows]:any=await app.query('SELECT library_json,revision FROM network_hotspot_card_templates WHERE id=1');const [packages]:any=await app.query('SELECT id,name FROM hotspot_packages WHERE archived_at IS NULL ORDER BY name,id');return {library:decode(rows[0]),revision:Number(rows[0]?.revision||0),packages};});}
+export async function readHotspotCardTemplates(scope:any){return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);const [rows]:any=await app.query('SELECT library_json,revision FROM network_hotspot_card_templates WHERE id=1');const [packages]:any=await app.query('SELECT p.id,p.name,p.login_mode,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_mode,t.name_ar unit_name,p.base_price,p.currency_code FROM hotspot_packages p LEFT JOIN hotspot_package_versions v ON v.id=(SELECT x.id FROM hotspot_package_versions x WHERE x.package_id=p.id ORDER BY x.version_no DESC LIMIT 1) LEFT JOIN time_units t ON t.id=v.duration_unit_id WHERE p.archived_at IS NULL ORDER BY p.name,p.id');return {library:decode(rows[0]),revision:Number(rows[0]?.revision||0),packages};});}
 export async function saveHotspotCardTemplates(scope:any,input:any){
  const library=normalize(input?.library),revision=Number(input?.revision);if(!Number.isSafeInteger(revision)||revision<0)invalid();
  return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);
@@ -51,3 +51,4 @@ export async function readHotspotPrintableCards(scope:any,kind:any,value:any){
  return {packageId:Number(metadata.package_id||0),packageName:metadata.package_name||'هوتسبوت',downloadBps:String(metadata.download_bps||0),uploadBps:String(metadata.upload_bps||0),quotaBytes:metadata.quota_bytes==null?null:String(metadata.quota_bytes),duration:metadata.duration_value?`${metadata.duration_value} ${metadata.unit_name||''}${metadata.duration_mode==='connected_time'?' · وقت استخدام':' · متواصل'}`:'—',price:metadata.price==null?'—':`${metadata.price} ${metadata.currency_code||''}`,timezone:String(settings[0]?.timezone||'Asia/Damascus'),cards:cards.map((c:any)=>({serial:String(c.serial),username:String(c.username),password:String(c.password||''),loginMode:c.loginMode,expiry:c.expiry||null}))};
  });
 }
+

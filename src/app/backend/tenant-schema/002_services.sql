@@ -438,6 +438,7 @@ CREATE TABLE pppoe_subscriptions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE hotspot_packages (
+ login_mode ENUM('code','username_password') NULL DEFAULT NULL,
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
  name VARCHAR(150) NOT NULL,
  description TEXT NULL,
@@ -760,3 +761,4 @@ CREATE TABLE network_hotspot_card_templates (
   PRIMARY KEY(id),
   CONSTRAINT chk_hotspot_template_library_singleton CHECK(id=1)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

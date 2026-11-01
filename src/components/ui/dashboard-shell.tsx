@@ -230,9 +230,9 @@ export default function DashboardShell({ children,network }: { children: React.R
     if ((!network&&accountType !== "master_admin") || customerOnboarding) return;
     const root = shellRootRef.current, footer = footerRef.current;
     if (!root || !footer) return;
-    const measure = () => root.style.setProperty("--rl-footer-space", `${Math.ceil(footer.getBoundingClientRect().height) + 32}px`);
-    measure();const observer = new ResizeObserver(measure);observer.observe(footer);
-    return () => { observer.disconnect();root.style.removeProperty("--rl-footer-space"); };
+    const measure = () => root.style.setProperty("--rl-footer-space", `${Math.max(0,Math.ceil(root.getBoundingClientRect().bottom-footer.getBoundingClientRect().top))+12}px`);
+    measure();const observer = new ResizeObserver(measure);observer.observe(footer);window.addEventListener("resize",measure);
+    return () => { observer.disconnect();window.removeEventListener("resize",measure);root.style.removeProperty("--rl-footer-space"); };
   }, [accountType, customerOnboarding,Boolean(network)]);
 
   const currentTitle = useMemo(() => {
@@ -326,8 +326,8 @@ export default function DashboardShell({ children,network }: { children: React.R
       </aside>
       <div ref={element => { if (element) element.inert = !mobileOpen; }} aria-hidden={!mobileOpen} data-open={mobileOpen} className="rl-mobile-sidebar dashboard-logout-surface fixed inset-0 z-[80] lg:hidden"><button className="rl-mobile-sidebar-backdrop absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" /><aside className="rl-mobile-sidebar-panel absolute bottom-3 right-3 top-3 w-[min(86vw,330px)] overflow-hidden rounded-[22px] border border-white/70 bg-[#f9fbfe] shadow-2xl dark:border-white/10 dark:bg-[#302e33]">{renderSidebarContent(true)}</aside></div>
 
-      <div className={`dashboard-main-shell dashboard-logout-surface ${mainGap} h-screen min-w-0 overflow-hidden ${shellMotion}`}>
-        <header className="relative z-30 px-3 pt-3 md:px-4 lg:px-5"><div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
+      <div className={`dashboard-main-shell dashboard-logout-surface ${mainGap} flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden ${shellMotion}`}>
+        <header className="relative z-30 shrink-0 px-3 pt-3 md:px-4 lg:px-5"><div className="flex min-h-[62px] items-center gap-3 rounded-[16px] border border-white/80 bg-[#f9fbfe]/95 px-3.5 shadow-[0_12px_34px_rgba(60,88,116,.10)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#302e33]/95 dark:shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:px-5">
           <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#d5e2ef] bg-white text-[#0758e9] dark:border-white/10 dark:bg-[#38363c] dark:text-white lg:hidden" aria-label="فتح القائمة"><Menu className="h-5 w-5" /></button>
           <div className="min-w-0 flex-1 px-1">
             {(() => {
@@ -359,7 +359,7 @@ export default function DashboardShell({ children,network }: { children: React.R
             </div>
           </div>
         </div></header>
-        <main style={accountType === "master_admin" || network ? {paddingBottom:"var(--rl-footer-space)"} : undefined} className={`h-[calc(100dvh-74px)] overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-frame ${accountType === "master_admin"&&!homeWorkspace || network && !continuousWorkspace ? "rl-workspace-separated" : ""} h-full ${continuousWorkspace?"rounded-[22px] border border-[#b7c0ca] bg-transparent shadow-none dark:border-[#40556a] dark:bg-transparent":"rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none"} ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-hidden pb-[18px]"}`}>
+        <main style={accountType === "master_admin" || network ? {paddingBottom:"var(--rl-footer-space,84px)"} : undefined} className={`box-border min-h-0 flex-1 overflow-hidden px-3 pt-3 md:px-4 lg:px-5 ${customerOnboarding ? "pb-3" : accountType === "master_admin" ? "pb-[210px] sm:pb-[132px] xl:pb-[84px]" : "pb-[66px]"}`}><div className={`workspace-frame ${accountType === "master_admin"&&!homeWorkspace || network && !continuousWorkspace ? "rl-workspace-separated" : ""} h-full ${continuousWorkspace?"rounded-[22px] border border-[#b7c0ca] bg-transparent shadow-none dark:border-[#40556a] dark:bg-transparent":"rounded-[22px] border border-[#a9c8e8] bg-[#edf3f8]/80 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] dark:border-white/[.08] dark:bg-[#211a25] dark:shadow-none"} ${customerOnboarding ? "flex min-h-0 flex-col overflow-hidden p-0" : "overflow-hidden pb-[18px]"}`}>
 
           <div className={customerOnboarding ? "min-w-0" : "workspace-scroll rl-workspace-inset-scroll h-full min-w-0 overflow-y-auto p-3 sm:p-4"}><div className={customerOnboarding ? "" : "rl-workspace-content-end"}>{children}</div></div>
         </div></main>
@@ -380,4 +380,5 @@ export default function DashboardShell({ children,network }: { children: React.R
     </>
   );
 }
+
 

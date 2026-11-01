@@ -24,7 +24,7 @@ export async function readHotspotBatches(scope:any){
   await principalAccess(app,scope);
   const [[items],[packages]]:any=await Promise.all([
    app.query("SELECT b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.name package_name,v.version_no,COUNT(bc.account_id) card_count,SUM(CASE WHEN a.status='enabled' AND a.archived_at IS NULL THEN 1 ELSE 0 END) enabled_count FROM hotspot_card_batches b JOIN hotspot_package_versions v ON v.id=b.package_version_id JOIN hotspot_packages p ON p.id=v.package_id LEFT JOIN hotspot_batch_cards bc ON bc.batch_id=b.id LEFT JOIN hotspot_accounts a ON a.id=bc.account_id WHERE b.owner_manager_id=? GROUP BY b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.name,v.version_no ORDER BY b.id DESC LIMIT 200",[scope.managerId]),
-   app.query("SELECT p.id package_id,p.name,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_packages p JOIN hotspot_package_versions v ON v.id=(SELECT latest.id FROM hotspot_package_versions latest WHERE latest.package_id=p.id ORDER BY latest.version_no DESC LIMIT 1) JOIN time_units t ON t.id=v.duration_unit_id WHERE p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL ORDER BY p.id DESC",[scope.managerId])
+   app.query("SELECT p.id package_id,p.name,p.login_mode,p.base_price,p.currency_code,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_packages p JOIN hotspot_package_versions v ON v.id=(SELECT latest.id FROM hotspot_package_versions latest WHERE latest.package_id=p.id ORDER BY latest.version_no DESC LIMIT 1) JOIN time_units t ON t.id=v.duration_unit_id WHERE p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL ORDER BY p.id DESC",[scope.managerId])
   ]);
   return {items,packages};
  });
@@ -47,14 +47,11 @@ export async function createHotspotBatch(scope:any,input:any){
    const name=String(input.name??'').trim();
    if(!name||name.length>150)invalid('name');
    const quantity=integer(input.quantity,1,1000,'quantity');
-   const loginMode=String(input.loginMode);
-   if(!['code','username_password'].includes(loginMode))invalid('loginMode');
    if(typeof input.isGift!=='boolean')invalid('isGift');
    const usernamePrefix=String(input.usernamePrefix??'').trim().toLowerCase();
    if(!/^[a-z0-9_-]*$/.test(usernamePrefix)||usernamePrefix.length>16||(usernamePrefix.length>0&&usernamePrefix.length<3))invalid('usernamePrefix');
    const usernameLength=integer(input.usernameLength,4,32,'usernameLength');
    if(usernameLength-usernamePrefix.length<3)invalid('usernamePrefix');
-   const passwordLength=loginMode==='code'?usernameLength:integer(input.passwordLength,4,32,'passwordLength');
    const usernameAlphabetKind=String(input.usernameAlphabet??'alphanumeric') as UsernameAlphabet;
    if(!Object.prototype.hasOwnProperty.call(USERNAME_ALPHABETS,usernameAlphabetKind))invalid('usernameAlphabet');
    const passwordAlphabetKind=String(input.passwordAlphabet??'alphanumeric') as PasswordAlphabet;
@@ -63,8 +60,11 @@ export async function createHotspotBatch(scope:any,input:any){
    const usernameAlphabet=USERNAME_ALPHABETS[usernameAlphabetKind];
    const passwordAlphabet=PASSWORD_ALPHABETS[passwordAlphabetKind];
    const versionId=integer(input.packageVersionId,1,Number.MAX_SAFE_INTEGER,'packageVersionId');
-   const [rows]:any=await app.query("SELECT p.id package_id,p.name package_name,p.base_price,p.currency_code,p.owner_manager_id,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_package_versions v JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE v.id=? AND p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL AND v.id=(SELECT latest.id FROM hotspot_package_versions latest WHERE latest.package_id=p.id ORDER BY latest.version_no DESC LIMIT 1) FOR UPDATE",[versionId,scope.managerId]);
+   const [rows]:any=await app.query("SELECT p.id package_id,p.name package_name,p.login_mode,p.base_price,p.currency_code,p.owner_manager_id,v.id package_version_id,v.version_no,v.radius_group_name,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_unit_id,v.duration_mode,v.simultaneous_sessions,t.code duration_unit_code,t.name_ar duration_unit_name,t.seconds_per_unit,t.actual_usage_seconds FROM hotspot_package_versions v JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE v.id=? AND p.owner_manager_id=? AND p.is_enabled=1 AND p.archived_at IS NULL AND v.id=(SELECT latest.id FROM hotspot_package_versions latest WHERE latest.package_id=p.id ORDER BY latest.version_no DESC LIMIT 1) FOR UPDATE",[versionId,scope.managerId]);
    const version=rows[0];if(!version)throw new Error('HOTSPOT_BATCH_PACKAGE_UNAVAILABLE');
+   const loginMode=String(version.login_mode);if(input.expectedLoginMode!==undefined&&input.expectedLoginMode!==loginMode)invalid('loginMode');if(!['code','username_password'].includes(loginMode))invalid('loginMode');
+   const passwordLength=loginMode==='code'?usernameLength:integer(input.passwordLength,4,32,'passwordLength');
+
    const generationOptions={usernamePrefix,usernameLength,passwordLength,format:loginMode==='code'?'single-code':'username-password',usernameAlphabet:usernameAlphabetKind,passwordAlphabet:passwordAlphabetKind};
    const price= input.isGift?'0.00':String(version.base_price);
    const [created]:any=await app.query("INSERT INTO hotspot_card_batches(package_version_id,name,quantity,owner_manager_id,created_by,login_mode,generation_options,unit_price,currency_code,is_gift) VALUES(?,?,?,?,?,?,?,?,?,?)",[versionId,name,quantity,scope.managerId,scope.managerId,loginMode,JSON.stringify(generationOptions),price,version.currency_code,input.isGift?1:0]);
@@ -115,3 +115,4 @@ export async function createHotspotBatch(scope:any,input:any){
   }catch(error){await app.rollback();throw error;}
  });
 }
+
