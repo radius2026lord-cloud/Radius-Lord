@@ -747,3 +747,16 @@ CREATE TABLE pppoe_radius_job_state (
  CONSTRAINT chk_ppp_radius_job_state_singleton CHECK(id=1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT IGNORE INTO pppoe_radius_job_state(id,scan_cursor) VALUES(1,0);
+
+
+
+-- Hotspot print-template library.
+CREATE TABLE network_hotspot_card_templates (
+  id TINYINT UNSIGNED NOT NULL,
+  library_json JSON NOT NULL,
+  revision INT UNSIGNED NOT NULL DEFAULT 0,
+  updated_by BIGINT UNSIGNED NULL,
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY(id),
+  CONSTRAINT chk_hotspot_template_library_singleton CHECK(id=1)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
