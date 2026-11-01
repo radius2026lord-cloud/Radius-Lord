@@ -7,13 +7,14 @@ function design(v:any){
  if(!v||!/^#[0-9a-f]{6}$/i.test(v.accent)||!['modern','stripe','simple'].includes(v.layout)||!['86x54','90x50','54x86'].includes(v.size)||!['center','right'].includes(v.align)||!Number.isInteger(v.fontSize)||v.fontSize<9||v.fontSize>14)invalid();
  if(typeof v.title!=='string'||v.title.length>60||typeof v.note!=='string'||v.note.length>100||typeof v.logo!=='string'||v.logo.length>80000||v.logo&&!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(v.logo))invalid();
  if(!Array.isArray(v.fields)||v.fields.length>6||new Set(v.fields).size!==v.fields.length||v.fields.some((field:any)=>!fields.includes(field)))invalid();
- const hidden=v.hidden||[];if(!Array.isArray(hidden)||hidden.length>4||new Set(hidden).size!==hidden.length||hidden.some((key:any)=>!['brand','package','logo','note'].includes(key)))invalid();
+ const hidden=v.hidden||[];if(!Array.isArray(hidden)||hidden.length>13||new Set(hidden).size!==hidden.length||hidden.some((key:any)=>!['brand','logo','package','username','password','note',...fields,'qr'].includes(key)))invalid();
  const textColor=String(v.textColor||'#0f172a');if(!/^#[a-f0-9]{6}$/i.test(textColor))invalid();const background=String(v.background||''),loginUrl=String(v.loginUrl||'').trim();
  if(background.length>180000||background&&!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(background)||loginUrl.length>500||v.customLayout!==undefined&&typeof v.customLayout!=='boolean'||v.showQr!==undefined&&typeof v.showQr!=='boolean')invalid();
  if(loginUrl){try{const u=new URL(loginUrl);if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.hash||u.searchParams.has('username')||u.searchParams.has('password'))invalid();}catch{invalid();}}if(v.showQr&&!loginUrl)invalid();
+ const elementStyles:Record<string,any>={};if(v.elementStyles!==undefined){if(!v.elementStyles||typeof v.elementStyles!=='object'||Array.isArray(v.elementStyles)||Object.keys(v.elementStyles).length>13)invalid();for(const [key,style] of Object.entries(v.elementStyles) as [string,any][]){if(!['brand','logo','package','username','password','note',...fields,'qr'].includes(key)||!style||!Number.isInteger(style.fontSize)||style.fontSize<8||style.fontSize>28||!/^#[a-f0-9]{6}$/i.test(style.color)||typeof style.bold!=='boolean'||!['left','center','right'].includes(style.align))invalid();elementStyles[key]={fontSize:style.fontSize,color:style.color,bold:style.bold,align:style.align};}}
  const positions:Record<string,{x:number;y:number;width:number}>={};const keys=['brand','logo','package','username','password','note',...fields,'qr'];
  if(v.positions!==undefined){if(!v.positions||typeof v.positions!=='object'||Array.isArray(v.positions)||Object.keys(v.positions).length>13)invalid();for(const [key,p] of Object.entries(v.positions) as [string,any][]){if(!keys.includes(key)||!p||![p.x,p.y,p.width].every(Number.isFinite)||p.x<0||p.y<0||p.x>98||p.y>98||p.width<5||p.width>100||p.x+p.width>100.1)invalid();positions[key]={x:p.x,y:p.y,width:p.width};}}
- return {hidden,textColor,background,loginUrl,customLayout:Boolean(v.customLayout),showQr:Boolean(v.showQr),positions,accent:v.accent,layout:v.layout,size:v.size,align:v.align,fontSize:v.fontSize,logo:v.logo,title:v.title.trim(),note:v.note.trim(),fields:v.fields};
+ return {hidden,elementStyles,textColor,background,loginUrl,customLayout:Boolean(v.customLayout),showQr:Boolean(v.showQr),positions,accent:v.accent,layout:v.layout,size:v.size,align:v.align,fontSize:v.fontSize,logo:v.logo,title:v.title.trim(),note:v.note.trim(),fields:v.fields};
 }
 function normalize(v:any){
  if(!v||!Array.isArray(v.templates)||!v.templates.length||v.templates.length>20||JSON.stringify(v).length>3000000)invalid();
@@ -57,5 +58,6 @@ export async function readHotspotPrintableCards(scope:any,kind:any,value:any){
  return {packageId:Number(metadata.package_id||0),packageName:metadata.package_name||'هوتسبوت',downloadBps:String(metadata.download_bps||0),uploadBps:String(metadata.upload_bps||0),quotaBytes:metadata.quota_bytes==null?null:String(metadata.quota_bytes),duration:metadata.duration_value?`${metadata.duration_value} ${metadata.unit_name||''}${metadata.duration_mode==='connected_time'?' · وقت استخدام':' · متواصل'}`:'—',price:metadata.price==null?'—':`${metadata.price} ${metadata.currency_code||''}`,timezone:String(settings[0]?.timezone||'Asia/Damascus'),cards:cards.map((c:any)=>({serial:String(c.serial),username:String(c.username),password:String(c.password||''),loginMode:c.loginMode,expiry:c.expiry||null}))};
  });
 }
+
 
 
