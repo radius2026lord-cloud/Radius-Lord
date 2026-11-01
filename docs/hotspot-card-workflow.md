@@ -54,3 +54,9 @@ Design undo/redo is scoped to the current template and limited to 40 immutable s
 The imported editor measures available space above the shared footer and reserves a persistent flex viewport for the canvas. Ribbon tabs and view controls are compact, with a stable-height options area so changing tabs cannot push the sheet down. Optional overflowing settings scroll within the tools area; zoomed artwork scrolls within the canvas. Base fit scale uses the canvas's actual observed width and height, rather than a fraction of the whole browser window.
 
 The field palette appears first in Insert, before optional artwork/contact settings. Basic selected-field typography, color, visibility and the exact-position toggle share a compact row. The default fit view keeps tools and artwork visible together. No print dimensions, data or backend behavior change.
+
+## Sidebar workspace
+
+The imported editor now uses an RTL three-part workspace: a narrow category rail on the right, a fixed-width adjacent options panel, and the live canvas on the left. Switching categories preserves panel width and canvas space. Explicit collapse expands the canvas; choosing a category or selecting a field reopens the relevant options. The undo/redo, focus, zoom, grid and snap controls stay in a compact top toolbar; save/approval remain in the editor header.
+
+Options scroll independently. At smaller breakpoints the rail becomes horizontal and the options panel is height-limited and collapsible above the canvas. Sheet settings have a compact single-column variant for the sidebar. Shared print layout, draft history, account data and the renderer are unchanged.
