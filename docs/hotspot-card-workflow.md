@@ -30,3 +30,9 @@ Reference workflow: Labeljoy 6 official field panel, layout wizard and image-exp
 - https://www.labeljoy.com/help-lj6/the-field-panel/
 - https://www.labeljoy.com/help-lj6/layout-wizard/
 - https://www.labeljoy.com/help-lj6/exporting-labels/
+
+## Single-page imported-template ribbon
+
+The imported-template path opens one editor rather than the separate sheet/elements/approval stages. A top ribbon groups File (artwork, JSON, template name, package binding), Insert (fields, logo, text and configured contacts), Format (selected field styling and position), and Page layout (paper distribution and print-size guidance). All controls stay above the shared card canvas. Selecting a field on the card opens Format after pointer release, preserving drag coordinates during the gesture.
+
+Sheet preview toggles within the same page; draft save and approval stay in the editor header. The internal design path keeps its established stages. The renderer, print dimensions, revision checks, credential policy and approved-template behavior are unchanged. No schema changes.
