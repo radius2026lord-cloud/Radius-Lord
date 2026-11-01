@@ -17,3 +17,16 @@
 - المعاينة والطباعة تستخدمان المحرك نفسه، لكن يجب تجربة ورقة واحدة ومراجعة إعدادات الطابعة قبل طباعة دفعة كبيرة.
 
 لا يحتاج التعديل ترقية SQL جديدة؛ التوزيع والألوان واختيارات التواصل تحفظ في JSON القالب الحالي. الواجهة والخلفية تحتاجان إعادة تشغيل بعد السحب.
+
+## Field-oriented imported artwork editor
+
+The imported-card workflow uses a fixed single-card background and locally bound Radius fields. The field panel shows a sample value and marks fields already present. Dragging a field places its value; the label remains editor guidance unless explicitly enabled in the design. Account login mode still comes from the package.
+
+Editor-only zoom (75–200%), a 5 mm grid and optional 1 mm snapping help position fields. Position and width inputs display physical millimetres and convert to the existing normalized positions on save. These tools do not change print dimensions or add API/database polling. Grid, zoom and snapping are not part of exported/printed artwork.
+
+Import a single-card PNG/JPEG/WebP background, not a whole sheet or a Labeljoy native project. Export external artwork without dynamic credentials. Radius JSON remains the supported editable design interchange. Print geometry and the final sheet preview remain shared with the established workflow.
+
+Reference workflow: Labeljoy 6 official field panel, layout wizard and image-export documentation:
+- https://www.labeljoy.com/help-lj6/the-field-panel/
+- https://www.labeljoy.com/help-lj6/layout-wizard/
+- https://www.labeljoy.com/help-lj6/exporting-labels/
