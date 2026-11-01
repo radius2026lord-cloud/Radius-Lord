@@ -70,3 +70,9 @@ A single compact header contains the template name, current step, back and save 
 ## Saved-template selection routing fix
 
 Selecting a saved template no longer derives the editor route from whether its background image exists. Selection inside the guided sidebar preserves that workspace. Opening a saved template from the landing view also uses the guided sidebar for both image-backed and native designs. Saved designs and locally imported sources count as valid sources even without a background image, so the distribution step remains available. Switching templates resets the guided progression without deleting either draft. Explicitly starting a new native design retains its separate creation route. No account or backend changes.
+
+## Consistent action and element controls
+
+Header back, draft-save and approve actions use the shared button component with a consistent 40px height, rounded rectangular corners and bare icons. The preview toolbar groups undo/redo, explicit sheet/card view actions, fit/zoom, grid and snapping. Typography is a labeled two-column group; physical position/size uses three short labels with LTR numeric inputs. Label/layout/reset settings are optional details. Insertion fields are grouped into login data, package data and network information.
+
+A shared size guide derives physical dimensions and 300 DPI image dimensions from the actual saved sheet geometry, in both paper setup and the editing sidebar. It updates with paper, card count, margins and gaps; guidance is never a hard-coded card size. Print rendering and approval behavior are preserved.
