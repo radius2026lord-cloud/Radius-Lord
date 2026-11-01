@@ -60,3 +60,9 @@ The field palette appears first in Insert, before optional artwork/contact setti
 The imported editor now uses an RTL three-part workspace: a narrow category rail on the right, a fixed-width adjacent options panel, and the live canvas on the left. Switching categories preserves panel width and canvas space. Explicit collapse expands the canvas; choosing a category or selecting a field reopens the relevant options. The undo/redo, focus, zoom, grid and snap controls stay in a compact top toolbar; save/approval remain in the editor header.
 
 Options scroll independently. At smaller breakpoints the rail becomes horizontal and the options panel is height-limited and collapsible above the canvas. Sheet settings have a compact single-column variant for the sidebar. Shared print layout, draft history, account data and the renderer are unchanged.
+
+## Guided imported workflow and compact heading
+
+The imported designer guides the user through source selection, paper distribution, then editing. The first step previews one card; the second shows the configured sheet. Editing and approval unlock after selecting a source, template name and package with a defined login mode, and explicitly proceeding from the distribution step. Returning through steps keeps the draft. The category rail reflects this progression; typography opens when a field is selected in the editing step.
+
+A single compact header contains the template name, current step, back and save actions. The template hub omits its duplicate navigation row for this designer; hub navigation is available from the designer landing view. Print bindings, default template, cloning and export are grouped under optional printing options. Margins and gaps are optional details in the guided paper step. The live canvas stays inside the measured viewport above the shared footer; tools scroll independently. No schema, account or NAS behavior changes.
