@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>الدخول إلى الشبكة</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#eef3f8;color:#17386d;font:15px Tahoma,Arial,sans-serif}main{width:min(360px,calc(100vw - 64px));padding:24px;background:#fff;border:1px solid #d6e2ef;border-radius:18px}h1{font-size:20px}p{line-height:1.7;color:#64748b}label{display:block;margin-top:12px}input,button{box-sizing:border-box;width:100%;min-height:44px;margin-top:6px;border:1px solid #ccd9e7;border-radius:12px;padding:10px;font:inherit}input{direction:ltr}button{background:#0758e9;color:white;cursor:pointer}small{display:block;margin-top:14px;color:#64748b}</style>
+$(if chap-id)<script src="md5.js"></script>$(endif)
+</head><body><main><h1>الدخول إلى الشبكة</h1><p id="status" role="status">استخدم بطاقتك للدخول إلى الإنترنت.</p>
+<form id="entry"><label>رمز البطاقة أو اسم المستخدم<input id="username" name="display-username" autocomplete="username" required maxlength="64"></label><label>كلمة المرور<input id="password" type="password" autocomplete="current-password" maxlength="128"></label><button id="submit" type="submit">دخول</button></form><small>للبطاقة ذات الرمز الواحد، يكفي إدخال الرمز.</small></main>
+<form id="auth" action="$(link-login-only)" method="post" hidden><input name="username"><input name="password" type="password"><input name="popup" value="false"></form>
+<script>
+// This file must be served by RouterOS as login.html, not by the Radius dashboard.
+(function(){
+ var entry=document.getElementById('entry'),auth=document.getElementById('auth'),username=document.getElementById('username'),password=document.getElementById('password'),status=document.getElementById('status'),button=document.getElementById('submit'),busy=false;
+ var params=new URLSearchParams(location.search),qrUser=params.get('username'),qrPass=params.get('password');
+ function send(user,pass){
+  if(busy)return;var target;
+  try{target=new URL(auth.action,location.href);if(target.hostname!==location.hostname||!/^https?:$/.test(target.protocol))throw Error();}catch(error){status.textContent='هذه الصفحة تحتاج إعدادها كصفحة دخول على سيرفر الهوتسبوت.';return;}
+  auth.elements.username.value=user;
+  $(if chap-id)
+  if(typeof hexMD5!=='function'){status.textContent='ملف md5.js غير موجود ضمن مجلد الهوتسبوت. اطلب من مدير الشبكة إضافته.';return;}
+  auth.elements.password.value=hexMD5('$(chap-id)'+pass+'$(chap-challenge)');
+  $(else)
+  auth.elements.password.value=pass;
+  $(endif)
+  busy=true;button.disabled=true;status.textContent='جارٍ تسجيل الدخول ببيانات البطاقة…';auth.submit();
+ }
+ entry.addEventListener('submit',function(event){event.preventDefault();var user=username.value.trim();if(user)send(user,password.value||user);});
+ $(if error)
+ status.textContent='تعذّر تسجيل الدخول. تحقق من صلاحية البطاقة أو تواصل مع مدير الشبكة.';
+ $(endif)
+ if(qrUser!==null&&qrPass!==null&&qrUser.length>0&&qrUser.length<=64&&qrPass.length<=128){
+  username.value=qrUser;password.value=qrPass;
+  params.delete('username');params.delete('password');
+  try{history.replaceState(null,'',location.pathname+(params.toString()?'?'+params.toString():'')+location.hash);}catch(error){}
+  send(qrUser,qrPass);
+ }
+})();
+</script></body></html>
