@@ -1,3 +1,4 @@
+import {readHotspotCards} from '../services/network-hotspot-cards.service';
 import {readHotspotCardTemplates,saveHotspotCardTemplates,readHotspotPrintableCards} from '../services/hotspot-card-template.service';
 import {readNetworkNasSnapshot} from '../services/network-nas-snapshot.service';
 import {profileReferences} from '../services/profile-definition.service';
@@ -80,6 +81,8 @@ function hotspotTemplateFailure(res:any,e:any){const code=e?.message;if(e?.code=
 router.get('/:slug/hotspot/card-templates',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await readHotspotCardTemplates(await principal(req)));}catch(e){return hotspotTemplateFailure(res,e);}});
 router.put('/:slug/hotspot/card-templates',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await saveHotspotCardTemplates(await principal(req),req.body));}catch(e){return hotspotTemplateFailure(res,e);}});
 router.get('/:slug/hotspot/card-print',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await readHotspotPrintableCards(await principal(req),req.query.kind,req.query.id));}catch(e){return hotspotTemplateFailure(res,e);}});
+router.get('/:slug/hotspot/cards',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await readHotspotCards(await principal(req),req.query));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:'تعذر تحميل بطاقات الهوتسبوت.'});}});
+router.post('/:slug/hotspot/cards/check',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await readHotspotCards(await principal(req),req.body,true));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:code==='HOTSPOT_CARD_INPUT'?422:503).json({message:code==='HOTSPOT_CARD_INPUT'?'أدخل رمز البطاقة أو اسم المستخدم.':'تعذر فحص البطاقة.'});}});
 router.get('/:slug/hotspot/packages',async(req,res)=>{try{return res.json(await readHotspotPackages({...await principal(req),archiveMode:req.query.archive==='1'}));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:'تعذر تحميل باقات الهوتسبوت.'});}});
 router.post('/:slug/hotspot/packages',async(req,res)=>{try{return res.json(await mutateHotspotPackage(await principal(req),req.body));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:409).json({message:code==='HOTSPOT_PACKAGE_INPUT'?'راجع بيانات الباقة المحددة.':code==='HOTSPOT_PACKAGE_CONFLICT'?'تغير إعداد الباقة من جلسة أخرى. حدّث القائمة ثم أعد المحاولة.':code==='HOTSPOT_PACKAGE_UNAVAILABLE'?'الباقة غير متاحة لهذه العملية.':'تعذر حفظ الباقة.',fields:(e as any).fields||{}});}});
 router.get('/:slug/hotspot/batches',async(req,res)=>{try{return res.json(await readHotspotBatches(await principal(req)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:'تعذر تحميل دفعات الكروت.'});}});
@@ -315,6 +318,7 @@ router.post('/:slug/verify',async(req,res)=>{
  }catch{return res.status(403).json({message:'فشل التحقق من بيئة الشبكة.'});}
 });
 export default router;
+
 
 
 

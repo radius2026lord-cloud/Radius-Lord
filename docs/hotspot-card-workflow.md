@@ -116,3 +116,11 @@ Approval runs a local preflight against the actual rendered card after images/fo
 Optional crop marks are stored in existing design JSON and can be overridden for a single batch print. They appear outside card boundaries in sheet preview and physical/PDF output, without changing the card dimensions. At least 2mm gaps are required. The print grid has an explicit physical width for stable mark coordinates.
 
 Successful template creation, draft edits and approval append named tenant activity events using the shared audit helper inside the same transaction as the library save. Unchanged saves add no duplicate template events. New templates created and approved together produce both events. Metadata contains only template ID/name, revision and approval state; no credentials, QR URL, artwork or contact content is logged. The activity UI shows Arabic names and the template name. No new SQL tables or migration are needed.
+# قائمة البطاقات وفحص بطاقة
+
+- ضمن الهوتسبوت: «البطاقات» تجمع بطاقات الدفعات والبطاقات الفردية، مع بحث وفلاتر الباقة والدفعة وحالة الاشتراك وتحميل 50 سجلًا في الصفحة.
+- «فحص بطاقة» يبحث بالرمز أو اسم المستخدم المطابق عبر طلب POST دون كلمات المرور، ويعرض الباقة والدفعة وحالة الاشتراك والاستهلاك والمتبقي وأوقات التفعيل والانتهاء وآخر تحديث للمحاسبة.
+- القراءة لمدير الشبكة الرئيسي فقط، ومن قاعدة الشبكة الحالية. لا تستدعي RouterOS API ولا تعدل حالة الحساب أو الاشتراك ولا تحتاج ترقية SQL.
+- الحالة مشتقة من إيقاف الحساب وفترة الخدمة الحالية/الأخيرة والحجم والوقت المستهلك؛ «سارية» ليست دليل اتصال مباشر. الاستهلاك حسب آخر تحديث محاسبة.
+- بيانات الطباعة وحالة إتمام الطباعة لم تتغير بهذا التحديث.
+

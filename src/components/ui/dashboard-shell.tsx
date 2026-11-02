@@ -171,7 +171,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const networkGroups:NavGroup[]=network?[
    {label:'إدارة المشتركين',icon:Users,items:[{label:'المشتركون',href:`${network.basePath}?tab=subscribers`,icon:Users},...(network.canCreateSubscribers?[{label:'إضافة عميل',href:`${network.basePath}?tab=subscribers&subscriberTab=create`,icon:UserPlus}]:[]),...(network.canViewCategories?[{label:'تصنيفات المشتركين',href:`${network.basePath}?tab=categories`,icon:Tags}]:[]),...(network.canViewSubscriberActivity?[{label:'سجل المشتركين',href:`${network.basePath}?tab=subscribers&subscriberTab=activity`,icon:ScrollText}]:[]),{label:'تصميم بطاقة المشترك',href:`${network.basePath}?tab=templates&templateGroup=cards&template=subscriber-card`,icon:CreditCard}]},
    {label:'بروفايلات الخدمة',icon:Gauge,items:[{label:'عرض البروفايلات',href:`${network.basePath}?tab=profiles&profileTab=list`,icon:List},{label:'إنشاء بروفايل',href:`${network.basePath}?tab=profiles&profileTab=create`,icon:PlusCircle},{label:'مضاعفة السرعة',href:`${network.basePath}?tab=profiles&profileTab=double`,icon:ChevronsUp}]},
-   {label:'الهوتسبوت',icon:Radio,items:[{label:'الباقات',href:`${network.basePath}?tab=hotspot&hotspotTab=packages`,icon:Layers},{label:'دفعات الكروت',href:`${network.basePath}?tab=hotspot&hotspotTab=batches`,icon:CreditCard},{label:'الحسابات الفردية',href:`${network.basePath}?tab=hotspot&hotspotTab=standalone`,icon:Users}]},
+   {label:'الهوتسبوت',icon:Radio,items:[{label:'الباقات',href:`${network.basePath}?tab=hotspot&hotspotTab=packages`,icon:Layers},{label:'دفعات الكروت',href:`${network.basePath}?tab=hotspot&hotspotTab=batches`,icon:CreditCard},{label:'الحسابات الفردية',href:`${network.basePath}?tab=hotspot&hotspotTab=standalone`,icon:Users},{label:'البطاقات',href:`${network.basePath}?tab=hotspot&hotspotTab=cards`,icon:CreditCard},{label:'فحص بطاقة',href:`${network.basePath}?tab=hotspot&hotspotTab=check`,icon:ShieldCheck}]},
    {label:'خوادم NAS',icon:Server,items:[{label:'إدارة الخوادم',href:`${network.basePath}?tab=servers`,icon:Server}]},
    ...(network.isPrincipal?[{label:'إدارة القطع',icon:Router,items:[{label:'سجل القطع ونطاقات IP',href:`${network.basePath}?tab=equipment`,icon:Router}]}]:[]),
    ...(network.isPrincipal?[{label:'إدارة البيانات',icon:Database,items:[{label:'استيراد ومراجعة البيانات',href:`${network.basePath}?tab=data`,icon:Database}]}]:[]),
@@ -380,5 +380,6 @@ export default function DashboardShell({ children,network }: { children: React.R
     </>
   );
 }
+
 
 
