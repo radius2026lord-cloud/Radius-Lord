@@ -4,13 +4,13 @@ type Props = {
   value: number | null;
   label: string;
   caption?:string;
-  tone?: "success" | "warning" | "danger" | "neutral" | "info";
+  tone?: "success" | "warning" | "danger" | "neutral" | "info" | "primary" | "pending";
   size?: "xs" | "sm" | "md";
   valueText?:string;
   trackClassName?:string;
 };
 
-const colors = {info:"text-cyan-500",success: "text-emerald-500", warning: "text-amber-500", danger: "text-red-500", neutral: "text-slate-400"};
+const colors = {primary:"text-blue-500",pending:"text-violet-500",info:"text-cyan-500",success: "text-emerald-500", warning: "text-amber-500", danger: "text-red-500", neutral: "text-slate-400"};
 
 export default function CircularProgress({value, label, caption, tone = "success",size="md",valueText,trackClassName}: Props) {
   const gradientId = useId();

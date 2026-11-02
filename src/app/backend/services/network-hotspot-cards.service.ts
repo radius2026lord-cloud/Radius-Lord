@@ -35,6 +35,9 @@ export async function readHotspotCards(scope:any,input:any={},lookup=false){
    if(input.time==='near')where.push("sp.lifecycle='active' AND ((sp.duration_mode='continuous' AND sp.expires_at>UTC_TIMESTAMP(6) AND sp.expires_at<=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 24 HOUR)) OR (sp.duration_mode='connected_time' AND sp.time_allowance_seconds+sp.carried_seconds>COALESCE(u.used_seconds,0) AND COALESCE(u.used_seconds,0)>=(sp.time_allowance_seconds+sp.carried_seconds)*0.8))");
    if(input.time==='ended')where.push("(sp.lifecycle IN ('ended','cancelled') OR (sp.expires_at IS NOT NULL AND sp.expires_at<=UTC_TIMESTAMP(6)) OR (sp.time_allowance_seconds IS NOT NULL AND COALESCE(u.used_seconds,0)>=sp.time_allowance_seconds+sp.carried_seconds))");
   }
+  const activated="EXISTS (SELECT 1 FROM hotspot_service_periods activation_period WHERE activation_period.account_id=a.id AND activation_period.activated_at IS NOT NULL)";
+  if(!lookup&&input.activation==='used')where.push(activated);
+  if(!lookup&&input.activation==='unused')where.push('NOT '+activated);
   const clause=' WHERE '+where.join(' AND ');
   const sort=({id:'a.id',username:'r.current_username',usage:'(COALESCE(u.upload_bytes,0)+COALESCE(u.download_bytes,0))',expiry:'sp.expires_at'} as Record<string,string>)[String(input.sort)]||'a.id',direction=input.direction==='asc'?'ASC':'DESC';
   const [items]:any=await app.query(`SELECT a.id,a.account_kind,r.current_username username,bc.serial_no,b.id batch_id,b.name batch_name,p.id package_id,p.name package_name,${state} state,sp.activated_at,sp.expires_at,sp.ended_at,sp.lifecycle,sp.duration_mode,sp.quota_allowance_bytes,sp.time_allowance_seconds,sp.carried_seconds,COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,COALESCE(u.used_seconds,0) used_seconds,u.updated_at usage_updated_at`+joins+clause+` ORDER BY ${sort} ${direction},a.id ${direction} LIMIT ? OFFSET ?`,[...params,lookup?1:limit,(page-1)*limit]);
@@ -51,20 +54,30 @@ export async function readHotspotCards(scope:any,input:any={},lookup=false){
 export async function readHotspotCardBatchOverview(scope:any,input:any={}){
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion);if(access.role!=='principal')throw new Error('NETWORK_AUTH');
+  if(input.historyOnly==='1'){
+   const [owned]:any=await app.query('SELECT id FROM hotspot_card_batches WHERE id=? AND owner_manager_id=?',[positive(input.batchId,0),scope.managerId]);
+   if(!owned.length)throw new Error('NETWORK_AUTH');
+   const [events]:any=await app.query("SELECT id,action_code,actor_snapshot,occurred_at,COALESCE(JSON_UNQUOTE(JSON_EXTRACT(after_data,'$.cardCount')),JSON_UNQUOTE(JSON_EXTRACT(after_data,'$.quantity'))) card_count FROM activity_log WHERE target_type='hotspot_batch' AND target_id=? ORDER BY id DESC LIMIT 50",[owned[0].id]);return {history:events};
+  }
   const page=Math.min(100000,positive(input.page,1)),pageSize=[50,100,150].includes(Number(input.pageSize))?Number(input.pageSize):50;
   const where=['b.owner_manager_id=?'],params:any[]=[scope.managerId],query=String(input.search||'').trim().slice(0,150);
-  if(query){where.push("b.name LIKE ? ESCAPE '='");params.push('%'+query.replace(/[=%_]/g,c=>'='+c)+'%');}
+  if(query){where.push("(b.name LIKE ? ESCAPE '=' OR b.id=?)");params.push('%'+query.replace(/[=%_]/g,c=>'='+c)+'%',/^\d+$/.test(query)&&Number.isSafeInteger(Number(query))?Number(query):0);}
   if(input.packageId){where.push('p.id=?');params.push(positive(input.packageId,0));}
   if(input.batchId){where.push('b.id=?');params.push(positive(input.batchId,0));}
   if(['code','username_password'].includes(input.loginMode)){where.push('b.login_mode=?');params.push(input.loginMode);}
   if(['0','1'].includes(input.gift)){where.push('b.is_gift=?');params.push(Number(input.gift));}
-  const from=' FROM hotspot_card_batches b JOIN hotspot_package_versions v ON v.id=b.package_version_id JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id WHERE '+where.join(' AND ');
+  const started="EXISTS (SELECT 1 FROM hotspot_batch_cards usage_card JOIN hotspot_accounts usage_account ON usage_account.id=usage_card.account_id AND usage_account.archived_at IS NULL JOIN hotspot_service_periods usage_period ON usage_period.account_id=usage_card.account_id WHERE usage_card.batch_id=b.id AND usage_period.activated_at IS NOT NULL)";
+  const unstarted="EXISTS (SELECT 1 FROM hotspot_batch_cards usage_card JOIN hotspot_accounts usage_account ON usage_account.id=usage_card.account_id AND usage_account.archived_at IS NULL WHERE usage_card.batch_id=b.id AND NOT EXISTS (SELECT 1 FROM hotspot_service_periods usage_period WHERE usage_period.account_id=usage_card.account_id AND usage_period.activated_at IS NOT NULL))";
+  if(input.usageState==='unused')where.push('NOT '+started);
+  if(input.usageState==='partial')where.push(started+' AND '+unstarted);
+  if(input.usageState==='all')where.push(started+' AND NOT '+unstarted);
+  const from=' FROM hotspot_card_batches b JOIN hotspot_package_versions v ON v.id=b.package_version_id JOIN hotspot_packages p ON p.id=v.package_id JOIN time_units t ON t.id=v.duration_unit_id LEFT JOIN managers creator ON creator.id=b.created_by WHERE '+where.join(' AND ');
   const sort=({name:'b.name',quantity:'b.quantity',created:'b.id'} as Record<string,string>)[String(input.sort)]||'b.id',direction=input.direction==='asc'?'ASC':'DESC';
-  const [items]:any=await app.query('SELECT b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,p.id package_id,p.name package_name,v.version_no,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_mode,t.name_ar duration_unit_name'+from+` ORDER BY ${sort} ${direction},b.id ${direction} LIMIT ? OFFSET ?`,[...params,pageSize,(page-1)*pageSize]);
+  const [items]:any=await app.query('SELECT b.id,b.name,b.quantity,b.login_mode,b.unit_price,b.currency_code,b.is_gift,b.created_at,creator.full_name created_by_name,CAST(b.unit_price*b.quantity AS DECIMAL(20,2)) nominal_value,p.id package_id,p.name package_name,v.version_no,v.download_bps,v.upload_bps,v.quota_bytes,v.duration_value,v.duration_mode,t.name_ar duration_unit_name'+from+` ORDER BY ${sort} ${direction},b.id ${direction} LIMIT ? OFFSET ?`,[...params,pageSize,(page-1)*pageSize]);
   if(items.length){
    // Aggregate only the visible batches, over all their cards (not the card page).
-   const [counts]:any=await app.query(`SELECT bc.batch_id,${state} state,COUNT(*) count,SUM(CASE WHEN EXISTS (SELECT 1 FROM hotspot_service_periods used_period WHERE used_period.account_id=a.id AND used_period.activated_at IS NOT NULL) THEN 1 ELSE 0 END) activated_count,SUM(COALESCE(u.upload_bytes,0)+COALESCE(u.download_bytes,0)) used_bytes`+joins+' WHERE a.archived_at IS NULL AND a.owner_manager_id=? AND bc.batch_id IN ('+items.map(()=>'?').join(',')+') GROUP BY bc.batch_id,state',[scope.managerId,...items.map((b:any)=>b.id)]);
-   for(const item of items){item.counts={};item.card_count=0;item.activated_count=0;item.used_bytes='0';for(const row of counts.filter((r:any)=>Number(r.batch_id)===Number(item.id))){item.counts[row.state]=Number(row.count);item.card_count+=Number(row.count);item.activated_count+=Number(row.activated_count);item.used_bytes=(BigInt(item.used_bytes)+BigInt(String(row.used_bytes||0))).toString();}}
+   const [counts]:any=await app.query(`SELECT bc.batch_id,${state} state,COUNT(*) count,SUM(CASE WHEN EXISTS (SELECT 1 FROM hotspot_service_periods used_period WHERE used_period.account_id=a.id AND used_period.activated_at IS NOT NULL) THEN 1 ELSE 0 END) activated_count,MIN((SELECT MIN(first_period.activated_at) FROM hotspot_service_periods first_period WHERE first_period.account_id=a.id)) first_used_at,SUM(COALESCE(u.upload_bytes,0)+COALESCE(u.download_bytes,0)) used_bytes`+joins+' WHERE a.archived_at IS NULL AND a.owner_manager_id=? AND bc.batch_id IN ('+items.map(()=>'?').join(',')+') GROUP BY bc.batch_id,state',[scope.managerId,...items.map((b:any)=>b.id)]);
+   for(const item of items){item.counts={};item.card_count=0;item.activated_count=0;item.used_bytes='0';item.first_used_at=null;for(const row of counts.filter((r:any)=>Number(r.batch_id)===Number(item.id))){item.counts[row.state]=Number(row.count);item.card_count+=Number(row.count);item.activated_count+=Number(row.activated_count);if(row.first_used_at&&(!item.first_used_at||new Date(row.first_used_at).getTime()<new Date(item.first_used_at).getTime()))item.first_used_at=row.first_used_at;item.used_bytes=(BigInt(item.used_bytes)+BigInt(String(row.used_bytes||0))).toString();}item.unused_count=Math.max(0,item.card_count-item.activated_count);item.usage_state=item.activated_count===0?'unused':item.unused_count===0?'all':'partial';}
   }
   const printSummary=await hotspotPrintSummaries(app,items.map((b:any)=>Number(b.id)));
   for(const item of items)Object.assign(item,printSummary.items.find((p:any)=>Number(p.id)===Number(item.id))||{});
