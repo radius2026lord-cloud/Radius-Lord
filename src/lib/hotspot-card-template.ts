@@ -26,9 +26,10 @@ export function hotspotQuota(value:string|null){if(value===null)return 'غير �
 
 export function hotspotLoginBase(base:string){
  const input=String(base||'').trim();
- if(!input)throw Error('أدخل رابط دخول الهوتسبوت لإنشاء QR، مثل http://g.net/login.');
- let url:URL;try{url=new URL(input);}catch{throw Error('رابط دخول الهوتسبوت غير صالح. ابدأ بـ http:// أو https://، مثل http://g.net/login.');}
- if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.hash||input.length>500||url.searchParams.has('username')||url.searchParams.has('password'))throw Error('استخدم رابط دخول http:// أو https:// دون اسم مستخدم أو كلمة مرور أو علامة #.');
+ if(!input)throw Error('أدخل رابط الدخول الخاص بشبكتك كاملًا مع http:// أو https:// لإنشاء QR.');
+ let url:URL;try{url=new URL(input);}catch{throw Error('رابط الشبكة غير صالح. أدخل الرابط الأساسي كاملًا مع http:// أو https://.');}
+ if(url.searchParams.has('username')||url.searchParams.has('password'))throw Error('أدخل رابط الشبكة الأساسي فقط دون username أو password؛ يضيف النظام بيانات كل بطاقة تلقائيًا.');
+ if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.hash||input.length>500)throw Error('استخدم رابط دخول http:// أو https:// دون اسم مستخدم أو كلمة مرور أو علامة #.');
  return url;
 }
 export function hotspotLoginUrl(base:string,card:HotspotPrintCard){
