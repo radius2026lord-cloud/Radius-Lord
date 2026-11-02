@@ -1,3 +1,4 @@
+import {hotspotPrintSummaries} from './hotspot-print-tracking.service';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
 
@@ -25,16 +26,25 @@ export async function readHotspotCards(scope:any,input:any={},lookup=false){
   if(!lookup&&input.packageId){where.push('p.id=?');params.push(positive(input.packageId,0));}
   if(!lookup&&input.batchId){where.push('bc.batch_id=?');params.push(positive(input.batchId,0));}
   if(!lookup&&['disabled','cancelled','quota','expired','pending','active','unknown'].includes(input.status)){where.push('('+state+')=?');params.push(input.status);}
+  if(!lookup){
+   const used='(COALESCE(u.upload_bytes,0)+COALESCE(u.download_bytes,0))';
+   if(input.volume==='near')where.push(`sp.quota_allowance_bytes IS NOT NULL AND ${used}>=sp.quota_allowance_bytes*0.8 AND ${used}<sp.quota_allowance_bytes`);
+   if(input.volume==='exhausted')where.push(`sp.quota_allowance_bytes IS NOT NULL AND ${used}>=sp.quota_allowance_bytes`);
+   if(input.volume==='unlimited')where.push('sp.id IS NOT NULL AND sp.quota_allowance_bytes IS NULL');
+   if(input.time==='pending')where.push("sp.lifecycle='pending'");
+   if(input.time==='near')where.push("sp.lifecycle='active' AND ((sp.duration_mode='continuous' AND sp.expires_at>UTC_TIMESTAMP(6) AND sp.expires_at<=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 24 HOUR)) OR (sp.duration_mode='connected_time' AND sp.time_allowance_seconds+sp.carried_seconds>COALESCE(u.used_seconds,0) AND COALESCE(u.used_seconds,0)>=(sp.time_allowance_seconds+sp.carried_seconds)*0.8))");
+   if(input.time==='ended')where.push("(sp.lifecycle IN ('ended','cancelled') OR (sp.expires_at IS NOT NULL AND sp.expires_at<=UTC_TIMESTAMP(6)) OR (sp.time_allowance_seconds IS NOT NULL AND COALESCE(u.used_seconds,0)>=sp.time_allowance_seconds+sp.carried_seconds))");
+  }
   const clause=' WHERE '+where.join(' AND ');
   const sort=({id:'a.id',username:'r.current_username',usage:'(COALESCE(u.upload_bytes,0)+COALESCE(u.download_bytes,0))',expiry:'sp.expires_at'} as Record<string,string>)[String(input.sort)]||'a.id',direction=input.direction==='asc'?'ASC':'DESC';
-  const [items]:any=await app.query(`SELECT a.id,a.account_kind,r.current_username username,bc.serial_no,b.id batch_id,b.name batch_name,p.id package_id,p.name package_name,${state} state,sp.activated_at,sp.expires_at,sp.ended_at,sp.duration_mode,sp.quota_allowance_bytes,sp.time_allowance_seconds,sp.carried_seconds,COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,COALESCE(u.used_seconds,0) used_seconds,u.updated_at usage_updated_at`+joins+clause+` ORDER BY ${sort} ${direction},a.id ${direction} LIMIT ? OFFSET ?`,[...params,lookup?1:limit,(page-1)*limit]);
+  const [items]:any=await app.query(`SELECT a.id,a.account_kind,r.current_username username,bc.serial_no,b.id batch_id,b.name batch_name,p.id package_id,p.name package_name,${state} state,sp.activated_at,sp.expires_at,sp.ended_at,sp.lifecycle,sp.duration_mode,sp.quota_allowance_bytes,sp.time_allowance_seconds,sp.carried_seconds,COALESCE(u.upload_bytes,0) upload_bytes,COALESCE(u.download_bytes,0) download_bytes,COALESCE(u.used_seconds,0) used_seconds,u.updated_at usage_updated_at`+joins+clause+` ORDER BY ${sort} ${direction},a.id ${direction} LIMIT ? OFFSET ?`,[...params,lookup?1:limit,(page-1)*limit]);
   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');
-  if(lookup)return {items,timezone:settings[0]?.timezone||'Asia/Damascus'};
+  if(lookup)return {items,serverNow:new Date().toISOString(),timezone:settings[0]?.timezone||'Asia/Damascus'};
   const [counts]:any=await app.query('SELECT COUNT(*) total'+joins+clause,params);
-  if(input.batchId)return {items,total:Number(counts[0].total),page,pageSize:limit,packages:[],batches:[],timezone:settings[0]?.timezone||'Asia/Damascus'};
+  if(input.batchId)return {items,total:Number(counts[0].total),page,pageSize:limit,packages:[],batches:[],serverNow:new Date().toISOString(),timezone:settings[0]?.timezone||'Asia/Damascus'};
   const [packages]:any=await app.query('SELECT id,name FROM hotspot_packages WHERE owner_manager_id=? ORDER BY name',[scope.managerId]);
   const [batches]:any=await app.query('SELECT id,name FROM hotspot_card_batches WHERE owner_manager_id=? ORDER BY id DESC LIMIT 1000',[scope.managerId]);
-  return {items,total:Number(counts[0].total),page,pageSize:limit,packages,batches,timezone:settings[0]?.timezone||'Asia/Damascus'};
+  return {items,total:Number(counts[0].total),page,pageSize:limit,packages,batches,serverNow:new Date().toISOString(),timezone:settings[0]?.timezone||'Asia/Damascus'};
  });
 }
 
@@ -56,9 +66,11 @@ export async function readHotspotCardBatchOverview(scope:any,input:any={}){
    const [counts]:any=await app.query(`SELECT bc.batch_id,${state} state,COUNT(*) count,SUM(CASE WHEN EXISTS (SELECT 1 FROM hotspot_service_periods used_period WHERE used_period.account_id=a.id AND used_period.activated_at IS NOT NULL) THEN 1 ELSE 0 END) activated_count,SUM(COALESCE(u.upload_bytes,0)+COALESCE(u.download_bytes,0)) used_bytes`+joins+' WHERE a.archived_at IS NULL AND a.owner_manager_id=? AND bc.batch_id IN ('+items.map(()=>'?').join(',')+') GROUP BY bc.batch_id,state',[scope.managerId,...items.map((b:any)=>b.id)]);
    for(const item of items){item.counts={};item.card_count=0;item.activated_count=0;item.used_bytes='0';for(const row of counts.filter((r:any)=>Number(r.batch_id)===Number(item.id))){item.counts[row.state]=Number(row.count);item.card_count+=Number(row.count);item.activated_count+=Number(row.activated_count);item.used_bytes=(BigInt(item.used_bytes)+BigInt(String(row.used_bytes||0))).toString();}}
   }
+  const printSummary=await hotspotPrintSummaries(app,items.map((b:any)=>Number(b.id)));
+  for(const item of items)Object.assign(item,printSummary.items.find((p:any)=>Number(p.id)===Number(item.id))||{});
   const [total]:any=await app.query('SELECT COUNT(*) total'+from,params);
   const [packages]:any=await app.query('SELECT id,name FROM hotspot_packages WHERE owner_manager_id=? ORDER BY name',[scope.managerId]);
   const [settings]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');
-  return {items,total:Number(total[0].total),page,pageSize,packages,timezone:settings[0]?.timezone||'Asia/Damascus'};
+  return {items,printTrackingAvailable:printSummary.available,total:Number(total[0].total),page,pageSize,packages,serverNow:new Date().toISOString(),timezone:settings[0]?.timezone||'Asia/Damascus'};
  });
 }

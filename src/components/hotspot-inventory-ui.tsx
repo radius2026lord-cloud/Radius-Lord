@@ -1,5 +1,5 @@
 "use client";
-import {ArrowDownUp,CalendarClock,Clock3,Database,Hash,Layers,ShieldX,Ban,HelpCircle,CheckCircle2} from 'lucide-react';
+import {ArrowDownUp,CalendarClock,Clock3,Database,Hash,Layers,ShieldX,Ban,HelpCircle,CheckCircle2,Printer} from 'lucide-react';
 import ProjectDropdown from '@/components/ui/project-dropdown';
 import ProjectButton from '@/components/ui/project-button';
 import ProjectTooltip from '@/components/ui/project-tooltip';
@@ -13,6 +13,7 @@ export const hotspotStates=[
  {value:'cancelled',label:'ملغاة',color:'text-slate-600 dark:text-slate-300',hex:'#64748b',icon:Ban},
  {value:'unknown',label:'لا توجد فترة خدمة',color:'text-slate-600 dark:text-slate-300',hex:'#94a3b8',icon:HelpCircle}
 ];
+export function HotspotPrintStatus({count,total,available}:{count?:number;total:number;available:boolean}){return <span className={'inline-flex items-center gap-2 text-xs font-semibold '+(!available?'text-slate-500':!count?'text-blue-600 dark:text-blue-300':count>=total?'text-emerald-700 dark:text-emerald-300':'text-amber-700 dark:text-amber-300')}><Printer className="h-4 w-4 shrink-0"/>{!available?'تتبع الطباعة غير مفعّل':!count?'لم تُطبع':count>=total?'طُبعت بالكامل':`طُبعت جزئيًا · ${count} من ${total}`}</span>;}
 export function HotspotStateBadge({state,id}:{state:string;id?:number}){const item=hotspotStates.find(s=>s.value===state)||hotspotStates[6],Icon=item.icon;return <span className={'inline-flex items-center gap-1.5 text-xs font-semibold '+item.color}>{id!=null&&<span className="inline-flex items-center gap-1 rounded-full border px-2 py-1" style={{borderColor:item.hex,backgroundColor:item.hex+'18'}}><Hash className="h-3 w-3"/>{id}</span>}<Icon className="h-4 w-4 shrink-0"/>{item.label}</span>;}
 export function HotspotStateChart({counts,onSelect,value='',compact=false}:{counts:Record<string,number>;onSelect?:(state:string)=>void;value?:string;compact?:boolean}){
  const total=Object.values(counts).reduce((n,v)=>n+v,0);
