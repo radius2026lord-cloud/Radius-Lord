@@ -10,7 +10,7 @@ export function hotspotCardHtml(design:HotspotCardDesign,data:HotspotPrintData,c
 
  const premium=Boolean(design.cardStyle&&design.cardStyle!=='plain'&&!design.background),radius=design.cornerStyle==='square'?'0':premium?'3mm':'2mm';
  const hidden=design.hidden||[];
- const qr=design.showQr?`<div style="aspect-ratio:1;background:white;color:#0f172a">${qrSvg||'<span style="display:grid;height:100%;place-items:center;font-size:10px">QR</span>'}</div>`:'';
+ const qr=design.showQr?`<div style="display:grid;aspect-ratio:1;line-height:0;background:white;color:#0f172a">${qrSvg||'<span style="display:grid;height:100%;place-items:center;font-size:10px">QR</span>'}</div>`:'';
  const icon=(kind:string)=>kind==='speed'?'↧↥':kind==='quota'?'◉':kind==='duration'?'◷':kind==='price'?'#':kind==='serial'?'#':'◷';
  if(design.customLayout){
   const position=(key:keyof typeof defaultHotspotPositions)=>hotspotElementPosition(design,key,card.loginMode);

@@ -102,3 +102,9 @@ Position/size locks persist as a validated `locked` field-key list in the design
 The QR URL already encodes the actual account username and password (single code uses the same value for both). PAP can receive plain credentials; CHAP requires the router's current challenge and md5.js. The downloadable `public/hotspot/qr-login.html` is intended to be installed as login.html in the router's existing Hotspot HTML directory, retaining md5.js. It reads QR parameters, removes them from the visible URL, and submits the router login form automatically, hashing with the CHAP challenge when supplied. It falls back to a manual form on errors; it does not declare success before router authentication. Phone must be on the Hotspot network. Existing custom login pages may instead implement this behavior themselves. No files are automatically installed on a NAS, no password is sent to a QR provider, and no authentication method is changed.
 
 Official RouterOS reference: https://help.mikrotik.com/docs/spaces/ROS/pages/87162881/Hotspot%20customisation
+
+## QR size interaction
+
+Selecting an unlocked QR exposes an editor-only bottom-right resize handle. The diagonal gesture changes square side length in card-local coordinates, accounting for fit/zoom and repeated-sheet selection. One resize gesture is one undo step. A labeled millimetre size input provides precise sizing; the square is bounded to card width/height and its position is clamped to keep it inside the card. Locked QR nodes cannot resize.
+
+The white quiet zone remains part of the locally generated SVG and scales with it. Sizes below 16mm show an editor warning; the existing print-time minimum guard remains in place. Handles and guides are never included in print HTML. No QR data, login flow or database schema changes.
