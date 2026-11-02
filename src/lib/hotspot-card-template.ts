@@ -24,8 +24,15 @@ export function hotspotQuota(value:string|null){if(value===null)return 'غير �
 
 
 
+export function hotspotLoginBase(base:string){
+ const input=String(base||'').trim();
+ if(!input)throw Error('أدخل رابط دخول الهوتسبوت لإنشاء QR، مثل http://g.net/login.');
+ let url:URL;try{url=new URL(input);}catch{throw Error('رابط دخول الهوتسبوت غير صالح. ابدأ بـ http:// أو https://، مثل http://g.net/login.');}
+ if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.hash||input.length>500||url.searchParams.has('username')||url.searchParams.has('password'))throw Error('استخدم رابط دخول http:// أو https:// دون اسم مستخدم أو كلمة مرور أو علامة #.');
+ return url;
+}
 export function hotspotLoginUrl(base:string,card:HotspotPrintCard){
- const url=new URL(base.trim());if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.hash||base.length>500||url.searchParams.has('username')||url.searchParams.has('password'))throw Error('أدخل رابط صفحة دخول هوتسبوت صالحًا دون بيانات مستخدم.');
+ const url=hotspotLoginBase(base);
  if(url.pathname==='/'||!url.pathname)url.pathname='/login';url.searchParams.set('username',card.username);url.searchParams.set('password',card.loginMode==='code'?card.username:card.password);return url.toString();
 }
 export function importHotspotDesign(input:any):HotspotCardDesign{
