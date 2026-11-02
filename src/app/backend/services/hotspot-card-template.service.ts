@@ -1,3 +1,4 @@
+import {auditNetworkEvent} from './network-audit.service';
 const fontFamilies=['LBC','Tahoma','Arial','Times New Roman','Courier New'];
 import {withNetwork,validateLocalLicense} from './network-runtime.service';
 const fields=['speed','quota','duration','price','serial','expiry','contacts'];
@@ -11,6 +12,7 @@ function design(v:any){
  if(v.cardStyle!==undefined&&!['plain','identity','wave','diagonal'].includes(v.cardStyle)||v.cornerStyle!==undefined&&!['rounded','square'].includes(v.cornerStyle))invalid();
  const sheet=v.sheet;if(sheet!==undefined&&(!sheet||!['A4','A5'].includes(sheet.paper)||!Number.isInteger(sheet.columns)||sheet.columns<1||sheet.columns>5||!Number.isInteger(sheet.rows)||sheet.rows<1||sheet.rows>10||!Number.isFinite(sheet.margin)||sheet.margin<5||sheet.margin>20||!Number.isFinite(sheet.gap)||sheet.gap<0||sheet.gap>5||!['2x2','2x3','2x4','2x5','3x4','3x5','3x6','4x5'].includes(sheet.columns+'x'+sheet.rows)||sheet.paper==='A5'&&sheet.columns*sheet.rows>12))invalid();
  if(v.showLabels!==undefined&&typeof v.showLabels!=='boolean'||v.backgroundMode!==undefined&&!['solid','gradient'].includes(v.backgroundMode)||v.backgroundColor!==undefined&&!/^#[a-f0-9]{6}$/i.test(v.backgroundColor)||v.gradientColor!==undefined&&!/^#[a-f0-9]{6}$/i.test(v.gradientColor)||v.gradientAngle!==undefined&&(!Number.isFinite(v.gradientAngle)||v.gradientAngle<0||v.gradientAngle>360))invalid();
+ if(v.cropMarks!==undefined&&typeof v.cropMarks!=='boolean')invalid();
  if(v.fontFamily!==undefined&&!fontFamilies.includes(v.fontFamily)||v.showContactLabels!==undefined&&typeof v.showContactLabels!=='boolean')invalid();
  if(v.contactLabels!==undefined&&(!v.contactLabels||typeof v.contactLabels!=='object'||Array.isArray(v.contactLabels)||Object.keys(v.contactLabels).length>6))invalid();
  const contactLabels:Record<string,string>=Object.fromEntries(Object.entries(v.contactLabels||{}).map(([phone,label])=>{if(!phone||phone.length>80||typeof label!=='string'||label.length>60)invalid();return [phone,(label as string).trim()];}));
@@ -23,7 +25,7 @@ function design(v:any){
  const elementStyles:Record<string,any>={};if(v.elementStyles!==undefined){if(!v.elementStyles||typeof v.elementStyles!=='object'||Array.isArray(v.elementStyles)||Object.keys(v.elementStyles).length>14)invalid();for(const [key,style] of Object.entries(v.elementStyles) as [string,any][]){if(!['brand','logo','package','username','password','note',...fields,'qr'].includes(key)||!style||style.fontFamily!==undefined&&!fontFamilies.includes(style.fontFamily)||!Number.isInteger(style.fontSize)||style.fontSize<8||style.fontSize>28||!/^#[a-f0-9]{6}$/i.test(style.color)||typeof style.bold!=='boolean'||!['left','center','right'].includes(style.align))invalid();elementStyles[key]={fontFamily:style.fontFamily,fontSize:style.fontSize,color:style.color,bold:style.bold,align:style.align};}}
  const positions:Record<string,{x:number;y:number;width:number}>={};const keys=['brand','logo','package','username','password','note',...fields,'qr'];
  if(v.positions!==undefined){if(!v.positions||typeof v.positions!=='object'||Array.isArray(v.positions)||Object.keys(v.positions).length>14)invalid();for(const [key,p] of Object.entries(v.positions) as [string,any][]){if(!keys.includes(key)||!p||![p.x,p.y,p.width].every(Number.isFinite)||p.x<0||p.y<0||p.x>98||p.y>98||p.width<5||p.width>100||p.x+p.width>100.1)invalid();positions[key]={x:p.x,y:p.y,width:p.width};}}
- return {locked,fontFamily:v.fontFamily,contactLabels:Object.fromEntries(Object.entries(contactLabels).filter(([phone])=>selectedContactPhones.includes(phone))),showContactLabels:v.showContactLabels,cardStyle:v.cardStyle,cornerStyle:v.cornerStyle,sheet:sheet?{paper:sheet.paper,columns:sheet.columns,rows:sheet.rows,margin:sheet.margin,gap:sheet.gap}:undefined,showLabels:Boolean(v.showLabels),selectedContactPhones,backgroundMode:v.backgroundMode||'solid',backgroundColor:v.backgroundColor||'#ffffff',gradientColor:v.gradientColor||'#dbeafe',gradientAngle:v.gradientAngle??135,hidden,elementStyles,textColor,background,loginUrl,customLayout:Boolean(v.customLayout),showQr:Boolean(v.showQr),positions,accent:v.accent,layout:v.layout,size:v.size,align:v.align,fontSize:v.fontSize,logo:v.logo,title:v.title.trim(),note:v.note.trim(),fields:v.fields};
+ return {cropMarks:Boolean(v.cropMarks),locked,fontFamily:v.fontFamily,contactLabels:Object.fromEntries(Object.entries(contactLabels).filter(([phone])=>selectedContactPhones.includes(phone))),showContactLabels:v.showContactLabels,cardStyle:v.cardStyle,cornerStyle:v.cornerStyle,sheet:sheet?{paper:sheet.paper,columns:sheet.columns,rows:sheet.rows,margin:sheet.margin,gap:sheet.gap}:undefined,showLabels:Boolean(v.showLabels),selectedContactPhones,backgroundMode:v.backgroundMode||'solid',backgroundColor:v.backgroundColor||'#ffffff',gradientColor:v.gradientColor||'#dbeafe',gradientAngle:v.gradientAngle??135,hidden,elementStyles,textColor,background,loginUrl,customLayout:Boolean(v.customLayout),showQr:Boolean(v.showQr),positions,accent:v.accent,layout:v.layout,size:v.size,align:v.align,fontSize:v.fontSize,logo:v.logo,title:v.title.trim(),note:v.note.trim(),fields:v.fields};
 }
 function normalize(v:any){
  if(!v||!Array.isArray(v.templates)||!v.templates.length||v.templates.length>20||JSON.stringify(v).length>3000000)invalid();
@@ -44,8 +46,14 @@ export async function saveHotspotCardTemplates(scope:any,input:any){
  const packageIds=Object.keys(library.packageTemplates);if(packageIds.length){const [valid]:any=await app.query('SELECT id FROM hotspot_packages WHERE id IN (?)',[packageIds]);if(valid.length!==packageIds.length)invalid();}
  await app.beginTransaction();try{
   await app.query('INSERT IGNORE INTO network_hotspot_card_templates(id,library_json,revision) VALUES(1,?,0)',[JSON.stringify(defaultLibrary)]);
-  const [rows]:any=await app.query('SELECT revision FROM network_hotspot_card_templates WHERE id=1 FOR UPDATE');if(Number(rows[0].revision)!==revision)throw new Error('HOTSPOT_TEMPLATE_CONFLICT');
-  await app.query('UPDATE network_hotspot_card_templates SET library_json=?,revision=revision+1,updated_by=? WHERE id=1',[JSON.stringify(library),scope.managerId]);await app.commit();
+  const [rows]:any=await app.query('SELECT revision,library_json FROM network_hotspot_card_templates WHERE id=1 FOR UPDATE');if(Number(rows[0].revision)!==revision)throw new Error('HOTSPOT_TEMPLATE_CONFLICT');
+  await app.query('UPDATE network_hotspot_card_templates SET library_json=?,revision=revision+1,updated_by=? WHERE id=1',[JSON.stringify(library),scope.managerId]);const previous=decode(rows[0]);
+  for(const template of library.templates){const before=previous.templates.find((item:any)=>item.id===template.id),metadata={id:template.id,name:template.name,revision:revision+1,approved:Boolean(template.approved)};
+   if(!before)await auditNetworkEvent(app,{action:'network.hotspot_template.create',managerId:scope.managerId,template:metadata});
+   else if(before.name!==template.name||JSON.stringify(before.draft)!==JSON.stringify(template.draft)||before.approved&&!template.approved)await auditNetworkEvent(app,{action:'network.hotspot_template.update',managerId:scope.managerId,template:metadata});
+   if(template.approved&&(!before?.approved||JSON.stringify(before.approved)!==JSON.stringify(template.approved)))await auditNetworkEvent(app,{action:'network.hotspot_template.approve',managerId:scope.managerId,template:metadata});
+  }
+  await app.commit();
  }catch(e){await app.rollback();throw e;}
  return {library,revision:revision+1};
  });

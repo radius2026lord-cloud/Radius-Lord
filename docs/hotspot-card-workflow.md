@@ -108,3 +108,11 @@ Official RouterOS reference: https://help.mikrotik.com/docs/spaces/ROS/pages/871
 Selecting an unlocked QR exposes an editor-only bottom-right resize handle. The diagonal gesture changes square side length in card-local coordinates, accounting for fit/zoom and repeated-sheet selection. One resize gesture is one undo step. A labeled millimetre size input provides precise sizing; the square is bounded to card width/height and its position is clamped to keep it inside the card. Locked QR nodes cannot resize.
 
 The white quiet zone remains part of the locally generated SVG and scales with it. Sizes below 16mm show an editor warning; the existing print-time minimum guard remains in place. Handles and guides are never included in print HTML. No QR data, login flow or database schema changes.
+
+## Review, crop marks and activity log
+
+Approval runs a local preflight against the actual rendered card after images/fonts are ready. It detects bounds errors, QR below 16mm, likely overlaps, content outside the 3mm safe area, small text and hidden login details. Error-level issues block approval; warnings can be reviewed and explicitly accepted. Clicking an element issue selects that field. Draft saving remains independent. Review does not inspect text baked into an imported image, and does not replace a physical test sheet.
+
+Optional crop marks are stored in existing design JSON and can be overridden for a single batch print. They appear outside card boundaries in sheet preview and physical/PDF output, without changing the card dimensions. At least 2mm gaps are required. The print grid has an explicit physical width for stable mark coordinates.
+
+Successful template creation, draft edits and approval append named tenant activity events using the shared audit helper inside the same transaction as the library save. Unchanged saves add no duplicate template events. New templates created and approved together produce both events. Metadata contains only template ID/name, revision and approval state; no credentials, QR URL, artwork or contact content is logged. The activity UI shows Arabic names and the template name. No new SQL tables or migration are needed.
