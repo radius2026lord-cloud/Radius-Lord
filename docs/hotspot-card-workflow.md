@@ -88,3 +88,9 @@ The designer offers a clearly labeled one-sheet test print/PDF with fake credent
 Native designs now opt into an identity-inspired visual structure rather than only a flat gradient: Identity, Soft wave and Geometric corners, plus a plain canvas option. These use local SVG decoration, an inset edge, brand divider and distinct credential/metadata surfaces. They retain editable field positions, colors and values-only behavior. Rounded/straight corners and an explicit reset-to-style arrangement are available. Color presets are independent of structure.
 
 `cardStyle` and `cornerStyle` are optional, validated design JSON attributes in frontend import and backend normalization. Existing designs without them retain their previous rendering and positions. Image-backed designs bypass the native artwork decoration. New native designs default to Identity. Preview and printing share the same renderer; no images are remotely loaded and no SQL migration is needed.
+
+## Contact captions and font selection
+
+Each configured contact number can have a template-local caption override, with an independent show-captions toggle. The network's primary-phone designation and the saved phone number are not changed. Overrides are escaped when rendered, limited to six captions of 60 characters, restricted to configured contact numbers on save, and pruned when a contact disappears. Values-only output remains the default unless captions are enabled.
+
+The design and individual text elements support a fixed font allowlist: LBC, Tahoma, Arial, Times New Roman and Courier New. The shared renderer uses the same explicit stack in preview and the print iframe. These are device-local fonts with defined fallbacks; no remote font URLs or downloads are introduced. New native cards default to the project's LBC stack. Optional JSON fields preserve old template output; no SQL migration is needed.
