@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, RefreshCw, UserRound } from "lucide-react";
+import { Network, RefreshCw, UserRound } from "lucide-react";
 import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 import FloatingNotice from "@/components/ui/floating-notice";
@@ -30,7 +30,7 @@ export default function SubscriptionsPage(){
   const [orders,setOrders]=useState<Order[]>([]);
   const [loading,setLoading]=useState(true);
   const [query,setQuery]=useState("");
-  const [filter,setFilter]=useState<"all"|"awaiting_confirmation"|"paid"|"ready"|"attention">("all");
+  const [filter,setFilter]=useState<"all"|"awaiting_confirmation"|"paid"|"provisioning"|"ready"|"attention">("all");
   const [busy,setBusy]=useState<string|null>(null);
   const [message,setMessage]=useState("");
   const {view,setView,selected,setSelected,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("subscriptions","row");
@@ -48,6 +48,7 @@ export default function SubscriptionsPage(){
     all:orders.length,
     awaiting_confirmation:orders.filter(x=>["pending","awaiting_confirmation"].includes(x.status)).length,
     paid:orders.filter(x=>["paid","completed"].includes(x.status)).length,
+    provisioning:orders.filter(x=>x.environmentStatus==="provisioning"&&!x.environmentArchived).length,
     ready:orders.filter(x=>x.environmentStatus==="ready"&&!x.environmentArchived).length,
     attention:orders.filter(x=>x.environmentStatus==="failed"&&!x.environmentArchived).length,
   }),[orders]);
@@ -57,6 +58,7 @@ export default function SubscriptionsPage(){
     return orders.filter(x=>{
       if(filter==='awaiting_confirmation'&&!["pending","awaiting_confirmation"].includes(x.status))return false;
       if(filter==='paid'&&!["paid","completed"].includes(x.status))return false;
+      if(filter==='provisioning'&&(x.environmentStatus!=='provisioning'||x.environmentArchived))return false;
       if(filter==='ready'&&(x.environmentStatus!=='ready'||x.environmentArchived))return false;
       if(filter==='attention'&&(x.environmentStatus!=='failed'||x.environmentArchived))return false;
       if(!q)return true;
@@ -85,8 +87,8 @@ export default function SubscriptionsPage(){
   return <div className="space-y-3 sm:space-y-4">
     <CollectionToolbar
       responsive
-      icon={CreditCard}
-      title="عرض الاشتراكات"
+      icon={Network}
+      title="طلبات الشبكات وتجهيزها"
       description="الدفع وحالة تجهيز الشبكة، كل منهما ظاهر بشكل مستقل"
       view={view}
       onViewChange={setView}
@@ -96,11 +98,12 @@ export default function SubscriptionsPage(){
       onToggleAll={toggleAllVisible}
       query={query}
       onQueryChange={setQuery}
-      searchPlaceholder="بحث بالعميل، الخطة أو كود الدفع..."
+      searchPlaceholder="بحث بالشبكة، العميل، الباقة أو كود الدفع..."
       filters={<CollectionStatusFilters value={filter} onChange={setFilter} items={[
         {value:"all",label:"الكل",count:counts.all,dot:"bg-[#0758e9]"},
         {value:"awaiting_confirmation",label:"بانتظار الدفع والتأكيد",count:counts.awaiting_confirmation,dot:"bg-amber-500"},
         {value:"paid",label:"الدفع مكتمل",count:counts.paid,dot:"bg-emerald-500"},
+        {value:"provisioning",label:"جارٍ تجهيز البيئة",count:counts.provisioning,dot:"bg-indigo-500"},
         {value:"ready",label:"البيئة جاهزة",count:counts.ready,dot:"bg-blue-500"},
         {value:"attention",label:"التجهيز يحتاج معالجة",count:counts.attention,dot:"bg-amber-500"},
       ]}/>}
