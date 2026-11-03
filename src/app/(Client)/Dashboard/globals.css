@@ -314,15 +314,15 @@ a {
 
 /* One UI 8.5-inspired dark palette: soft charcoal-plum surfaces and calm separators. */
 .dark .rl-hostinger-subscribers {
-  --oneui-bg: #19171d;
-  --oneui-workspace: #1d1b21;
-  --oneui-surface: #242228;
-  --oneui-surface-2: #2d2a32;
-  --oneui-surface-3: #37343d;
-  --oneui-border: rgba(235, 230, 240, 0.08);
-  --oneui-border-strong: rgba(235, 230, 240, 0.13);
-  --oneui-text: #f1eef4;
-  --oneui-muted: #f1eef4;
+  --oneui-bg: #0c1424;
+  --oneui-workspace: #101a2c;
+  --oneui-surface: #182337;
+  --oneui-surface-2: #202d43;
+  --oneui-surface-3: #28364e;
+  --oneui-border: rgba(179, 204, 240, 0.13);
+  --oneui-border-strong: rgba(179, 204, 240, 0.22);
+  --oneui-text: #f2f6fc;
+  --oneui-muted: #b6c4d7;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
 }
@@ -366,7 +366,7 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .text-slate-300 {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers .text-slate-400,
@@ -377,20 +377,20 @@ a {
 
 /* Keep key navigation and page labels crisp against the soft plum surfaces. */
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main:hover,
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-main:focus-visible {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-sub {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers .sidebar .rl-nav-sub[aria-current="page"] {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers .rl-breadcrumb a,
@@ -400,19 +400,19 @@ a {
 }
 
 .dark .rl-hostinger-subscribers .rl-breadcrumb > :is(svg) {
-  color: #aaa4af !important;
+  color: #a9bad0 !important;
 }
 
 .dark .rl-hostinger-subscribers .collection-table-scroll thead {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers :is(h1, h2, h3) {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers .collection-table-scroll tbody {
-  color: #f1eef4 !important;
+  color: #f2f6fc !important;
 }
 
 .dark .rl-hostinger-subscribers [class*="dark:bg-[#172b40]"],
