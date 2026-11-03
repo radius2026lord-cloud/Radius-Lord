@@ -28,6 +28,9 @@
   color-scheme: light;
 }
 
+/* Dark mode: canvas → workspace → card → controls/hover → raised surfaces.
+   Use text for content, muted for supporting labels, and blue for focus.
+   Keep semantic status colors separate from these neutral surfaces. */
 .dark {
   color-scheme: dark;
   --oneui-bg: #0c1424;
@@ -389,7 +392,7 @@ a {
 .dark .rl-hostinger-subscribers .rl-breadcrumb a,
 .dark .rl-hostinger-subscribers .rl-breadcrumb > span,
 .dark .rl-hostinger-subscribers .rl-breadcrumb button {
-  color: #ffffff !important;
+  color: var(--oneui-text) !important;
 }
 
 .dark .rl-hostinger-subscribers .rl-breadcrumb > :is(svg) {
