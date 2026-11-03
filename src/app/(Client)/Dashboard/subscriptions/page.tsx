@@ -29,6 +29,7 @@ export default function SubscriptionsPage(){
   const router=useRouter();
   const [orders,setOrders]=useState<Order[]>([]);
   const [loading,setLoading]=useState(true);
+  const [filtersOpen,setFiltersOpen]=useState(false);
   const [query,setQuery]=useState("");
   const [filter,setFilter]=useState<"all"|"awaiting_confirmation"|"paid"|"provisioning"|"ready"|"attention">("all");
   const [busy,setBusy]=useState<string|null>(null);
@@ -87,6 +88,8 @@ export default function SubscriptionsPage(){
   return <div className="space-y-3 sm:space-y-4">
     <CollectionToolbar
       responsive
+      hostingerStyle
+      selectionAcrossViews
       icon={Network}
       title="طلبات الشبكات وتجهيزها"
       description="الدفع وحالة تجهيز الشبكة، كل منهما ظاهر بشكل مستقل"
@@ -99,7 +102,8 @@ export default function SubscriptionsPage(){
       query={query}
       onQueryChange={setQuery}
       searchPlaceholder="بحث بالشبكة، العميل، الباقة أو كود الدفع..."
-      filters={<CollectionStatusFilters value={filter} onChange={setFilter} items={[
+      searchAction={<ProjectButton variant="secondary" aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(open=>!open)}>تصفية{filter!=="all"?" · 1":""}</ProjectButton>}
+      filters={filtersOpen&&<CollectionStatusFilters value={filter} onChange={setFilter} items={[
         {value:"all",label:"الكل",count:counts.all,dot:"bg-[#0758e9]"},
         {value:"awaiting_confirmation",label:"بانتظار الدفع والتأكيد",count:counts.awaiting_confirmation,dot:"bg-amber-500"},
         {value:"paid",label:"الدفع مكتمل",count:counts.paid,dot:"bg-emerald-500"},
@@ -114,7 +118,7 @@ export default function SubscriptionsPage(){
 
     <BulkSelectionBar count={selected.size} noun="الاشتراكات" allSelected={allVisibleSelected} onToggleAll={toggleAllVisible} onClearSelection={()=>setSelected(new Set())}/>
 
-    {loading?<CollectionState loading>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard key={o.id} selectionMode={selectionMode} selected={selected.has(o.id)} onToggle={()=>toggle(o.id)} onOpen={()=>openSubscription(o)}>
+    {loading?<CollectionState loading>جارٍ تحميل الاشتراكات...</CollectionState>:filtered.length===0?<CollectionState>لا توجد طلبات اشتراك مطابقة.</CollectionState>:view==="grid"?<CollectionGrid>{filtered.map(o=><CollectionCard hostingerStyle key={o.id} selectionMode={selectionMode} selected={selected.has(o.id)} onToggle={()=>toggle(o.id)} onOpen={()=>openSubscription(o)}>
       <div className="flex items-start gap-3">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06] dark:text-[#8ab5ff]"><UserRound className="h-5 w-5"/></div>
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{o.customerName}</div><div className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">@{o.customerUsername||"—"}</div></div>
@@ -127,7 +131,7 @@ export default function SubscriptionsPage(){
         <div className="flex items-center justify-between gap-3"><span>تاريخ الطلب</span><span>{formatDate(o.requestedAt)}</span></div>
       </div>
     </CollectionCard>)}</CollectionGrid>:<>
-      <CollectionTable minWidth="880px">
+      <CollectionTable hostingerStyle rowCards minWidth="880px">
         <CollectionTableHead><tr><th className="w-12 p-3 text-center"><CollectionSelectionBox checked={allVisibleSelected} onChange={toggleAllVisible} label="تحديد كل الاشتراكات الظاهرة"/></th><th className="p-3">العميل</th><th>الخطة</th><th>الإجمالي</th><th>الدفع</th><th>البيئة</th><th>التاريخ</th><th className="w-14 text-center">إجراء</th></tr></CollectionTableHead>
         <CollectionTableBody>{filtered.map(o=><tr key={o.id} onClick={()=>openSubscription(o)} className={collectionRowClass(selected.has(o.id))}>
           <td className="w-12 p-3 text-center" onClick={e=>e.stopPropagation()}><CollectionSelectionBox checked={selected.has(o.id)} onChange={()=>toggle(o.id)} label={`تحديد اشتراك ${o.customerName}`}/></td>
@@ -137,7 +141,7 @@ export default function SubscriptionsPage(){
           <td className="w-14 text-center"><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></td>
         </tr>)}</CollectionTableBody>
       </CollectionTable>
-      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard key={o.id} onOpen={()=>openSubscription(o)}>
+      <CollectionMobileList>{filtered.map(o=><CollectionMobileCard hostingerStyle key={o.id} onOpen={()=>openSubscription(o)}>
         <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#0758e9] dark:bg-white/[.06]"><UserRound className="h-5 w-5"/></div><div className="min-w-0 flex-1"><div className="break-words text-sm font-semibold">{o.customerName}</div><div className="mt-1 text-[11px] text-slate-500">{o.planName}</div></div><SubscriptionActions order={o} busy={busy!==null} onOpen={()=>openSubscription(o)} onPayment={()=>openPayment(o)} onConfirm={()=>confirm(o)}/></div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge status={o.status as Status} environmentStatus={o.environmentStatus} environmentArchived={o.environmentArchived}/><bdi className="text-xs font-semibold">{o.totalAmount} {o.currency}</bdi></div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-400 dark:border-white/10"><bdi className="break-all font-mono">{o.paymentCode}</bdi><span>{formatDate(o.requestedAt)}</span></div>
