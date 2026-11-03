@@ -216,7 +216,7 @@ export default function DashboardShell({ children,network }: { children: React.R
     catch{setLoggingOut(false);setLogoutError('تعذر إلغاء الجلسة على الخادم. أعد المحاولة.');return;}
     {
       const remaining = Math.max(0, 1400 - (performance.now() - startedAt));
-      window.setTimeout(() => window.location.replace("/login?reason=logout"), remaining);
+      window.setTimeout(() => window.location.replace("/login"), remaining);
     }
   };
 
