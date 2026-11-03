@@ -54,6 +54,11 @@ export default function HotspotCardTemplates({endpoint,networkName='',initialPac
  const [bundlePreview,setBundlePreview]=useState<{id:number;templateId:string}|null>(null);
  async function browseBundles(templateId:string){
   setSaveResult(null);
+  const originalBatch=Number(new URLSearchParams(window.location.search).get('sourceBatch'));
+  if(Number.isSafeInteger(originalBatch)&&originalBatch>0){
+   setBundlePreview({id:originalBatch,templateId});
+   return;
+  }
   setBundlePicker({templateId});
   try{
    const response=await fetch(endpoint+'/hotspot/batches',{credentials:'include',cache:'no-store'});
