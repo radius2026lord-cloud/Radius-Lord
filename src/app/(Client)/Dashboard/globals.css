@@ -35,9 +35,9 @@
   --oneui-surface: #182337;
   --oneui-surface-2: #202d43;
   --oneui-surface-3: #28364e;
-  --oneui-border: rgba(255, 255, 255, 0.09);
-  --oneui-border-strong: rgba(255, 255, 255, 0.14);
-  --oneui-text: #f2f6fc;
+  --oneui-border: rgba(179, 204, 240, 0.13);
+  --oneui-border-strong: rgba(179, 204, 240, 0.22);
+  --oneui-text: #dce6f4;
   --oneui-muted: #b6c4d7;
   --oneui-blue: #59a5ff;
   --oneui-orange: #ffb34d;
@@ -247,13 +247,11 @@ a {
 
 /* Calm, consistent near-white typography across the complete dashboard in dark mode. */
 .dark .dashboard-shell-root {
-  --oneui-text: #f1eef4;
-  --oneui-muted: #f1eef4;
-  color: #f1eef4;
+  color: var(--oneui-text);
 }
 
 .dark .dashboard-shell-root :is(h1, h2, h3) {
-  color: #f1eef4 !important;
+  color: var(--oneui-text) !important;
 }
 
 .dark .dashboard-shell-root :is(
@@ -273,11 +271,11 @@ a {
   [class*="dark:text-[#f4f1f5]"], [class*="dark:text-[#f6f2f7]"],
   [class*="dark:text-[#dce8fa]"]
 ) {
-  color: #f1eef4 !important;
+  color: var(--oneui-text) !important;
 }
 
 .dark .dashboard-shell-root .rl-field-value {
-  color: #f1eef4 !important;
+  color: var(--oneui-text) !important;
 }
 
 .dark .dashboard-shell-root .sidebar .rl-nav-main,
@@ -285,7 +283,7 @@ a {
 .dark .dashboard-shell-root .rl-breadcrumb a,
 .dark .dashboard-shell-root .rl-breadcrumb button,
 .dark .dashboard-shell-root .rl-breadcrumb > span {
-  color: #f1eef4 !important;
+  color: var(--oneui-text) !important;
 }
 
 .dark .dashboard-shell-root .sidebar .rl-nav-main > span:not(.sidebar-active-icon) > .lucide,
@@ -296,7 +294,7 @@ a {
 
 .dark .dashboard-shell-root .sidebar .rl-nav-main:hover > span:not(.sidebar-active-icon) > .lucide,
 .dark .dashboard-shell-root .sidebar .rl-nav-sub:not([aria-current="page"]):hover > .lucide {
-  color: #f1eef4 !important;
+  color: var(--oneui-text) !important;
 }
 
 /* Subscriber list: keep one continuous page canvas behind the Hostinger-style surfaces. */
@@ -327,30 +325,12 @@ a {
 
 /* One UI 8.5-inspired dark palette: soft charcoal-plum surfaces and calm separators. */
 .dark .rl-hostinger-subscribers {
-  --oneui-bg: #0c1424;
-  --oneui-workspace: #101a2c;
-  --oneui-surface: #182337;
-  --oneui-surface-2: #202d43;
-  --oneui-surface-3: #28364e;
-  --oneui-border: rgba(179, 204, 240, 0.13);
-  --oneui-border-strong: rgba(179, 204, 240, 0.22);
-  --oneui-text: #f2f6fc;
-  --oneui-muted: #c3cfe0;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
 }
 
 /* Use the subscribers workspace canvas and card palette on the master home screen. */
 .dark .rl-home-workspace {
-  --oneui-bg: #19171d;
-  --oneui-workspace: #1d1b21;
-  --oneui-surface: #242228;
-  --oneui-surface-2: #2d2a32;
-  --oneui-surface-3: #37343d;
-  --oneui-border: rgba(235, 230, 240, 0.08);
-  --oneui-border-strong: rgba(235, 230, 240, 0.13);
-  --oneui-text: #f1eef4;
-  --oneui-muted: #f1eef4;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
 }
