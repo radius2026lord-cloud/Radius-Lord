@@ -300,6 +300,19 @@ a {
 }
 
 /* Subscriber list: keep one continuous page canvas behind the Hostinger-style surfaces. */
+.dark .rl-hostinger-subscribers article[data-focus-target-id] {
+  background-color: var(--oneui-surface);
+  color: var(--oneui-text);
+}
+
+.dark .rl-hostinger-subscribers article[data-focus-target-id]:hover {
+  background-color: var(--oneui-surface-2);
+}
+
+.dark .rl-hostinger-subscribers article[data-focus-target-id]:focus-visible {
+  border-color: var(--oneui-blue);
+}
+
 .dark .rl-hostinger-subscribers .workspace-frame {
   background-color: transparent !important;
   border-color: var(--oneui-border-strong) !important;
@@ -322,7 +335,7 @@ a {
   --oneui-border: rgba(179, 204, 240, 0.13);
   --oneui-border-strong: rgba(179, 204, 240, 0.22);
   --oneui-text: #f2f6fc;
-  --oneui-muted: #b6c4d7;
+  --oneui-muted: #c3cfe0;
   background-color: var(--oneui-bg) !important;
   color: var(--oneui-text);
 }
