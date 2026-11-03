@@ -338,7 +338,7 @@ export async function recordNetworkSubscriberCardPrint(scope:any,value:any){
  });
 }
 
-export async function readNetworkSubscriberDetail(scope:any,value:any,options:{includeActivity?:boolean;activityOffset?:number}={}){
+export async function readNetworkSubscriberDetail(scope:any,value:any,options:{includeActivity?:boolean;activityOffset?:number;activityKind?:string}={}){
  return withNetwork(scope,async app=>{
   const access=await managerAccess(app,scope.managerId,scope.authVersion),managerId=ownerId(access),principal=access.role==='principal';
   if(!principal&&!access.permissions.includes('customers.view'))throw new Error('NETWORK_AUTH');
@@ -410,14 +410,17 @@ export async function readNetworkSubscriberDetail(scope:any,value:any,options:{i
   const activityPageSize=100,activityOffset=Math.min(1000000,Math.max(0,Math.floor(Number(options.activityOffset)||0)));
   if(canViewActivity){
    const identityIds=`SELECT radius_identity_id FROM pppoe_accounts WHERE customer_id=? UNION SELECT h.radius_identity_id FROM hotspot_standalone_cards sc JOIN hotspot_accounts h ON h.id=sc.account_id WHERE sc.customer_id=?`;
+   const kind=options.activityKind;
+   const sessionFilter=kind==="disconnect"?"AND (ra.acctstoptime IS NOT NULL OR COALESCE(ra.acctupdatetime,ra.acctstarttime)<UTC_TIMESTAMP()-INTERVAL 6 MINUTE)":"";
+   const authFilter=kind==="auth-ok"?"AND pa.reply = 'Access-Accept'":kind==="auth-fail"?"AND (pa.reply IS NULL OR pa.reply <> 'Access-Accept')":"";
    const [[logs],[accounting],[auth]]:any=await Promise.all([
     app.query(`SELECT a.id,a.actor_snapshot,a.actor_kind,a.action_code,a.target_type,a.target_id,a.before_data,a.after_data,a.result,a.failure_code,a.occurred_at
      FROM activity_log a WHERE a.customer_id=? OR a.account_id IN (${identityIds}) ORDER BY a.occurred_at DESC,a.id DESC LIMIT ? OFFSET ?`,[id,id,id,activityPageSize+1,activityOffset]),
     app.query(`SELECT ra.radacctid,ra.username,ra.acctsessionid,ra.nasipaddress,ra.acctstarttime,ra.acctupdatetime,ra.acctstoptime,ra.acctsessiontime,ra.acctinputoctets,ra.acctoutputoctets,ra.framedipaddress,ra.callingstationid,ra.acctterminatecause
-     FROM radacct ra WHERE ra.username IN (SELECT r.current_username FROM radius_identities r WHERE r.id IN (${identityIds})) ORDER BY COALESCE(ra.acctstoptime,ra.acctupdatetime,ra.acctstarttime) DESC,ra.radacctid DESC LIMIT ? OFFSET ?`,[id,id,activityPageSize+1,activityOffset]),
-    app.query(`SELECT pa.id,pa.username,pa.reply,pa.authdate FROM radpostauth pa WHERE pa.username IN (SELECT r.current_username FROM radius_identities r WHERE r.id IN (${identityIds})) ORDER BY pa.authdate DESC,pa.id DESC LIMIT ? OFFSET ?`,[id,id,activityPageSize+1,activityOffset])
+     FROM radacct ra WHERE ra.username IN (SELECT r.current_username FROM radius_identities r WHERE r.id IN (${identityIds})) ${sessionFilter} ORDER BY COALESCE(ra.acctstoptime,ra.acctupdatetime,ra.acctstarttime) DESC,ra.radacctid DESC LIMIT ? OFFSET ?`,[id,id,activityPageSize+1,activityOffset]),
+    app.query(`SELECT pa.id,pa.username,pa.reply,pa.authdate FROM radpostauth pa WHERE pa.username IN (SELECT r.current_username FROM radius_identities r WHERE r.id IN (${identityIds})) ${authFilter} ORDER BY pa.authdate DESC,pa.id DESC LIMIT ? OFFSET ?`,[id,id,activityPageSize+1,activityOffset])
    ]);
-   activityHasMore=logs.length>activityPageSize||accounting.length>activityPageSize||auth.length>activityPageSize;
+   activityHasMore=((!kind||kind==="log")&&logs.length>activityPageSize)||((!kind||kind==="connect"||kind==="disconnect")&&accounting.length>activityPageSize)||((!kind||kind.startsWith("auth-"))&&auth.length>activityPageSize);
    const safeJson=(value:any)=>{if(value==null)return null;let parsed=value;try{if(typeof value==='string')parsed=JSON.parse(value);}catch{return null;}const redact=(item:any):any=>{if(Array.isArray(item))return item.map(redact);if(item&&typeof item==='object'){const result:any={};for(const [key,entry] of Object.entries(item))result[key]=/password|secret|national.?number|front.?image|back.?image|image.?data|token/i.test(key)?'[محجوب]':redact(entry);return result;}return item;};return redact(parsed);};
    activity=logs.slice(0,activityPageSize).map((row:any)=>({...row,actor_snapshot:safeJson(row.actor_snapshot),before_data:safeJson(row.before_data),after_data:safeJson(row.after_data)}));
    sessions=accounting.slice(0,activityPageSize).map((row:any)=>({id:Number(row.radacctid),username:row.username,session_id:row.acctsessionid,nas_ip:row.nasipaddress,started_at:row.acctstarttime,last_update:row.acctupdatetime||row.acctstarttime,stopped_at:row.acctstoptime,session_seconds:row.acctsessiontime,upload_bytes:row.acctinputoctets,download_bytes:row.acctoutputoctets,framed_ip:row.framedipaddress,calling_station:row.callingstationid,terminate_cause:row.acctterminatecause}));
