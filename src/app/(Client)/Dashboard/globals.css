@@ -258,21 +258,15 @@ a {
 }
 
 .dark .dashboard-shell-root :is(
-  [class*="text-slate-"], [class*="dark:text-slate-"],
-  [class*="text-gray-"], [class*="dark:text-gray-"],
-  [class*="text-zinc-"], [class*="dark:text-zinc-"],
-  [class*="text-neutral-"], [class*="dark:text-neutral-"],
-  [class*="text-stone-"], [class*="dark:text-stone-"],
-  [class*="text-white"],
-  [class*="dark:text-[#918a96]"], [class*="dark:text-[#9f98a5]"],
-  [class*="dark:text-[#aaa4af]"], [class*="dark:text-[#96909b]"],
-  [class*="dark:text-[#b9b3bd]"], [class*="dark:text-[#bdb6c1]"],
-  [class*="dark:text-[#c4bec8]"], [class*="dark:text-[#d4ced7]"],
-  [class*="dark:text-[#d6d1d9]"], [class*="dark:text-[#d8d2dc]"],
-  [class*="dark:text-[#ddd7e1]"], [class*="dark:text-[#e3dee6]"],
-  [class*="dark:text-[#ece8ee]"], [class*="dark:text-[#f3f5f8]"],
-  [class*="dark:text-[#f4f1f5]"], [class*="dark:text-[#f6f2f7]"],
-  [class*="dark:text-[#dce8fa]"]
+  [class~="dark:text-[#918a96]"], [class~="dark:text-[#9f98a5]"],
+  [class~="dark:text-[#aaa4af]"], [class~="dark:text-[#96909b]"],
+  [class~="dark:text-[#b9b3bd]"], [class~="dark:text-[#bdb6c1]"],
+  [class~="dark:text-[#c4bec8]"], [class~="dark:text-[#d4ced7]"],
+  [class~="dark:text-[#d6d1d9]"], [class~="dark:text-[#d8d2dc]"],
+  [class~="dark:text-[#ddd7e1]"], [class~="dark:text-[#e3dee6]"],
+  [class~="dark:text-[#ece8ee]"], [class~="dark:text-[#f3f5f8]"],
+  [class~="dark:text-[#f4f1f5]"], [class~="dark:text-[#f6f2f7]"],
+  [class~="dark:text-[#dce8fa]"]
 ) {
   color: var(--oneui-text) !important;
 }
@@ -361,7 +355,7 @@ a {
 
 .dark .rl-hostinger-subscribers .text-slate-400,
 .dark .rl-hostinger-subscribers .text-slate-500,
-.dark .rl-hostinger-subscribers [class*="dark:text-[#b9b3bd]"] {
+.dark .rl-hostinger-subscribers [class~="dark:text-[#b9b3bd]"] {
   color: var(--oneui-muted) !important;
 }
 
@@ -405,12 +399,12 @@ a {
   color: #f2f6fc !important;
 }
 
-.dark .rl-hostinger-subscribers [class*="dark:bg-[#172b40]"],
-.dark .rl-hostinger-subscribers [class*="dark:bg-[#29435d]"],
-.dark .rl-hostinger-subscribers [class*="dark:bg-[#16283b]"],
-.dark .rl-hostinger-subscribers [class*="dark:bg-[#102136]"],
-.dark .rl-hostinger-subscribers [class*="dark:bg-[#10243a]"],
-.dark .rl-hostinger-subscribers [class*="dark:bg-[#142d47]"] {
+.dark .rl-hostinger-subscribers [class~="dark:bg-[#172b40]"],
+.dark .rl-hostinger-subscribers [class~="dark:bg-[#29435d]"],
+.dark .rl-hostinger-subscribers [class~="dark:bg-[#16283b]"],
+.dark .rl-hostinger-subscribers [class~="dark:bg-[#102136]"],
+.dark .rl-hostinger-subscribers [class~="dark:bg-[#10243a]"],
+.dark .rl-hostinger-subscribers [class~="dark:bg-[#142d47]"] {
   background-color: var(--oneui-surface-2) !important;
 }
 
@@ -419,28 +413,28 @@ a {
   border-color: var(--oneui-border) !important;
 }
 
-.dark [class*="dark:bg-[#0d243b]"],
-.dark [class*="dark:bg-[#0d243c]"],
-.dark [class*="dark:bg-[#0b2036]"],
-.dark [class*="dark:bg-[#0a1f35]"],
-.dark [class*="dark:bg-[#0a1b2e]"],
-.dark [class*="dark:bg-[#091d32]"],
-.dark [class*="dark:bg-[#081b2f]"],
-.dark [class*="dark:bg-[#102942]"] {
+.dark [class~="dark:bg-[#0d243b]"],
+.dark [class~="dark:bg-[#0d243c]"],
+.dark [class~="dark:bg-[#0b2036]"],
+.dark [class~="dark:bg-[#0a1f35]"],
+.dark [class~="dark:bg-[#0a1b2e]"],
+.dark [class~="dark:bg-[#091d32]"],
+.dark [class~="dark:bg-[#081b2f]"],
+.dark [class~="dark:bg-[#102942]"] {
   background-color: var(--oneui-surface) !important;
 }
 
-.dark [class*="dark:bg-white/[.04]"],
-.dark [class*="dark:bg-white/[.05]"],
-.dark [class*="dark:bg-white/[.055]"],
-.dark [class*="dark:bg-white/[.06]"] {
+.dark [class~="dark:bg-white/[.04]"],
+.dark [class~="dark:bg-white/[.05]"],
+.dark [class~="dark:bg-white/[.055]"],
+.dark [class~="dark:bg-white/[.06]"] {
   background-color: rgba(255,255,255,.055) !important;
 }
 
-.dark [class*="dark:border-white/[.07]"],
-.dark [class*="dark:border-white/[.08]"],
-.dark [class*="dark:border-white/[.09]"],
-.dark [class*="dark:border-white/10"] {
+.dark [class~="dark:border-white/[.07]"],
+.dark [class~="dark:border-white/[.08]"],
+.dark [class~="dark:border-white/[.09]"],
+.dark [class~="dark:border-white/10"] {
   border-color: var(--oneui-border) !important;
 }
 
