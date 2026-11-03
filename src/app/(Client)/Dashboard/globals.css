@@ -30,16 +30,16 @@
 
 .dark {
   color-scheme: dark;
-  --oneui-bg: #1d1721;
-  --oneui-workspace: #211a25;
-  --oneui-surface: #302e33;
-  --oneui-surface-2: #37343a;
-  --oneui-surface-3: #3e3a42;
+  --oneui-bg: #0c1424;
+  --oneui-workspace: #101a2c;
+  --oneui-surface: #182337;
+  --oneui-surface-2: #202d43;
+  --oneui-surface-3: #28364e;
   --oneui-border: rgba(255, 255, 255, 0.09);
   --oneui-border-strong: rgba(255, 255, 255, 0.14);
-  --oneui-text: #f6f2f7;
-  --oneui-muted: #b8b0bc;
-  --oneui-blue: #4c8dff;
+  --oneui-text: #f2f6fc;
+  --oneui-muted: #b6c4d7;
+  --oneui-blue: #59a5ff;
   --oneui-orange: #ffb34d;
 }
 
