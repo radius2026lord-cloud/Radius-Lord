@@ -2,8 +2,8 @@
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity} from "lucide-react";
-import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,CollectionStatusFilters,useCollectionDisplay} from "@/components/ui/collection-display";
+import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers} from "lucide-react";
+import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import ProjectButton from "@/components/ui/project-button";
 import {ProjectInfoCard} from "@/components/ui/project-info-card";
 type NetworkRow={id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
@@ -21,7 +21,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  return <div dir="rtl" className="space-y-4">
  {networkId&&<Link href="/Dashboard/networks" className="inline-flex text-sm text-blue-600">العودة إلى الشبكات</Link>}
  {!networkId&&<>
- <CollectionToolbar hostingerStyle responsive title="الشبكات" description="متابعة الشبكات وقواعد بياناتها وآخر حالة محفوظة للبيئة" icon={Network} view={view} onViewChange={setView} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<ProjectButton variant="secondary" aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(value=>!value)}><Filter/>تصفية</ProjectButton>} primaryAction={<ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>} filters={filtersOpen&&<CollectionStatusFilters value={filter} onChange={setFilter} items={[{value:"all",label:"كل الشبكات",count:items.length,dot:"bg-blue-500"},...["pending","provisioning","ready","failed"].map(value=>({value,label:labels[value],count:items.filter(item=>item.environmentStatus===value).length,dot:value==="ready"?"bg-emerald-500":value==="failed"?"bg-rose-500":"bg-amber-500"}))]}/>}/>
+ <CollectionToolbar hostingerStyle responsive title="الشبكات" description="متابعة الشبكات وقواعد بياناتها وآخر حالة محفوظة للبيئة" icon={Network} view={view} onViewChange={setView} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<ProjectButton variant="secondary" aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(value=>!value)}><Filter/>تصفية</ProjectButton>} primaryAction={<ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>} filters={filtersOpen&&<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[
+ {value:"all",title:"كل الشبكات",Icon:Layers,tone:"text-blue-600"},
+ {value:"pending",title:"بانتظار التجهيز",Icon:Clock3,tone:"text-amber-600"},
+ {value:"provisioning",title:"جارٍ التجهيز",Icon:Activity,tone:"text-violet-500"},
+ {value:"ready",title:"البيئة جاهزة",Icon:CheckCircle2,tone:"text-emerald-600"},
+ {value:"failed",title:"تحتاج معالجة",Icon:AlertTriangle,tone:"text-rose-500"}
+ ].map(({value,title,Icon,tone})=>{const count=value==="all"?items.length:items.filter(item=>item.environmentStatus===value).length;return <button key={value} type="button" aria-pressed={filter===value} onClick={()=>setFilter(value)} className={`rounded-2xl border p-4 text-right transition-colors ${filter===value?"border-blue-500 bg-blue-50 dark:bg-blue-500/10":"border-slate-200 bg-white dark:border-white/10 dark:bg-[var(--oneui-surface)]"}`}><span className="flex items-center gap-2 text-sm"><Icon className={`h-4 w-4 ${tone}`}/>{title}</span><span className="mt-3 block text-xl font-semibold">{count}</span><span className="mt-2 block h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><span className="block h-full bg-blue-500" style={{width:`${items.length?count/items.length*100:0}%`}}/></span></button>})}</div>}/> 
  {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{filtered.map(item=><CollectionCard hostingerStyle key={item.id} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
  <div className={view==="row"?"grid items-center gap-4 sm:grid-cols-2 xl:grid-cols-5":"space-y-3"}>
  <div><h3 className="font-semibold"><Network className="ml-2 inline h-4 w-4 text-blue-500"/>#{item.id} · {item.name}</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.ownerName}</p></div>
