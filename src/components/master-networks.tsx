@@ -40,7 +40,7 @@ function SubscriptionDates({item,days}:{item:NetworkRow;days:number}){
  return <div className="space-y-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-white/10">
  <p className="flex items-center gap-1.5"><Package className="h-4 w-4 text-violet-500"/>{item.planName||"الخطة غير محددة"}</p>
  <p className="text-slate-500 dark:text-slate-400">بدء الاشتراك · {item.startsAt?date(item.startsAt):"لم يبدأ"}</p>
- <p className="flex items-center gap-1.5"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/><span>انتهاء الاشتراك · {item.expiresAt?date(item.expiresAt):"لم يُحدد"}</span></p>
+ <div className="border-t border-slate-200 pt-2 dark:border-white/10"><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/>موعد انتهاء الاشتراك</p><p className="mt-1 text-sm font-semibold leading-6">{item.expiresAt?date(item.expiresAt):"لم يُحدد"}</p>{Number.isFinite(expiry)&&remaining>0&&<p className="mt-1 text-slate-500 dark:text-slate-400">متبقٍ {Math.ceil(remaining/86400000)} يوم</p>}</div>
  {(approaching||expired)&&<p role="status" className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300"><AlertTriangle className="h-4 w-4 shrink-0"/>{expired?"انتهى الاشتراك، يلزم التجديد":"بادر بتجديد الخطة · متبقٍ "+Math.ceil(remaining/86400000)+" يوم"}</p>}
  </div>;
 }
@@ -89,9 +89,9 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div role="group" aria-label="حالة تجهيز الشبكات" className="grid items-stretch gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
  {states.map(({value,title,Icon,tone,ink})=>{const count=value==="all"?baseItems.length:baseItems.filter(item=>item.environmentStatus===value).length,percent=baseItems.length?Math.round(count/baseItems.length*100):0;
  return <ProjectButton key={value} variant="secondary" aria-pressed={filter===value} onClick={()=>setFilter(current=>current===value?"all":value)} className="group !h-auto !min-h-0 !w-full !justify-start !rounded-[18px] !border-0 !bg-transparent !p-0 !shadow-none">
- <ProjectInfoCard tone={tone} className={`!min-h-[110px] !w-full !border-t-[3px] !p-3 text-right transition-transform group-hover:-translate-y-1 motion-reduce:transform-none ${ink} ${filter===value?"ring-2 ring-blue-400 shadow-md":""}`}>
+ <ProjectInfoCard tone={tone} className={`!min-h-[130px] !w-full !border-t-[3px] !p-4 text-right transition-transform group-hover:-translate-y-1 motion-reduce:transform-none ${ink} ${filter===value?"ring-2 ring-blue-400 shadow-md":""}`}>
  <span className="flex items-start justify-between gap-2"><span className="text-[11px] font-semibold">{title}</span><Icon className="h-5 w-5"/></span>
- <span className="mt-2 flex items-baseline gap-1.5"><b className="text-2xl tabular-nums">{count}</b><span className="text-xs">شبكة</span></span>
+ <span className="mt-3 flex items-baseline gap-1.5"><b className="text-3xl tabular-nums">{count}</b><span className="text-xs">شبكة</span></span>
  <span className="mt-3 block h-1 rounded-full bg-slate-200 dark:bg-white/10"><span className="block h-full rounded-full bg-current" style={{width:percent+"%"}}/></span><span className="mt-1 block text-[10px]">{percent}% من نتائج البحث</span>
  </ProjectInfoCard></ProjectButton>})}
  </div>
@@ -102,19 +102,14 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  </div>
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
  {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
- <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(190px,1fr)_minmax(210px,1fr)_minmax(300px,1.5fr)]":"space-y-4"}>
+ <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(180px,1fr)_minmax(220px,1fr)_minmax(290px,1.4fr)]":"space-y-4"}>
  <div className="min-w-0">
  <div className="flex flex-wrap items-center gap-2"><span aria-label={"معرّف الشبكة "+item.id+" · "+state.label} className={`inline-flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-semibold ${state.tone}`}><Hash className="h-3.5 w-3.5"/>{item.id}</span><h3 className="min-w-0 break-words text-sm font-semibold">{item.name}</h3></div>
  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><UserRound className="h-4 w-4 shrink-0 text-violet-500"/>{item.ownerName||"غير محدد"}</p>
  <p className={`mt-2 flex items-center gap-1.5 text-xs ${state.tone.split(" ").filter(token=>token.startsWith("text-")||token.startsWith("dark:text-")).join(" ")}`}><StateIcon className="h-4 w-4"/>{state.label}</p>
  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck className="h-4 w-4 text-blue-500"/>الاشتراك · {label(item.subscriptionStatus)}</p>
  </div>
- <div className="min-w-0 space-y-3 text-xs"><SubscriptionDates item={item} days={reminderDays}/>
- <div><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><Database className="h-4 w-4 text-violet-500"/>قاعدة البيانات</p><p className="mt-1 break-all"><bdi>{item.databaseName||"لم تُجهّز"}</bdi></p></div>
- <p className="flex items-center gap-1.5"><Server className="h-4 w-4 shrink-0 text-sky-500"/>{item.databaseServerName||"الخادم غير محدد"}</p>
- <p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/><span>قراءة المؤشرات · {date(item.metricsReadAt)}</span></p>
- <p className={item.metricsStatus==="unavailable"||item.metricsStale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}>{item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":item.metricsStale?"قراءة قديمة أو بانتظار التحديث":"قراءة محفوظة حديثة"}</p>
- </div>
+ <div className="min-w-0"><SubscriptionDates item={item} days={reminderDays}/></div>
  <div className="grid min-w-0 items-start gap-3 sm:grid-cols-2">
  <ConnectionChart title="متصلو PPPoE" connected={item.metrics?.connectedSubscribers} total={item.metrics?.totalSubscribers} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
  <ConnectionChart title="NAS المرتبطة · المتصلة" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
@@ -123,6 +118,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <p className="flex items-center gap-1.5 text-xs sm:col-span-2"><Users className="h-4 w-4 text-teal-500"/>مشتركون جدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p>
  </div>
  </div>
+ <footer className="mt-4 space-y-3 border-t border-slate-200 pt-3 dark:border-white/10">
+ <details onClick={event=>event.stopPropagation()} onKeyDown={event=>event.stopPropagation()} className="rounded-xl border border-slate-200 px-3 py-2 text-xs dark:border-white/10">
+ <summary className="cursor-pointer text-slate-600 dark:text-slate-300"><Database className="mx-1 inline h-4 w-4 text-violet-500"/>التفاصيل التقنية</summary>
+ <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2"><div><dt className="text-slate-500 dark:text-slate-400">قاعدة البيانات</dt><dd className="mt-1 break-all"><bdi>{item.databaseName||"لم تُجهّز"}</bdi></dd></div><div><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><Server className="h-3.5 w-3.5 text-sky-500"/>الخادم</dt><dd className="mt-1 break-words">{item.databaseServerName||"غير محدد"}</dd></div></dl>
+ </details>
+ <div className="flex flex-wrap items-center justify-between gap-2 text-[10px]"><p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-3.5 w-3.5 shrink-0"/><span>آخر قراءة · {date(item.metricsReadAt)}</span></p><p className={item.metricsStatus==="unavailable"||item.metricsStale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}>{item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":item.metricsStale?"قديمة أو بانتظار التحديث":"قراءة حديثة"}</p></div>
+ </footer>
  </CollectionCard>})}</CollectionGrid>}
  <div className="flex items-center justify-between"><ProjectButton variant="secondary" disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>السابق</ProjectButton><span className="text-xs">{currentPage} / {pageCount}</span><ProjectButton variant="secondary" disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}>التالي</ProjectButton></div>
  </>}
