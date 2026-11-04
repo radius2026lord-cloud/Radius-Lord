@@ -15,7 +15,18 @@ type NetworkRow={planName:string|null;startsAt:string|null;metrics:Metrics|null;
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
-function networkState(item:NetworkRow){
+function expiryState(item:NetworkRow,days:number,now:number){
+ const end=item.expiresAt?Date.parse(item.expiresAt):NaN;
+ const start=item.startsAt?Date.parse(item.startsAt):NaN;
+ if(item.subscriptionStatus==="expired"||(Number.isFinite(end)&&end<=now))return "expired";
+ if(!Number.isFinite(start)||start>now)return "pending";
+ if(item.subscriptionStatus!=="active"||!Number.isFinite(end))return "other";
+ return end-now<=days*86400000?"soon":"current";
+}
+function networkState(item:NetworkRow,days:number,now:number){
+ const expiry=expiryState(item,days,now);
+ if(expiry==="expired")return {label:"اشتراك منتهٍ",tone:"border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200",Icon:CalendarClock};
+ if(expiry==="soon"&&item.status==="active")return {label:"قريب من الانتهاء",tone:"border-orange-400 bg-orange-50 text-orange-800 dark:border-orange-400/40 dark:bg-orange-500/10 dark:text-orange-200",Icon:CalendarClock};
  if(item.status==="disabled")return {label:"غير مفعّلة",tone:"border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-500 dark:bg-slate-500/10 dark:text-slate-300",Icon:Power};
  if(item.subscriptionStatus==="expired")return {label:"اشتراك منتهٍ",tone:"border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200",Icon:CalendarClock};
  if(item.environmentStatus==="failed")return {label:"تحتاج معالجة",tone:"border-rose-400 bg-rose-50 text-rose-700 dark:border-rose-400/40 dark:bg-rose-500/10 dark:text-rose-200",Icon:AlertTriangle};
@@ -57,6 +68,9 @@ function SubscriptionDates({item,days}:{item:NetworkRow;days:number}){
 export default function MasterNetworks({networkId}:{networkId?:number}){
  const router=useRouter();
  const [items,setItems]=useState<NetworkRow[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
+ const [now,setNow]=useState(()=>Date.now());
+ const [validityFilter,setValidityFilter]=useState("all");
+ useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
  const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false),[selected,setSelected]=useState<NetworkRow|null>(null);
  const [subscriptionFilter,setSubscriptionFilter]=useState("all"),[readingFilter,setReadingFilter]=useState("all"),[serverFilter,setServerFilter]=useState("all");
@@ -65,21 +79,27 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");if(!controller.signal.aborted){setItems(body.items||[]);setReminderDays(body.reminderSettings?.expiryDays??7);}}).catch(reason=>{if(!controller.signal.aborted)setError(reason.message||"تعذر تحميل الشبكات.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[revision]);
  useEffect(()=>{if(networkId)setSelected(items.find(item=>Number(item.id)===networkId)||null);},[networkId,items]);
  const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||item.subscriptionStatus===subscriptionFilter)
+ &&(validityFilter==="all"||expiryState(item,reminderDays,now)===validityFilter)
  &&(serverFilter==="all"||item.databaseServerName===serverFilter)
  &&(readingFilter==="all"||(readingFilter==="fresh"?item.metricsStatus==="ok"&&!item.metricsStale:readingFilter==="failed"?item.metricsStatus==="unavailable":item.metricsStale))
  &&[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(query.trim().toLowerCase()));
- const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter]);
+ const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,reminderDays,now]);
  const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||item.environmentStatus===filter).sort((a,b)=>{
+ if(sort==="expiry"){
+ const left=a.expiresAt?Date.parse(a.expiresAt):NaN,right=b.expiresAt?Date.parse(b.expiresAt):NaN;
+ if(!Number.isFinite(left)||!Number.isFinite(right))return Number.isFinite(left)?-1:Number.isFinite(right)?1:a.id-b.id;
+ return (descending?right-left:left-right)||a.id-b.id;
+ }
  const comparison=sort==="id"?a.id-b.id:sort==="subscribers"?(a.metrics?.totalSubscribers??-1)-(b.metrics?.totalSubscribers??-1):a.name.localeCompare(b.name,"ar");
  return descending?-comparison:comparison;
  }),[baseItems,filter,sort,descending]);
- const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all");
+ const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all");
  const effectivePageSize=pageSize==="all"?Math.max(1,filtered.length):Number(pageSize);
  const pageCount=Math.max(1,Math.ceil(filtered.length/effectivePageSize));
  const currentPage=Math.min(page,pageCount);
  const visible=filtered.slice((currentPage-1)*effectivePageSize,currentPage*effectivePageSize);
  const allVisibleSelected=visible.length>0&&visible.every(item=>selection.has(item.id));
- useEffect(()=>{setPage(1);setSelection(new Set());},[query,filter,subscriptionFilter,readingFilter,serverFilter,pageSize,setSelection]);
+ useEffect(()=>{setPage(1);setSelection(new Set());},[query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,pageSize,setSelection]);
  const serverOptions=[{value:"all",label:"كل الخوادم"},...Array.from(new Set(items.map(item=>item.databaseServerName).filter((name):name is string=>Boolean(name)))).map(name=>({value:name,label:name}))];
  const states=[
  {value:"all",title:"كل الشبكات",Icon:Layers,tone:"info" as const,ink:"text-blue-700 dark:text-blue-200"},
@@ -93,10 +113,14 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <CollectionToolbar hostingerStyle responsive title="الشبكات" description="متابعة الشبكات وقواعد بياناتها وآخر حالة محفوظة للبيئة" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>}/>
  {filtersOpen&&<div id="master-network-filters" className="grid items-start gap-3 rounded-2xl border border-slate-200 p-3 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-3">
  <ProjectFilterGroup icon={CheckCircle2} title="الاشتراك" tone="subscription"><ProjectFilterChoices value={subscriptionFilter} onChange={setSubscriptionFilter} items={[{value:"all",label:"الكل",icon:Layers,accent:"text-blue-500"},{value:"active",label:"نشط",icon:CheckCircle2,accent:"text-emerald-600"},{value:"expired",label:"منتهي",icon:Clock3,accent:"text-amber-600"}]}/></ProjectFilterGroup>
+ <ProjectFilterGroup icon={CalendarClock} title="صلاحية الاشتراك" tone="subscription"><ProjectDropdown compact bareOptionIcons value={validityFilter} onChange={setValidityFilter} options={[{value:"all",label:"كل الاشتراكات"},{value:"current",label:"ساري"},{value:"soon",label:"قريب من الانتهاء"},{value:"expired",label:"منتهي"},{value:"pending",label:"لم يبدأ"},{value:"other",label:"حالة أخرى أو موعد غير محدد"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={Activity} title="حداثة مؤشرات التشغيل" tone="connection"><ProjectDropdown compact bareOptionIcons value={readingFilter} onChange={setReadingFilter} options={[{value:"all",label:"كل القراءات"},{value:"fresh",label:"قراءة حديثة"},{value:"stale",label:"قديمة أو لم تصل"},{value:"failed",label:"تعذرت آخر قراءة"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={Database} title="خادم قاعدة البيانات" tone="server"><ProjectDropdown compact bareOptionIcons searchable value={serverFilter} onChange={setServerFilter} options={serverOptions}/></ProjectFilterGroup>
- {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");}}>مسح التصفية</ProjectButton>}
+ {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");}}>مسح التصفية</ProjectButton>}
  </div>}
+ <div className="grid gap-3 sm:grid-cols-2" aria-label="متابعة صلاحية الاشتراكات">
+ {[{value:"soon",title:"قريبة من الانتهاء",Icon:CalendarClock},{value:"expired",title:"اشتراكات منتهية",Icon:AlertTriangle}].map(({value,title,Icon})=><button key={value} type="button" aria-pressed={validityFilter===value} onClick={()=>setValidityFilter(current=>current===value?"all":value)} className={`flex items-center justify-between gap-3 rounded-2xl border p-4 text-right ${validityFilter===value?"border-amber-400 bg-amber-50 dark:bg-amber-500/10":"border-slate-200 bg-white dark:border-white/10 dark:bg-[var(--oneui-surface)]"}`}><span className="flex items-center gap-2 text-sm"><Icon className="h-5 w-5 text-amber-500"/>{title}</span><b className="text-xl tabular-nums">{items.filter(item=>expiryState(item,reminderDays,now)===value).length}</b></button>)}
+ </div>
  <div role="group" aria-label="حالة تجهيز الشبكات" className="grid items-stretch gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
  {states.map(({value,title,Icon,tone,ink})=>{const count=value==="all"?baseItems.length:baseItems.filter(item=>item.environmentStatus===value).length,percent=baseItems.length?Math.round(count/baseItems.length*100):0;
  return <ProjectButton key={value} variant="secondary" aria-pressed={filter===value} onClick={()=>setFilter(current=>current===value?"all":value)} className="group !h-auto !min-h-0 !w-full !justify-start !rounded-[18px] !border-0 !bg-transparent !p-0 !shadow-none">
@@ -108,11 +132,11 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  </div>
  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-[var(--oneui-surface)]">
  <span className="text-sm"><Users className="ml-2 inline h-4 w-4 text-blue-500"/>إجمالي الشبكات · {filtered.length}</span>
- <div className="flex items-center gap-2"><span className="text-xs">الترتيب</span><ProjectDropdown compact value={sort} onChange={setSort} options={[{value:"name",label:"اسم الشبكة"},{value:"id",label:"معرّف الشبكة"},{value:"subscribers",label:"عدد مشتركي PPPoE"}]}/><ProjectButton variant="secondary" size="icon" aria-label={descending?"ترتيب تصاعدي":"ترتيب تنازلي"} onClick={()=>setDescending(value=>!value)}><ArrowUpDown className="h-4 w-4"/></ProjectButton></div>
+ <div className="flex items-center gap-2"><span className="text-xs">الترتيب</span><ProjectDropdown compact value={sort} onChange={setSort} options={[{value:"expiry",label:"موعد انتهاء الاشتراك"},{value:"name",label:"اسم الشبكة"},{value:"id",label:"معرّف الشبكة"},{value:"subscribers",label:"عدد مشتركي PPPoE"}]}/><ProjectButton variant="secondary" size="icon" aria-label={descending?"ترتيب تصاعدي":"ترتيب تنازلي"} onClick={()=>setDescending(value=>!value)}><ArrowUpDown className="h-4 w-4"/></ProjectButton></div>
  <div className="flex min-w-0 items-center justify-between gap-2 border-t border-slate-200/70 pt-3 dark:border-white/10 lg:border-r lg:border-t-0 lg:pr-3 lg:pt-0"><span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300"><Rows3 aria-hidden="true" className="h-4 w-4 shrink-0"/>عدد العناصر</span><ProjectDropdown bareOptionIcons value={pageSize} onChange={setPageSize} compact className="w-[124px] max-w-full" placeholder="العدد" options={[{value:"50",label:"50 عنصرًا"},{value:"100",label:"100 عنصر"},{value:"150",label:"150 عنصر"},{value:"all",label:"كل النتائج"}]}/></div>
  </div>
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
- {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
+ {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item,reminderDays,now),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
  <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(180px,1fr)_minmax(220px,1fr)_minmax(290px,1.4fr)]":"space-y-4"}>
  <div className="min-w-0">
  <div className="flex flex-wrap items-center gap-2"><span aria-label={"معرّف الشبكة "+item.id+" · "+state.label} className={`inline-flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-semibold ${state.tone}`}><Hash className="h-3.5 w-3.5"/>{item.id}</span><h3 className="min-w-0 break-words text-sm font-semibold">{item.name}</h3></div>
