@@ -2,7 +2,7 @@
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X} from "lucide-react";
+import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-filter-panel";
@@ -14,6 +14,24 @@ type NetworkRow={metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:st
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
+function networkState(item:NetworkRow){
+ if(item.status==="disabled")return {label:"غير مفعّلة",tone:"border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-500 dark:bg-slate-500/10 dark:text-slate-300",Icon:Power};
+ if(item.subscriptionStatus==="expired")return {label:"اشتراك منتهٍ",tone:"border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200",Icon:CalendarClock};
+ if(item.environmentStatus==="failed")return {label:"تحتاج معالجة",tone:"border-rose-400 bg-rose-50 text-rose-700 dark:border-rose-400/40 dark:bg-rose-500/10 dark:text-rose-200",Icon:AlertTriangle};
+ if(item.environmentStatus==="provisioning")return {label:"جارٍ التجهيز",tone:"border-violet-400 bg-violet-50 text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/10 dark:text-violet-200",Icon:Activity};
+ if(item.environmentStatus==="ready"&&item.status==="active")return {label:"مفعّلة",tone:"border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200",Icon:CheckCircle2};
+ return {label:"بانتظار التجهيز",tone:"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-300/40 dark:bg-blue-500/10 dark:text-blue-200",Icon:Clock3};
+}
+function ConnectionChart({title,connected,total,Icon,tone}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string}){
+ const available=connected!==undefined&&total!==undefined;
+ const percent=available&&total>0?Math.max(0,Math.min(100,Math.round(100*connected/total))):0;
+ return <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200/80 p-3 dark:border-white/10">
+ <div className={`relative h-16 w-16 shrink-0 ${tone}`} role="img" aria-label={title+" · "+(available?connected+" من "+total:"لم تصل قراءة")}>
+ <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-15"/>{available&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
+ <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{available?percent+"%":"—"}</span></div>
+ <div className="min-w-0"><p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></>:"لم تصل قراءة"}</p></div>
+ </div>;
+}
 export default function MasterNetworks({networkId}:{networkId?:number}){
  const router=useRouter();
  const [items,setItems]=useState<NetworkRow[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
@@ -70,14 +88,29 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <ProjectDropdown compact value={pageSize} onChange={setPageSize} options={["25","50","100"].map(value=>({value,label:value+" عنصرًا"}))}/>
  </div>
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
- {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=><CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
- <div className={view==="row"?"grid items-center gap-4 sm:grid-cols-2 xl:grid-cols-5":"space-y-3"}>
- <div><h3 className="font-semibold"><Network className="ml-2 inline h-4 w-4 text-blue-500"/><span className="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 dark:border-blue-300/30 dark:bg-blue-500/10 dark:text-blue-200"><Hash className="h-3 w-3"/>{item.id}</span> · {item.name}</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.ownerName}</p></div>
- <div className="text-sm">البيئة · {label(item.environmentStatus)}<p className="mt-1 text-xs text-slate-500 dark:text-slate-400">الاشتراك · {label(item.subscriptionStatus)}</p></div>
- <div className="text-xs"><Database className="ml-1 inline h-4 w-4 text-violet-500"/><bdi>{item.databaseName||"لم تُجهّز قاعدة البيانات"}</bdi><p className="mt-1">{item.databaseServerName}</p></div>
- <div className="text-xs"><p className="mb-1">إجمالي مشتركي PPPoE · {item.metrics?.totalSubscribers??"—"}</p><Users className="ml-1 inline h-4 w-4 text-emerald-500"/>متصلو PPPoE · {item.metrics?.connectedSubscribers??"—"}<p className="mt-1"><Activity className="ml-1 inline h-4 w-4 text-sky-500"/>الجلسات · {item.metrics?.activeSessions??"—"}</p></div>
- <div className="text-xs text-slate-500 dark:text-slate-400">آخر تقرير<p className="mt-1">{date(item.metricsReadAt)}</p><p className="mt-1">{item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":item.metricsStale?"قراءة قديمة أو بانتظار التحديث":"قراءة محفوظة حديثة"}</p></div>
- </div><div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 text-xs dark:border-white/10 sm:grid-cols-3"><p>غير المتصلين · {item.metrics?.disconnectedSubscribers??"—"}</p><p>الجدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p><p>NAS المتصلة / الإجمالي · {item.metrics?`${item.metrics.connectedNas} / ${item.metrics.totalNas}`:"—"}</p></div>{item.metrics&&<div className="mt-3"><p className="mb-1 text-xs">نسبة اتصال مشتركي PPPoE · {item.metrics.totalSubscribers?Math.round(100*item.metrics.connectedSubscribers/item.metrics.totalSubscribers):0}%</p><div role="progressbar" aria-label="نسبة اتصال مشتركي PPPoE" aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.metrics.totalSubscribers?Math.round(100*item.metrics.connectedSubscribers/item.metrics.totalSubscribers):0} className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div className="h-full bg-emerald-500" style={{width:`${item.metrics.totalSubscribers?100*item.metrics.connectedSubscribers/item.metrics.totalSubscribers:0}%`}}/></div></div>}</CollectionCard>)}</CollectionGrid>}
+ {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
+ <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(190px,1fr)_minmax(210px,1fr)_minmax(300px,1.5fr)]":"space-y-4"}>
+ <div className="min-w-0">
+ <div className="flex flex-wrap items-center gap-2"><span aria-label={"معرّف الشبكة "+item.id+" · "+state.label} className={`inline-flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-semibold ${state.tone}`}><Hash className="h-3.5 w-3.5"/>{item.id}</span><h3 className="min-w-0 break-words text-sm font-semibold">{item.name}</h3></div>
+ <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><UserRound className="h-4 w-4 shrink-0 text-violet-500"/>{item.ownerName||"غير محدد"}</p>
+ <p className={`mt-2 flex items-center gap-1.5 text-xs ${state.tone.split(" ").filter(token=>token.startsWith("text-")||token.startsWith("dark:text-")).join(" ")}`}><StateIcon className="h-4 w-4"/>{state.label}</p>
+ <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck className="h-4 w-4 text-blue-500"/>الاشتراك · {label(item.subscriptionStatus)}</p>
+ </div>
+ <div className="min-w-0 space-y-3 text-xs">
+ <div><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><Database className="h-4 w-4 text-violet-500"/>قاعدة البيانات</p><p className="mt-1 break-all"><bdi>{item.databaseName||"لم تُجهّز"}</bdi></p></div>
+ <p className="flex items-center gap-1.5"><Server className="h-4 w-4 shrink-0 text-sky-500"/>{item.databaseServerName||"الخادم غير محدد"}</p>
+ <p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/><span>قراءة المؤشرات · {date(item.metricsReadAt)}</span></p>
+ <p className={item.metricsStatus==="unavailable"||item.metricsStale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}>{item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":item.metricsStale?"قراءة قديمة أو بانتظار التحديث":"قراءة محفوظة حديثة"}</p>
+ </div>
+ <div className="grid min-w-0 items-start gap-3 sm:grid-cols-2">
+ <ConnectionChart title="متصلو PPPoE" connected={item.metrics?.connectedSubscribers} total={item.metrics?.totalSubscribers} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
+ <ConnectionChart title="NAS المتصلة" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
+ <p className="flex items-center gap-1.5 text-xs"><WifiOff className="h-4 w-4 text-blue-500"/>غير المتصلين · {item.metrics?.disconnectedSubscribers??"—"}</p>
+ <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>الجلسات · {item.metrics?.activeSessions??"—"}</p>
+ <p className="flex items-center gap-1.5 text-xs sm:col-span-2"><Users className="h-4 w-4 text-teal-500"/>مشتركون جدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p>
+ </div>
+ </div>
+ </CollectionCard>})}</CollectionGrid>}
  <div className="flex items-center justify-between"><ProjectButton variant="secondary" disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>السابق</ProjectButton><span className="text-xs">{currentPage} / {pageCount}</span><ProjectButton variant="secondary" disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}>التالي</ProjectButton></div>
  </>}
  {networkId&&!loading&&!error&&!selected&&<CollectionState>الشبكة غير موجودة أو غير متاحة.</CollectionState>}
