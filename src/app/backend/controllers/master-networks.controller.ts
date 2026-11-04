@@ -1,3 +1,4 @@
+import {readPrivateSetting,savePrivateSetting} from '../services/radius-provision.service';
 import {Response} from 'express';
 import {db} from '../config/db';
 import {AuthenticatedRequest} from '../middleware/auth.middleware';
@@ -8,7 +9,8 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
   const [items]=await db.query(`SELECT t.id,t.name,t.slug,t.status,t.license_number licenseNumber,c.full_name ownerName,
    e.id environmentId,e.status environmentStatus,e.system_url systemUrl,
    d.db_name databaseName,ds.name databaseServerName,
-   s.status subscriptionStatus,s.expires_at expiresAt,
+   s.status subscriptionStatus,s.starts_at startsAt,s.expires_at expiresAt,
+   (SELECT po.plan_name_snapshot FROM payment_orders po WHERE po.subscription_id=s.id AND po.tenant_id=t.id ORDER BY po.id DESC LIMIT 1) planName,
    p.setting_value metricsSnapshot,h.reported_at reportedAt,h.last_seen_at lastSeenAt,h.online_users_count onlineUsers,
    h.active_sessions_count activeSessions,h.database_status databaseStatus,h.radius_status radiusStatus
    FROM tenants t LEFT JOIN customers c ON c.id=t.customer_id
@@ -19,7 +21,8 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
    LEFT JOIN tenant_environment_status h ON h.environment_id=e.id
    LEFT JOIN platform_settings p ON p.setting_group=\'master_network_metrics\' AND p.setting_key=CONCAT(\'tenant_\',t.id)
    WHERE t.archived_at IS NULL ORDER BY t.id DESC`);
-  return res.json({items:(items as any[]).map(({metricsSnapshot,...item})=>{
+  const reminderSettings=await readSubscriptionReminderSettings();
+  return res.json({reminderSettings,items:(items as any[]).map(({metricsSnapshot,...item})=>{
    let snapshot:any=null;
    try{snapshot=typeof metricsSnapshot==='string'?JSON.parse(metricsSnapshot):metricsSnapshot;}catch{}
    if(Number(snapshot?.environmentId)!==Number(item.environmentId))snapshot=null;
@@ -28,4 +31,17 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
     metricsStale:!snapshot?.readAt||Date.now()-Date.parse(snapshot.readAt)>6*60*1000};
   })});
  }catch(error){console.error('[master-networks]',{code:(error as any)?.code});return res.status(500).json({message:'تعذر تحميل الشبكات.'});}
+}
+
+export async function readSubscriptionReminderSettings(){
+ const saved=await readPrivateSetting('subscription_notifications','renewal');
+ return {expiryDays:Number(saved?.expiryDays)||7};
+}
+export async function getSubscriptionReminderSettings(_req:AuthenticatedRequest,res:Response){
+ try{return res.json(await readSubscriptionReminderSettings());}catch{return res.status(503).json({message:'تعذر تحميل إعداد تنبيه التجديد.'});}
+}
+export async function saveSubscriptionReminderSettings(req:AuthenticatedRequest,res:Response){
+ const expiryDays=Number(req.body?.expiryDays);
+ if(!Number.isInteger(expiryDays)||expiryDays<1||expiryDays>90)return res.status(400).json({message:'أدخل عدد أيام من 1 إلى 90.'});
+ try{await savePrivateSetting('subscription_notifications','renewal',{expiryDays});return res.json({expiryDays});}catch{return res.status(503).json({message:'تعذر حفظ إعداد تنبيه التجديد.'});}
 }
