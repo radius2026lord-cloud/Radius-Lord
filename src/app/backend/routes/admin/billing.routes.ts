@@ -1,4 +1,4 @@
-import {listMasterNetworks} from '../../controllers/master-networks.controller';
+import {listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
 import {deleteEnvironment} from '../../controllers/environment-delete.controller';
 import {requestEnvironmentNotification} from '../../controllers/environment-notification.controller';
 import { Router } from 'express';
@@ -8,6 +8,8 @@ import { getCollectionReportController } from '../../controllers/payment-reports
 import { requestEnvironmentController } from '../../controllers/environment.controller';
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
+router.get('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),getSubscriptionReminderSettings);
+router.put('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),saveSubscriptionReminderSettings);
 router.get('/admin/networks',authenticate,requireAccountType('master_admin'),listMasterNetworks);
 router.get('/admin/subscriptions/:id/payments',authenticate,requireAccountType('master_admin'),listSubscriptionPaymentsController);
 router.delete('/admin/subscriptions/:id/environment',authenticate,requireAccountType('master_admin'),deleteEnvironment);
