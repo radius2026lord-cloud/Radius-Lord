@@ -1,3 +1,4 @@
+import {startMasterNetworkMetricsWorker} from './services/master-network-metrics.worker';
 import {startNetworkArchiveWorker} from './services/network-archive.service';
 import {startProfileSpeedBoostWorker} from './services/profile-speed-boost.worker';
 import {startPppoeLifecycleWorker} from './services/network-pppoe-lifecycle.worker';
@@ -40,6 +41,8 @@ const startServer = (port: number) => {
   server.listen(port, () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
+    const stopMasterMetrics=startMasterNetworkMetricsWorker();
+    server.once('close',stopMasterMetrics);
     const stopArchive=startNetworkArchiveWorker();
     const stopProfileBoosts=startProfileSpeedBoostWorker();
     const stopPppoeLifecycle=startPppoeLifecycleWorker();
