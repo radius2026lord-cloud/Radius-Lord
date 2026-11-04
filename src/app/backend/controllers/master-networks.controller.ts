@@ -9,7 +9,7 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
    e.id environmentId,e.status environmentStatus,e.system_url systemUrl,
    d.db_name databaseName,ds.name databaseServerName,
    s.status subscriptionStatus,s.expires_at expiresAt,
-   h.reported_at reportedAt,h.last_seen_at lastSeenAt,h.online_users_count onlineUsers,
+   p.setting_value metricsSnapshot,h.reported_at reportedAt,h.last_seen_at lastSeenAt,h.online_users_count onlineUsers,
    h.active_sessions_count activeSessions,h.database_status databaseStatus,h.radius_status radiusStatus
    FROM tenants t LEFT JOIN customers c ON c.id=t.customer_id
    LEFT JOIN tenant_environments e ON e.id=(SELECT MAX(e2.id) FROM tenant_environments e2 WHERE e2.tenant_id=t.id AND e2.archived_at IS NULL)
@@ -17,7 +17,15 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
    LEFT JOIN database_servers ds ON ds.id=d.database_server_id
    LEFT JOIN subscriptions s ON s.id=(SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.tenant_id=t.id)
    LEFT JOIN tenant_environment_status h ON h.environment_id=e.id
+   LEFT JOIN platform_settings p ON p.setting_group=\'master_network_metrics\' AND p.setting_key=CONCAT(\'tenant_\',t.id)
    WHERE t.archived_at IS NULL ORDER BY t.id DESC`);
-  return res.json({items});
+  return res.json({items:(items as any[]).map(({metricsSnapshot,...item})=>{
+   let snapshot:any=null;
+   try{snapshot=typeof metricsSnapshot==='string'?JSON.parse(metricsSnapshot):metricsSnapshot;}catch{}
+   if(Number(snapshot?.environmentId)!==Number(item.environmentId))snapshot=null;
+   return {...item,metrics:snapshot?.metrics??null,metricsReadAt:snapshot?.readAt??null,
+    metricsStatus:snapshot?.status??'pending',metricsScope:snapshot?.scope??null,
+    metricsStale:!snapshot?.readAt||Date.now()-Date.parse(snapshot.readAt)>6*60*1000};
+  })});
  }catch(error){console.error('[master-networks]',{code:(error as any)?.code});return res.status(500).json({message:'تعذر تحميل الشبكات.'});}
 }
