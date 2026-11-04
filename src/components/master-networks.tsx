@@ -2,8 +2,9 @@
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package} from "lucide-react";
+import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
+import {useClock24h} from "@/components/ui/project-clock-provider";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-filter-panel";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
@@ -32,16 +33,25 @@ function ConnectionChart({title,connected,total,Icon,tone}:{title:string;connect
  <div className="w-full min-w-0"><p className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></> :<span className="font-normal text-slate-500 dark:text-slate-400">بانتظار القراءة</span>}</p></div>
  </div>;
 }
+function DateStamp({value,empty}:{value:string|null;empty:string}){
+ const clock24h=useClock24h();
+ const parsed=value?new Date(value):null;
+ if(!parsed||Number.isNaN(parsed.getTime()))return <span className="text-slate-500 dark:text-slate-400">{empty}</span>;
+ return <time dateTime={parsed.toISOString()} className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+ <bdi dir="ltr" className="text-sm font-semibold tabular-nums">{new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"2-digit",year:"numeric"}).format(parsed)}</bdi>
+ <bdi className="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400">{new Intl.DateTimeFormat("ar",{hour:"2-digit",minute:"2-digit",hour12:!clock24h}).format(parsed)}</bdi>
+ </time>;
+}
 function SubscriptionDates({item,days}:{item:NetworkRow;days:number}){
  const expiry=item.expiresAt?Date.parse(item.expiresAt):NaN;
  const remaining=expiry-Date.now();
  const expired=Number.isFinite(expiry)&&remaining<=0;
  const approaching=Number.isFinite(expiry)&&remaining>0&&remaining<=days*86400000;
- return <div className="space-y-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-white/10">
- <p className="flex items-center gap-1.5"><Package className="h-4 w-4 text-violet-500"/>{item.planName||"الخطة غير محددة"}</p>
- <p className="text-slate-500 dark:text-slate-400">بدء الاشتراك · {item.startsAt?date(item.startsAt):"لم يبدأ"}</p>
- <div className="border-t border-slate-200 pt-2 dark:border-white/10"><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/>موعد انتهاء الاشتراك</p><p className="mt-1 text-sm font-semibold leading-6">{item.expiresAt?date(item.expiresAt):"لم يُحدد"}</p>{Number.isFinite(expiry)&&remaining>0&&<p className="mt-1 text-slate-500 dark:text-slate-400">متبقٍ {Math.ceil(remaining/86400000)} يوم</p>}</div>
- {(approaching||expired)&&<p role="status" className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300"><AlertTriangle className="h-4 w-4 shrink-0"/>{expired?"انتهى الاشتراك، يلزم التجديد":"بادر بتجديد الخطة · متبقٍ "+Math.ceil(remaining/86400000)+" يوم"}</p>}
+ return <div className={`min-w-0 space-y-3 rounded-2xl border p-4 text-xs shadow-sm ${expired||approaching?"border-amber-300 bg-amber-50/70 dark:border-amber-400/30 dark:bg-amber-500/[.07]":"border-blue-200 bg-[#f3f7fd] dark:border-blue-300/20 dark:bg-blue-400/[.06]"}`}>
+ <p className="flex min-w-0 items-start gap-2 font-semibold"><Package className="h-4 w-4 shrink-0 text-violet-500"/><span className="break-words leading-5">{item.planName||"الخطة غير محددة"}</span></p>
+ <div><p className="text-slate-500 dark:text-slate-400">بدء الاشتراك</p><DateStamp value={item.startsAt} empty="لم يبدأ"/></div>
+ <div className="border-t border-blue-200/70 pt-3 dark:border-white/10"><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/>انتهاء الاشتراك</p><DateStamp value={item.expiresAt} empty="لم يُحدد"/>{Number.isFinite(expiry)&&remaining>0&&<p className="mt-2 text-slate-500 dark:text-slate-400">متبقٍ {Math.ceil(remaining/86400000)} يوم</p>}</div>
+ {(approaching||expired)&&<p role="status" className="flex items-start gap-1.5 border-t border-amber-200 pt-2 leading-5 text-amber-700 dark:border-amber-400/20 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>{expired?"انتهى الاشتراك، يلزم التجديد":"بادر بتجديد الخطة"}</p>}
  </div>;
 }
 export default function MasterNetworks({networkId}:{networkId?:number}){
@@ -64,9 +74,10 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  return descending?-comparison:comparison;
  }),[baseItems,filter,sort,descending]);
  const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all");
- const pageCount=Math.max(1,Math.ceil(filtered.length/Number(pageSize)));
+ const effectivePageSize=pageSize==="all"?Math.max(1,filtered.length):Number(pageSize);
+ const pageCount=Math.max(1,Math.ceil(filtered.length/effectivePageSize));
  const currentPage=Math.min(page,pageCount);
- const visible=filtered.slice((currentPage-1)*Number(pageSize),currentPage*Number(pageSize));
+ const visible=filtered.slice((currentPage-1)*effectivePageSize,currentPage*effectivePageSize);
  const allVisibleSelected=visible.length>0&&visible.every(item=>selection.has(item.id));
  useEffect(()=>{setPage(1);setSelection(new Set());},[query,filter,subscriptionFilter,readingFilter,serverFilter,pageSize,setSelection]);
  const serverOptions=[{value:"all",label:"كل الخوادم"},...Array.from(new Set(items.map(item=>item.databaseServerName).filter((name):name is string=>Boolean(name)))).map(name=>({value:name,label:name}))];
@@ -98,7 +109,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-[var(--oneui-surface)]">
  <span className="text-sm"><Users className="ml-2 inline h-4 w-4 text-blue-500"/>إجمالي الشبكات · {filtered.length}</span>
  <div className="flex items-center gap-2"><span className="text-xs">الترتيب</span><ProjectDropdown compact value={sort} onChange={setSort} options={[{value:"name",label:"اسم الشبكة"},{value:"id",label:"معرّف الشبكة"},{value:"subscribers",label:"عدد مشتركي PPPoE"}]}/><ProjectButton variant="secondary" size="icon" aria-label={descending?"ترتيب تصاعدي":"ترتيب تنازلي"} onClick={()=>setDescending(value=>!value)}><ArrowUpDown className="h-4 w-4"/></ProjectButton></div>
- <ProjectDropdown compact value={pageSize} onChange={setPageSize} options={["25","50","100"].map(value=>({value,label:value+" عنصرًا"}))}/>
+ <div className="flex min-w-0 items-center justify-between gap-2 border-t border-slate-200/70 pt-3 dark:border-white/10 lg:border-r lg:border-t-0 lg:pr-3 lg:pt-0"><span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300"><Rows3 aria-hidden="true" className="h-4 w-4 shrink-0"/>عدد العناصر</span><ProjectDropdown bareOptionIcons value={pageSize} onChange={setPageSize} compact className="w-[124px] max-w-full" placeholder="العدد" options={[{value:"50",label:"50 عنصرًا"},{value:"100",label:"100 عنصر"},{value:"150",label:"150 عنصر"},{value:"all",label:"كل النتائج"}]}/></div>
  </div>
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
  {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
