@@ -2,7 +2,7 @@
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power} from "lucide-react";
+import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-filter-panel";
@@ -10,7 +10,7 @@ import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ProjectButton from "@/components/ui/project-button";
 import {ProjectInfoCard} from "@/components/ui/project-info-card";
 type Metrics={totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
-type NetworkRow={metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
+type NetworkRow={planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
@@ -25,21 +25,34 @@ function networkState(item:NetworkRow){
 function ConnectionChart({title,connected,total,Icon,tone}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string}){
  const available=connected!==undefined&&total!==undefined;
  const percent=available&&total>0?Math.max(0,Math.min(100,Math.round(100*connected/total))):0;
- return <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200/80 p-3 dark:border-white/10">
+ return <div className="flex min-w-0 flex-col items-center gap-2 rounded-2xl border border-slate-200/80 p-3 text-center dark:border-white/10">
  <div className={`relative h-16 w-16 shrink-0 ${tone}`} role="img" aria-label={title+" · "+(available?connected+" من "+total:"لم تصل قراءة")}>
  <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-15"/>{available&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
  <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{available?percent+"%":"—"}</span></div>
- <div className="min-w-0"><p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></>:"لم تصل قراءة"}</p></div>
+ <div className="w-full min-w-0"><p className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></> :<span className="font-normal text-slate-500 dark:text-slate-400">بانتظار القراءة</span>}</p></div>
+ </div>;
+}
+function SubscriptionDates({item,days}:{item:NetworkRow;days:number}){
+ const expiry=item.expiresAt?Date.parse(item.expiresAt):NaN;
+ const remaining=expiry-Date.now();
+ const expired=Number.isFinite(expiry)&&remaining<=0;
+ const approaching=Number.isFinite(expiry)&&remaining>0&&remaining<=days*86400000;
+ return <div className="space-y-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-white/10">
+ <p className="flex items-center gap-1.5"><Package className="h-4 w-4 text-violet-500"/>{item.planName||"الخطة غير محددة"}</p>
+ <p className="text-slate-500 dark:text-slate-400">بدء الاشتراك · {item.startsAt?date(item.startsAt):"لم يبدأ"}</p>
+ <p className="flex items-center gap-1.5"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/><span>انتهاء الاشتراك · {item.expiresAt?date(item.expiresAt):"لم يُحدد"}</span></p>
+ {(approaching||expired)&&<p role="status" className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300"><AlertTriangle className="h-4 w-4 shrink-0"/>{expired?"انتهى الاشتراك، يلزم التجديد":"بادر بتجديد الخطة · متبقٍ "+Math.ceil(remaining/86400000)+" يوم"}</p>}
  </div>;
 }
 export default function MasterNetworks({networkId}:{networkId?:number}){
  const router=useRouter();
  const [items,setItems]=useState<NetworkRow[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
+ const [reminderDays,setReminderDays]=useState(7);
  const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false),[selected,setSelected]=useState<NetworkRow|null>(null);
  const [subscriptionFilter,setSubscriptionFilter]=useState("all"),[readingFilter,setReadingFilter]=useState("all"),[serverFilter,setServerFilter]=useState("all");
  const [sort,setSort]=useState("name"),[descending,setDescending]=useState(false),[pageSize,setPageSize]=useState("50"),[page,setPage]=useState(1);
  const {view,setView,selected:selection,setSelected:setSelection,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("master-networks","row");
- useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");if(!controller.signal.aborted)setItems(body.items||[]);}).catch(reason=>{if(!controller.signal.aborted)setError(reason.message||"تعذر تحميل الشبكات.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[revision]);
+ useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");if(!controller.signal.aborted){setItems(body.items||[]);setReminderDays(body.reminderSettings?.expiryDays??7);}}).catch(reason=>{if(!controller.signal.aborted)setError(reason.message||"تعذر تحميل الشبكات.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[revision]);
  useEffect(()=>{if(networkId)setSelected(items.find(item=>Number(item.id)===networkId)||null);},[networkId,items]);
  const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||item.subscriptionStatus===subscriptionFilter)
  &&(serverFilter==="all"||item.databaseServerName===serverFilter)
@@ -96,7 +109,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <p className={`mt-2 flex items-center gap-1.5 text-xs ${state.tone.split(" ").filter(token=>token.startsWith("text-")||token.startsWith("dark:text-")).join(" ")}`}><StateIcon className="h-4 w-4"/>{state.label}</p>
  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck className="h-4 w-4 text-blue-500"/>الاشتراك · {label(item.subscriptionStatus)}</p>
  </div>
- <div className="min-w-0 space-y-3 text-xs">
+ <div className="min-w-0 space-y-3 text-xs"><SubscriptionDates item={item} days={reminderDays}/>
  <div><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><Database className="h-4 w-4 text-violet-500"/>قاعدة البيانات</p><p className="mt-1 break-all"><bdi>{item.databaseName||"لم تُجهّز"}</bdi></p></div>
  <p className="flex items-center gap-1.5"><Server className="h-4 w-4 shrink-0 text-sky-500"/>{item.databaseServerName||"الخادم غير محدد"}</p>
  <p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/><span>قراءة المؤشرات · {date(item.metricsReadAt)}</span></p>
@@ -104,7 +117,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  </div>
  <div className="grid min-w-0 items-start gap-3 sm:grid-cols-2">
  <ConnectionChart title="متصلو PPPoE" connected={item.metrics?.connectedSubscribers} total={item.metrics?.totalSubscribers} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
- <ConnectionChart title="NAS المتصلة" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
+ <ConnectionChart title="NAS المرتبطة · المتصلة" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
  <p className="flex items-center gap-1.5 text-xs"><WifiOff className="h-4 w-4 text-blue-500"/>غير المتصلين · {item.metrics?.disconnectedSubscribers??"—"}</p>
  <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>الجلسات · {item.metrics?.activeSessions??"—"}</p>
  <p className="flex items-center gap-1.5 text-xs sm:col-span-2"><Users className="h-4 w-4 text-teal-500"/>مشتركون جدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p>
@@ -116,9 +129,10 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  {networkId&&!loading&&!error&&!selected&&<CollectionState>الشبكة غير موجودة أو غير متاحة.</CollectionState>}
  {networkId&&selected&&<h2 className="text-lg font-semibold">ملف الشبكة · {selected.name}</h2>}
  <section aria-label="ملف الشبكة" className="space-y-4">
+ {selected&&<SubscriptionDates item={selected} days={reminderDays}/>}
  {selected&&<div className="grid gap-4 sm:grid-cols-2">{[
  ["بيانات الشبكة",[["المعرّف",selected.id],["المالك",selected.ownerName],["الرخصة",selected.licenseNumber],["الحالة",label(selected.status)]]],
- ["الاشتراك والبيئة",[["الاشتراك",label(selected.subscriptionStatus)],["البيئة",label(selected.environmentStatus)],["انتهاء الاشتراك",date(selected.expiresAt)]]],
+ ["الاشتراك والبيئة",[["الخطة",selected.planName||"غير محددة"],["بدء الاشتراك",selected.startsAt?date(selected.startsAt):"لم يبدأ"],["الاشتراك",label(selected.subscriptionStatus)],["البيئة",label(selected.environmentStatus)],["انتهاء الاشتراك",date(selected.expiresAt)]]],
  ["قاعدة البيانات المستقلة",[["القاعدة",selected.databaseName||"لم تُجهّز"],["الخادم",selected.databaseServerName||"غير محدد"],["الصحة",label(selected.databaseStatus)]]],
  ["آخر مؤشرات التشغيل",[["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
  ].map(([title,fields])=><ProjectInfoCard key={String(title)}><h3 className="mb-3 font-semibold">{String(title)}</h3><dl className="space-y-3">{(fields as Array<[string,string|number]>).map(([name,value])=><div key={name}><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl></ProjectInfoCard>)}</div>}
