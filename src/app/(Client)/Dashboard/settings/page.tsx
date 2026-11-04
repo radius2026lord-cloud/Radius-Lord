@@ -1,4 +1,5 @@
 "use client";
+import SubscriptionReminderSettings from "@/components/settings/subscription-reminder-settings";
 import LocalHostingSettings from "@/components/settings/local-hosting-settings";
 import ProjectLoading from "@/components/ui/project-loading";
 
@@ -42,5 +43,6 @@ export default function PlatformSettingsPage(){
    {activeTab!=="hosting"&&<div className="flex items-center justify-between gap-3 border-t border-slate-200/70 px-6 py-4 dark:border-white/10"><span className={`text-sm ${message.startsWith("تم ")?"text-green-600 dark:text-green-400":"text-red-500"}`}>{message}</span><button type="button" disabled={loading||saving} onClick={save} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#0758e9] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#064fd1] disabled:opacity-50"><Save className="h-4 w-4"/>{saving?"جارٍ الحفظ...":"حفظ الإعدادات"}</button></div>}
   </section>
   {activeTab!=="hosting"&&<div className="flex items-start gap-3 rounded-[22px] border border-blue-200/70 bg-blue-50/70 p-4 text-sm text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200"><Settings2 className="mt-0.5 h-5 w-5 shrink-0"/><p>هذه البيانات عامة على منصة Radius Lord وليست مرتبطة بخطة محددة. كود الدفع والخطة والإجمالي سيضافان إلى رسالة العميل عند إنشاء طلب الدفع.</p></div>}
+ <SubscriptionReminderSettings/>
  </div>;
 }
