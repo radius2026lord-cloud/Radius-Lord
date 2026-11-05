@@ -10,7 +10,7 @@ import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-f
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ProjectButton from "@/components/ui/project-button";
 import {ProjectInfoCard} from "@/components/ui/project-info-card";
-type Metrics={totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
+type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
 type NetworkRow={planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
@@ -40,14 +40,18 @@ function networkState(item:NetworkRow,days:number,now:number){
  if(item.environmentStatus==="ready"&&item.status==="active")return {label:"مفعّلة",tone:"border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200",Icon:CheckCircle2};
  return {label:"بانتظار التجهيز",tone:"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-300/40 dark:bg-blue-500/10 dark:text-blue-200",Icon:Clock3};
 }
-function ConnectionChart({title,connected,total,Icon,tone}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string}){
- const available=connected!==undefined&&total!==undefined;
+function ConnectionChart({title,connected,total,Icon,tone,sessions}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string;sessions?:number}){
+ const available=typeof connected==="number"&&typeof total==="number";
  const percent=available&&total>0?Math.max(0,Math.min(100,Math.round(100*connected/total))):0;
- return <div className="flex h-full min-h-[154px] min-w-0 flex-col items-center gap-2 rounded-2xl border border-slate-200/80 p-3 text-center dark:border-white/10">
- <div className={`relative h-16 w-16 shrink-0 ${tone}`} role="img" aria-label={title+" · "+(available?connected+" من "+total:"لم تصل قراءة")}>
- <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-15"/>{available&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
+ return <div className="flex h-full min-w-0 flex-col gap-3 rounded-2xl border border-slate-200/80 p-3 dark:border-white/10">
+ <p className="flex items-center gap-2 text-xs font-semibold"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p>
+ <div className="flex min-w-0 items-center gap-3">
+ <div className={`relative h-16 w-16 shrink-0 ${tone}`} role="img" aria-label={title+" · "+(available?percent+"%":"بانتظار القراءة")}>
+ <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.15"/>{available&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
  <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{available?percent+"%":"—"}</span></div>
- <div className="w-full min-w-0"><p className="flex min-h-8 flex-wrap items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></> :<span className="font-normal text-slate-500 dark:text-slate-400">بانتظار القراءة</span>}</p></div>
+ <dl className="min-w-0 flex-1 space-y-1 text-xs"><div className="flex flex-wrap justify-between gap-x-2"><dt className="text-slate-500 dark:text-slate-400">الإجمالي</dt><dd className="font-semibold tabular-nums">{total??"—"}</dd></div><div className="flex flex-wrap justify-between gap-x-2"><dt className="text-slate-500 dark:text-slate-400">متصل</dt><dd className={`font-semibold tabular-nums ${tone}`}>{connected??"—"}</dd></div><div className="flex flex-wrap justify-between gap-x-2"><dt className="text-slate-500 dark:text-slate-400">غير متصل</dt><dd className="tabular-nums">{available?Math.max(0,total-connected):"—"}</dd></div></dl>
+ </div>
+ <p className="mt-auto border-t border-slate-200 pt-2 text-[10px] text-slate-500 dark:border-white/10 dark:text-slate-400">{!available?"بانتظار القراءة":sessions!==undefined?"الجلسات النشطة · "+sessions:"نسبة الاتصال · "+percent+"%"}</p>
  </div>;
 }
 function DateStamp({value,empty}:{value:string|null;empty:string}){
@@ -150,7 +154,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  </div>
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
  {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item,reminderDays,now),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
- <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(180px,1fr)_minmax(220px,1fr)_minmax(290px,1.4fr)]":"space-y-4"}>
+ <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(160px,.8fr)_minmax(210px,1fr)_minmax(450px,2fr)]":"space-y-4"}>
  <div className="min-w-0">
  <div className="flex flex-wrap items-center gap-2"><span aria-label={"معرّف الشبكة "+item.id+" · "+state.label} className={`inline-flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-semibold ${state.tone}`}><Hash className="h-3.5 w-3.5"/>{item.id}</span><h3 className="min-w-0 break-words text-sm font-semibold">{item.name}</h3></div>
  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><UserRound className="h-4 w-4 shrink-0 text-violet-500"/>{item.ownerName||"غير محدد"}</p>
@@ -158,14 +162,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck className="h-4 w-4 text-blue-500"/>الاشتراك · {label(item.subscriptionStatus)}</p>
  </div>
  <div className="min-w-0"><SubscriptionDates item={item} days={reminderDays} now={now}/></div>
- <div className="grid min-w-0 items-stretch gap-3 sm:grid-cols-2">
- <ConnectionChart title="متصلو PPPoE" connected={item.metrics?.connectedSubscribers} total={item.metrics?.totalSubscribers} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
- <ConnectionChart title="حسابات الهوتسبوت المتصلة" connected={item.metrics?.connectedHotspotAccounts} total={item.metrics?.totalHotspotAccounts} Icon={Wifi} tone="text-violet-600 dark:text-violet-300"/>
- <ConnectionChart title="NAS المرتبطة · المتصلة" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
- <p className="flex items-center gap-1.5 text-xs"><WifiOff className="h-4 w-4 text-blue-500"/>غير المتصلين · {item.metrics?.disconnectedSubscribers??"—"}</p>
- <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>جلسات PPPoE · {item.metrics?.activeSessions??"—"}</p>
- <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>جلسات الهوتسبوت · {item.metrics?.hotspotSessions??"—"}</p>
- <p className="flex items-center gap-1.5 text-xs sm:col-span-2"><Users className="h-4 w-4 text-teal-500"/>مشتركون جدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p>
+ <div className="min-w-0 space-y-3">
+ <div className={view==="row"?"grid min-w-0 items-stretch gap-3 md:grid-cols-3":"grid min-w-0 items-stretch gap-3"}>
+ <ConnectionChart title="حسابات PPPoE" connected={item.metrics?.connectedPppoeAccounts} total={item.metrics?.totalPppoeAccounts} sessions={item.metrics?.activeSessions} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
+ <ConnectionChart title="حسابات الهوتسبوت" connected={item.metrics?.connectedHotspotAccounts} total={item.metrics?.totalHotspotAccounts} sessions={item.metrics?.hotspotSessions} Icon={Wifi} tone="text-violet-600 dark:text-violet-300"/>
+ <ConnectionChart title="أجهزة NAS" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
+ </div>
+ <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-white/[.03]"><p className="flex items-center gap-1.5"><Users className="h-4 w-4 text-blue-500"/>ملفات مشتركي PPPoE · {item.metrics?.totalSubscribers??"—"}</p><p>الجدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p></div>
  </div>
  </div>
  <footer className="mt-4 space-y-3 border-t border-slate-200 pt-3 dark:border-white/10">
@@ -186,7 +189,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  ["بيانات الشبكة",[["المعرّف",selected.id],["المالك",selected.ownerName],["الرخصة",selected.licenseNumber],["الحالة",label(selected.status)]]],
  ["الاشتراك والبيئة",[["الخطة",selected.planName||"غير محددة"],["بدء الاشتراك",selected.startsAt?date(selected.startsAt):"لم يبدأ"],["الاشتراك",label(selected.subscriptionStatus)],["البيئة",label(selected.environmentStatus)],["انتهاء الاشتراك",date(selected.expiresAt)]]],
  ["قاعدة البيانات المستقلة",[["القاعدة",selected.databaseName||"لم تُجهّز"],["الخادم",selected.databaseServerName||"غير محدد"],["الصحة",label(selected.databaseStatus)]]],
- ["آخر مؤشرات التشغيل",[["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["حسابات الهوتسبوت المتصلة",selected.metrics?.connectedHotspotAccounts??"غير متاح"],["إجمالي حسابات الهوتسبوت",selected.metrics?.totalHotspotAccounts??"غير متاح"],["جلسات الهوتسبوت",selected.metrics?.hotspotSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
+ ["آخر مؤشرات التشغيل",[["إجمالي حسابات PPPoE",selected.metrics?.totalPppoeAccounts??"غير متاح"],["حسابات PPPoE المتصلة",selected.metrics?.connectedPppoeAccounts??"غير متاح"],["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["حسابات الهوتسبوت المتصلة",selected.metrics?.connectedHotspotAccounts??"غير متاح"],["إجمالي حسابات الهوتسبوت",selected.metrics?.totalHotspotAccounts??"غير متاح"],["جلسات الهوتسبوت",selected.metrics?.hotspotSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
  ].map(([title,fields])=><ProjectInfoCard key={String(title)}><h3 className="mb-3 font-semibold">{String(title)}</h3><dl className="space-y-3">{(fields as Array<[string,string|number]>).map(([name,value])=><div key={name}><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl></ProjectInfoCard>)}</div>}
  </section>
  </div>;
