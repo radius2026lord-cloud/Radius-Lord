@@ -14,13 +14,13 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
    p.setting_value metricsSnapshot,h.reported_at reportedAt,h.last_seen_at lastSeenAt,h.online_users_count onlineUsers,
    h.active_sessions_count activeSessions,h.database_status databaseStatus,h.radius_status radiusStatus
    FROM tenants t LEFT JOIN customers c ON c.id=t.customer_id
-   LEFT JOIN tenant_environments e ON e.id=(SELECT MAX(e2.id) FROM tenant_environments e2 WHERE e2.tenant_id=t.id AND e2.archived_at IS NULL)
+   LEFT JOIN tenant_environments e ON e.id=(SELECT MAX(e2.id) FROM tenant_environments e2 WHERE e2.tenant_id=t.id AND e2.archived_at IS NULL AND e2.ready_at IS NOT NULL)
    LEFT JOIN tenant_databases d ON d.id=e.tenant_database_id AND d.tenant_id=t.id
    LEFT JOIN database_servers ds ON ds.id=d.database_server_id
-   LEFT JOIN subscriptions s ON s.id=(SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.tenant_id=t.id)
+   LEFT JOIN subscriptions s ON s.id=(SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.tenant_id=t.id AND s2.starts_at IS NOT NULL)
    LEFT JOIN tenant_environment_status h ON h.environment_id=e.id
    LEFT JOIN platform_settings p ON p.setting_group=\'master_network_metrics\' AND p.setting_key=CONCAT(\'tenant_\',t.id)
-   WHERE t.archived_at IS NULL ORDER BY t.id DESC`);
+   WHERE t.archived_at IS NULL AND e.id IS NOT NULL ORDER BY t.id DESC`);
   const reminderSettings=await readSubscriptionReminderSettings();
   return res.json({reminderSettings,items:(items as any[]).map(({metricsSnapshot,...item})=>{
    let snapshot:any=null;
