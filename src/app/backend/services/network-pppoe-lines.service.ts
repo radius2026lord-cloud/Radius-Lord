@@ -1,3 +1,4 @@
+import {requirePppoePlanCapacity} from './network-plan-capacity.service';
 import {syncPppoeExpiration} from './pppoe-expiration-policy';
 import {createEquipmentStationForPppoe} from './network-equipment.service';
 import {withNetwork} from './network-runtime.service';
@@ -71,6 +72,7 @@ export async function createPppoeLine(scope:any,input:any,sharedConnection?:any,
   const allowedNasId=input.allowedNasId==null||input.allowedNasId===''?null:integer(input.allowedNasId,'allowedNasId');
   const username=String(input.username??'').trim().toLowerCase();if(!/^[a-z0-9_.@-]{1,64}$/.test(username))invalid('username');
   const password=String(input.password??'');if(!password||password.length>64||/[\u0000-\u001f\u007f\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(password))invalid('password');
+  mark('plan.capacity');await requirePppoePlanCapacity(app,scope);
   mark('customer.lock');const [customers]:any=await app.query("SELECT id,first_name,last_name FROM customers WHERE id=? AND archived_at IS NULL FOR UPDATE",[customerId]);if(!customers[0])throw new Error('PPPOE_LINE_CUSTOMER_UNAVAILABLE');
   const [[serviceTypes],[connectionMethods]]:any=await Promise.all([app.query('SELECT id,code FROM service_types'),app.query('SELECT id,service_type_id,code FROM connection_methods')]);
   const serviceType=serviceTypes.find((row:any)=>Number(row.id)===serviceTypeId);

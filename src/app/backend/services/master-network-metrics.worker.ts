@@ -24,7 +24,7 @@ export function startMasterNetworkMetricsWorker(){
    if(!tenant)return;
    const key='tenant_'+tenant.id,attemptedAt=new Date().toISOString();
    try{
-    const scope=await networkScope(tenant.slug,true);
+    const scope=await networkScope(tenant.slug);
     if(Number(scope.environment_id)!==Number(tenant.environmentId))throw Error('ENVIRONMENT_CHANGED');
     const metrics=await withNetwork(scope,async app=>{
      const [customers]:any=await app.query({sql:`SELECT COUNT(DISTINCT c.id) totalSubscribers,COUNT(DISTINCT a.id) totalPppoeAccounts,
@@ -59,7 +59,7 @@ export function startMasterNetworkMetricsWorker(){
    }
   }catch(error){console.error('[master-network-metrics]',{code:(error as any)?.code||'UNAVAILABLE'});}
   finally{
-   if(lock){try{await lock.query("SELECT RELEASE_LOCK('lord-master-network-metrics')");}finally{lock.release();}}
+   if(lock){try{await lock.query("SELECT RELEASE_LOCK('lord-master-network-metrics')");}catch{console.error('[master-network-metrics]',{code:'LOCK_RELEASE_UNAVAILABLE'});}finally{lock.release();}}
    running=false;
    if(!stopped)timer=setTimeout(()=>void tick(),10000);
   }
