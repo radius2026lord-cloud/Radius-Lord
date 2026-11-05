@@ -27,7 +27,8 @@ export function startMasterNetworkMetricsWorker(){
     const scope=await networkScope(tenant.slug,true);
     if(Number(scope.environment_id)!==Number(tenant.environmentId))throw Error('ENVIRONMENT_CHANGED');
     const metrics=await withNetwork(scope,async app=>{
-     const [customers]:any=await app.query({sql:`SELECT COUNT(DISTINCT c.id) totalSubscribers,
+     const [customers]:any=await app.query({sql:`SELECT COUNT(DISTINCT c.id) totalSubscribers,COUNT(DISTINCT a.id) totalPppoeAccounts,
+      COUNT(DISTINCT CASE WHEN live.username IS NOT NULL THEN a.id END) connectedPppoeAccounts,
       COUNT(DISTINCT CASE WHEN live.username IS NOT NULL THEN c.id END) connectedSubscribers,
       COUNT(DISTINCT CASE WHEN c.created_at>=UTC_TIMESTAMP()-INTERVAL 24 HOUR THEN c.id END) newSubscribers24h,
       COALESCE(SUM(live.sessions),0) activeSessions
