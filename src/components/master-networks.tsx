@@ -23,6 +23,12 @@ function expiryState(item:NetworkRow,days:number,now:number){
  if(item.subscriptionStatus!=="active"||!Number.isFinite(end))return "other";
  return end-now<=days*86400000?"soon":"current";
 }
+function operationalState(item:NetworkRow,days:number,now:number){
+ const expiry=expiryState(item,days,now);
+ if(expiry==="expired")return "expired";
+ if(item.status!=="active"||item.subscriptionStatus!=="active")return "suspended";
+ return expiry==="soon"?"soon":"active";
+}
 function networkState(item:NetworkRow,days:number,now:number){
  const expiry=expiryState(item,days,now);
  if(expiry==="expired")return {label:"اشتراك منتهٍ",tone:"border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200",Icon:CalendarClock};
@@ -84,7 +90,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  &&(readingFilter==="all"||(readingFilter==="fresh"?item.metricsStatus==="ok"&&!item.metricsStale:readingFilter==="failed"?item.metricsStatus==="unavailable":item.metricsStale))
  &&[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(query.trim().toLowerCase()));
  const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,reminderDays,now]);
- const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||item.environmentStatus===filter).sort((a,b)=>{
+ const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||operationalState(item,reminderDays,now)===filter).sort((a,b)=>{
  if(sort==="expiry"){
  const left=a.expiresAt?Date.parse(a.expiresAt):NaN,right=b.expiresAt?Date.parse(b.expiresAt):NaN;
  if(!Number.isFinite(left)||!Number.isFinite(right))return Number.isFinite(left)?-1:Number.isFinite(right)?1:a.id-b.id;
@@ -92,7 +98,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  }
  const comparison=sort==="id"?a.id-b.id:sort==="subscribers"?(a.metrics?.totalSubscribers??-1)-(b.metrics?.totalSubscribers??-1):a.name.localeCompare(b.name,"ar");
  return descending?-comparison:comparison;
- }),[baseItems,filter,sort,descending]);
+ }),[baseItems,filter,sort,descending,reminderDays,now]);
  const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all");
  const effectivePageSize=pageSize==="all"?Math.max(1,filtered.length):Number(pageSize);
  const pageCount=Math.max(1,Math.ceil(filtered.length/effectivePageSize));
@@ -103,14 +109,14 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const serverOptions=[{value:"all",label:"كل الخوادم"},...Array.from(new Set(items.map(item=>item.databaseServerName).filter((name):name is string=>Boolean(name)))).map(name=>({value:name,label:name}))];
  const states=[
  {value:"all",title:"كل الشبكات",Icon:Layers,tone:"info" as const,ink:"text-blue-700 dark:text-blue-200"},
- {value:"pending",title:"بانتظار التجهيز",Icon:Clock3,tone:"warning" as const,ink:"text-amber-700 dark:text-amber-200"},
- {value:"provisioning",title:"جارٍ التجهيز",Icon:Activity,tone:"memory" as const,ink:"text-violet-700 dark:text-violet-200"},
- {value:"ready",title:"البيئة جاهزة",Icon:CheckCircle2,tone:"success" as const,ink:"text-emerald-700 dark:text-emerald-200"},
- {value:"failed",title:"تحتاج معالجة",Icon:AlertTriangle,tone:"danger" as const,ink:"text-rose-700 dark:text-rose-200"}];
+ {value:"active",title:"نشطة",Icon:CheckCircle2,tone:"success" as const,ink:"text-emerald-700 dark:text-emerald-200"},
+ {value:"soon",title:"قريبة من الانتهاء",Icon:CalendarClock,tone:"warning" as const,ink:"text-orange-700 dark:text-orange-200"},
+ {value:"expired",title:"منتهية",Icon:Clock3,tone:"warning" as const,ink:"text-amber-700 dark:text-amber-200"},
+ {value:"suspended",title:"موقوفة",Icon:Power,tone:"danger" as const,ink:"text-rose-700 dark:text-rose-200"}];
  return <div dir="rtl" className="space-y-4">
  {networkId&&<Link href="/Dashboard/networks" className="inline-flex text-sm text-blue-600">العودة إلى الشبكات</Link>}
  {!networkId&&<>
- <CollectionToolbar hostingerStyle responsive title="الشبكات" description="متابعة الشبكات وقواعد بياناتها وآخر حالة محفوظة للبيئة" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>}/>
+ <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>}/>
  {filtersOpen&&<div id="master-network-filters" className="grid items-start gap-3 rounded-2xl border border-slate-200 p-3 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-3">
  <ProjectFilterGroup icon={CheckCircle2} title="الاشتراك" tone="subscription"><ProjectFilterChoices value={subscriptionFilter} onChange={setSubscriptionFilter} items={[{value:"all",label:"الكل",icon:Layers,accent:"text-blue-500"},{value:"active",label:"نشط",icon:CheckCircle2,accent:"text-emerald-600"},{value:"expired",label:"منتهي",icon:Clock3,accent:"text-amber-600"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={CalendarClock} title="صلاحية الاشتراك" tone="subscription"><ProjectDropdown compact bareOptionIcons value={validityFilter} onChange={setValidityFilter} options={[{value:"all",label:"كل الاشتراكات"},{value:"current",label:"ساري"},{value:"soon",label:"قريب من الانتهاء"},{value:"expired",label:"منتهي"},{value:"pending",label:"لم يبدأ"},{value:"other",label:"حالة أخرى أو موعد غير محدد"}]}/></ProjectFilterGroup>
@@ -121,8 +127,8 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div className="grid gap-3 sm:grid-cols-2" aria-label="متابعة صلاحية الاشتراكات">
  {[{value:"soon",title:"قريبة من الانتهاء",Icon:CalendarClock},{value:"expired",title:"اشتراكات منتهية",Icon:AlertTriangle}].map(({value,title,Icon})=><button key={value} type="button" aria-pressed={validityFilter===value} onClick={()=>setValidityFilter(current=>current===value?"all":value)} className={`flex items-center justify-between gap-3 rounded-2xl border p-4 text-right ${validityFilter===value?"border-amber-400 bg-amber-50 dark:bg-amber-500/10":"border-slate-200 bg-white dark:border-white/10 dark:bg-[var(--oneui-surface)]"}`}><span className="flex items-center gap-2 text-sm"><Icon className="h-5 w-5 text-amber-500"/>{title}</span><b className="text-xl tabular-nums">{items.filter(item=>expiryState(item,reminderDays,now)===value).length}</b></button>)}
  </div>
- <div role="group" aria-label="حالة تجهيز الشبكات" className="grid items-stretch gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
- {states.map(({value,title,Icon,tone,ink})=>{const count=value==="all"?baseItems.length:baseItems.filter(item=>item.environmentStatus===value).length,percent=baseItems.length?Math.round(count/baseItems.length*100):0;
+ <div role="group" aria-label="حالة الشبكات المفعّلة سابقًا" className="grid items-stretch gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+ {states.map(({value,title,Icon,tone,ink})=>{const count=value==="all"?baseItems.length:baseItems.filter(item=>operationalState(item,reminderDays,now)===value).length,percent=baseItems.length?Math.round(count/baseItems.length*100):0;
  return <ProjectButton key={value} variant="secondary" aria-pressed={filter===value} onClick={()=>setFilter(current=>current===value?"all":value)} className="group !h-auto !min-h-0 !w-full !justify-start !rounded-[18px] !border-0 !bg-transparent !p-0 !shadow-none">
  <ProjectInfoCard tone={tone} className={`!min-h-[130px] !w-full !border-t-[3px] !p-4 text-right transition-transform group-hover:-translate-y-1 motion-reduce:transform-none ${ink} ${filter===value?"ring-2 ring-blue-400 shadow-md":""}`}>
  <span className="flex items-start justify-between gap-2"><span className="text-[11px] font-semibold">{title}</span><Icon className="h-5 w-5"/></span>
