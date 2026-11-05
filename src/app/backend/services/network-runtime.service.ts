@@ -37,26 +37,37 @@ function networkPool(scope:any){
  const entry:NetworkPool={users:0,pool:mysql.createPool({host:scope.database_host,port:scope.database_port,user:scope.db_username,password:decryptProvisioningSecret(scope.app_password_encrypted),database:scope.db_name,connectTimeout:8000,connectionLimit:2,maxIdle:1,idleTimeout:60000,waitForConnections:true,queueLimit:24,enableKeepAlive:true,...(scope.tls_required?{ssl:{rejectUnauthorized:true}}:{})})};
  networkPools.set(key,entry);return entry;
 }
-export async function networkScope(slug:string,provisioning=false){
+export async function networkScope(slug:string,provisioning=false,subscriptionAccess=false){
  if(!/^network-[a-f0-9]{24}$/.test(slug))throw new Error('NETWORK_NOT_AVAILABLE');
  const [rows]:any=await db.query(`SELECT t.id tenant_id,t.slug,t.name,t.status tenant_status,t.license_number,e.id environment_id,e.status environment_status,d.*,ds.host database_host,ds.port database_port,ds.tls_required,ds.tls_ca_reference,s.id subscription_id,s.status subscription_status,s.expires_at,l.status license_status FROM tenants t JOIN tenant_environments e ON e.tenant_id=t.id JOIN tenant_databases d ON d.id=e.tenant_database_id AND d.tenant_id=t.id JOIN database_servers ds ON ds.id=d.database_server_id JOIN subscription_licenses l ON l.tenant_id=t.id JOIN subscriptions s ON s.id=l.subscription_id AND s.tenant_id=t.id WHERE t.slug=? AND t.archived_at IS NULL AND e.archived_at IS NULL AND ds.archived_at IS NULL AND ds.status='active' AND d.status='active' AND d.credentials_state='ready'`,[slug]);
  const scope=rows[0];if(!scope||scope.tls_ca_reference)throw new Error('NETWORK_NOT_AVAILABLE');
  if(provisioning){if(scope.environment_status!=='provisioning'||scope.subscription_status!=='pending')throw new Error('NETWORK_NOT_PROVISIONING');}
- else if(scope.environment_status!=='ready'||scope.tenant_status!=='active'||scope.subscription_status!=='active'||scope.license_status!=='active'||!scope.expires_at||new Date(scope.expires_at).getTime()<=Date.now())throw new Error('NETWORK_NOT_AVAILABLE');
+ else if(scope.environment_status!=='ready'||scope.tenant_status!=='active'||!(subscriptionAccess?['active','expired']:['active']).includes(scope.subscription_status)||!(subscriptionAccess?['active','expired']:['active']).includes(scope.license_status)||!scope.expires_at||(!subscriptionAccess&&new Date(scope.expires_at).getTime()<=Date.now()))throw new Error('NETWORK_NOT_AVAILABLE');
  return scope;
 }
 export function licenseSignature(payload:string){return createHmac('sha256',provisioningKey()).update('radius-lord:network-license:v1\0').update(payload).digest('hex');}
-export async function validateLocalLicense(connection:mysql.Connection,scope:any,provisioning=false){
- const [rows]:any=await connection.query('SELECT * FROM platform_subscription WHERE id=1');const license=rows[0];
+// UTC writes are compared as SQL text, independent of the Node host timezone.
+// Existing signed licenses retain their historical driver interpretation; never shift data on read.
+function licenseDateMatches(signed:any,value:any,utcText:any,utcOnly=false){
+ if(signed===null)return value===null;
+ if(typeof signed!=='string'||!Number.isFinite(Date.parse(signed)))return false;
+ if(signed===utcText)return true;
+ if(utcOnly)return false;
+ const legacy=value?new Date(value):null;
+ return Boolean(legacy&&Number.isFinite(legacy.getTime())&&legacy.toISOString()===signed);
+}
+export async function validateLocalLicense(connection:mysql.Connection,scope:any,provisioning=false,subscriptionAccess=false){
+ const [rows]:any=await connection.query("SELECT *,DATE_FORMAT(starts_at,'%Y-%m-%dT%H:%i:%s.000Z') starts_at_utc_text,DATE_FORMAT(expires_at,'%Y-%m-%dT%H:%i:%s.000Z') expires_at_utc_text FROM platform_subscription WHERE id=1");const license=rows[0];
  if(!license||Number(license.central_tenant_id)!==Number(scope.tenant_id)||Number(license.central_subscription_id)!==Number(scope.subscription_id)||license.license_number!==scope.license_number)throw new Error('NETWORK_LICENSE_SCOPE');
  const payload=typeof license.signed_payload==='string'?license.signed_payload:JSON.stringify(license.signed_payload);
  // Canonical payload is serialized as a string inside JSON to preserve its exact signature bytes.
  const parsed=JSON.parse(payload);const serialized=typeof parsed==='string'?parsed:JSON.stringify(parsed);
  const expected=Buffer.from(licenseSignature(serialized),'hex'),actual=Buffer.from(license.payload_signature,'hex');if(actual.length!==expected.length||!timingSafeEqual(expected,actual))throw new Error('NETWORK_LICENSE_SIGNATURE');
  const signed=JSON.parse(serialized);
- if(Number(signed.tenantId)!==Number(scope.tenant_id)||Number(signed.subscriptionId)!==Number(scope.subscription_id)||signed.license!==license.license_number||signed.status!==license.subscription_status||signed.maxSubscribers!==Number(license.max_pppoe_accounts)||signed.maxNas!==Number(license.base_max_nas)||signed.additionalNas!==Number(license.additional_nas_capacity)||signed.startsAt!==(license.starts_at?new Date(license.starts_at).toISOString():null)||signed.expiresAt!==(license.expires_at?new Date(license.expires_at).toISOString():null))throw new Error('NETWORK_LICENSE_PAYLOAD');
- if(!provisioning&&(license.subscription_status!=='active'||license.license_status!=='active'||!license.expires_at||new Date(license.expires_at).getTime()<=Date.now()))throw new Error('NETWORK_LICENSE_EXPIRED');
- return license;
+ if(signed.dateEncoding==='utc'&&(signed.planName!==license.plan_name_snapshot||signed.durationMonths!==Number(license.duration_months_snapshot)))throw new Error('NETWORK_LICENSE_PAYLOAD');
+ if(Number(signed.tenantId)!==Number(scope.tenant_id)||Number(signed.subscriptionId)!==Number(scope.subscription_id)||signed.license!==license.license_number||signed.status!==license.subscription_status||signed.maxSubscribers!==Number(license.max_pppoe_accounts)||signed.maxNas!==Number(license.base_max_nas)||signed.additionalNas!==Number(license.additional_nas_capacity)||!licenseDateMatches(signed.startsAt,license.starts_at,license.starts_at_utc_text,signed.dateEncoding==='utc')||!licenseDateMatches(signed.expiresAt,license.expires_at,license.expires_at_utc_text,signed.dateEncoding==='utc'))throw new Error('NETWORK_LICENSE_PAYLOAD');
+ if(!provisioning&&(!(subscriptionAccess?['active','expired']:['active']).includes(license.subscription_status)||!(subscriptionAccess?['active','expired']:['active']).includes(license.license_status)||!signed.expiresAt||(!subscriptionAccess&&Date.parse(signed.expiresAt)<=Date.now())))throw new Error('NETWORK_LICENSE_EXPIRED');
+ return {...license,canonicalStartsAt:signed.startsAt,canonicalExpiresAt:signed.expiresAt};
 }
 export async function withNetwork<T>(scope:any,operation:(connection:mysql.Connection)=>Promise<T>):Promise<T>{
  await acquireNetworkConnection();let connection:mysql.PoolConnection|undefined,entry:NetworkPool|undefined;
@@ -84,3 +95,4 @@ export async function withNetwork<T>(scope:any,operation:(connection:mysql.Conne
   }finally{if(entry)entry.users--;releaseNetworkConnection();}
  }
 }
+

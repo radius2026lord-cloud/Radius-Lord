@@ -13,8 +13,8 @@ import {networkScope,validateLocalLicense,withNetwork} from './network-runtime.s
 export async function loginNetworkPrincipal(username:string,password:string){
  const [rows]:any=await db.query(`SELECT t.slug FROM tenants t
  JOIN tenant_environments e ON e.tenant_id=t.id
- JOIN subscription_licenses l ON l.tenant_id=t.id AND l.status='active'
- JOIN subscriptions s ON s.id=l.subscription_id AND s.tenant_id=t.id AND s.status='active' AND s.expires_at>CURRENT_TIMESTAMP
+ JOIN subscription_licenses l ON l.tenant_id=t.id AND l.status IN ('active','expired')
+ JOIN subscriptions s ON s.id=l.subscription_id AND s.tenant_id=t.id AND s.status IN ('active','expired') AND s.expires_at IS NOT NULL
  JOIN platform_settings r ON r.setting_group='environment_runtime' AND r.setting_key=CONCAT('environment_',e.id)
  WHERE t.archived_at IS NULL AND e.archived_at IS NULL AND t.status='active' AND e.status='ready'
  AND (JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.username'))=? OR JSON_UNQUOTE(JSON_EXTRACT(r.setting_value,'$.pendingUsername'))=?) UNION SELECT t.slug FROM platform_settings d JOIN tenants t ON t.slug=JSON_UNQUOTE(JSON_EXTRACT(d.setting_value,'$.slug')) JOIN tenant_environments e ON e.tenant_id=t.id AND e.id=JSON_UNQUOTE(JSON_EXTRACT(d.setting_value,'$.environmentId')) WHERE d.setting_group='network_manager_directory' AND JSON_UNQUOTE(JSON_EXTRACT(d.setting_value,'$.username'))=? AND t.status='active' AND t.archived_at IS NULL AND e.status='ready' AND e.archived_at IS NULL LIMIT 101`,[username,username,username]);
@@ -23,14 +23,14 @@ export async function loginNetworkPrincipal(username:string,password:string){
  let match:{token:string;redirectTo:string;scope:any;managerId:number}|null=null;
  for(let offset=0;offset<rows.length;offset+=4){
   const batch=await Promise.all(rows.slice(offset,offset+4).map(async(row:any)=>{
-   const scope=await networkScope(row.slug);
-   return withNetwork(scope,async app=>{await validateLocalLicense(app,scope);
+   const scope=await networkScope(row.slug,false,true);
+   return withNetwork(scope,async app=>{const license=await validateLocalLicense(app,scope,false,true);
     const [managers]:any=await app.query({sql:"SELECT id,password_hash FROM managers WHERE username=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL)) LIMIT 1",values:[username],timeout:5000});
     const manager=managers[0];if(manager){try{await managerAccess(app,Number(manager.id));}catch{await auditRejectedLogin(scope);return null;}}
     const [stateRows]:any=await db.query("SELECT setting_value FROM platform_settings WHERE setting_group='environment_runtime' AND setting_key=?",['environment_'+scope.environment_id]);
     const state=stateRows[0]?JSON.parse(stateRows[0].setting_value):null;
     if(state?.mustChangeCredentials===true&&username!==state.pendingUsername&&(!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now())){await auditNetworkEvent(app,{action:'auth.login',result:'failed',reason:'TEMPORARY_CREDENTIALS_EXPIRED'});return null;}if(!manager||!await bcrypt.compare(password,manager.password_hash)){await auditNetworkEvent(app,{action:'auth.login',result:'failed',reason:'AUTH_REJECTED'});return null;}
-    return {scope,managerId:Number(manager.id),token:jwt.sign({sessionVersion:await networkSessionVersion(scope,Number(manager.id)),kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'}),redirectTo:`/network/${encodeURIComponent(scope.slug)}`};
+    return {scope,managerId:Number(manager.id),token:jwt.sign({sessionVersion:await networkSessionVersion(scope,Number(manager.id)),kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'}),redirectTo:`/network/${encodeURIComponent(scope.slug)}${license.subscription_status==='expired'||Date.parse(license.canonicalExpiresAt)<=Date.now()?'?tab=subscription':''}`};
    });
   }));
   for(const candidate of batch){if(!candidate)continue;if(match)throw new Error('NETWORK_LOGIN_AMBIGUOUS');match=candidate;}
@@ -38,3 +38,4 @@ export async function loginNetworkPrincipal(username:string,password:string){
  console.info('[network-login]',{stage:'verification',result:match?'matched':'no_matching_credentials'});
  if(match){const resolved=match;await withNetwork(resolved.scope,app=>auditNetworkEvent(app,{action:'auth.login',managerId:resolved.managerId}));return {token:resolved.token,redirectTo:resolved.redirectTo};}return null;
 }
+
