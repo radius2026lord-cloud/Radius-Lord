@@ -36,12 +36,19 @@ export function startMasterNetworkMetricsWorker(){
       LEFT JOIN (SELECT username,COUNT(*) sessions FROM radacct WHERE acctstoptime IS NULL
        AND COALESCE(acctupdatetime,acctstarttime)>=UTC_TIMESTAMP()-INTERVAL 6 MINUTE GROUP BY username) live ON live.username=r.current_username
       WHERE c.archived_at IS NULL`,timeout:5000});
+     const [hotspot]:any=await app.query({sql:`SELECT COUNT(*) totalHotspotAccounts,
+      COALESCE(SUM(live.username IS NOT NULL),0) connectedHotspotAccounts,
+      COALESCE(SUM(live.sessions),0) hotspotSessions
+      FROM hotspot_accounts h JOIN radius_identities r ON r.id=h.radius_identity_id
+      LEFT JOIN (SELECT username,COUNT(*) sessions FROM radacct WHERE acctstoptime IS NULL
+       AND COALESCE(acctupdatetime,acctstarttime)>=UTC_TIMESTAMP()-INTERVAL 6 MINUTE GROUP BY username) live ON live.username=r.current_username
+      WHERE h.archived_at IS NULL`,timeout:5000});
      const [nas]:any=await app.query({sql:`SELECT COUNT(*) totalNas,COALESCE(SUM(is_enabled=1 AND activity_status='recent' AND last_seen_at>=UTC_TIMESTAMP()-INTERVAL 90 SECOND),0) connectedNas FROM lord_nas WHERE archived_at IS NULL`,timeout:5000});
-     const values={...customers[0],...nas[0]};
+     const values={...customers[0],...hotspot[0],...nas[0]};
      for(const key of Object.keys(values))values[key]=Number(values[key]||0);
      return {...values,disconnectedSubscribers:values.totalSubscribers-values.connectedSubscribers};
     });
-    await savePrivateSetting('master_network_metrics',key,{environmentId:Number(tenant.environmentId),attemptedAt,readAt:new Date().toISOString(),status:'ok',scope:'pppoe',metrics});
+    await savePrivateSetting('master_network_metrics',key,{environmentId:Number(tenant.environmentId),attemptedAt,readAt:new Date().toISOString(),status:'ok',scope:'pppoe-hotspot',metrics});
    }catch(error){
     const [previous]:any=await lock.query("SELECT setting_value FROM platform_settings WHERE setting_group='master_network_metrics' AND setting_key=?",[key]);
     let saved:any={};
