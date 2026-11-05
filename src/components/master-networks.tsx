@@ -10,7 +10,7 @@ import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-f
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ProjectButton from "@/components/ui/project-button";
 import {ProjectInfoCard} from "@/components/ui/project-info-card";
-type Metrics={totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
+type Metrics={totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
 type NetworkRow={planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
@@ -43,11 +43,11 @@ function networkState(item:NetworkRow,days:number,now:number){
 function ConnectionChart({title,connected,total,Icon,tone}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string}){
  const available=connected!==undefined&&total!==undefined;
  const percent=available&&total>0?Math.max(0,Math.min(100,Math.round(100*connected/total))):0;
- return <div className="flex min-w-0 flex-col items-center gap-2 rounded-2xl border border-slate-200/80 p-3 text-center dark:border-white/10">
+ return <div className="flex h-full min-h-[154px] min-w-0 flex-col items-center gap-2 rounded-2xl border border-slate-200/80 p-3 text-center dark:border-white/10">
  <div className={`relative h-16 w-16 shrink-0 ${tone}`} role="img" aria-label={title+" · "+(available?connected+" من "+total:"لم تصل قراءة")}>
  <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-15"/>{available&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
  <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{available?percent+"%":"—"}</span></div>
- <div className="w-full min-w-0"><p className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></> :<span className="font-normal text-slate-500 dark:text-slate-400">بانتظار القراءة</span>}</p></div>
+ <div className="w-full min-w-0"><p className="flex min-h-8 flex-wrap items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p><p className="mt-1 text-sm font-semibold tabular-nums">{available?<>{connected} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">من {total}</span></> :<span className="font-normal text-slate-500 dark:text-slate-400">بانتظار القراءة</span>}</p></div>
  </div>;
 }
 function DateStamp({value,empty}:{value:string|null;empty:string}){
@@ -59,15 +59,22 @@ function DateStamp({value,empty}:{value:string|null;empty:string}){
  <bdi className="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400">{new Intl.DateTimeFormat("ar",{hour:"2-digit",minute:"2-digit",hour12:!clock24h}).format(parsed)}</bdi>
  </time>;
 }
-function SubscriptionDates({item,days}:{item:NetworkRow;days:number}){
+function SubscriptionDates({item,days,now}:{item:NetworkRow;days:number;now:number}){
  const expiry=item.expiresAt?Date.parse(item.expiresAt):NaN;
- const remaining=expiry-Date.now();
+ const remaining=expiry-now;
+ const start=item.startsAt?Date.parse(item.startsAt):NaN;
+ const valid=Number.isFinite(start)&&Number.isFinite(expiry)&&expiry>start;
+ const elapsed=Number.isFinite(start)?Math.max(0,Math.floor((now-start)/86400000)):null;
+ const percent=valid?Math.max(0,Math.min(100,Math.round(100*(now-start)/(expiry-start)))):0;
+ const remainingText=remaining<=0?"انتهى الاشتراك":remaining<86400000?Math.floor(remaining/3600000)+" ساعة و "+Math.floor(remaining%3600000/60000)+" دقيقة":Math.ceil(remaining/86400000)+" يوم";
  const expired=Number.isFinite(expiry)&&remaining<=0;
  const approaching=Number.isFinite(expiry)&&remaining>0&&remaining<=days*86400000;
  return <div className={`min-w-0 space-y-3 rounded-2xl border p-4 text-xs shadow-sm ${expired||approaching?"border-amber-300 bg-amber-50/70 dark:border-amber-400/30 dark:bg-amber-500/[.07]":"border-blue-200 bg-[#f3f7fd] dark:border-blue-300/20 dark:bg-blue-400/[.06]"}`}>
  <p className="flex min-w-0 items-start gap-2 font-semibold"><Package className="h-4 w-4 shrink-0 text-violet-500"/><span className="break-words leading-5">{item.planName||"الخطة غير محددة"}</span></p>
  <div><p className="text-slate-500 dark:text-slate-400">بدء الاشتراك</p><DateStamp value={item.startsAt} empty="لم يبدأ"/></div>
  <div className="border-t border-blue-200/70 pt-3 dark:border-white/10"><p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-4 w-4 shrink-0 text-amber-500"/>انتهاء الاشتراك</p><DateStamp value={item.expiresAt} empty="لم يُحدد"/>{Number.isFinite(expiry)&&remaining>0&&<p className="mt-2 text-slate-500 dark:text-slate-400">متبقٍ {Math.ceil(remaining/86400000)} يوم</p>}</div>
+ <div className="grid grid-cols-2 gap-3 border-t border-blue-200/70 pt-3 dark:border-white/10"><div><p className="text-slate-500 dark:text-slate-400">مضى على التفعيل</p><p className="mt-1 text-base font-semibold tabular-nums">{elapsed===null?"—":elapsed+" يوم"}</p></div><div><p className="text-slate-500 dark:text-slate-400">المتبقي</p><p className="mt-1 break-words text-base font-semibold tabular-nums">{Number.isFinite(expiry)?remainingText:"—"}</p></div></div>
+ {valid&&<div><div role="progressbar" aria-label="المدة المنقضية من الاشتراك" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-1.5 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10"><div className={`h-full rounded-full ${approaching||expired?"bg-amber-500":"bg-blue-500"}`} style={{width:percent+"%"}}/></div><p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{percent}% من مدة الاشتراك انقضت</p></div>}
  {(approaching||expired)&&<p role="status" className="flex items-start gap-1.5 border-t border-amber-200 pt-2 leading-5 text-amber-700 dark:border-amber-400/20 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>{expired?"انتهى الاشتراك، يلزم التجديد":"بادر بتجديد الخطة"}</p>}
  </div>;
 }
@@ -150,12 +157,14 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <p className={`mt-2 flex items-center gap-1.5 text-xs ${state.tone.split(" ").filter(token=>token.startsWith("text-")||token.startsWith("dark:text-")).join(" ")}`}><StateIcon className="h-4 w-4"/>{state.label}</p>
  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><ShieldCheck className="h-4 w-4 text-blue-500"/>الاشتراك · {label(item.subscriptionStatus)}</p>
  </div>
- <div className="min-w-0"><SubscriptionDates item={item} days={reminderDays}/></div>
- <div className="grid min-w-0 items-start gap-3 sm:grid-cols-2">
+ <div className="min-w-0"><SubscriptionDates item={item} days={reminderDays} now={now}/></div>
+ <div className="grid min-w-0 items-stretch gap-3 sm:grid-cols-2">
  <ConnectionChart title="متصلو PPPoE" connected={item.metrics?.connectedSubscribers} total={item.metrics?.totalSubscribers} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
+ <ConnectionChart title="حسابات الهوتسبوت المتصلة" connected={item.metrics?.connectedHotspotAccounts} total={item.metrics?.totalHotspotAccounts} Icon={Wifi} tone="text-violet-600 dark:text-violet-300"/>
  <ConnectionChart title="NAS المرتبطة · المتصلة" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
  <p className="flex items-center gap-1.5 text-xs"><WifiOff className="h-4 w-4 text-blue-500"/>غير المتصلين · {item.metrics?.disconnectedSubscribers??"—"}</p>
- <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>الجلسات · {item.metrics?.activeSessions??"—"}</p>
+ <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>جلسات PPPoE · {item.metrics?.activeSessions??"—"}</p>
+ <p className="flex items-center gap-1.5 text-xs"><Activity className="h-4 w-4 text-violet-500"/>جلسات الهوتسبوت · {item.metrics?.hotspotSessions??"—"}</p>
  <p className="flex items-center gap-1.5 text-xs sm:col-span-2"><Users className="h-4 w-4 text-teal-500"/>مشتركون جدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p>
  </div>
  </div>
@@ -177,7 +186,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  ["بيانات الشبكة",[["المعرّف",selected.id],["المالك",selected.ownerName],["الرخصة",selected.licenseNumber],["الحالة",label(selected.status)]]],
  ["الاشتراك والبيئة",[["الخطة",selected.planName||"غير محددة"],["بدء الاشتراك",selected.startsAt?date(selected.startsAt):"لم يبدأ"],["الاشتراك",label(selected.subscriptionStatus)],["البيئة",label(selected.environmentStatus)],["انتهاء الاشتراك",date(selected.expiresAt)]]],
  ["قاعدة البيانات المستقلة",[["القاعدة",selected.databaseName||"لم تُجهّز"],["الخادم",selected.databaseServerName||"غير محدد"],["الصحة",label(selected.databaseStatus)]]],
- ["آخر مؤشرات التشغيل",[["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
+ ["آخر مؤشرات التشغيل",[["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["حسابات الهوتسبوت المتصلة",selected.metrics?.connectedHotspotAccounts??"غير متاح"],["إجمالي حسابات الهوتسبوت",selected.metrics?.totalHotspotAccounts??"غير متاح"],["جلسات الهوتسبوت",selected.metrics?.hotspotSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
  ].map(([title,fields])=><ProjectInfoCard key={String(title)}><h3 className="mb-3 font-semibold">{String(title)}</h3><dl className="space-y-3">{(fields as Array<[string,string|number]>).map(([name,value])=><div key={name}><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl></ProjectInfoCard>)}</div>}
  </section>
  </div>;
