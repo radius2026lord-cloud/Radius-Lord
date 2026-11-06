@@ -8,7 +8,10 @@ const BACKEND_API_URL = (
 
 export async function POST(request: NextRequest) {
   const origin=request.headers.get('origin');
-  if(request.headers.get('sec-fetch-site')==='cross-site'||(origin&&origin!==request.nextUrl.origin))return NextResponse.json({success:false,message:'مصدر الطلب غير مصرح.'},{status:403});
+  const fetchSite=request.headers.get('sec-fetch-site');
+  if(fetchSite==='cross-site')return NextResponse.json({success:false,message:'مصدر الطلب غير مصرح.'},{status:403});
+  // Express validates the browser origin against the deployment allowlist.
+  // Next's internal URL can differ from the browser origin behind a reverse proxy.
   try {
     const body = await request.json();
 
@@ -17,6 +20,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         ...(origin?{origin}:{}),
+        ...(fetchSite?{'sec-fetch-site':fetchSite}:{}),
       },
       body: JSON.stringify(body),
       cache: "no-store",
