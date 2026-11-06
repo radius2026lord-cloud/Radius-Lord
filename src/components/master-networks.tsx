@@ -28,14 +28,18 @@ function expiryState(item:NetworkRow,days:number,now:number){
 }
 const subscriptionLabels={expired:"منتهٍ",pending:"لم يبدأ",soon:"قريب من الانتهاء",current:"ساري",other:"غير ساري أو غير محدد"};
 const tunnelLabels:Record<TunnelState,{label:string;tone:InfoCardTone}>={
- connected:{label:"متصل",tone:"success"},partial:{label:"اتصال جزئي",tone:"warning"},
- disconnected:{label:"منقطع",tone:"danger"},unavailable:{label:"تعذّر الفحص",tone:"warning"},
+ connected:{label:"متصل",tone:"success"},partial:{label:"متصلة مع انقطاع بعض أجهزة NAS",tone:"warning"},
+ disconnected:{label:"انقطاع كامل",tone:"danger"},unavailable:{label:"تعذّر الفحص",tone:"warning"},
  stale:{label:"قراءة قديمة",tone:"warning"},pending:{label:"بانتظار الفحص",tone:"pending"},
  unlinked:{label:"غير مربوط",tone:"info"},
 };
+function hasTunnelReading(state:TunnelState){
+ return state==="connected"||state==="disconnected"||state==="partial";
+}
+
 function NetworkTunnelBadge({ovpn}:{ovpn:NetworkRow["ovpn"]}){
  const state=ovpn?.state??"pending",display=tunnelLabels[state];
- const known=state==="connected"||state==="disconnected"||state==="partial";
+ const known=hasTunnelReading(state);
  return <ProjectInfoCard tone={display.tone} className="flex flex-wrap items-center gap-2 !p-2 text-xs">
   <Router className="size-4 shrink-0"/><span>OpenVPN · {display.label}</span>
   {known&&ovpn&&<bdi className="font-semibold tabular-nums">{ovpn.connected}/{ovpn.total}</bdi>}
@@ -60,15 +64,19 @@ function networkState(item:NetworkRow,days:number,now:number){
  if(item.environmentStatus==="ready"&&item.status==="active")return {label:"مفعّلة",tone:"border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200",Icon:CheckCircle2};
  return {label:"بانتظار التجهيز",tone:"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-300/40 dark:bg-blue-500/10 dark:text-blue-200",Icon:Clock3};
 }
+function ConnectionRing({label,percent,tone,className=""}:{label:string;percent:number|null;tone:string;className?:string}){
+ return <div className={`relative size-16 shrink-0 ${tone} ${className}`} role="img" aria-label={label+" · "+(percent===null?"القراءة غير متاحة":percent+"%")}>
+ <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.15"/>{percent!==null&&percent>0&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
+ <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{percent===null?"—":percent+"%"}</span></div>;
+}
+
 function ConnectionChart({title,connected,total,Icon,tone,sessions}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string;sessions?:number}){
  const available=typeof connected==="number"&&typeof total==="number";
  const percent=available&&total>0?Math.max(0,Math.min(100,Math.round(100*connected/total))):0;
  return <div className="flex h-full min-w-0 flex-col gap-3 rounded-2xl border border-slate-200/80 p-3 dark:border-white/10">
  <p className="flex items-center gap-2 text-xs font-semibold"><Icon className={`h-4 w-4 shrink-0 ${tone}`}/>{title}</p>
  <div className="flex min-w-0 items-center gap-3">
- <div className={`relative h-16 w-16 shrink-0 ${tone}`} role="img" aria-label={title+" · "+(available?percent+"%":"بانتظار القراءة")}>
- <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.15"/>{available&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
- <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{available?percent+"%":"—"}</span></div>
+ <ConnectionRing label={title} percent={available?percent:null} tone={tone}/>
  <dl className="min-w-0 flex-1 space-y-1 text-xs"><div className="flex flex-wrap justify-between gap-x-2"><dt className="text-slate-500 dark:text-slate-400">الإجمالي</dt><dd className="font-semibold tabular-nums">{total??"—"}</dd></div><div className="flex flex-wrap justify-between gap-x-2"><dt className="text-slate-500 dark:text-slate-400">متصل</dt><dd className={`font-semibold tabular-nums ${tone}`}>{connected??"—"}</dd></div><div className="flex flex-wrap justify-between gap-x-2"><dt className="text-slate-500 dark:text-slate-400">غير متصل</dt><dd className="tabular-nums">{available?Math.max(0,total-connected):"—"}</dd></div></dl>
  </div>
  <p className="mt-auto border-t border-slate-200 pt-2 text-[10px] text-slate-500 dark:border-white/10 dark:text-slate-400">{!available?"بانتظار القراءة":sessions!==undefined?"الجلسات النشطة · "+sessions:"نسبة الاتصال · "+percent+"%"}</p>
@@ -296,7 +304,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div className={view==="row"?"grid min-w-0 items-stretch gap-3 xl:grid-cols-3":"grid min-w-0 items-stretch gap-3"}>
  <ConnectionChart title="حسابات PPPoE" connected={item.metrics?.connectedPppoeAccounts} total={item.metrics?.totalPppoeAccounts} sessions={item.metrics?.activeSessions} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
  <ConnectionChart title="حسابات الهوتسبوت" connected={item.metrics?.connectedHotspotAccounts} total={item.metrics?.totalHotspotAccounts} sessions={item.metrics?.hotspotSessions} Icon={Wifi} tone="text-violet-600 dark:text-violet-300"/>
- <ConnectionChart title="NAS عبر OpenVPN" connected={item.ovpn&&["connected","disconnected","partial"].includes(item.ovpn.state)?item.ovpn.connected:undefined} total={item.ovpn?.total} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
+ <ConnectionChart title="NAS عبر OpenVPN" connected={item.ovpn&&hasTunnelReading(item.ovpn.state)?item.ovpn.connected:undefined} total={item.ovpn?.total} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
  </div>
  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-white/[.03]"><p className="flex items-center gap-1.5"><Users className="h-4 w-4 text-blue-500"/>ملفات مشتركي PPPoE · {item.metrics?.totalSubscribers??"—"}</p><p>الجدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p></div>
  </section>
@@ -331,10 +339,16 @@ function UsageBar({title,used,limit}:{title:string;used?:number;limit?:number}){
 function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:NetworkRow;days:number;now:number;error:string;refreshing:boolean;onRefresh:()=>void}){
  const [notice,setNotice]=useState({message:"",error:""});
  const [recoveryOpen,setRecoveryOpen]=useState(false);
- const status=networkState(item,days,now),StatusIcon=status.Icon;
  const expiry=expiryState(item,days,now);
  const ovpn=item.ovpn;
  const tunnelStatus=ovpn?.state??"pending";
+ const tunnelDisplay=tunnelLabels[tunnelStatus];
+ const connectionPercent=ovpn&&ovpn.total>0&&hasTunnelReading(tunnelStatus)?Math.round(100*ovpn.connected/ovpn.total):null;
+ const connectionInk=tunnelStatus==="connected"?"text-emerald-600 dark:text-emerald-300":tunnelStatus==="disconnected"?"text-rose-600 dark:text-rose-300":tunnelDisplay.tone==="warning"?"text-amber-700 dark:text-amber-300":"text-sky-600 dark:text-sky-300";
+ const ConnectionIcon=tunnelStatus==="connected"?CheckCircle2:tunnelStatus==="disconnected"?WifiOff:tunnelDisplay.tone==="warning"?AlertTriangle:Router;
+ const tunnels=[...(ovpn?.tunnels??[])].sort((left,right)=>Number(left.state==="connected")-Number(right.state==="connected"));
+ const affectedGateways=Array.from(new Set(tunnels.filter(tunnel=>tunnel.state==="disconnected").map(tunnel=>tunnel.gateway)));
+
  const environment=item.status!=="active"?"موقوفة":label(item.environmentStatus);
  const readAt=Date.parse(item.metricsReadAt??"");
  const elapsed=Number.isFinite(readAt)?Math.max(0,Math.floor((now-readAt)/60000)):null;
@@ -343,7 +357,6 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const metrics=item.metrics;
  const limit=item.planLimits;
  const alerts=[
-  ...(["disconnected","partial","unavailable","stale"].includes(tunnelStatus)?[{text:"OpenVPN · "+tunnelLabels[tunnelStatus].label,href:"#network-ovpn"}]:[]),
   ...(expiry==="expired"||expiry==="soon"?[{text:expiry==="expired"?"انتهى اشتراك الشبكة":"اقترب موعد انتهاء الاشتراك",href:"#network-subscription"}]:[]),
   ...(!stale&&limit&&limit.nas>0&&metrics&&metrics.totalNas>=limit.nas?[{text:"بلغت الشبكة حد أجهزة NAS",href:"#network-subscription"}]:[]),
   ...(!stale&&limit&&limit.pppoe>0&&typeof metrics?.totalPppoeAccounts==="number"&&metrics.totalPppoeAccounts>=limit.pppoe?[{text:"بلغت الشبكة حد حسابات PPPoE",href:"#network-subscription"}]:[]),
@@ -354,12 +367,6 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const healthSummary=[
   ["قاعدة البيانات",label(item.databaseStatus)],["FreeRADIUS",label(item.radiusStatus)],["خادم البيانات",item.databaseServerName||"غير محدد"],
   ["اسم القاعدة",item.databaseName||"غير متاح"],["آخر تقرير",date(item.reportedAt)],["آخر ظهور",date(item.lastSeenAt)],
- ];
- const stats: {name:string;value?:number;icon:typeof Users;tone:InfoCardTone}[]=[
-  {name:"المشتركون المتصلون",value:metrics?.connectedSubscribers,icon:Users,tone:"success"},
-  {name:"الجلسات النشطة",value:metrics?.activeSessions,icon:Activity,tone:"cpu"},
-  {name:"أجهزة NAS المتصلة عبر OpenVPN",value:ovpn&&["connected","disconnected","partial"].includes(tunnelStatus)?ovpn.connected:undefined,icon:Router,tone:"memory"},
-  {name:"حسابات الهوتسبوت المتصلة",value:metrics?.connectedHotspotAccounts,icon:Wifi,tone:"connections"},
  ];
  async function copy(value:string,message:string){
   try{
@@ -373,13 +380,13 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    setNotice({message,error:""});
   }catch{setNotice({message:"",error:"تعذر النسخ في هذا المتصفح."});}
  }
- const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${subscriptionLabels[expiry]}`,`البيئة: ${environment}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
+ const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${subscriptionLabels[expiry]}`,`البيئة: ${environment}`,`OpenVPN: ${tunnelDisplay.label}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
  return <section aria-label="ملف الشبكة" className="space-y-4">
   <FloatingNotice {...notice} onDismiss={()=>setNotice({message:"",error:""})}/>
   {recoveryOpen&&<NetworkAccessRecovery slug={item.slug} networkName={item.name} copy={copy} onClose={()=>setRecoveryOpen(false)}/>}
   <ProjectInfoCard tone="info" className="flex flex-wrap items-start justify-between gap-4">
    <div className="min-w-0 space-y-2">
-    <div className="flex flex-wrap items-center gap-2"><ProjectCardIcon icon={Network}/><h1 className="break-words text-xl font-bold">{item.name}</h1><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${status.tone}`}><StatusIcon className="size-3.5"/>{status.label}</span></div>
+    <div className="flex flex-wrap items-center gap-2"><ProjectCardIcon icon={Network}/><h1 className="break-words text-xl font-bold">{item.name}</h1></div>
     <p className="text-sm">{item.ownerName||"المالك غير محدد"} · شبكة <bdi>#{item.id}</bdi></p>
     {item.licenseNumber&&<div className="flex flex-wrap items-center gap-2 text-xs">الرخصة <bdi className="break-all font-mono">{item.licenseNumber}</bdi><ProjectButton variant="ghost" aria-label="نسخ الرخصة" onClick={()=>void copy(item.licenseNumber,"تم نسخ رقم الرخصة.")}><Copy className="size-4"/></ProjectButton></div>}
    </div>
@@ -390,43 +397,45 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     <ProjectButton variant="ghost" disabled={refreshing} onClick={onRefresh}><RefreshCw className={`size-4 ${refreshing?"animate-spin":""}`}/>تحديث</ProjectButton>
    </div>
   </ProjectInfoCard>
-  <div aria-label="حالة الشبكة" className="grid gap-3 sm:grid-cols-3">
-   <ProjectInfoCard tone={expiry==="current"?"success":expiry==="expired"?"danger":expiry==="soon"?"warning":"pending"} className="flex items-center gap-3"><ProjectCardIcon icon={CalendarClock}/><div><p className="text-xs">الاشتراك</p><p className="font-semibold">{subscriptionLabels[expiry]}</p></div></ProjectInfoCard>
-   <ProjectInfoCard tone={item.status!=="active"?"warning":item.environmentStatus==="ready"?"success":"pending"} className="flex items-center gap-3"><ProjectCardIcon icon={Server}/><div><p className="text-xs">البيئة</p><p className="font-semibold">{environment}</p></div></ProjectInfoCard>
-   <ProjectInfoCard tone={tunnelLabels[tunnelStatus].tone} className="flex items-center gap-3"><ProjectCardIcon icon={Activity}/><div><p className="text-xs">التشغيل · OpenVPN</p><p className="font-semibold">{tunnelLabels[tunnelStatus].label}</p>{ovpn?.readAt&&<p className="text-xs">آخر فحص ناجح · {date(ovpn.readAt)}</p>}</div></ProjectInfoCard>
+  <div aria-label="حالة الشبكة" className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(230px,1fr)]">
+   <ProjectInfoCard tone={tunnelDisplay.tone} className="flex min-w-0 flex-wrap items-center gap-4 sm:flex-nowrap sm:gap-5">
+    <ConnectionRing label="نسبة أجهزة NAS المتصلة" percent={connectionPercent} tone={connectionInk} className="sm:size-24"/>
+    <div className="min-w-0 flex-1 space-y-2">
+     <p className="flex items-center gap-2 text-xs"><ConnectionIcon className={`size-4 shrink-0 ${connectionInk}`}/>اتصال الشبكة عبر OpenVPN</p>
+     <h2 className={`text-lg font-bold ${connectionInk}`}>{tunnelDisplay.label}</h2>
+     {connectionPercent!==null&&ovpn&&<p className="text-sm"><bdi className="font-semibold">{ovpn.connected} / {ovpn.total}</bdi> أجهزة NAS متصلة</p>}
+     {tunnelStatus==="partial"&&affectedGateways.length>0&&<p className="break-words text-xs">أجهزة متأثرة على خوادم الاتصال · {affectedGateways.join("، ")}</p>}
+     {ovpn?.readAt&&<p className="text-xs">آخر فحص ناجح · {date(ovpn.readAt)}</p>}
+     {tunnels.length>0&&<a href="#network-ovpn" className="inline-flex items-center gap-1 text-xs font-semibold underline underline-offset-4"><Router className="size-3.5"/>عرض تفاصيل أجهزة NAS</a>}
+    </div>
+   </ProjectInfoCard>
+   <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+    <ProjectInfoCard tone={expiry==="current"?"success":expiry==="expired"?"danger":expiry==="soon"?"warning":"pending"} className="flex items-center gap-3"><ProjectCardIcon icon={CalendarClock} tone={expiry==="current"?"success":"warning"}/><div><p className="text-xs">الاشتراك</p><p className="font-semibold">{subscriptionLabels[expiry]}</p></div></ProjectInfoCard>
+    <ProjectInfoCard tone={item.status!=="active"?"warning":item.environmentStatus==="ready"?"success":"pending"} className="flex items-center gap-3"><ProjectCardIcon icon={Server} tone="connections"/><div><p className="text-xs">البيئة</p><p className="font-semibold">{environment}</p></div></ProjectInfoCard>
+   </div>
   </div>
   {error&&<ProjectInfoCard tone="warning"><p role="alert">{error} · تُعرض آخر بيانات متاحة.</p></ProjectInfoCard>}
   {alerts.length>0&&<ProjectInfoCard tone="warning">
    <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={AlertTriangle} tone="warning"/>تنبيهات تحتاج متابعة</h2>
    <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm">{alerts.map(alert=><li key={alert.text}><a className="underline underline-offset-4" href={alert.href}>{alert.text}</a></li>)}</ul>
   </ProjectInfoCard>}
-  <section id="network-ovpn" className="scroll-mt-4">
-   <ProjectInfoCard className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2><NetworkTunnelBadge ovpn={ovpn}/></div>
-    <p className="text-xs text-slate-500 dark:text-slate-400">قراءة أنفاق CHR مستقلة عن تقرير صحة FreeRADIUS وقراءات PPPoE.</p>
-    <p className="flex items-center gap-2 text-xs"><Radio className="size-4 text-violet-500"/>FreeRADIUS · {label(item.radiusStatus)} بحسب تقرير البيئة · {date(item.reportedAt)}</p>
-    {!ovpn?.tunnels?.length?<p className="text-sm">{ovpn?.state==="unlinked"?"لا توجد أجهزة NAS مرتبطة عبر OpenVPN.":"بانتظار بيانات أجهزة NAS."}</p>:
-     <ul className="grid gap-3 sm:grid-cols-2">{ovpn.tunnels.map(tunnel=><li key={tunnel.nasId+":"+tunnel.gatewayId}>
-      <ProjectInfoCard tone={tunnelLabels[tunnel.state].tone} className="space-y-2">
-       <div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-words">{tunnel.name}</strong><span className="text-xs">{tunnelLabels[tunnel.state].label}</span></div>
-       <p className="flex items-center gap-2 text-xs"><Server className="size-4"/>خادم الاتصال · {tunnel.gateway}</p>
-       <p className="flex items-center gap-2 text-xs"><Clock3 className="size-4"/>آخر ظهور متصل · {date(tunnel.lastSeenAt)}</p>
-       <p className="text-xs">آخر فحص ناجح · {date(tunnel.readAt)}</p>
-      </ProjectInfoCard>
-     </li>)}</ul>}
+  <section id="network-overview" className="scroll-mt-4">
+   <ProjectInfoCard className="space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Activity} tone="info"/>الحسابات والجلسات</h2><span className={`text-xs ${stale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}`}>{reading}</span></div>
+    <div className="grid gap-3 sm:grid-cols-2">
+     <ConnectionChart title="حسابات PPPoE" connected={metrics?.connectedPppoeAccounts} total={metrics?.totalPppoeAccounts} sessions={metrics?.activeSessions} Icon={Radio} tone="text-emerald-600 dark:text-emerald-300"/>
+     <ConnectionChart title="حسابات الهوتسبوت" connected={metrics?.connectedHotspotAccounts} total={metrics?.totalHotspotAccounts} sessions={metrics?.hotspotSessions} Icon={Wifi} tone="text-violet-600 dark:text-violet-300"/>
+    </div>
+    {metrics&&<dl className="grid gap-3 sm:grid-cols-3">{[
+     {title:"ملفات مشتركي PPPoE",value:metrics.totalSubscribers,Icon:Users,tone:"info"},
+     {title:"المشتركون المتصلون",value:metrics.connectedSubscribers,Icon:Wifi,tone:"success"},
+     {title:"مشتركون جدد خلال 24 ساعة",value:metrics.newSubscribers24h,Icon:Activity,tone:"connections"},
+    ].map(({title,value,Icon,tone})=><div key={title} className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 p-2 dark:border-white/10"><ProjectCardIcon icon={Icon} tone={tone as InfoCardTone}/><div><dt className="text-xs">{title}</dt><dd className="font-semibold tabular-nums">{value?.toLocaleString("ar")??"—"}</dd></div></div>)}</dl>}
    </ProjectInfoCard>
-  </section>
-  <section id="network-overview" className="scroll-mt-4 space-y-3">
-   <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Activity}/>نظرة عامة</h2><span className={`text-xs ${stale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}`}>{reading}</span></div>
-   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat=><ProjectInfoCard key={stat.name} tone={stat.value==null?"pending":stat.tone}><p className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={stat.icon} tone={stat.value==null?"pending":stat.tone}/>{stat.name}</p><p className="mt-2 text-xl font-bold tabular-nums">{stat.value?.toLocaleString("ar")??"—"}</p></ProjectInfoCard>)}</div>
-   {metrics&&<dl className="flex flex-wrap gap-x-5 gap-y-2 text-xs">{[
-    ["حسابات PPPoE المتصلة",metrics.connectedPppoeAccounts],["مشتركو PPPoE",metrics.totalSubscribers],["غير المتصلين",metrics.disconnectedSubscribers],["الجدد خلال 24 ساعة",metrics.newSubscribers24h],["حسابات الهوتسبوت",metrics.totalHotspotAccounts],["جلسات الهوتسبوت",metrics.hotspotSessions],
-   ].map(([name,value])=><div key={name}><dt className="inline text-slate-500 dark:text-slate-400">{name} </dt><dd className="inline font-semibold">{value??"—"}</dd></div>)}</dl>}
   </section>
   <div className="grid items-start gap-4 lg:grid-cols-2">
    <section id="network-subscription" className="scroll-mt-4"><ProjectInfoCard className="space-y-4">
     <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Package}/>الاشتراك وحدود الخطة</h2>
-    <p className="text-xs text-slate-600 dark:text-slate-300">الاشتراك: {subscriptionLabels[expiry]} · البيئة: {environment}</p>
     <SubscriptionDates item={item} days={days} now={now}/>
     <UsageBar title="حسابات PPPoE" used={metrics?.totalPppoeAccounts} limit={limit?.pppoe}/>
     <UsageBar title="أجهزة NAS" used={metrics?.totalNas} limit={limit?.nas}/>
@@ -437,5 +446,19 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     <dl className="grid grid-cols-2 gap-3">{healthSummary.slice(2).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl>
    </ProjectInfoCard></section>
   </div>
+  <section id="network-ovpn" className="scroll-mt-4">
+   <ProjectInfoCard className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2></div>
+    {!tunnels.length?<p className="text-sm">{ovpn?.state==="unlinked"?"لا توجد أجهزة NAS مرتبطة عبر OpenVPN.":"بانتظار بيانات أجهزة NAS."}</p>:
+     <ul className="grid gap-3 sm:grid-cols-2">{tunnels.map(tunnel=><li key={tunnel.nasId+":"+tunnel.gatewayId}>
+      <ProjectInfoCard tone={tunnelLabels[tunnel.state].tone} className="space-y-2">
+       <div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-words">{tunnel.name}</strong><span className="text-xs">{tunnel.state==="disconnected"?"غير متصل":tunnelLabels[tunnel.state].label}</span></div>
+       <p className="flex items-center gap-2 text-xs"><Server className="size-4"/>خادم الاتصال · {tunnel.gateway}</p>
+       <p className="flex items-center gap-2 text-xs"><Clock3 className="size-4"/>آخر ظهور متصل · {date(tunnel.lastSeenAt)}</p>
+       <p className="text-xs">آخر فحص ناجح · {date(tunnel.readAt)}</p>
+      </ProjectInfoCard>
+     </li>)}</ul>}
+   </ProjectInfoCard>
+  </section>
  </section>;
 }
