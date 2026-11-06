@@ -1,3 +1,4 @@
+import {recoverNetworkPassword,RecoveryError} from '../services/network-access-recovery.service';
 import {subscriptionPresentation,readPlatformSubscription,requestPlatformRenewal,requestPlatformUpgrade} from '../services/network-platform-subscription.service';
 import {confirmHotspotBatchOutput} from '../services/hotspot-print-tracking.service';
 import {readHotspotCards,readHotspotCardBatchOverview} from '../services/network-hotspot-cards.service';
@@ -279,6 +280,22 @@ router.post('/:slug/nas/:id/status',async(req,res)=>{
  finally{if(locked)await central.query("SELECT RELEASE_LOCK('radius-lord:database-provisioner')");central.release();}
 });
 router.post('/:slug/nas-check',async(req,res)=>provisionNasRequest(req,res,true));
+router.post('/:slug/access-recovery',async(req,res)=>{
+ const key='recovery:'+(req.ip??''),now=Date.now(),attempts=failed.get(key);
+ if(attempts&&attempts.until>now&&attempts.count>=10)return res.status(429).json({message:'انتظر دقائق قبل إعادة المحاولة.'});
+ try{
+  await recoverNetworkPassword(req,String(req.params.slug));
+  failed.delete(key);res.clearCookie('network_token',{path:'/api/network'});
+  return res.json({success:true,message:'تم تعيين كلمة المرور الجديدة وإنهاء جلسات المدير السابقة. سجّل الدخول مجددًا.'});
+ }catch(e){
+  if(!(e instanceof RecoveryError)||e.status===400){
+   for(const [id,value] of failed)if(value.until<=now)failed.delete(id);
+   if(failed.size>1000)failed.clear();
+   failed.set(key,{count:attempts&&attempts.until>now?attempts.count+1:1,until:now+300000});
+  }
+  return res.status(e instanceof RecoveryError?e.status:409).json({message:e instanceof RecoveryError?e.message:'تعذر إتمام الاستعادة. اطلب رابطًا جديدًا من مدير المنصة.'});
+ }
+});
 router.post('/:slug/activate',async(req,res)=>{
  const key='activate:'+(req.ip??'');const now=Date.now(),attempts=failed.get(key);if(attempts&&attempts.until>now&&attempts.count>=10)return res.status(429).json({message:'انتظر دقائق قبل إعادة المحاولة.'});
  try{const username=await consumeActivation(String(req.params.slug),String(req.body?.token??''),String(req.body?.password??''));failed.delete(key);return res.json({success:true,username,message:'تم تعيين كلمة المرور. يمكنك تسجيل الدخول الآن.'});}

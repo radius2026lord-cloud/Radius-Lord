@@ -2,15 +2,16 @@
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink} from "lucide-react";
+import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink,KeyRound,Radio} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import {useClock24h} from "@/components/ui/project-clock-provider";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-filter-panel";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ProjectButton from "@/components/ui/project-button";
+import NetworkAccessRecovery from "@/components/network-access-recovery";
 import FloatingNotice from "@/components/ui/floating-notice";
-import {ProjectInfoCard,ProjectCardIcon} from "@/components/ui/project-info-card";
+import {ProjectInfoCard,ProjectCardIcon,type InfoCardTone} from "@/components/ui/project-info-card";
 type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
 type NetworkRow={systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
@@ -243,6 +244,7 @@ function UsageBar({title,used,limit}:{title:string;used?:number;limit?:number}){
 
 function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:NetworkRow;days:number;now:number;error:string;refreshing:boolean;onRefresh:()=>void}){
  const [notice,setNotice]=useState({message:"",error:""});
+ const [recoveryOpen,setRecoveryOpen]=useState(false);
  const status=networkState(item,days,now),StatusIcon=status.Icon;
  const expiry=expiryState(item,days,now);
  const readAt=Date.parse(item.metricsReadAt??"");
@@ -263,11 +265,11 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
   ["قاعدة البيانات",label(item.databaseStatus)],["FreeRADIUS",label(item.radiusStatus)],["خادم البيانات",item.databaseServerName||"غير محدد"],
   ["اسم القاعدة",item.databaseName||"غير متاح"],["آخر تقرير",date(item.reportedAt)],["آخر ظهور",date(item.lastSeenAt)],
  ];
- const stats=[
-  {name:"المشتركون المتصلون",value:metrics?.connectedSubscribers,icon:Users},
-  {name:"الجلسات النشطة",value:metrics?.activeSessions,icon:Activity},
-  {name:"أجهزة NAS المتصلة",value:metrics?.connectedNas,icon:Router},
-  {name:"حسابات الهوتسبوت المتصلة",value:metrics?.connectedHotspotAccounts,icon:Wifi},
+ const stats: {name:string;value?:number;icon:typeof Users;tone:InfoCardTone}[]=[
+  {name:"المشتركون المتصلون",value:metrics?.connectedSubscribers,icon:Users,tone:"success"},
+  {name:"الجلسات النشطة",value:metrics?.activeSessions,icon:Activity,tone:"cpu"},
+  {name:"أجهزة NAS المتصلة",value:metrics?.connectedNas,icon:Router,tone:"memory"},
+  {name:"حسابات الهوتسبوت المتصلة",value:metrics?.connectedHotspotAccounts,icon:Wifi,tone:"connections"},
  ];
  async function copy(value:string,message:string){
   try{
@@ -284,6 +286,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${label(item.subscriptionStatus)}`,`البيئة: ${label(item.environmentStatus)}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
  return <section aria-label="ملف الشبكة" className="space-y-4">
   <FloatingNotice {...notice} onDismiss={()=>setNotice({message:"",error:""})}/>
+  {recoveryOpen&&<NetworkAccessRecovery slug={item.slug} copy={copy} onClose={()=>setRecoveryOpen(false)}/>}
   <ProjectInfoCard className="flex flex-wrap items-start justify-between gap-4">
    <div className="min-w-0 space-y-2">
     <div className="flex flex-wrap items-center gap-2"><ProjectCardIcon icon={Network}/><h1 className="break-words text-xl font-bold">{item.name}</h1><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${status.tone}`}><StatusIcon className="size-3.5"/>{status.label}</span></div>
@@ -292,6 +295,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    </div>
    <div className="flex flex-wrap items-center gap-2">
     {portal&&<ProjectButton onClick={()=>window.open(portal,"_blank","noopener,noreferrer")}><ExternalLink className="size-4"/>فتح واجهة الشبكة</ProjectButton>}
+    {item.environmentStatus==="ready"&&<ProjectButton variant="secondary" onClick={()=>setRecoveryOpen(true)}><KeyRound className="size-4 text-violet-600 dark:text-violet-300"/>استعادة وصول مدير الشبكة</ProjectButton>}
     <ProjectButton variant="secondary" onClick={()=>void copy(summary,"تم نسخ ملخص الشبكة.")}><Copy className="size-4"/>نسخ ملخص الشبكة</ProjectButton>
     <ProjectButton variant="ghost" disabled={refreshing} onClick={onRefresh}><RefreshCw className={`size-4 ${refreshing?"animate-spin":""}`}/>تحديث</ProjectButton>
    </div>
@@ -303,7 +307,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
   </ProjectInfoCard>}
   <section id="network-overview" className="scroll-mt-4 space-y-3">
    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Activity}/>نظرة عامة</h2><span className={`text-xs ${stale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}`}>{reading}</span></div>
-   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat=><ProjectInfoCard key={stat.name}><p className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={stat.icon}/>{stat.name}</p><p className="mt-2 text-lg font-bold tabular-nums">{stat.value?.toLocaleString("ar")??"—"}</p></ProjectInfoCard>)}</div>
+   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat=><ProjectInfoCard key={stat.name} tone={stat.value==null?"pending":stat.tone}><p className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={stat.icon} tone={stat.value==null?"pending":stat.tone}/>{stat.name}</p><p className="mt-2 text-xl font-bold tabular-nums">{stat.value?.toLocaleString("ar")??"—"}</p></ProjectInfoCard>)}</div>
    {metrics&&<dl className="flex flex-wrap gap-x-5 gap-y-2 text-xs">{[
     ["حسابات PPPoE المتصلة",metrics.connectedPppoeAccounts],["مشتركو PPPoE",metrics.totalSubscribers],["غير المتصلين",metrics.disconnectedSubscribers],["الجدد خلال 24 ساعة",metrics.newSubscribers24h],["حسابات الهوتسبوت",metrics.totalHotspotAccounts],["جلسات الهوتسبوت",metrics.hotspotSessions],
    ].map(([name,value])=><div key={name}><dt className="inline text-slate-500 dark:text-slate-400">{name} </dt><dd className="inline font-semibold">{value??"—"}</dd></div>)}</dl>}
@@ -318,7 +322,8 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    </ProjectInfoCard></section>
    <section><ProjectInfoCard className="space-y-4">
     <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={ShieldCheck}/>صحة البيئة</h2>
-    <dl className="grid grid-cols-2 gap-3">{healthSummary.map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl>
+    <div className="grid gap-2 sm:grid-cols-2">{[{name:"قاعدة البيانات",value:item.databaseStatus,icon:Database},{name:"FreeRADIUS",value:item.radiusStatus,icon:Radio}].map(service=>{const tone=service.value==="healthy"?"success":!service.value||service.value==="unknown"?"pending":"warning";return <ProjectInfoCard key={service.name} tone={tone} className="flex flex-wrap items-center justify-between gap-2 !p-3 text-sm"><span className="flex items-center gap-2"><ProjectCardIcon icon={service.icon} tone={tone}/>{service.name}</span><span className="font-semibold">{label(service.value)}</span></ProjectInfoCard>;})}</div>
+    <dl className="grid grid-cols-2 gap-3">{healthSummary.slice(2).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl>
    </ProjectInfoCard></section>
   </div>
  </section>;

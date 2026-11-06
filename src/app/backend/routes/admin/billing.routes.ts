@@ -1,3 +1,5 @@
+import {manageNetworkAccess,RecoveryError} from '../../services/network-access-recovery.service';
+import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
 import {createManualEnvironment,listManualEnvironmentPlans} from '../../controllers/manual-environment.controller';
 import {applySubscriptionChange,listSubscriptionChanges,readUpgradePaymentSettings,saveUpgradePaymentSettings} from '../../services/master-subscription-changes.service';
 import {listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
@@ -50,6 +52,18 @@ router.post('/admin/subscription-changes/:tenantId/:kind/apply',authenticate,req
 router.get('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),getSubscriptionReminderSettings);
 router.put('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),saveSubscriptionReminderSettings);
 router.get('/admin/networks',authenticate,requireAccountType('master_admin'),listMasterNetworks);
+router.get('/admin/networks/:slug/access-recovery',authenticate,requireAccountType('master_admin'),async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ try{return res.json(await manageNetworkAccess(req,String(req.params.slug),'read'));}
+ catch(e){return res.status(e instanceof RecoveryError?e.status:409).json({message:e instanceof RecoveryError?e.message:'تعذر قراءة بيانات مدير الشبكة.'});}
+});
+router.post('/admin/networks/:slug/access-recovery',authenticate,requireAccountType('master_admin'),requireAuthOrigin,async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ const action=req.body?.action;
+ if(action!=='rename'&&action!=='issue'&&action!=='revoke')return res.status(422).json({message:'إجراء الاستعادة غير صالح.'});
+ try{return res.json(await manageNetworkAccess(req,String(req.params.slug),action));}
+ catch(e){return res.status(e instanceof RecoveryError?e.status:409).json({message:e instanceof RecoveryError?e.message:'تعذر إكمال إجراء الاستعادة. حدّث البيانات وأعد المحاولة.'});}
+});
 router.get('/admin/subscriptions/:id/payments',authenticate,requireAccountType('master_admin'),listSubscriptionPaymentsController);
 router.delete('/admin/subscriptions/:id/environment',authenticate,requireAccountType('master_admin'),deleteEnvironment);
 router.post('/admin/subscriptions/:id/environment/send-details',authenticate,requireAccountType('master_admin'),requestEnvironmentNotification);
