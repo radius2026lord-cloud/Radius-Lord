@@ -2,10 +2,11 @@
 
 import {useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {AlertTriangle,ArrowLeft,CheckCircle2,Clock3,ListFilter,RefreshCw,Server,UserRound} from 'lucide-react';
+import {AlertTriangle,ArrowLeft,CheckCircle2,Clock3,ListFilter,RefreshCw,Plus,Server,UserRound} from 'lucide-react';
 import {CollectionGrid,CollectionState} from '@/components/ui/collection-display';
 import {ProjectCardIcon,ProjectInfoCard} from '@/components/ui/project-info-card';
 import {ProjectFilterGroup} from '@/components/ui/project-filter-panel';
+import ManualEnvironmentDialog from '@/components/manual-environment-dialog';
 import ProjectButton from '@/components/ui/project-button';
 import ProjectDropdown from '@/components/ui/project-dropdown';
 import ProjectInput from '@/components/ui/project-input';
@@ -29,6 +30,7 @@ function stageFor(order:Order){
 export default function ManualProvisioningPage(){
  const router=useRouter();
  const [items,setItems]=useState<Order[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+ const [createOpen,setCreateOpen]=useState(false);
  const [query,setQuery]=useState(''),[status,setStatus]=useState('work'),[filtersOpen,setFiltersOpen]=useState(false);
  useEffect(()=>{
   const controller=new AbortController();
@@ -53,9 +55,12 @@ export default function ManualProvisioningPage(){
    <div className="flex flex-wrap items-start justify-between gap-4">
     <div className="min-w-0">
      <h1 className="flex items-center gap-2 text-base font-semibold"><ProjectCardIcon icon={Server}/>تجهيز البيئة يدويًا</h1>
-     <p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">اختر طلبًا مؤكد الدفع، ثم راجع بياناته والبنية التحتية قبل بدء التجهيز.</p>
+     <p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">ولّد بيئة باعتماد إداري، أو تابع تجهيز طلب اشتراك موجود.</p>
     </div>
-    <ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>
+    <div className="flex flex-wrap gap-2">
+     <ProjectButton onClick={()=>setCreateOpen(true)}><Plus/>توليد بيئة</ProjectButton>
+     <ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>
+    </div>
    </div>
   </ProjectInfoCard>
   <div className="flex flex-wrap items-center gap-3">
@@ -85,5 +90,6 @@ export default function ManualProvisioningPage(){
     </ProjectInfoCard>;
    })}
   </CollectionGrid>}
+  {createOpen&&<ManualEnvironmentDialog onClose={()=>setCreateOpen(false)} onCreated={orderId=>router.push(`/Dashboard/subscriptions/${orderId}?from=provisioning#environment-provisioning`)}/>}
  </section>;
 }

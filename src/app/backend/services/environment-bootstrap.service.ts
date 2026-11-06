@@ -82,7 +82,7 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  await options.activationStarted();
  await central.beginTransaction();
  try{
-  const [locked]:any=await central.query("SELECT s.status,s.starts_at,s.expires_at,s.duration_months_snapshot FROM subscriptions s JOIN payment_orders p ON p.subscription_id=s.id AND p.tenant_id=s.tenant_id WHERE s.id=? AND s.tenant_id=? AND p.id=? AND p.status IN ('paid','completed') FOR UPDATE",[job.subscription_id,job.tenant_id,job.payment_order_id]);
+  const [locked]:any=await central.query("SELECT s.status,s.starts_at,s.expires_at,s.duration_months_snapshot FROM subscriptions s JOIN payment_orders p ON p.subscription_id=s.id AND p.tenant_id=s.tenant_id WHERE s.id=? AND s.tenant_id=? AND p.id=? AND p.status IN ('paid','completed','manual_authorized') FOR UPDATE",[job.subscription_id,job.tenant_id,job.payment_order_id]);
   if(!locked[0]||locked[0].status!=='pending'||locked[0].starts_at||locked[0].expires_at)fail('ENVIRONMENT_ACTIVATION_CONFLICT');
   const [times]:any=await central.query('SELECT NOW() starts_at,DATE_ADD(NOW(),INTERVAL ? MONTH) expires_at',[scope.duration_months_snapshot]);
   await writeLocalLicense(app,scope,'active',new Date(times[0].starts_at),new Date(times[0].expires_at));

@@ -6,7 +6,7 @@ export function environmentAction(state:State,paymentStatus:string,code=state.jo
  if(state.cleanupStatus==='failed'&&state.canDelete)return {kind:'cleanup',label:'استكمال تنظيف البيئة',description:'توقف تنظيف بعض الموارد. افتح نافذة الحذف وراجع التأكيد لاستكمال الخطوات المتبقية.'};
  if(state.archived||state.status==='ready')return null;
  if(['queued','running'].includes(state.job?.status??''))return {kind:'progress',label:'متابعة مراحل التجهيز',description:'الطلب مسجل. افتح المراحل لمتابعة التنفيذ ونتيجة كل خطوة.'};
- if(!['paid','completed'].includes(paymentStatus))return {kind:'purchase',label:'مراجعة الدفع',description:'راجع عملية الدفع وأكد الاستلام من صفحة عمليات الدفع قبل طلب تجهيز البيئة.'};
+ if(!['paid','completed','manual_authorized'].includes(paymentStatus))return {kind:'purchase',label:'مراجعة الدفع',description:'راجع عملية الدفع وأكد الاستلام من صفحة عمليات الدفع قبل طلب تجهيز البيئة.'};
  if(/حدود الشراء|بيانات الاستضافة|مدة الشراء|ملكية|الربط المركزي|لا تطابق|الرخصة/.test(reason))return {kind:'purchase',label:'مراجعة بيانات الشراء',description:'راجع بيانات الطلب الأصلي وربط الشبكة والرخصة. القيم التاريخية الناقصة تحتاج تثبيتًا من سجل الشراء الموثق؛ لا تُستبدل بحدود الخطة الحالية تلقائيًا.'};
  if(code==='INFRASTRUCTURE_NOT_READY'||reason.includes('صحة البنية التحتية')||step==='infrastructure_preflight')return {kind:'navigate',label:'فتح صفحة التحقق',href:'/Dashboard/infrastructure-health',description:'تحقق من الخدمات غير الجاهزة في صفحة صحة البنية التحتية، ثم ارجع وحدّث حالة الاشتراك.'};
  if(code.startsWith('HOSTING_'))return {kind:'navigate',label:'ضبط الوصول للمنصة',href:'/Dashboard/settings?tab=hosting',description:'راجع عنوان المخدم أو الدومين ومنفذ التطبيق، ثم ارجع إلى الاشتراك وحدّث الحالة.'};

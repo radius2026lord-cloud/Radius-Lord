@@ -15,7 +15,7 @@ export async function requestEnvironmentController(req: AuthenticatedRequest, re
     const [orders]:any=await conn.query('SELECT * FROM payment_orders WHERE id=? FOR UPDATE',[Number(id)]);
     const order=orders[0];
     if (!order) throw new EnvironmentRequestError(404,'طلب الاشتراك غير موجود.');
-    if (!['paid','completed'].includes(order.status)) throw new EnvironmentRequestError(409,'يجب تأكيد الدفع قبل طلب إنشاء البيئة.');
+    if (!['paid','completed','manual_authorized'].includes(order.status)) throw new EnvironmentRequestError(409,'يجب تأكيد الدفع قبل طلب إنشاء البيئة.');
     let initial=await readEnvironmentSummary((sql,params)=>conn!.query(sql,params),order);
     // Repeated clicks on an active request are successful reads, not new jobs/events.
     if (initial.registered && initial.job && ['queued','running'].includes(initial.job.status)) {
@@ -42,7 +42,7 @@ export async function requestEnvironmentController(req: AuthenticatedRequest, re
       const [job]:any=await conn.query("INSERT INTO environment_provisioning_jobs (tenant_id,environment_id,subscription_id,payment_order_id,requested_by_master_admin_id,idempotency_key,status) VALUES (?,?,?,?,?,?,'queued')",[central.tenantId,central.environmentId,central.subscriptionId,order.id,req.auth!.accountId,key]);
       jobId=job.insertId;
     }
-    await writeAuditLog(req,{actionCode:jobs[0]?'UPDATE':'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:jobs[0]?'إعادة طلب تجهيز البيئة بعد فشل المحاولة':'تسجيل طلب إنشاء البيئة بعد تأكيد الدفع',metadata:{eventType:jobs[0]?'environment_request_retried':'environment_requested',paymentOrderId:order.id,subscriptionId:central.subscriptionId,environmentId:central.environmentId,jobId}},conn);
+    await writeAuditLog(req,{actionCode:jobs[0]?'UPDATE':'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:jobs[0]?'إعادة طلب تجهيز البيئة بعد فشل المحاولة':'تسجيل طلب إنشاء البيئة بعد اعتماد الطلب',metadata:{eventType:jobs[0]?'environment_request_retried':'environment_requested',paymentOrderId:order.id,subscriptionId:central.subscriptionId,environmentId:central.environmentId,jobId}},conn);
     const environment=await readEnvironmentSummary((sql,params)=>conn!.query(sql,params),order);
     await conn.commit();
     return res.status(202).json({success:true,environment,message:'تم تسجيل طلب إنشاء البيئة؛ ستتولى خدمة التجهيز تنفيذه تلقائيًا. لم تبدأ مدة الاشتراك.'});

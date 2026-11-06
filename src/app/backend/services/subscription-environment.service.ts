@@ -91,7 +91,7 @@ export type EnvironmentSummary = {
 // Read one network summary from core; never fan out to customer databases.
 async function readEnvironmentSummaryCore(query: (sql: string, params?: any[]) => Promise<any>, order: any): Promise<EnvironmentSummary> {
   if (!order.tenant_id || !order.subscription_id) {
-    const blockedReason = !['paid','completed'].includes(order.status) ? 'يتاح إنشاء البيئة بعد تأكيد الدفع.' : !validLimits(order.plan_limits_snapshot) ? 'حدود الشراء القديمة غير محفوظة؛ راجع الطلب قبل التجهيز.' : !order.deployment_type_id || !Number.isSafeInteger(order.duration_months_snapshot) || order.duration_months_snapshot < 1 ? 'بيانات الاستضافة أو مدة الشراء ناقصة.' : null;
+    const blockedReason = !['paid','completed','manual_authorized'].includes(order.status) ? 'يتاح إنشاء البيئة بعد تأكيد الدفع.' : !validLimits(order.plan_limits_snapshot) ? 'حدود الشراء القديمة غير محفوظة؛ راجع الطلب قبل التجهيز.' : !order.deployment_type_id || !Number.isSafeInteger(order.duration_months_snapshot) || order.duration_months_snapshot < 1 ? 'بيانات الاستضافة أو مدة الشراء ناقصة.' : null;
     return {registered:false,canRequest:!blockedReason,blockedReason};
   }
   const [rows]: any = await query(`SELECT t.id tenant_id,t.name,t.license_number,t.customer_id,t.status tenant_status,t.archived_at tenant_archived_at,
@@ -116,7 +116,7 @@ async function readEnvironmentSummaryCore(query: (sql: string, params?: any[]) =
   const [steps]:any=r.job_id?await query('SELECT step_code,status,error_code FROM environment_provisioning_steps WHERE job_id=? ORDER BY id',[r.job_id]):[[]];
   let blockedReason: string | null = null;
   if (r.environment_archived_at) blockedReason='حُذفت أو أُرشفت البيئة؛ سجل الاشتراك محفوظ للمراجعة.';
-  else if (!['paid','completed'].includes(order.status)) blockedReason='يتاح إنشاء البيئة بعد تأكيد الدفع.';
+  else if (!['paid','completed','manual_authorized'].includes(order.status)) blockedReason='يتاح إنشاء البيئة بعد تأكيد الدفع.';
   else if (r.customer_id !== order.customer_id || r.license_key !== r.license_number || r.license_subscription_id !== r.subscription_id) blockedReason='ملكية الشبكة أو الرخصة تحتاج مراجعة.';
   else if (!['active','disabled'].includes(r.tenant_status) || r.license_status !== 'pending') blockedReason='حالة الشبكة أو الرخصة لا تسمح بالتجهيز الأول.';
   else if (r.tenant_archived_at || r.environment_archived_at) blockedReason='الشبكة أو البيئة مؤرشفة.';

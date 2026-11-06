@@ -1,3 +1,4 @@
+import {createManualEnvironment,listManualEnvironmentPlans} from '../../controllers/manual-environment.controller';
 import {applySubscriptionChange,listSubscriptionChanges,readUpgradePaymentSettings,saveUpgradePaymentSettings} from '../../services/master-subscription-changes.service';
 import {listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
 import {deleteEnvironment} from '../../controllers/environment-delete.controller';
@@ -9,6 +10,8 @@ import { getCollectionReportController } from '../../controllers/payment-reports
 import { requestEnvironmentController } from '../../controllers/environment.controller';
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
+router.get('/admin/manual-environment/plans',authenticate,requireAccountType('master_admin'),listManualEnvironmentPlans);
+router.post('/admin/manual-environment',authenticate,requireAccountType('master_admin'),createManualEnvironment);
 router.get('/admin/subscription-changes',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
  try{res.set('Cache-Control','no-store');return res.json({items:await listSubscriptionChanges(),paymentSettings:await readUpgradePaymentSettings()});}
  catch{return res.status(503).json({message:'تعذر تحميل طلبات التجديد والترقية.'});}
