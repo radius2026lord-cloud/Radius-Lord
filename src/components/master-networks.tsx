@@ -87,6 +87,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const [items,setItems]=useState<NetworkRow[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
  const [now,setNow]=useState(()=>Date.now());
  const [validityFilter,setValidityFilter]=useState("all");
+ const [requestFilter,setRequestFilter]=useState("all");
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
  const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false),[selected,setSelected]=useState<NetworkRow|null>(null);
@@ -96,11 +97,12 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");if(!controller.signal.aborted){setItems(body.items||[]);setReminderDays(body.reminderSettings?.expiryDays??7);}}).catch(reason=>{if(!controller.signal.aborted)setError(reason.message||"تعذر تحميل الشبكات.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[revision]);
  useEffect(()=>{if(networkId)setSelected(items.find(item=>Number(item.id)===networkId)||null);},[networkId,items]);
  const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||item.subscriptionStatus===subscriptionFilter)
+ &&(requestFilter==="all"||(requestFilter==="renewal"?Boolean(item.renewalRequest||item.upgradeRequest?.includeRenewal):Boolean(item.upgradeRequest)))
  &&(validityFilter==="all"||expiryState(item,reminderDays,now)===validityFilter)
  &&(serverFilter==="all"||item.databaseServerName===serverFilter)
  &&(readingFilter==="all"||(readingFilter==="fresh"?item.metricsStatus==="ok"&&!item.metricsStale:readingFilter==="failed"?item.metricsStatus==="unavailable":item.metricsStale))
  &&[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(query.trim().toLowerCase()));
- const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,reminderDays,now]);
+ const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,reminderDays,now]);
  const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||operationalState(item,reminderDays,now)===filter).sort((a,b)=>{
  if(sort==="expiry"){
  const left=a.expiresAt?Date.parse(a.expiresAt):NaN,right=b.expiresAt?Date.parse(b.expiresAt):NaN;
@@ -110,13 +112,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const comparison=sort==="id"?a.id-b.id:sort==="subscribers"?(a.metrics?.totalSubscribers??-1)-(b.metrics?.totalSubscribers??-1):a.name.localeCompare(b.name,"ar");
  return descending?-comparison:comparison;
  }),[baseItems,filter,sort,descending,reminderDays,now]);
- const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all");
+ const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all")+Number(requestFilter!=="all");
  const effectivePageSize=pageSize==="all"?Math.max(1,filtered.length):Number(pageSize);
  const pageCount=Math.max(1,Math.ceil(filtered.length/effectivePageSize));
  const currentPage=Math.min(page,pageCount);
  const visible=filtered.slice((currentPage-1)*effectivePageSize,currentPage*effectivePageSize);
  const allVisibleSelected=visible.length>0&&visible.every(item=>selection.has(item.id));
- useEffect(()=>{setPage(1);setSelection(new Set());},[query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,pageSize,setSelection]);
+ useEffect(()=>{setPage(1);setSelection(new Set());},[query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,pageSize,setSelection]);
  const serverOptions=[{value:"all",label:"كل الخوادم"},...Array.from(new Set(items.map(item=>item.databaseServerName).filter((name):name is string=>Boolean(name)))).map(name=>({value:name,label:name}))];
  const states=[
  {value:"all",title:"كل الشبكات",Icon:Layers,tone:"info" as const,ink:"text-blue-700 dark:text-blue-200"},
@@ -132,6 +134,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <ProjectFilterGroup icon={CheckCircle2} title="الاشتراك" tone="subscription"><ProjectFilterChoices value={subscriptionFilter} onChange={setSubscriptionFilter} items={[{value:"all",label:"الكل",icon:Layers,accent:"text-blue-500"},{value:"active",label:"نشط",icon:CheckCircle2,accent:"text-emerald-600"},{value:"expired",label:"منتهي",icon:Clock3,accent:"text-amber-600"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={CalendarClock} title="صلاحية الاشتراك" tone="subscription"><ProjectDropdown compact bareOptionIcons value={validityFilter} onChange={setValidityFilter} options={[{value:"all",label:"كل الاشتراكات"},{value:"current",label:"ساري"},{value:"soon",label:"قريب من الانتهاء"},{value:"expired",label:"منتهي"},{value:"pending",label:"لم يبدأ"},{value:"other",label:"حالة أخرى أو موعد غير محدد"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={Activity} title="حداثة مؤشرات التشغيل" tone="connection"><ProjectDropdown compact bareOptionIcons value={readingFilter} onChange={setReadingFilter} options={[{value:"all",label:"كل القراءات"},{value:"fresh",label:"قراءة حديثة"},{value:"stale",label:"قديمة أو لم تصل"},{value:"failed",label:"تعذرت آخر قراءة"}]}/></ProjectFilterGroup>
+ <ProjectFilterGroup icon={Package} title="طلبات الاشتراك" tone="subscription">
+  <ProjectDropdown compact bareOptionIcons value={requestFilter} onChange={setRequestFilter} options={[
+   {value:"all",label:"كل الشبكات"},
+   {value:"renewal",label:"لديها طلب تجديد"},
+   {value:"upgrade",label:"لديها طلب ترقية"},
+  ]}/>
+ </ProjectFilterGroup>
  <ProjectFilterGroup icon={Database} title="خادم قاعدة البيانات" tone="server"><ProjectDropdown compact bareOptionIcons searchable value={serverFilter} onChange={setServerFilter} options={serverOptions}/></ProjectFilterGroup>
  {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");}}>مسح التصفية</ProjectButton>}
  </div>}

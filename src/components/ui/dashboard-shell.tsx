@@ -77,17 +77,10 @@ const masterAdminGroups: NavGroup[] = [
     { label: "إضافة خطة", href: "/Dashboard/plans/add", icon: PackagePlus },
     { label: "إدارة الخطط", href: "/Dashboard/plans/manage", icon: Settings },
   ]},
-  { label: "الاشتراكات", icon: CreditCard, items: [
-    { label: "عرض الاشتراكات", href: "/Dashboard/subscriptions", icon: CreditCard },
+  { label: "الشبكات والاشتراكات", icon: Radio, items: [
+    { label: "الشبكات وحالتها", href: "/Dashboard/networks", icon: Radio },
+    { label: "طلبات الاشتراك والتجهيز", href: "/Dashboard/subscriptions", icon: CreditCard },
     { label: "عمليات الدفع", href: "/Dashboard/payments", icon: CircleDollarSign },
-    { label: "تقارير التحصيل", href: "/Dashboard/payments/reports", icon: Gauge },
-    { label: "الاشتراكات النشطة", href: "/Dashboard/subscriptions/active", icon: ShieldCheck },
-    { label: "المنتهية والقريبة من الانتهاء", href: "/Dashboard/subscriptions/expiring", icon: Clock3 },
-  ]},
-  { label: "الشبكات", icon: Radio, items: [
-    { label: "عرض الشبكات", href: "/Dashboard/networks", icon: Radio },
-    { label: "إضافة شبكة", href: "/Dashboard/networks/add", icon: PackagePlus },
-    { label: "حالة الشبكات", href: "/Dashboard/networks/status", icon: Activity },
   ]},
   { label: "الخوادم والبنية التحتية", icon: Server, items: [
     { label: "خوادم قواعد البيانات", href: "/Dashboard/database-servers", icon: Server },

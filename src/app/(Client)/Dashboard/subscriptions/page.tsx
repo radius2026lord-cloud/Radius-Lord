@@ -91,7 +91,7 @@ export default function SubscriptionsPage(){
       hostingerStyle
       selectionAcrossViews
       icon={Network}
-      title="طلبات الشبكات وتجهيزها"
+      title="طلبات الاشتراك والتجهيز"
       description="الدفع وحالة تجهيز الشبكة، كل منهما ظاهر بشكل مستقل"
       view={view}
       onViewChange={setView}
