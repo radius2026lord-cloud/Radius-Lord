@@ -80,6 +80,7 @@ const masterAdminGroups: NavGroup[] = [
   { label: "الشبكات والاشتراكات", icon: Radio, items: [
     { label: "الشبكات وحالتها", href: "/Dashboard/networks", icon: Radio },
     { label: "طلبات الاشتراك والتجهيز", href: "/Dashboard/subscriptions", icon: CreditCard },
+    { label: "تجهيز البيئة يدويًا", href: "/Dashboard/subscriptions/provisioning", icon: Server },
     { label: "عمليات الدفع", href: "/Dashboard/payments", icon: CircleDollarSign },
   ]},
   { label: "الخوادم والبنية التحتية", icon: Server, items: [
