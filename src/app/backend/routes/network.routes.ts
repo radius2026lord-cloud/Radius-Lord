@@ -1,4 +1,4 @@
-import {subscriptionPresentation,readPlatformSubscription,requestPlatformRenewal} from '../services/network-platform-subscription.service';
+import {subscriptionPresentation,readPlatformSubscription,requestPlatformRenewal,requestPlatformUpgrade} from '../services/network-platform-subscription.service';
 import {confirmHotspotBatchOutput} from '../services/hotspot-print-tracking.service';
 import {readHotspotCards,readHotspotCardBatchOverview} from '../services/network-hotspot-cards.service';
 import {readHotspotCardTemplates,saveHotspotCardTemplates,readHotspotPrintableCards} from '../services/hotspot-card-template.service';
@@ -307,7 +307,8 @@ router.post('/:slug/credentials',async(req,res)=>{try{
 });
 router.post('/:slug/logout',async(req,res)=>{try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});const scope=await networkScope(String(req.params.slug));if(token.kind==='network-manager'&&token.slug===scope.slug&&Number(token.tenantId)===Number(scope.tenant_id)&&Number(token.environmentId)===Number(scope.environment_id)&&token.sessionVersion===await networkSessionVersion(scope,Number(token.sub)))await withNetwork(scope,async app=>{await managerAccess(app,Number(token.sub),token.authVersion);await auditNetworkEvent(app,{action:'auth.logout',managerId:Number(token.sub)});});}catch{console.error('[network-audit]',{action:'auth.logout',result:'unverified_or_audit_unavailable'});}res.clearCookie('network_token',{path:'/api/network',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});return res.json({success:true});});
 router.get('/:slug/platform-subscription',async(req,res)=>{try{return res.json(await readPlatformSubscription(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:503).json({message:'تعذر تحميل معلومات الاشتراك. تحقق من الاتصال وتوقيت الشبكة ثم أعد المحاولة.'});}});
-router.post('/:slug/platform-subscription/renewal-request',async(req,res)=>{try{return res.json(await requestPlatformRenewal(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:409).json({message:(e as Error).message==='RENEWAL_REQUEST_BUSY'?'يجري تسجيل طلب التجديد؛ أعد المحاولة بعد قليل.':'تعذر تسجيل طلب التجديد. أعد المحاولة.'});}});
+router.post('/:slug/platform-subscription/upgrade-request',async(req,res)=>{try{return res.json(await requestPlatformUpgrade(await principal(req,true),req.body));}catch(e){const code=(e as Error).message;const messages:Record<string,string>={UPGRADE_REQUEST_INPUT:'حدد نوع الزيادة وأدخل حدودًا صحيحة.',UPGRADE_REQUEST_LIMIT:'الحد المطلوب يجب أن يكون أكبر من الحد الحالي؛ السعة غير المحدودة لا تحتاج إلى زيادة.',UPGRADE_REQUEST_PENDING:'لديك طلب ترقية قيد المراجعة؛ تواصل مع الإدارة لمتابعته.',UPGRADE_REQUEST_BUSY:'يجري تسجيل طلب آخر؛ أعد المحاولة بعد قليل.',UPGRADE_RENEWAL_NOT_DUE:'يتاح إرفاق التجديد عند اقتراب انتهاء الاشتراك.'};return res.status(code==='NETWORK_AUTH'?403:code==='UPGRADE_REQUEST_INPUT'||code==='UPGRADE_REQUEST_LIMIT'?422:409).json({message:messages[code]||'تعذر تسجيل طلب الترقية.'});}});
+router.post('/:slug/platform-subscription/renewal-request',async(req,res)=>{try{return res.json(await requestPlatformRenewal(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:409).json({message:(e as Error).message==='RENEWAL_NOT_DUE'?'يتاح طلب التجديد عند اقتراب انتهاء الاشتراك.':(e as Error).message==='RENEWAL_REQUEST_BUSY'?'يجري تسجيل طلب التجديد؛ أعد المحاولة بعد قليل.':'تعذر تسجيل طلب التجديد. أعد المحاولة.'});}});
 router.get('/:slug/me',async(req,res)=>{
  try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('SCOPE');const scope=await networkScope(String(req.params.slug),false,true);if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('SCOPE');
  if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub)))throw new Error('NETWORK_AUTH');
@@ -325,6 +326,7 @@ router.post('/:slug/verify',async(req,res)=>{
  }catch{return res.status(403).json({message:'فشل التحقق من بيئة الشبكة.'});}
 });
 export default router;
+
 
 
 
