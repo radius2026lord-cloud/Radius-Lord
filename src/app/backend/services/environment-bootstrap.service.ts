@@ -14,6 +14,21 @@ import {syncRadiusOvpnRoutes} from './radius-ovpn-routes.service';
 import {readHostingPreflight} from './hosting-preflight.service';
 type Step=(code:string,operation:()=>Promise<void>,alwaysRun?:boolean)=>Promise<void>;
 const fail=(code:string)=>{throw new Error(code);};
+async function verifyApplicationRequest<T>(stage: 'PAGE' | 'LOGIN', request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+ for(let attempt=0;attempt<2;attempt++){
+  const signal=AbortSignal.timeout(30000);
+  try{return await request(signal);}
+  catch(error){
+   if(signal.aborted){
+    if(attempt===0)continue;
+    throw new Error(`NETWORK_APPLICATION_${stage}_TIMEOUT`);
+   }
+   if(error instanceof TypeError)throw new Error(`NETWORK_APPLICATION_${stage}_UNREACHABLE`);
+   throw error;
+  }
+ }
+ throw new Error(`NETWORK_APPLICATION_${stage}_TIMEOUT`);
+}
 const utcSql=(date:Date|null)=>date?date.toISOString().slice(0,19).replace('T',' '):null;
 export async function writeLocalLicense(connection:mysql.Connection,scope:any,status:'pending'|'active',startsAt:Date|null=null,expiresAt:Date|null=null){
  const limits=validLimits(scope.plan_limits_snapshot);if(!limits)fail('LICENSE_LIMITS_REQUIRED');
@@ -82,10 +97,21 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  const hosting=await readHostingPreflight((sql,params)=>central.query(sql,params));
  const url=hosting.baseUrl+'/network/'+scope.slug;
  await step('network_application_verify',async()=>{
+  await verifyApplicationRequest('PAGE',async signal=>{
+   const page=await fetch(url,{redirect:'error',signal});
+   await page.body?.cancel();
+   if(!page.ok)fail('NETWORK_PAGE_NOT_AVAILABLE');
+  });
   const nonce=randomBytes(16).toString('hex');const proof=jwt.sign({kind:'network-bootstrap',slug:scope.slug,environmentId:job.environment_id,jobId:job.id,nonce},provisioningKey(),{algorithm:'HS256',expiresIn:'2m'});
-  const page=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(10000)});if(!page.ok)fail('NETWORK_PAGE_NOT_AVAILABLE');
-  const response=await fetch(hosting.baseUrl+'/api/network/'+scope.slug+'/verify',{method:'POST',headers:{'Content-Type':'application/json','x-provisioning-proof':proof},body:JSON.stringify({username:state.username,password}),redirect:'error',signal:AbortSignal.timeout(12000)});
-  const report:any=await response.json();if(!response.ok||report.application!=='radius-lord-network'||Number(report.environmentId)!==Number(job.environment_id)||Number(report.tenantId)!==Number(job.tenant_id)||report.nonce!==nonce)fail('NETWORK_APPLICATION_LOGIN_FAILED');
+  await verifyApplicationRequest('LOGIN',async signal=>{
+   const response=await fetch(hosting.baseUrl+'/api/network/'+scope.slug+'/verify',{method:'POST',headers:{'Content-Type':'application/json','x-provisioning-proof':proof},body:JSON.stringify({username:state.username,password}),redirect:'error',signal});
+   if(!response.ok){await response.body?.cancel();fail('NETWORK_APPLICATION_LOGIN_FAILED');}
+   const report:any=await response.json().catch(error=>{
+    if(signal.aborted)throw error;
+    throw new Error('NETWORK_APPLICATION_LOGIN_INVALID_RESPONSE');
+   });
+   if(report?.application!=='radius-lord-network'||Number(report.environmentId)!==Number(job.environment_id)||Number(report.tenantId)!==Number(job.tenant_id)||report.nonce!==nonce)fail('NETWORK_APPLICATION_LOGIN_FAILED');
+  });
  },true);
  // One central transaction activates network/license/subscription/job. Local activation remains inaccessible until commit.
  await options.activationStarted();
