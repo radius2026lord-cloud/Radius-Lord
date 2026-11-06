@@ -60,7 +60,7 @@ router.get('/admin/networks/:slug/access-recovery',authenticate,requireAccountTy
 router.post('/admin/networks/:slug/access-recovery',authenticate,requireAccountType('master_admin'),requireAuthOrigin,async(req,res)=>{
  res.set('Cache-Control','no-store');
  const action=req.body?.action;
- if(action!=='rename'&&action!=='issue'&&action!=='revoke')return res.status(422).json({message:'إجراء الاستعادة غير صالح.'});
+ if(action!=='issue'&&action!=='revoke')return res.status(422).json({message:'إجراء الاستعادة غير صالح.'});
  try{return res.json(await manageNetworkAccess(req,String(req.params.slug),action));}
  catch(e){return res.status(e instanceof RecoveryError?e.status:409).json({message:e instanceof RecoveryError?e.message:'تعذر إكمال إجراء الاستعادة. حدّث البيانات وأعد المحاولة.'});}
 });

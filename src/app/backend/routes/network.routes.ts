@@ -1,4 +1,4 @@
-import {recoverNetworkPassword,RecoveryError} from '../services/network-access-recovery.service';
+import {recoverNetworkAccess,RecoveryError} from '../services/network-access-recovery.service';
 import {subscriptionPresentation,readPlatformSubscription,requestPlatformRenewal,requestPlatformUpgrade} from '../services/network-platform-subscription.service';
 import {confirmHotspotBatchOutput} from '../services/hotspot-print-tracking.service';
 import {readHotspotCards,readHotspotCardBatchOverview} from '../services/network-hotspot-cards.service';
@@ -283,10 +283,12 @@ router.post('/:slug/nas-check',async(req,res)=>provisionNasRequest(req,res,true)
 router.post('/:slug/access-recovery',async(req,res)=>{
  const key='recovery:'+(req.ip??''),now=Date.now(),attempts=failed.get(key);
  if(attempts&&attempts.until>now&&attempts.count>=10)return res.status(429).json({message:'انتظر دقائق قبل إعادة المحاولة.'});
+ res.set('Cache-Control','no-store');
  try{
-  await recoverNetworkPassword(req,String(req.params.slug));
+  const preview=await recoverNetworkAccess(req,String(req.params.slug));
+  if(preview)return res.json(preview);
   failed.delete(key);res.clearCookie('network_token',{path:'/api/network'});
-  return res.json({success:true,message:'تم تعيين كلمة المرور الجديدة وإنهاء جلسات المدير السابقة. سجّل الدخول مجددًا.'});
+  return res.json({success:true,message:'تم تعيين اسم المستخدم وكلمة المرور وإنهاء جلسات المدير السابقة. سجّل الدخول بالبيانات الجديدة.'});
  }catch(e){
   if(!(e instanceof RecoveryError)||e.status===400){
    for(const [id,value] of failed)if(value.until<=now)failed.delete(id);

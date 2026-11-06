@@ -77,7 +77,7 @@ async function lockEnvironment(central:PoolConnection,scope:Scope){
  if(!rows[0])throw new RecoveryError(409,'بيئة الشبكة غير جاهزة.');
 }
 
-export async function manageNetworkAccess(req:AuthenticatedRequest,slug:string,action:'read'|'rename'|'issue'|'revoke'){
+export async function manageNetworkAccess(req:AuthenticatedRequest,slug:string,action:'read'|'issue'|'revoke'){
  const scope=await networkScope(slug,false,true);
  if(action==='read'){
   const manager=await activeManager(scope);
@@ -87,40 +87,6 @@ export async function manageNetworkAccess(req:AuthenticatedRequest,slug:string,a
  }
  return underCredentialLock(async central=>{
   const manager=await activeManager(scope),key=keyFor(scope),adminId=req.auth!.accountId;
-  if(action==='rename'){
-   const username=typeof req.body?.username==='string'?req.body.username.trim().toLowerCase():'';
-   if(!/^[a-z][a-z0-9_.-]{2,63}$/.test(username)||username.startsWith('setup_'))throw new RecoveryError(422,'أدخل اسمًا من 3 إلى 64 محرفًا يبدأ بحرف إنجليزي.');
-   const runtime=await readSetting(central,'environment_runtime',key);
-   if(!runtime||runtime.tenantId!==Number(scope.tenant_id)||runtime.subscriptionId!==Number(scope.subscription_id)||runtime.mustChangeCredentials!==false)throw new RecoveryError(409,'أكمل إعداد الدخول الأول عبر رابط الاستعادة قبل تغيير اسم المدير من المنصة.');
-   if(username!==manager.username){
-    const [reserved]:any=await central.query(`SELECT 1 FROM master_admins WHERE username=? OR email=? UNION ALL
-     SELECT 1 FROM customers WHERE username=? OR email=? UNION ALL
-     SELECT 1 FROM platform_settings WHERE setting_group='environment_runtime' AND setting_key<>? AND
-       (JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.username'))=? OR JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.pendingUsername'))=?)
-     UNION ALL SELECT 1 FROM platform_settings WHERE setting_group='network_manager_directory' AND JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.username'))=? LIMIT 1`,
-     [username,username,username,username,key,username,username,username]);
-    if(reserved.length)throw new RecoveryError(409,'اسم المستخدم مستخدم بالفعل.');
-    await withNetwork(scope,async connection=>{
-     const [duplicate]:any=await connection.query('SELECT 1 FROM managers WHERE username=? AND id<>? LIMIT 1',[username,manager.id]);
-     if(duplicate.length)throw new RecoveryError(409,'اسم المستخدم مستخدم بالفعل داخل الشبكة.');
-     // Reserve the new alias before changing the tenant DB, so either name can be resolved during a retry.
-     runtime.pendingUsername=username;
-     await central.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='environment_runtime' AND setting_key=?",[JSON.stringify(runtime),key]);
-     const [result]:any=await connection.query("UPDATE managers SET username=? WHERE id=? AND username=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL",[username,manager.id,manager.username]);
-     if(result.affectedRows!==1)throw new RecoveryError(409,'تغير حساب المدير. حدّث البيانات ثم أعد المحاولة.');
-    });
-   }
-   if(runtime.username!==username||runtime.pendingUsername){
-    await transaction(central,async()=>{
-     await lockEnvironment(central,scope);
-     runtime.username=username;delete runtime.pendingUsername;
-     await central.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='environment_runtime' AND setting_key=?",[JSON.stringify(runtime),key]);
-     await invalidateNetworkManager(central,scope,manager.id);
-     await audit(req,adminId,scope,'network_manager_username_changed',manager.id,'إعادة تعيين اسم مستخدم مدير الشبكة',central);
-    });
-   }
-   return {username,link:linkStatus(await readSetting(central,group,key))};
-  }
   return transaction(central,async()=>{
    await lockEnvironment(central,scope);
    const previous=await readSetting(central,group,key,true) as Recovery|null;
@@ -142,45 +108,78 @@ export async function manageNetworkAccess(req:AuthenticatedRequest,slug:string,a
  });
 }
 
-export async function recoverNetworkPassword(req:AuthenticatedRequest,slug:string){
- const token=req.body?.token,password=req.body?.password;
- const invalid=()=>new RecoveryError(400,'رابط الاستعادة غير صالح أو انتهت صلاحيته.');
- if(typeof token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(token))throw invalid();
- if(typeof password!=='string'||password.length<8||Buffer.byteLength(password,'utf8')>72)throw new RecoveryError(422,'اختر كلمة مرور من 8 محارف على الأقل وبحد أقصى 72 بايت.');
+function invalidLink(){
+ return new RecoveryError(400,'رابط الاستعادة غير صالح أو انتهت صلاحيته.');
+}
+
+function matchesRecovery(recovery:Recovery|null,token:string):recovery is Recovery{
+ return Boolean(recovery&&linkStatus(recovery)?.status==='pending'&&/^[a-f0-9]{64}$/.test(recovery.hash)&&timingSafeEqual(digest(token),Buffer.from(recovery.hash,'hex')));
+}
+
+export async function recoverNetworkAccess(req:AuthenticatedRequest,slug:string){
+ const {token,password}=req.body??{};
+ if(typeof token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(token))throw invalidLink();
  const scope=await networkScope(slug,false,true);
+ if(req.body?.action==='preview'){
+  const [rows]:any=await db.query('SELECT setting_value FROM platform_settings WHERE setting_group=? AND setting_key=?',[group,keyFor(scope)]);
+  if(!matchesRecovery(rows[0]?JSON.parse(rows[0].setting_value):null,token))throw invalidLink();
+  return {networkName:scope.name};
+ }
+ const rawUsername=typeof req.body?.username==='string'?req.body.username:'';
+ const username=rawUsername.trim().toLowerCase();
+ if(/\p{Script=Arabic}/u.test(rawUsername)||typeof password==='string'&&/\p{Script=Arabic}/u.test(password))throw new RecoveryError(422,'الأحرف العربية غير مسموحة في اسم المستخدم أو كلمة المرور.');
+ if(!/^[a-z][a-z0-9_.-]{2,63}$/.test(username)||username.startsWith('setup_'))throw new RecoveryError(422,'أدخل اسمًا من 3 إلى 64 محرفًا يبدأ بحرف إنجليزي ويحتوي فقط على حروف إنجليزية أو أرقام أو . _ -');
+ if(typeof password!=='string'||password.length<8||Buffer.byteLength(password,'utf8')>72)throw new RecoveryError(422,'اختر كلمة مرور من 8 محارف على الأقل وبحد أقصى 72 بايت.');
  return underCredentialLock(async central=>{
   const key=keyFor(scope);
   const manager=await activeManager(scope);
   const state=await transaction(central,async()=>{
    await lockEnvironment(central,scope);
    const recovery=await readSetting(central,group,key,true) as Recovery|null;
-   if(!recovery||linkStatus(recovery)?.status!=='pending'||recovery.managerId!==manager.id||!/^[a-f0-9]{64}$/.test(recovery.hash)||!timingSafeEqual(digest(token),Buffer.from(recovery.hash,'hex')))throw invalid();
+   if(!matchesRecovery(recovery,token)||recovery.managerId!==manager.id)throw invalidLink();
+   const runtime=await readSetting(central,'environment_runtime',key,true);
+   if(!runtime||runtime.tenantId!==Number(scope.tenant_id)||runtime.subscriptionId!==Number(scope.subscription_id))throw invalidLink();
+   if(username!==manager.username){
+    const [reserved]:any=await central.query(`SELECT 1 FROM master_admins WHERE username=? OR email=? UNION ALL
+     SELECT 1 FROM customers WHERE username=? OR email=? UNION ALL
+     SELECT 1 FROM platform_settings WHERE setting_group='environment_runtime' AND setting_key<>? AND
+       (JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.username'))=? OR JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.pendingUsername'))=?)
+     UNION ALL SELECT 1 FROM platform_settings WHERE setting_group='network_manager_directory' AND JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.username'))=? LIMIT 1`,
+     [username,username,username,username,key,username,username,username]);
+    const duplicate=await withNetwork(scope,async connection=>{
+     const [rows]:any=await connection.query('SELECT 1 FROM managers WHERE username=? AND id<>? LIMIT 1',[username,manager.id]);
+     return rows.length>0;
+    });
+    if(reserved.length||duplicate)throw new RecoveryError(409,'اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.');
+   }
+   const passwordHash=await bcrypt.hash(password,12);
    // Claim before writing across databases. A failed write cannot make this token usable again.
    recovery.revokedAt=new Date().toISOString();
    await writeRecovery(central,key,recovery);
-   const runtime=await readSetting(central,'environment_runtime',key,true);
-   if(!runtime||runtime.tenantId!==Number(scope.tenant_id)||runtime.subscriptionId!==Number(scope.subscription_id))throw invalid();
+   // Keep the new alias resolvable if the tenant update succeeds before central finalization.
+   runtime.pendingUsername=username;
+   await central.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='environment_runtime' AND setting_key=?",[JSON.stringify(runtime),key]);
    await invalidateNetworkManager(central,scope,manager.id);
    await central.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public) VALUES ('environment_activation',?,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",[key,JSON.stringify({consumedAt:new Date().toISOString()})]);
-   await audit(req,recovery.adminId,scope,'network_access_recovery_claimed',manager.id,'بدء استخدام رابط استعادة كلمة مرور مدير الشبكة',central);
-   return {recovery,runtime};
+   await audit(req,recovery.adminId,scope,'network_access_recovery_claimed',manager.id,'بدء استخدام رابط إعادة تعيين بيانات دخول مدير الشبكة',central);
+   return {recovery,runtime,passwordHash};
   });
-  const passwordHash=await bcrypt.hash(password,12);
   await withNetwork(scope,async connection=>{
-   const [result]:any=await connection.query("UPDATE managers SET password_hash=? WHERE id=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL",[passwordHash,manager.id]);
+   const [result]:any=await connection.query("UPDATE managers SET username=?,password_hash=? WHERE id=? AND username=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL",[username,state.passwordHash,manager.id,manager.username]);
    if(result.affectedRows!==1)throw new RecoveryError(409,'تغير حساب المدير. اطلب رابط استعادة جديدًا.');
   });
   await transaction(central,async()=>{
    await lockEnvironment(central,scope);
-   state.runtime.username=manager.username;
+   state.runtime.username=username;
+   state.runtime.mustChangeCredentials=false;
    delete state.runtime.passwordEncrypted;
    delete state.runtime.credentialsExpiresAt;
-   if(state.runtime.mustChangeCredentials===true)state.runtime.pendingUsername=manager.username;
-   else delete state.runtime.pendingUsername;
+   delete state.runtime.pendingUsername;
+   await invalidateNetworkManager(central,scope,manager.id);
    await central.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='environment_runtime' AND setting_key=?",[JSON.stringify(state.runtime),key]);
    state.recovery.usedAt=new Date().toISOString();delete state.recovery.revokedAt;
    await writeRecovery(central,key,state.recovery);
-   await audit(req,state.recovery.adminId,scope,'network_access_recovery_used',manager.id,'استخدام رابط استعادة كلمة مرور مدير الشبكة',central);
+   await audit(req,state.recovery.adminId,scope,'network_access_recovery_used',manager.id,'استخدام رابط إعادة تعيين بيانات دخول مدير الشبكة',central);
   });
  });
 }
