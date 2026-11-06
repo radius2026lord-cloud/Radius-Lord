@@ -722,3 +722,7 @@ export async function radiusIpv4(host:string){return (await lookup(host,{family:
 
 
 
+
+export function readGatewayOvpnSessions(central:PoolConnection,gatewayId:number){
+ return withGateway(central,gatewayId,api=>api.command('/ppp/active/print',{'.proplist':'name,address,service'},['?service=ovpn']));
+}

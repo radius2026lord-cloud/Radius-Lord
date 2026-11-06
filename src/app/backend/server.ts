@@ -1,3 +1,4 @@
+import {startMasterNetworkTunnelsWorker} from './services/master-network-tunnels.service';
 import {migrateManualEnvironment} from './services/manual-environment-migration.service';
 import {startMasterNetworkMetricsWorker} from './services/master-network-metrics.worker';
 import {startNetworkArchiveWorker} from './services/network-archive.service';
@@ -44,6 +45,7 @@ const startServer = (port: number) => {
     startDatabaseProvisioningWorker();
     const stopMasterMetrics=startMasterNetworkMetricsWorker();
     server.once('close',stopMasterMetrics);
+    server.once('close',startMasterNetworkTunnelsWorker());
     const stopArchive=startNetworkArchiveWorker();
     const stopProfileBoosts=startProfileSpeedBoostWorker();
     const stopPppoeLifecycle=startPppoeLifecycleWorker();

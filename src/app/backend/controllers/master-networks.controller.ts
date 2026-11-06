@@ -1,3 +1,4 @@
+import {readMasterNetworkTunnels,describeMasterNetworkTunnels} from '../services/master-network-tunnels.service';
 import {readPrivateSetting,savePrivateSetting} from '../services/radius-provision.service';
 import {validLimits} from '../services/subscription-environment.service';
 import {Response} from 'express';
@@ -28,7 +29,10 @@ export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
    LEFT JOIN platform_settings renewal ON renewal.setting_group='subscription_renewal_requests' AND renewal.setting_key=CONCAT('tenant_',t.id)
    LEFT JOIN platform_settings upgrade ON upgrade.setting_group='subscription_upgrade_requests' AND upgrade.setting_key=CONCAT('tenant_',t.id)
    WHERE t.archived_at IS NULL AND e.id IS NOT NULL ${id!==undefined?'AND t.id=?':''} ORDER BY t.id DESC`,id!==undefined?[Number(id)]:[]);
-  const reminderSettings=await readSubscriptionReminderSettings();
+  const [reminderSettings,tunnels]=await Promise.all([
+   readSubscriptionReminderSettings(),
+   readMasterNetworkTunnels((items as any[]).map(item=>Number(item.environmentId))),
+  ]);
   return res.json({reminderSettings,items:(items as any[]).map(({metricsSnapshot,renewalRequestSnapshot,upgradeRequestSnapshot,planLimitsSnapshot,additionalNas,...item})=>{
    let snapshot:any=null;
    try{snapshot=typeof metricsSnapshot==='string'?JSON.parse(metricsSnapshot):metricsSnapshot;}catch{}
@@ -37,7 +41,7 @@ export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
    let upgradeRequest:any=null;try{const request=typeof upgradeRequestSnapshot==='string'?JSON.parse(upgradeRequestSnapshot):upgradeRequestSnapshot;if(request?.status==='requested'&&Number(request.subscriptionId)===Number(item.subscriptionId))upgradeRequest={requestedAt:request.requestedAt,requestedPppoeLimit:request.requestedPppoeLimit,requestedNasLimit:request.requestedNasLimit,includeRenewal:request.includeRenewal};}catch{}
    const limits=validLimits(planLimitsSnapshot);
    const planLimits=limits?{pppoe:limits.maxSubscribers,nas:limits.maxNas===0?0:limits.maxNas+Number(additionalNas)}:null;
-   return {...item,planLimits,upgradeRequest,renewalRequest,metrics:snapshot?.metrics??null,metricsReadAt:snapshot?.readAt??null,
+   return {...item,ovpn:describeMasterNetworkTunnels(tunnels,Number(item.environmentId),snapshot?.nasInventory,id!==undefined),planLimits,upgradeRequest,renewalRequest,metrics:snapshot?.metrics??null,metricsReadAt:snapshot?.readAt??null,
     metricsStatus:snapshot?.status??'pending',metricsScope:snapshot?.scope??null,
     metricsStale:!Number.isFinite(Date.parse(snapshot?.readAt??''))||Date.now()-Date.parse(snapshot.readAt)>6*60*1000};
   })});

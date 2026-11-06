@@ -12,7 +12,9 @@ import NetworkAccessRecovery from "@/components/network-access-recovery";
 import FloatingNotice from "@/components/ui/floating-notice";
 import {ProjectInfoCard,ProjectCardIcon,type InfoCardTone} from "@/components/ui/project-info-card";
 type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
-type NetworkRow={systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
+type TunnelState="connected"|"disconnected"|"partial"|"pending"|"unavailable"|"stale"|"unlinked";
+type Tunnel={nasId:number;name:string;gatewayId:number;gateway:string;state:TunnelState;readAt:string|null;lastSeenAt:string|null};
+type NetworkRow={ovpn?:{state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
@@ -24,10 +26,27 @@ function expiryState(item:NetworkRow,days:number,now:number){
  if(item.subscriptionStatus!=="active"||!Number.isFinite(end))return "other";
  return end-now<=days*86400000?"soon":"current";
 }
+const subscriptionLabels={expired:"منتهٍ",pending:"لم يبدأ",soon:"قريب من الانتهاء",current:"ساري",other:"غير ساري أو غير محدد"};
+const tunnelLabels:Record<TunnelState,{label:string;tone:InfoCardTone}>={
+ connected:{label:"متصل",tone:"success"},partial:{label:"اتصال جزئي",tone:"warning"},
+ disconnected:{label:"منقطع",tone:"danger"},unavailable:{label:"تعذّر الفحص",tone:"warning"},
+ stale:{label:"قراءة قديمة",tone:"warning"},pending:{label:"بانتظار الفحص",tone:"pending"},
+ unlinked:{label:"غير مربوط",tone:"info"},
+};
+function NetworkTunnelBadge({ovpn}:{ovpn:NetworkRow["ovpn"]}){
+ const state=ovpn?.state??"pending",display=tunnelLabels[state];
+ const known=state==="connected"||state==="disconnected"||state==="partial";
+ return <ProjectInfoCard tone={display.tone} className="flex flex-wrap items-center gap-2 !p-2 text-xs">
+  <Router className="size-4 shrink-0"/><span>OpenVPN · {display.label}</span>
+  {known&&ovpn&&<bdi className="font-semibold tabular-nums">{ovpn.connected}/{ovpn.total}</bdi>}
+ </ProjectInfoCard>;
+}
+
 function operationalState(item:NetworkRow,days:number,now:number){
  const expiry=expiryState(item,days,now);
  if(expiry==="expired")return "expired";
- if(item.status!=="active"||item.subscriptionStatus!=="active")return "suspended";
+ if(item.status!=="active"||item.environmentStatus!=="ready"||expiry==="other")return "suspended";
+ if(expiry==="pending")return "pending";
  return expiry==="soon"?"soon":"active";
 }
 function networkState(item:NetworkRow,days:number,now:number){
@@ -91,12 +110,12 @@ const networkReturnKey="lord-radius:master-networks:return";
 
 type NetworkListReturn = {
  query:string; filter:string; filtersOpen:boolean; subscriptionFilter:string; readingFilter:string;
- serverFilter:string; validityFilter:string; requestFilter:string; sort:string; descending:boolean;
+ serverFilter:string; validityFilter:string; requestFilter:string; tunnelFilter?:string; sort:string; descending:boolean;
  pageSize:string; page:number; scrollTop:number;
 };
 
-function networkFilterKey(state:Pick<NetworkListReturn,"query"|"filter"|"subscriptionFilter"|"readingFilter"|"serverFilter"|"validityFilter"|"requestFilter"|"pageSize">){
- return JSON.stringify([state.query,state.filter,state.subscriptionFilter,state.readingFilter,state.serverFilter,state.validityFilter,state.requestFilter,state.pageSize]);
+function networkFilterKey(state:Pick<NetworkListReturn,"query"|"filter"|"subscriptionFilter"|"readingFilter"|"serverFilter"|"validityFilter"|"requestFilter"|"tunnelFilter"|"pageSize">){
+ return JSON.stringify([state.query,state.filter,state.subscriptionFilter,state.readingFilter,state.serverFilter,state.validityFilter,state.requestFilter,state.tunnelFilter??"all",state.pageSize]);
 }
 
 export default function MasterNetworks({networkId}:{networkId?:number}){
@@ -108,6 +127,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const [now,setNow]=useState(()=>Date.now());
  const [validityFilter,setValidityFilter]=useState("all");
  const [requestFilter,setRequestFilter]=useState("all");
+ const [tunnelFilter,setTunnelFilter]=useState("all");
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
  const [hasLoaded,setHasLoaded]=useState(false);
@@ -144,13 +164,14 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   return()=>{controller.abort();clearInterval(timer);document.removeEventListener("visibilitychange",refreshVisible);};
  },[revision,networkId]);
  const selected=networkId?items.find(item=>Number(item.id)===networkId):undefined;
- const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||item.subscriptionStatus===subscriptionFilter)
+ const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||(subscriptionFilter==="active"?["current","soon"].includes(expiryState(item,reminderDays,now)):expiryState(item,reminderDays,now)==="expired"))
+ &&(tunnelFilter==="all"||(item.ovpn?.state??"pending")===tunnelFilter)
  &&(requestFilter==="all"||(requestFilter==="renewal"?Boolean(item.renewalRequest||item.upgradeRequest?.includeRenewal):Boolean(item.upgradeRequest)))
  &&(validityFilter==="all"||expiryState(item,reminderDays,now)===validityFilter)
  &&(serverFilter==="all"||item.databaseServerName===serverFilter)
  &&(readingFilter==="all"||(readingFilter==="fresh"?item.metricsStatus==="ok"&&!item.metricsStale:readingFilter==="failed"?item.metricsStatus==="unavailable":item.metricsStale))
  &&[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(query.trim().toLowerCase()));
- const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,reminderDays,now]);
+ const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,reminderDays,now]);
  const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||operationalState(item,reminderDays,now)===filter).sort((a,b)=>{
  if(sort==="expiry"){
  const left=a.expiresAt?Date.parse(a.expiresAt):NaN,right=b.expiresAt?Date.parse(b.expiresAt):NaN;
@@ -160,13 +181,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const comparison=sort==="id"?a.id-b.id:sort==="subscribers"?(a.metrics?.totalSubscribers??-1)-(b.metrics?.totalSubscribers??-1):a.name.localeCompare(b.name,"ar");
  return descending?-comparison:comparison;
  }),[baseItems,filter,sort,descending,reminderDays,now]);
- const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all")+Number(requestFilter!=="all");
+ const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all")+Number(requestFilter!=="all")+Number(tunnelFilter!=="all");
  const effectivePageSize=pageSize==="all"?Math.max(1,filtered.length):Number(pageSize);
  const pageCount=Math.max(1,Math.ceil(filtered.length/effectivePageSize));
  const currentPage=Math.min(page,pageCount);
  const visible=filtered.slice((currentPage-1)*effectivePageSize,currentPage*effectivePageSize);
  const allVisibleSelected=visible.length>0&&visible.every(item=>selection.has(item.id));
- const filterKey=networkFilterKey({query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,pageSize});
+ const filterKey=networkFilterKey({query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,pageSize});
  useEffect(()=>{
   if(lastFilterKey.current!==null&&lastFilterKey.current!==filterKey){
    setPage(1);
@@ -184,7 +205,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
    lastFilterKey.current=networkFilterKey(saved);
    setQuery(saved.query);setFilter(saved.filter);setFiltersOpen(saved.filtersOpen);
    setSubscriptionFilter(saved.subscriptionFilter);setReadingFilter(saved.readingFilter);setServerFilter(saved.serverFilter);
-   setValidityFilter(saved.validityFilter);setRequestFilter(saved.requestFilter);
+   setValidityFilter(saved.validityFilter);setRequestFilter(saved.requestFilter);setTunnelFilter(saved.tunnelFilter??"all");
    setSort(saved.sort);setDescending(saved.descending);setPageSize(saved.pageSize);setPage(saved.page);
    setReturnScroll(saved.scrollTop);
   }catch{/* List navigation still works when session storage is unavailable. */}
@@ -203,7 +224,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
 
  function openNetwork(id:number){
   const saved:NetworkListReturn={
-   query,filter,filtersOpen,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,
+   query,filter,filtersOpen,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,
    sort,descending,pageSize,page:currentPage,
    scrollTop:listRoot.current?.closest<HTMLElement>(".workspace-scroll")?.scrollTop??0,
   };
@@ -216,6 +237,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  {value:"active",title:"نشطة",Icon:CheckCircle2,tone:"success" as const,ink:"text-emerald-700 dark:text-emerald-200"},
  {value:"soon",title:"قريبة من الانتهاء",Icon:CalendarClock,tone:"warning" as const,ink:"text-orange-700 dark:text-orange-200"},
  {value:"expired",title:"منتهية",Icon:Clock3,tone:"warning" as const,ink:"text-amber-700 dark:text-amber-200"},
+ {value:"pending",title:"لم يبدأ الاشتراك",Icon:Clock3,tone:"pending" as const,ink:"text-violet-700 dark:text-violet-300"},
  {value:"suspended",title:"موقوفة",Icon:Power,tone:"danger" as const,ink:"text-rose-700 dark:text-rose-200"}];
  return <div ref={listRoot} dir="rtl" className="space-y-4">
  {networkId&&<div className="flex justify-end"><ProjectButton variant="back" onClick={()=>router.push("/Dashboard/networks")}><ArrowRight aria-hidden="true"/>العودة إلى الشبكات</ProjectButton></div>}
@@ -225,6 +247,9 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <ProjectFilterGroup icon={CheckCircle2} title="الاشتراك" tone="subscription"><ProjectFilterChoices value={subscriptionFilter} onChange={setSubscriptionFilter} items={[{value:"all",label:"الكل",icon:Layers,accent:"text-blue-500"},{value:"active",label:"نشط",icon:CheckCircle2,accent:"text-emerald-600"},{value:"expired",label:"منتهي",icon:Clock3,accent:"text-amber-600"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={CalendarClock} title="صلاحية الاشتراك" tone="subscription"><ProjectDropdown compact bareOptionIcons value={validityFilter} onChange={setValidityFilter} options={[{value:"all",label:"كل الاشتراكات"},{value:"current",label:"ساري"},{value:"soon",label:"قريب من الانتهاء"},{value:"expired",label:"منتهي"},{value:"pending",label:"لم يبدأ"},{value:"other",label:"حالة أخرى أو موعد غير محدد"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={Activity} title="حداثة مؤشرات التشغيل" tone="connection"><ProjectDropdown compact bareOptionIcons value={readingFilter} onChange={setReadingFilter} options={[{value:"all",label:"كل القراءات"},{value:"fresh",label:"قراءة حديثة"},{value:"stale",label:"قديمة أو لم تصل"},{value:"failed",label:"تعذرت آخر قراءة"}]}/></ProjectFilterGroup>
+ <ProjectFilterGroup icon={Router} title="اتصال OpenVPN" tone="connection">
+  <ProjectDropdown compact bareOptionIcons value={tunnelFilter} onChange={setTunnelFilter} options={[{value:"all",label:"كل حالات الاتصال"},...Object.entries(tunnelLabels).map(([value,status])=>({value,label:status.label,icon:Router}))]}/>
+ </ProjectFilterGroup>
  <ProjectFilterGroup icon={Package} title="طلبات الاشتراك" tone="subscription">
   <ProjectDropdown compact bareOptionIcons value={requestFilter} onChange={setRequestFilter} options={[
    {value:"all",label:"كل الشبكات"},
@@ -233,7 +258,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   ]}/>
  </ProjectFilterGroup>
  <ProjectFilterGroup icon={Database} title="خادم قاعدة البيانات" tone="server"><ProjectDropdown compact bareOptionIcons searchable value={serverFilter} onChange={setServerFilter} options={serverOptions}/></ProjectFilterGroup>
- {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");setRequestFilter("all");}}>مسح التصفية</ProjectButton>}
+ {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");setRequestFilter("all");setTunnelFilter("all");}}>مسح التصفية</ProjectButton>}
  </div>}
  <div role="group" aria-label="تصفية حسب حالة الشبكة" className="grid items-stretch gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
  {states.map(({value,title,Icon,tone,ink})=>{const count=value==="all"?baseItems.length:baseItems.filter(item=>operationalState(item,reminderDays,now)===value).length,percent=baseItems.length?Math.round(count/baseItems.length*100):0;
@@ -258,8 +283,9 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-xs ${state.tone}`}><StateIcon className="size-4 shrink-0"/>{state.label}</span>
  <dl className="grid min-w-0 grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-xs dark:border-white/10">
   <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><UserRound className="size-4 shrink-0 text-violet-500"/>المالك</dt><dd className="mt-1 break-words">{item.ownerName||"غير محدد"}</dd></div>
-  <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><ShieldCheck className="size-4 shrink-0 text-blue-500"/>الاشتراك</dt><dd className="mt-1 break-words">{label(item.subscriptionStatus)}</dd></div>
+  <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><ShieldCheck className="size-4 shrink-0 text-blue-500"/>الاشتراك</dt><dd className="mt-1 break-words">{subscriptionLabels[expiryState(item,reminderDays,now)]}</dd></div>
  </dl>
+ <NetworkTunnelBadge ovpn={item.ovpn}/>
  </section>
  <section aria-label="اشتراك الشبكة ومؤشرات التشغيل" className="min-w-0 space-y-3 rounded-[20px] border border-[#e4e4e7] p-3 dark:border-white/[.12] dark:bg-[#0d243b]">
  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -270,7 +296,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div className={view==="row"?"grid min-w-0 items-stretch gap-3 xl:grid-cols-3":"grid min-w-0 items-stretch gap-3"}>
  <ConnectionChart title="حسابات PPPoE" connected={item.metrics?.connectedPppoeAccounts} total={item.metrics?.totalPppoeAccounts} sessions={item.metrics?.activeSessions} Icon={Wifi} tone="text-emerald-600 dark:text-emerald-300"/>
  <ConnectionChart title="حسابات الهوتسبوت" connected={item.metrics?.connectedHotspotAccounts} total={item.metrics?.totalHotspotAccounts} sessions={item.metrics?.hotspotSessions} Icon={Wifi} tone="text-violet-600 dark:text-violet-300"/>
- <ConnectionChart title="أجهزة NAS" connected={item.metrics?.connectedNas} total={item.metrics?.totalNas} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
+ <ConnectionChart title="NAS عبر OpenVPN" connected={item.ovpn&&["connected","disconnected","partial"].includes(item.ovpn.state)?item.ovpn.connected:undefined} total={item.ovpn?.total} Icon={Router} tone="text-sky-600 dark:text-sky-300"/>
  </div>
  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-white/[.03]"><p className="flex items-center gap-1.5"><Users className="h-4 w-4 text-blue-500"/>ملفات مشتركي PPPoE · {item.metrics?.totalSubscribers??"—"}</p><p>الجدد خلال 24 ساعة · {item.metrics?.newSubscribers24h??"—"}</p></div>
  </section>
@@ -307,6 +333,9 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const [recoveryOpen,setRecoveryOpen]=useState(false);
  const status=networkState(item,days,now),StatusIcon=status.Icon;
  const expiry=expiryState(item,days,now);
+ const ovpn=item.ovpn;
+ const tunnelStatus=ovpn?.state??"pending";
+ const environment=item.status!=="active"?"موقوفة":label(item.environmentStatus);
  const readAt=Date.parse(item.metricsReadAt??"");
  const elapsed=Number.isFinite(readAt)?Math.max(0,Math.floor((now-readAt)/60000)):null;
  const reading=elapsed===null?readingLabel(item):`${readingLabel(item)} · آخر قراءة منذ ${elapsed.toLocaleString("ar")} دقيقة`;
@@ -314,6 +343,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const metrics=item.metrics;
  const limit=item.planLimits;
  const alerts=[
+  ...(["disconnected","partial","unavailable","stale"].includes(tunnelStatus)?[{text:"OpenVPN · "+tunnelLabels[tunnelStatus].label,href:"#network-ovpn"}]:[]),
   ...(expiry==="expired"||expiry==="soon"?[{text:expiry==="expired"?"انتهى اشتراك الشبكة":"اقترب موعد انتهاء الاشتراك",href:"#network-subscription"}]:[]),
   ...(!stale&&limit&&limit.nas>0&&metrics&&metrics.totalNas>=limit.nas?[{text:"بلغت الشبكة حد أجهزة NAS",href:"#network-subscription"}]:[]),
   ...(!stale&&limit&&limit.pppoe>0&&typeof metrics?.totalPppoeAccounts==="number"&&metrics.totalPppoeAccounts>=limit.pppoe?[{text:"بلغت الشبكة حد حسابات PPPoE",href:"#network-subscription"}]:[]),
@@ -328,7 +358,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const stats: {name:string;value?:number;icon:typeof Users;tone:InfoCardTone}[]=[
   {name:"المشتركون المتصلون",value:metrics?.connectedSubscribers,icon:Users,tone:"success"},
   {name:"الجلسات النشطة",value:metrics?.activeSessions,icon:Activity,tone:"cpu"},
-  {name:"أجهزة NAS المتصلة",value:metrics?.connectedNas,icon:Router,tone:"memory"},
+  {name:"أجهزة NAS المتصلة عبر OpenVPN",value:ovpn&&["connected","disconnected","partial"].includes(tunnelStatus)?ovpn.connected:undefined,icon:Router,tone:"memory"},
   {name:"حسابات الهوتسبوت المتصلة",value:metrics?.connectedHotspotAccounts,icon:Wifi,tone:"connections"},
  ];
  async function copy(value:string,message:string){
@@ -343,7 +373,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    setNotice({message,error:""});
   }catch{setNotice({message:"",error:"تعذر النسخ في هذا المتصفح."});}
  }
- const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${label(item.subscriptionStatus)}`,`البيئة: ${label(item.environmentStatus)}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
+ const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${subscriptionLabels[expiry]}`,`البيئة: ${environment}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
  return <section aria-label="ملف الشبكة" className="space-y-4">
   <FloatingNotice {...notice} onDismiss={()=>setNotice({message:"",error:""})}/>
   {recoveryOpen&&<NetworkAccessRecovery slug={item.slug} networkName={item.name} copy={copy} onClose={()=>setRecoveryOpen(false)}/>}
@@ -360,11 +390,32 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     <ProjectButton variant="ghost" disabled={refreshing} onClick={onRefresh}><RefreshCw className={`size-4 ${refreshing?"animate-spin":""}`}/>تحديث</ProjectButton>
    </div>
   </ProjectInfoCard>
+  <div aria-label="حالة الشبكة" className="grid gap-3 sm:grid-cols-3">
+   <ProjectInfoCard tone={expiry==="current"?"success":expiry==="expired"?"danger":expiry==="soon"?"warning":"pending"} className="flex items-center gap-3"><ProjectCardIcon icon={CalendarClock}/><div><p className="text-xs">الاشتراك</p><p className="font-semibold">{subscriptionLabels[expiry]}</p></div></ProjectInfoCard>
+   <ProjectInfoCard tone={item.status!=="active"?"warning":item.environmentStatus==="ready"?"success":"pending"} className="flex items-center gap-3"><ProjectCardIcon icon={Server}/><div><p className="text-xs">البيئة</p><p className="font-semibold">{environment}</p></div></ProjectInfoCard>
+   <ProjectInfoCard tone={tunnelLabels[tunnelStatus].tone} className="flex items-center gap-3"><ProjectCardIcon icon={Activity}/><div><p className="text-xs">التشغيل · OpenVPN</p><p className="font-semibold">{tunnelLabels[tunnelStatus].label}</p>{ovpn?.readAt&&<p className="text-xs">آخر فحص ناجح · {date(ovpn.readAt)}</p>}</div></ProjectInfoCard>
+  </div>
   {error&&<ProjectInfoCard tone="warning"><p role="alert">{error} · تُعرض آخر بيانات متاحة.</p></ProjectInfoCard>}
   {alerts.length>0&&<ProjectInfoCard tone="warning">
    <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={AlertTriangle} tone="warning"/>تنبيهات تحتاج متابعة</h2>
    <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm">{alerts.map(alert=><li key={alert.text}><a className="underline underline-offset-4" href={alert.href}>{alert.text}</a></li>)}</ul>
   </ProjectInfoCard>}
+  <section id="network-ovpn" className="scroll-mt-4">
+   <ProjectInfoCard className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2><NetworkTunnelBadge ovpn={ovpn}/></div>
+    <p className="text-xs text-slate-500 dark:text-slate-400">قراءة أنفاق CHR مستقلة عن تقرير صحة FreeRADIUS وقراءات PPPoE.</p>
+    <p className="flex items-center gap-2 text-xs"><Radio className="size-4 text-violet-500"/>FreeRADIUS · {label(item.radiusStatus)} بحسب تقرير البيئة · {date(item.reportedAt)}</p>
+    {!ovpn?.tunnels?.length?<p className="text-sm">{ovpn?.state==="unlinked"?"لا توجد أجهزة NAS مرتبطة عبر OpenVPN.":"بانتظار بيانات أجهزة NAS."}</p>:
+     <ul className="grid gap-3 sm:grid-cols-2">{ovpn.tunnels.map(tunnel=><li key={tunnel.nasId+":"+tunnel.gatewayId}>
+      <ProjectInfoCard tone={tunnelLabels[tunnel.state].tone} className="space-y-2">
+       <div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-words">{tunnel.name}</strong><span className="text-xs">{tunnelLabels[tunnel.state].label}</span></div>
+       <p className="flex items-center gap-2 text-xs"><Server className="size-4"/>خادم الاتصال · {tunnel.gateway}</p>
+       <p className="flex items-center gap-2 text-xs"><Clock3 className="size-4"/>آخر ظهور متصل · {date(tunnel.lastSeenAt)}</p>
+       <p className="text-xs">آخر فحص ناجح · {date(tunnel.readAt)}</p>
+      </ProjectInfoCard>
+     </li>)}</ul>}
+   </ProjectInfoCard>
+  </section>
   <section id="network-overview" className="scroll-mt-4 space-y-3">
    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Activity}/>نظرة عامة</h2><span className={`text-xs ${stale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}`}>{reading}</span></div>
    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat=><ProjectInfoCard key={stat.name} tone={stat.value==null?"pending":stat.tone}><p className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={stat.icon} tone={stat.value==null?"pending":stat.tone}/>{stat.name}</p><p className="mt-2 text-xl font-bold tabular-nums">{stat.value?.toLocaleString("ar")??"—"}</p></ProjectInfoCard>)}</div>
@@ -375,7 +426,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
   <div className="grid items-start gap-4 lg:grid-cols-2">
    <section id="network-subscription" className="scroll-mt-4"><ProjectInfoCard className="space-y-4">
     <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Package}/>الاشتراك وحدود الخطة</h2>
-    <p className="text-xs text-slate-600 dark:text-slate-300">الاشتراك: {label(item.subscriptionStatus)} · البيئة: {label(item.environmentStatus)}</p>
+    <p className="text-xs text-slate-600 dark:text-slate-300">الاشتراك: {subscriptionLabels[expiry]} · البيئة: {environment}</p>
     <SubscriptionDates item={item} days={days} now={now}/>
     <UsageBar title="حسابات PPPoE" used={metrics?.totalPppoeAccounts} limit={limit?.pppoe}/>
     <UsageBar title="أجهزة NAS" used={metrics?.totalNas} limit={limit?.nas}/>
