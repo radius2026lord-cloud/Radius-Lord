@@ -13,6 +13,11 @@ router.get('/admin/subscription-changes',authenticate,requireAccountType('master
  try{res.set('Cache-Control','no-store');return res.json({items:await listSubscriptionChanges(),paymentSettings:await readUpgradePaymentSettings()});}
  catch{return res.status(503).json({message:'تعذر تحميل طلبات التجديد والترقية.'});}
 });
+router.get('/admin/subscription-changes/payment-settings',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
+ res.set('Cache-Control','no-store');
+ try{return res.json({paymentSettings:await readUpgradePaymentSettings()});}
+ catch{return res.status(503).json({message:'تعذر تحميل إعدادات طرق الدفع.'});}
+});
 router.put('/admin/subscription-changes/payment-settings',authenticate,requireAccountType('master_admin'),async(req,res)=>{
  try{return res.json({paymentSettings:await saveUpgradePaymentSettings(req.body)});}
  catch(error){if((error as Error).message==='UPGRADE_PAYMENT_SETTINGS')return res.status(400).json({message:'أدخل رمز عملة من ثلاثة أحرف ورمز تحويل صالحًا.'});return res.status(503).json({message:'تعذر حفظ إعدادات التحويل.'});}

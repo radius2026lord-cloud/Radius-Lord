@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {CalendarClock,PackagePlus,Network,CheckCircle2,RefreshCw,Settings,Wallet,Users,Server,ArrowLeft,KeyRound} from 'lucide-react';
+import {CalendarClock,PackagePlus,Network,CheckCircle2,RefreshCw,Wallet,Users,Server,ArrowLeft} from 'lucide-react';
 import Link from 'next/link';
 import ProjectButton from './ui/project-button';
 import ProjectDialog from './ui/project-dialog';
@@ -21,11 +21,10 @@ const endpoint='/api/billing/admin/subscription-changes';
 const name=(item:Change)=>item.kind==='renewal'?'تجديد الاشتراك':item.includeRenewal?'ترقية السعة مع التجديد':'ترقية السعة';
 const format=(value:string)=>new Intl.DateTimeFormat('ar',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}).format(new Date(value))+' UTC';
 
-export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'upgrade'}){
+export default function MasterSubscriptionChanges({kind,status}:{kind:'all'|'renewal'|'upgrade';status:'open'|'applied'|'all'}){
  const [items,setItems]=useState<Change[]>([]),[loading,setLoading]=useState(true),[revision,setRevision]=useState(0);
- const [status,setStatus]=useState<'open'|'applied'|'all'>('open'),[selected,setSelected]=useState<Change|null>(null);
+ const [selected,setSelected]=useState<Change|null>(null);
  const [paymentSettings,setPaymentSettings]=useState<PaymentSettings>({currency:'',transferCode:''});
- const [draft,setDraft]=useState<PaymentSettings|null>(null);
  const [amount,setAmount]=useState('');
  const [months,setMonths]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  useEffect(()=>{
@@ -41,16 +40,6 @@ export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'
  const needsAmount=selected?.kind==='upgrade'&&selected.status==='requested';
  const validAmount=/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/.test(amount);
  const missingTransfer=Number(amount)>0&&(!paymentSettings.currency||!paymentSettings.transferCode);
- async function saveSettings(){
-  if(!draft||busy)return;
-  setBusy(true);setError('');
-  try{
-   const response=await fetch(endpoint+'/payment-settings',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(draft)});
-   const data=await response.json();if(!response.ok)throw Error(data.message);
-   setPaymentSettings(data.paymentSettings);setDraft(null);setMessage('تم حفظ إعدادات تحويل الترقية.');
-  }catch(e){setError(e instanceof Error?e.message:'تعذر حفظ إعدادات التحويل.');}
-  finally{setBusy(false);}
- }
  async function apply(){
   if(!selected||busy)return;
   setBusy(true);setError('');
@@ -65,8 +54,6 @@ export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'
   <div className="flex flex-wrap items-center justify-between gap-3">
    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={CalendarClock}/>طلبات التجديد والترقية</h2>
    <div className="flex flex-wrap gap-2">
-    {([{key:'open',label:'بانتظار المعالجة'},{key:'applied',label:'مطبّقة'},{key:'all',label:'الكل'}] as const).map(option=><ProjectButton key={option.key} variant={status===option.key?'primary':'secondary'} aria-pressed={status===option.key} onClick={()=>setStatus(option.key)}>{option.label}</ProjectButton>)}
-    <ProjectButton variant="secondary" disabled={busy||loading} onClick={()=>setDraft({...paymentSettings})}><Settings/>إعدادات تحويل الترقية</ProjectButton>
     <ProjectButton variant="ghost" size="icon" aria-label="تحديث الطلبات" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/></ProjectButton>
    </div>
   </div>
@@ -95,20 +82,11 @@ export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'
       <ProjectInput inputMode="decimal" dir="ltr" maxLength={13} value={amount} disabled={busy} placeholder="0.00" onChange={e=>{if(/^[0-9]*(?:\.[0-9]{0,2})?$/.test(e.target.value))setAmount(e.target.value);}}/>
      </label>
      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">أدخل صفرًا للترقية المجانية.</p>
-     {missingTransfer&&<ProjectButton className="mt-2" variant="secondary" onClick={()=>{setSelected(null);setDraft({...paymentSettings});}}><Settings/>اضبط العملة ورمز التحويل</ProjectButton>}
+     {missingTransfer&&<p className="mt-2 text-xs text-amber-700 dark:text-amber-300">اضبط العملة ورمز التحويل من الإعدادات ← طرق الدفع.</p>}
     </ProjectInfoCard>}
     {needsMonths&&<label className="block space-y-2"><span>مدة التمديد بالأشهر</span><ProjectInput inputMode="numeric" maxLength={3} value={months} disabled={busy} onChange={e=>{if(/^[0-9]*$/.test(e.target.value))setMonths(e.target.value);}}/><span className="block text-xs text-slate-600 dark:text-slate-300">تبدأ المدة من انتهاء الاشتراك الساري أو من وقت اعتماد الاشتراك المنتهي.</span></label>}
     {selected.applied&&<ProjectInfoCard tone="success"><p>موعد الانتهاء بعد التطبيق <bdi>{format(selected.applied.expiresAt)}</bdi></p><p className="mt-2">حد PPPoE {selected.applied.maxSubscribers||'غير محدود'} · حد NAS {selected.applied.maxNas||'غير محدود'}</p></ProjectInfoCard>}
     {selected.status!=='applied'&&<p className="text-xs leading-6 text-slate-600 dark:text-slate-300">يطبّق الاعتماد التغيير مباشرة على قاعدة العميل. تأكيد أي دفعة يتم من شاشة عمليات الدفع.</p>}
-   </div>
-  </ProjectDialog>}
-  {draft&&<ProjectDialog title="إعدادات تحويل الترقية" description="تظهر العملة ورمز التحويل للعميل مع قيمة الترقية بعد تطبيقها." onClose={()=>setDraft(null)} busy={busy} hostingerStyle compact footer={<>
-   <ProjectButton variant="secondary" disabled={busy} onClick={()=>setDraft(null)}>إلغاء</ProjectButton>
-   <ProjectButton disabled={busy||!draft.transferCode.trim()||!/^[A-Z]{3}$/.test(draft.currency)} onClick={()=>void saveSettings()}><CheckCircle2/>حفظ الإعدادات</ProjectButton>
-  </>}>
-   <div className="space-y-4">
-    <label className="block space-y-2"><span className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={Wallet}/>رمز العملة</span><ProjectInput dir="ltr" maxLength={3} placeholder="USD" value={draft.currency} disabled={busy} onChange={e=>setDraft({...draft,currency:e.target.value.toUpperCase()})}/></label>
-    <label className="block space-y-2"><span className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={KeyRound}/>رمز التحويل</span><ProjectInput dir="ltr" maxLength={100} value={draft.transferCode} disabled={busy} onChange={e=>setDraft({...draft,transferCode:e.target.value})}/></label>
    </div>
   </ProjectDialog>}
   <FloatingNotice error={error} message={message} onDismiss={()=>{setError('');setMessage('');}}/>

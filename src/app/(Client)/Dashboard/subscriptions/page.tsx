@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Network, RefreshCw, UserRound } from "lucide-react";
-import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
+import { Network, RefreshCw, UserRound, ListFilter, ChevronDown, CreditCard, ClipboardList, Clock3 } from "lucide-react";
+import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
 import MasterSubscriptionChanges from "@/components/master-subscription-changes";
+import ProjectDropdown from "@/components/ui/project-dropdown";
+import {ProjectFilterGroup} from "@/components/ui/project-filter-panel";
 import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
@@ -26,24 +28,50 @@ const meta:Record<Status,{label:string;tone:string}> = {
   expired:{label:"منتهي",tone:"bg-slate-100 text-slate-600 dark:bg-white/[.06] dark:text-slate-300"},
 };
 
+type InitialFilter="all"|"awaiting_confirmation"|"paid"|"provisioning"|"ready"|"attention";
+
 export default function SubscriptionsPage(){
  const [kind,setKind]=useState<'all'|'initial'|'renewal'|'upgrade'>('all');
+ const [status,setStatus]=useState<'all'|'open'|'applied'>('all');
+ const [initialFilter,setInitialFilter]=useState<InitialFilter>('all');
+ const [filtersOpen,setFiltersOpen]=useState(false);
+ const count=Number(kind!=='all')+Number(kind!=='initial'&&status!=='all')+Number((kind==='all'||kind==='initial')&&initialFilter!=='all');
  return <div className="space-y-5">
-  <div aria-label="نوع الطلب" className="flex flex-wrap gap-2">
-   {([{key:'all',label:'كل الطلبات'},{key:'initial',label:'الاشتراك والتجهيز'},{key:'renewal',label:'التجديد'},{key:'upgrade',label:'الترقية'}] as const).map(option=><ProjectButton key={option.key} variant={kind===option.key?'primary':'secondary'} aria-pressed={kind===option.key} onClick={()=>setKind(option.key)}>{option.label}</ProjectButton>)}
+  <div className="flex items-center justify-between gap-3">
+   <h1 className="text-base font-semibold">طلبات الاشتراك والتجهيز</h1>
+   <ProjectButton variant="secondary" aria-expanded={filtersOpen} aria-controls="subscription-request-filters" onClick={()=>setFiltersOpen(open=>!open)}>
+    <ListFilter/>تصفية{count>0?` · ${count}`:''}<ChevronDown className={filtersOpen?'rotate-180':''}/>
+   </ProjectButton>
   </div>
-  {kind!=='initial'&&<MasterSubscriptionChanges kind={kind}/>}
-  {(kind==='all'||kind==='initial')&&<InitialSubscriptions/>}
+  {filtersOpen&&<div id="subscription-request-filters" className="grid items-start gap-3 rounded-2xl border border-slate-200 p-3 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-3">
+   <ProjectFilterGroup title="نوع الطلب" icon={ClipboardList} tone="category">
+    <ProjectDropdown compact bareOptionIcons value={kind} onChange={value=>setKind(value as typeof kind)} options={[
+     {value:'all',label:'كل الطلبات'},{value:'initial',label:'الاشتراك والتجهيز'},{value:'renewal',label:'التجديد'},{value:'upgrade',label:'الترقية'},
+    ]}/>
+   </ProjectFilterGroup>
+   {kind!=='initial'&&<ProjectFilterGroup title="حالة التجديد والترقية" icon={Clock3} tone="subscription">
+    <ProjectDropdown compact bareOptionIcons value={status} onChange={value=>setStatus(value as typeof status)} options={[
+     {value:'all',label:'كل الحالات'},{value:'open',label:'بانتظار المعالجة'},{value:'applied',label:'مطبّقة'},
+    ]}/>
+   </ProjectFilterGroup>}
+   {(kind==='all'||kind==='initial')&&<ProjectFilterGroup title="حالة الاشتراك والتجهيز" icon={CreditCard} tone="activation">
+    <ProjectDropdown compact bareOptionIcons value={initialFilter} onChange={value=>setInitialFilter(value as InitialFilter)} options={[
+     {value:'all',label:'كل الحالات'},{value:'awaiting_confirmation',label:'بانتظار الدفع والتأكيد'},{value:'paid',label:'الدفع مكتمل'},
+     {value:'provisioning',label:'جارٍ تجهيز البيئة'},{value:'ready',label:'البيئة جاهزة'},{value:'attention',label:'التجهيز يحتاج معالجة'},
+    ]}/>
+   </ProjectFilterGroup>}
+   {count>0&&<ProjectButton variant="ghost" className="justify-self-start" onClick={()=>{setKind('all');setStatus('all');setInitialFilter('all');}}>مسح التصفية</ProjectButton>}
+  </div>}
+  {kind!=='initial'&&<MasterSubscriptionChanges kind={kind} status={status}/>}
+  {(kind==='all'||kind==='initial')&&<InitialSubscriptions filter={initialFilter}/>}
  </div>;
 }
 
-function InitialSubscriptions(){
+function InitialSubscriptions({filter}:{filter:InitialFilter}){
   const router=useRouter();
   const [orders,setOrders]=useState<Order[]>([]);
   const [loading,setLoading]=useState(true);
-  const [filtersOpen,setFiltersOpen]=useState(false);
   const [query,setQuery]=useState("");
-  const [filter,setFilter]=useState<"all"|"awaiting_confirmation"|"paid"|"provisioning"|"ready"|"attention">("all");
   const [busy,setBusy]=useState<string|null>(null);
   const [message,setMessage]=useState("");
   const {view,setView,selected,setSelected,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("subscriptions","row");
@@ -56,15 +84,6 @@ function InitialSubscriptions(){
       .finally(()=>setLoading(false));
   };
   useEffect(()=>{load()},[]);
-
-  const counts=useMemo(()=>({
-    all:orders.length,
-    awaiting_confirmation:orders.filter(x=>["pending","awaiting_confirmation"].includes(x.status)).length,
-    paid:orders.filter(x=>["paid","completed"].includes(x.status)).length,
-    provisioning:orders.filter(x=>x.environmentStatus==="provisioning"&&!x.environmentArchived).length,
-    ready:orders.filter(x=>x.environmentStatus==="ready"&&!x.environmentArchived).length,
-    attention:orders.filter(x=>x.environmentStatus==="failed"&&!x.environmentArchived).length,
-  }),[orders]);
 
   const filtered=useMemo(()=>{
     const q=query.trim().toLowerCase();
@@ -114,15 +133,7 @@ function InitialSubscriptions(){
       query={query}
       onQueryChange={setQuery}
       searchPlaceholder="بحث بالشبكة، العميل، الباقة أو كود الدفع..."
-      searchAction={<ProjectButton variant="secondary" aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(open=>!open)}>تصفية{filter!=="all"?" · 1":""}</ProjectButton>}
-      filters={filtersOpen&&<CollectionStatusFilters value={filter} onChange={setFilter} items={[
-        {value:"all",label:"الكل",count:counts.all,dot:"bg-[#0758e9]"},
-        {value:"awaiting_confirmation",label:"بانتظار الدفع والتأكيد",count:counts.awaiting_confirmation,dot:"bg-amber-500"},
-        {value:"paid",label:"الدفع مكتمل",count:counts.paid,dot:"bg-emerald-500"},
-        {value:"provisioning",label:"جارٍ تجهيز البيئة",count:counts.provisioning,dot:"bg-indigo-500"},
-        {value:"ready",label:"البيئة جاهزة",count:counts.ready,dot:"bg-blue-500"},
-        {value:"attention",label:"التجهيز يحتاج معالجة",count:counts.attention,dot:"bg-amber-500"},
-      ]}/>}
+
       primaryAction={<ProjectButton variant="secondary" disabled={loading||busy!==null} onClick={load}><RefreshCw/>تحديث</ProjectButton>}
     />
 
