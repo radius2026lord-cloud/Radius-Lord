@@ -1,8 +1,8 @@
 /* Keep the login/signup morph on one continuous animation timeline.
    The component already swaps modes internally; disabling document view-transition
    snapshots prevents the second animation pass that caused the visible hitch. */
-::view-transition-old(root),
-::view-transition-new(root) {
+html:has(.auth-shell)::view-transition-old(root),
+html:has(.auth-shell)::view-transition-new(root) {
   animation: none !important;
 }
 

@@ -355,7 +355,7 @@ export default function LordAuth({ mode,networkLogin }: { mode: Mode;networkLogi
                   </div>
                 )}
                 <h1 className={`${signup ? "mt-3" : "mt-1"} text-[26px] font-black text-[#102a63] dark:text-[#f4f1f5]`}>{signup ? "إنشاء حساب جديد" : "تسجيل الدخول"}</h1>
-                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
+                <p className="mx-auto mt-2 max-w-[370px] text-[12px] leading-5 text-slate-500 dark:text-[#b9b3bd]">{signup ? "أنشئ حسابك الآن وابدأ إدارة حسابك بسهولة وأمان" : networkLogin ? "أدخل اسم مستخدم مدير الشبكة وكلمة المرور للوصول إلى شبكتك" : "أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور للوصول إلى حسابك"}</p>
               </div>
 
               <form onSubmit={submit} autoComplete="on" className={signup ? "mt-5 flex flex-1 flex-col justify-center" : "mt-6"}>
