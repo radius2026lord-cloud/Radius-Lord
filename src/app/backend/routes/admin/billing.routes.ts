@@ -1,3 +1,4 @@
+import {applySubscriptionChange,listSubscriptionChanges} from '../../services/master-subscription-changes.service';
 import {listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
 import {deleteEnvironment} from '../../controllers/environment-delete.controller';
 import {requestEnvironmentNotification} from '../../controllers/environment-notification.controller';
@@ -8,6 +9,29 @@ import { getCollectionReportController } from '../../controllers/payment-reports
 import { requestEnvironmentController } from '../../controllers/environment.controller';
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
+router.get('/admin/subscription-changes',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
+ try{res.set('Cache-Control','no-store');return res.json({items:await listSubscriptionChanges()});}
+ catch{return res.status(503).json({message:'تعذر تحميل طلبات التجديد والترقية.'});}
+});
+router.post('/admin/subscription-changes/:tenantId/:kind/apply',authenticate,requireAccountType('master_admin'),async(req,res)=>{
+ const {kind}=req.params;
+ if(kind!=='renewal'&&kind!=='upgrade')return res.status(400).json({message:'نوع الطلب غير صالح.'});
+ try{
+  const result=await applySubscriptionChange(Number(req.params.tenantId),kind,String(req.body?.requestedAt??''),Number(req.body?.months),(req as import('../../middleware/auth.middleware').AuthenticatedRequest).auth!.accountId);
+  return res.json({result});
+ }catch(error){
+  const code=(error as Error).message;
+  const messages:Record<string,string>={
+   CHANGE_INPUT:'اختر مدة تمديد من شهر إلى 120 شهرًا.',
+   CHANGE_STALE:'تغير الطلب أو الرخصة. حدّث القائمة وراجع الطلب.',
+   CHANGE_BUSY:'تجري معالجة عملية أخرى. أعد المحاولة بعد اكتمالها.',
+   CHANGE_RENEW_FIRST:'جدّد الاشتراك المنتهي قبل اعتماد ترقية السعة.',
+  };
+  console.error('[subscription-change]',{tenantId:Number(req.params.tenantId),code:code.startsWith('CHANGE_')?code:'APPLY_FAILED'});
+  return res.status(code==='CHANGE_INPUT'?400:409).json({message:messages[code]||'تعذر إكمال التطبيق والتحقق. حدّث القائمة ثم استكمل العملية من الطلب نفسه.'});
+ }
+});
+
 router.get('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),getSubscriptionReminderSettings);
 router.put('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),saveSubscriptionReminderSettings);
 router.get('/admin/networks',authenticate,requireAccountType('master_admin'),listMasterNetworks);

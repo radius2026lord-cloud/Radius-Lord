@@ -11,7 +11,7 @@ import FloatingNotice from './ui/floating-notice';
 import {useClock24h} from './ui/project-clock-provider';
 export type SubscriptionMeta={restricted?:boolean;tenantId:number;subscriptionId:number;timezone:string;startsAt:string|null;expiresAt:string|null;serverNow:string;reminderDays:number;reminder:'soon'|'expired'|null;contact:{whatsapp:string|null;email:string|null;phone:string|null}};
 type Capacity={used:number;limit:number;available:number|null;overLimit:boolean};
-type Details=SubscriptionMeta&{planName:string;license:string;status:string;durationMonths:number;syncVersion:number;upgradeRequest:UpgradeRequest|null;pppoe:Capacity;nas:Capacity;hotspotAccounts:number;renewalRequest:{status:string;requestedAt:string}|null};
+type Details=SubscriptionMeta&{recentChange?:{appliedAt:string;renewed:boolean;upgraded:boolean};planName:string;license:string;status:string;durationMonths:number;syncVersion:number;upgradeRequest:UpgradeRequest|null;pppoe:Capacity;nas:Capacity;hotspotAccounts:number;renewalRequest:{status:string;requestedAt:string}|null};
 export function useSubscriptionNow(serverNow?:string){
  const anchor=useRef({server:0,local:0});const [now,setNow]=useState<number|null>(null);
  useEffect(()=>{const server=serverNow?Date.parse(serverNow):NaN;if(!Number.isFinite(server)){setNow(null);return;}anchor.current={server,local:performance.now()};const update=()=>setNow(anchor.current.server+performance.now()-anchor.current.local);update();const timer=setInterval(update,30000);return()=>clearInterval(timer);},[serverNow]);
@@ -28,6 +28,13 @@ export default function NetworkPlatformSubscription({endpoint,networkName}:{endp
  const [detailsOpen,setDetailsOpen]=useState(false);
  const clock24h=useClock24h(),now=useSubscriptionNow(data?.serverNow);
  useEffect(()=>{const controller=new AbortController();setLoading(true);setError('');fetch(`${endpoint}/platform-subscription`,{credentials:'include',cache:'no-store',signal:controller.signal}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.message||'تعذر تحميل الاشتراك.');if(!controller.signal.aborted)setData(j);}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'تعذر تحميل الاشتراك.');}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[endpoint,revision]);
+ useEffect(()=>{
+  const change=data?.recentChange;
+  if(!data||!change)return;
+  const key=`radius:subscription-change:${data.tenantId}:${change.appliedAt}`;
+  try{if(localStorage.getItem(key))return;localStorage.setItem(key,'seen');}catch{}
+  setMessage(change.renewed&&change.upgraded?'تم تجديد اشتراكك وترقية سعة خطتك.':change.renewed?'تم تجديد اشتراكك. يظهر موعد الانتهاء الجديد في بيانات الاشتراك.':'تمت ترقية سعة خطتك. تظهر الحدود الجديدة في بطاقة استخدام السعة.');
+ },[data?.tenantId,data?.recentChange?.appliedAt,data?.recentChange?.renewed,data?.recentChange?.upgraded]);
  async function requestRenewal(){if(busy)return;setBusy(true);setError('');try{const r=await fetch(`${endpoint}/platform-subscription/renewal-request`,{method:'POST',credentials:'include'}),j=await r.json();if(!r.ok)throw Error(j.message||'تعذر تسجيل الطلب.');setData(d=>d?{...d,renewalRequest:j}:d);setMessage('تم تسجيل طلب التجديد لدى الإدارة المركزية. يمكنك التواصل لاستكمال الإجراءات.');}catch(e){setError(e instanceof Error?e.message:'تعذر تسجيل الطلب.');}finally{setBusy(false);}}
  async function copyLicense(){if(!data)return;try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(data.license);else{const input=document.createElement('textarea');input.value=data.license;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);try{input.select();if(!document.execCommand('copy'))throw Error('copy');}finally{input.remove();}}setMessage('تم نسخ رقم الرخصة.');}catch{setError('تعذر النسخ التلقائي؛ يمكنك تحديد رقم الرخصة ونسخه يدويًا.');}}
  if(!data)return <div className="space-y-3">{loading?<ProjectLoading/>:<ProjectInfoCard tone="danger"><p>{error}</p><ProjectButton className="mt-3" onClick={()=>setRevision(v=>v+1)}><RefreshCw/>إعادة المحاولة</ProjectButton></ProjectInfoCard>}</div>;

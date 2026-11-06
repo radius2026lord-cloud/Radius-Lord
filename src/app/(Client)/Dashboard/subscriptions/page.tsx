@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Network, RefreshCw, UserRound } from "lucide-react";
 import { CollectionSelectionBox, CollectionCard, CollectionGrid, CollectionMobileCard, CollectionMobileList, CollectionState, CollectionStatusFilters, CollectionTable, CollectionTableBody, CollectionTableHead, CollectionToolbar, collectionRowClass, useCollectionDisplay } from "@/components/ui/collection-display";
 
+import MasterSubscriptionChanges from "@/components/master-subscription-changes";
 import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
@@ -26,6 +27,17 @@ const meta:Record<Status,{label:string;tone:string}> = {
 };
 
 export default function SubscriptionsPage(){
+ const [kind,setKind]=useState<'all'|'initial'|'renewal'|'upgrade'>('all');
+ return <div className="space-y-5">
+  <div aria-label="نوع الطلب" className="flex flex-wrap gap-2">
+   {([{key:'all',label:'كل الطلبات'},{key:'initial',label:'الاشتراك والتجهيز'},{key:'renewal',label:'التجديد'},{key:'upgrade',label:'الترقية'}] as const).map(option=><ProjectButton key={option.key} variant={kind===option.key?'primary':'secondary'} aria-pressed={kind===option.key} onClick={()=>setKind(option.key)}>{option.label}</ProjectButton>)}
+  </div>
+  {kind!=='initial'&&<MasterSubscriptionChanges kind={kind}/>}
+  {(kind==='all'||kind==='initial')&&<InitialSubscriptions/>}
+ </div>;
+}
+
+function InitialSubscriptions(){
   const router=useRouter();
   const [orders,setOrders]=useState<Order[]>([]);
   const [loading,setLoading]=useState(true);

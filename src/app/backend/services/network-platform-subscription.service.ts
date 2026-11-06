@@ -48,7 +48,11 @@ export async function readPlatformSubscription(scope:any){
   const capacity=(used:any,limit:any)=>{used=Number(used);limit=Number(limit);return {used,limit,available:limit===0?null:Math.max(0,limit-used),overLimit:limit>0&&used>limit};};
   const [request,upgrade]=await Promise.all([readPrivateSetting('subscription_renewal_requests','tenant_'+scope.tenant_id),readPrivateSetting('subscription_upgrade_requests','tenant_'+scope.tenant_id)]);
   const current=request&&Number(request.subscriptionId)===Number(scope.subscription_id)&&request.expiresAt===details.expiresAt;
-  return {...details,planName:license.plan_name_snapshot,license:license.license_number,status:license.subscription_status,
+  const recentChange=[request,upgrade]
+   .filter(item=>item?.status==='applied'&&Number(item.subscriptionId)===Number(scope.subscription_id)&&item.applied?.appliedAt)
+   .map(item=>item.applied)
+   .sort((a,b)=>String(b.appliedAt).localeCompare(String(a.appliedAt)))[0]??null;
+  return {...details,recentChange,planName:license.plan_name_snapshot,license:license.license_number,status:license.subscription_status,
    durationMonths:Number(license.duration_months_snapshot),syncVersion:Number(license.sync_version),
    pppoe:capacity(counts[0].pppoe,license.max_pppoe_accounts),nas:capacity(counts[0].nas,Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)),
    hotspotAccounts:Number(counts[0].hotspot),upgradeRequest:pendingUpgrade(upgrade,scope,license),renewalRequest:current?{status:'requested',requestedAt:request.requestedAt}:null};
@@ -64,6 +68,7 @@ export async function requestPlatformRenewal(scope:any){
   return await withNetwork(scope,async app=>{
    const license=await validateLocalLicense(app,scope,false,true);
    const existing=await readPrivateSetting('subscription_renewal_requests','tenant_'+scope.tenant_id);
+   if(existing?.status==='applying')throw new Error('RENEWAL_REQUEST_BUSY');
    if(existing&&Number(existing.subscriptionId)===Number(scope.subscription_id)&&existing.expiresAt===license.canonicalExpiresAt)return {status:'requested',requestedAt:existing.requestedAt};
    const settings=await renewalSettings();if(license.subscription_status!=='expired'&&Date.parse(license.canonicalExpiresAt)-Date.now()>settings.expiryDays*86400000)throw new Error('RENEWAL_NOT_DUE');
    const requestedAt=new Date().toISOString();
@@ -76,7 +81,7 @@ export async function requestPlatformRenewal(scope:any){
 
 
 function pendingUpgrade(request:any,scope:any,license:any){
- if(!request||request.status!=='requested'||Number(request.subscriptionId)!==Number(scope.subscription_id))return null;
+ if(!request||!['requested','applying'].includes(request.status)||Number(request.subscriptionId)!==Number(scope.subscription_id))return null;
  const pppoe=Number(license.max_pppoe_accounts),nas=Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity);
  const waitingPppoe=request.requestedPppoeLimit!==null&&pppoe!==0&&Number(request.requestedPppoeLimit)>pppoe;
  const waitingNas=request.requestedNasLimit!==null&&nas!==0&&Number(request.requestedNasLimit)>nas;
@@ -95,7 +100,9 @@ export async function requestPlatformUpgrade(scope:any,input:any){
   return await withNetwork(scope,async app=>{
    const license=await validateLocalLicense(app,scope,false,true);
    const currentPppoeLimit=Number(license.max_pppoe_accounts),currentNasLimit=Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity);
-   const saved=await readPrivateSetting('subscription_upgrade_requests','tenant_'+scope.tenant_id),existing=pendingUpgrade(saved,scope,license);
+   const saved=await readPrivateSetting('subscription_upgrade_requests','tenant_'+scope.tenant_id);
+   if(saved?.status==='applying')throw new Error('UPGRADE_REQUEST_BUSY');
+   const existing=pendingUpgrade(saved,scope,license);
    if(existing){if(existing.requestedPppoeLimit===requestedPppoeLimit&&existing.requestedNasLimit===requestedNasLimit&&existing.includeRenewal===input.includeRenewal)return existing;throw new Error('UPGRADE_REQUEST_PENDING');}
    if(requestedPppoeLimit!==null&&(currentPppoeLimit===0||requestedPppoeLimit<=currentPppoeLimit)||requestedNasLimit!==null&&(currentNasLimit===0||requestedNasLimit<=currentNasLimit))throw new Error('UPGRADE_REQUEST_LIMIT');
    const settings=await renewalSettings();const due=license.subscription_status==='expired'||Date.parse(license.canonicalExpiresAt)-Date.now()<=settings.expiryDays*86400000;
