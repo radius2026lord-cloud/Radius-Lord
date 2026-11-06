@@ -90,6 +90,6 @@ export default function ManualProvisioningPage(){
     </ProjectInfoCard>;
    })}
   </CollectionGrid>}
-  {createOpen&&<ManualEnvironmentDialog onClose={()=>setCreateOpen(false)} onCreated={orderId=>router.push(`/Dashboard/subscriptions/${orderId}?from=provisioning#environment-provisioning`)}/>}
+  {createOpen&&<ManualEnvironmentDialog onClose={()=>setCreateOpen(false)} onCreated={orderId=>router.push(`/Dashboard/subscriptions/${orderId}?from=provisioning&created=1#environment-provisioning`)}/>}
  </section>;
 }

@@ -27,10 +27,10 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
  const phone=String(body.phone??'').replace(/\s+/g,''),country=String(body.country??'').trim();
  const password=typeof body.password==='string'?body.password:'';
  const existing=body.customerMode==='existing',custom=body.planMode==='custom';
- if(!['new','existing'].includes(body.customerMode)||!['plan','custom'].includes(body.planMode)||!/^[a-f0-9]{32}$/.test(requestId)||!networkName||networkName.length>150||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+ if(!['new','existing'].includes(body.customerMode)||!['plan','custom'].includes(body.planMode)||!/^[a-f0-9]{32}$/.test(requestId)||!networkName||networkName.length>150||email.length>254||/[^\x21-\x7e]/.test(email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
   return res.status(400).json({message:'راجع اسم الشبكة والبريد الإلكتروني وخيارات الطلب.'});
  }
- if(!existing&&(!fullName||fullName.length>150||!/^\+?[0-9]{7,15}$/.test(phone)||!country||country.length>100||password.length<8||Buffer.byteLength(password,'utf8')>72)){
+ if(!existing&&(!fullName||fullName.length>150||!/^\+[0-9]{7,15}$/.test(phone)||!country||country.length>100||password.length<8||Buffer.byteLength(password,'utf8')>72)){
   return res.status(400).json({message:'أدخل اسم العميل والدولة ورقم هاتف دوليًا، وكلمة مرور من 8 أحرف على الأقل وبحد أقصى 72 بايت.'});
  }
  const paymentCode='MAN-RL-'+requestId;

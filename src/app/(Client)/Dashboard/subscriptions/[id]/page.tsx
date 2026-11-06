@@ -42,6 +42,7 @@ export default function SubscriptionDetailsPage(){
   const [deleteOpen,setDeleteOpen]=useState(false),[deleteName,setDeleteName]=useState("");
   const [requesting,setRequesting]=useState(false),[progressOpen,setProgressOpen]=useState(false);
   const [infrastructureWarning,setInfrastructureWarning]=useState("");
+  const [completionOpen,setCompletionOpen]=useState(false);
   const [delivery,setDelivery]=useState<{text:string;whatsappUrl:string|null;emailUrl:string|null}|null>(null);
   const [submitting,setSubmitting]=useState(false),[notice,setNotice]=useState(""),[actionError,setActionError]=useState("");
   const [item,setItem]=useState<Subscription|null>(null);
@@ -54,6 +55,13 @@ export default function SubscriptionDetailsPage(){
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[id,revision]);
+  useEffect(()=>{
+    if(item?.status!=="manual_authorized"||item.environment.status!=="ready"||item.environment.archived)return;
+    if(new URLSearchParams(window.location.search).get("created")!=="1")return;
+    const key="radius:manual-environment-ready:"+item.id;
+    try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,"shown");}catch{}
+    setProgressOpen(false);setCompletionOpen(true);
+  },[item?.id,item?.status,item?.environment.status,item?.environment.archived]);
   useEffect(()=>{if(!item?.environment.job||!["queued","running"].includes(item.environment.job.status))return;const controller=new AbortController();let active=false;const timer=setInterval(async()=>{if(active)return;active=true;try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}`,{credentials:"include",cache:"no-store",signal:controller.signal});if(r.ok){const j=await r.json();if(!controller.signal.aborted)setItem(j.subscription);}}catch{/* Keep last state; manual refresh remains available. */}finally{active=false;}},5000);return()=>{clearInterval(timer);controller.abort();};},[id,item?.environment.job?.status]);
   const infrastructureBlocked=Boolean(item?.environment.blockedReason?.startsWith('افحص صحة البنية التحتية')||item?.environment.job?.errorCode==='INFRASTRUCTURE_NOT_READY');
   useEffect(()=>{if(infrastructureBlocked)setInfrastructureWarning("لا يمكن توليد البيئة قبل نجاح فحوص البنية التحتية. افتح صفحة التحقق لمعالجة الخدمات غير الجاهزة ثم أعد المحاولة.");else setInfrastructureWarning("");},[infrastructureBlocked]);
@@ -66,9 +74,9 @@ export default function SubscriptionDetailsPage(){
     else if(action.href){const returnTo=`/Dashboard/subscriptions/${encodeURIComponent(id)}`;router.push(action.href+(action.href.includes('?')?'&':'?')+'returnTo='+encodeURIComponent(returnTo));}
   }
   const noticeGuidance=actionError?item&&actionCode?environmentAction(item.environment,item.status,actionCode):null:infrastructureWarning?environmentAction({canRequest:false,blockedReason:'صحة البنية التحتية'},item?.status??'paid'):notice&&item&&['queued','running'].includes(item.environment.job?.status??'')?guidance:null;
-  async function copyDelivery(){if(!delivery)return;try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(delivery.text);else{const field=document.createElement('textarea');field.value=delivery.text;field.style.position='fixed';field.style.opacity='0';document.body.appendChild(field);try{field.focus();field.select();if(!document.execCommand('copy'))throw new Error();}finally{field.remove();}}setNotice("نُسخت الرسالة بتنسيقها. الصقها مباشرة في واتساب.");}catch{setActionError("تعذر النسخ التلقائي؛ حدد نص الرسالة وانسخه يدويًا.");}}
+  async function copyDelivery(text=delivery?.text){if(!text)return;try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(text);else{const field=document.createElement('textarea');field.value=text;field.style.position='fixed';field.style.opacity='0';document.body.appendChild(field);try{field.focus();field.select();if(!document.execCommand('copy'))throw new Error();}finally{field.remove();}}setNotice("نُسخت الرسالة بتنسيقها. الصقها مباشرة في واتساب.");}catch{setActionError("تعذر النسخ التلقائي؛ حدد نص الرسالة وانسخه يدويًا.");}}
   async function removeEnvironment(){if(submitting||!item?.environment.canDelete||deleteName!==item.environment.networkName)return;setSubmitting(true);setNotice("");setActionError("");setActionCode("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment`,{method:"DELETE",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmName:deleteName})}),j=await r.json();if(!r.ok)throw new Error(j.message);setDeleteOpen(false);setDeleteName("");setDelivery(null);setNotice(j.message);setRevision(v=>v+1);}catch(e){setActionError(e instanceof Error?e.message:"تعذر حذف البيئة.");setRevision(v=>v+1);}finally{setSubmitting(false);}}
-  async function sendDetails(){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setActionCode("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);setDelivery(j);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
+  async function sendDetails(copy=false){if(submitting||item?.environment.status!=="ready")return;setSubmitting(true);setActionError("");setActionCode("");setNotice("");try{const r=await fetch(`/api/billing/admin/subscriptions/${encodeURIComponent(id)}/environment/send-details`,{method:"POST",credentials:"include"}),j=await r.json();if(!r.ok)throw new Error(j.message);setNotice(j.message);setCompletionOpen(false);setDelivery(j);if(copy)await copyDelivery(j.text);}catch(e){setActionError(e instanceof Error?e.message:"تعذر طلب الإرسال.");}finally{setSubmitting(false);}}
   async function requestEnvironment(){
     if(submitting || !item?.environment.canRequest)return;
     setSubmitting(true);setRequesting(true);setProgressOpen(true);setNotice("");setActionError("");setActionCode("");
@@ -93,6 +101,26 @@ export default function SubscriptionDetailsPage(){
       <ProjectButton variant="secondary" disabled={loading||submitting} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>
     </div></section>
     {loading?<CollectionState loading>جارٍ تحميل تفاصيل الاشتراك...</CollectionState>:error?<CollectionState><span role="alert">{error}</span></CollectionState>:item&&<>
+      <ProjectDialog open={completionOpen} title="اكتمل تجهيز البيئة" description="راجع بيانات الشبكة قبل تسليم رابط التفعيل إلى العميل." onClose={()=>setCompletionOpen(false)} busy={submitting} hostingerStyle footer={<>
+       <ProjectButton variant="secondary" disabled={submitting} onClick={()=>setCompletionOpen(false)}>إغلاق</ProjectButton>
+       <ProjectButton variant="secondary" disabled={submitting||!item.environment.canSendDetails} onClick={()=>void sendDetails(true)}><Copy/>نسخ بيانات الدخول</ProjectButton>
+       <ProjectButton disabled={submitting||!item.environment.canSendDetails} onClick={()=>void sendDetails()}><Send/>إرسال بيانات الدخول</ProjectButton>
+      </>}>
+       <ProjectInfoCard tone="success">
+        <dl className="grid gap-4 sm:grid-cols-2">
+         <Field label="الشبكة">{item.environment.networkName||"—"}</Field>
+         <Field label="العميل">{item.customerName}</Field>
+         <Field label="البريد الإلكتروني"><bdi>{item.customerEmail}</bdi></Field>
+         <Field label="الخطة">{item.planName} · {item.durationMonths} شهرًا</Field>
+         <Field label="حد PPPoE">{item.planLimits?(item.planLimits.maxSubscribers||"غير محدود"):"—"}</Field>
+         <Field label="حد NAS">{item.planLimits?(item.planLimits.maxNas||"غير محدود"):"—"}</Field>
+         <Field label="الرخصة"><bdi>{item.environment.licenseNumber||"—"}</bdi></Field>
+         <Field label="رابط الشبكة"><bdi>{item.environment.systemUrl||"—"}</bdi></Field>
+        </dl>
+       </ProjectInfoCard>
+       {!item.environment.canSendDetails&&<p className="mt-3 text-xs text-slate-600 dark:text-slate-300">رابط التفعيل غير متاح حاليًا.</p>}
+       {actionError&&<p className="mt-3 text-xs text-red-700 dark:text-red-300" role="alert">{actionError}</p>}
+      </ProjectDialog>
       <ProjectDialog open={Boolean(delivery)} title="تسليم بيانات التفعيل" description="راجع المستلم والرابط المؤقت قبل إرسال الرسالة من حساب واتساب أو البريد." onClose={()=>setDelivery(null)} footer={<ProjectButton variant="back" onClick={()=>setDelivery(null)}><ArrowRight/>رجوع</ProjectButton>}>
        {delivery&&<div className="space-y-4"><ProjectInfoCard><p className="text-sm font-semibold">{item.customerName}</p><p className="mt-1 break-all text-xs text-slate-500">{item.customerEmail}</p><p className="mt-2 text-xs leading-6 text-slate-500">هذه رسالة جاهزة للإرسال اليدوي. فتح التطبيق لا يؤكد إرسالها أو استلامها.</p></ProjectInfoCard><pre className="[unicode-bidi:plaintext] whitespace-pre-wrap break-words rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-xs leading-7 dark:border-white/10 dark:bg-white/5">{delivery.text}</pre><div className="grid gap-3 sm:grid-cols-3"><ProjectButton variant="secondary" onClick={()=>void copyDelivery()}><Copy className="text-violet-500"/>نسخ الرسالة</ProjectButton><ProjectButton disabled={!delivery.whatsappUrl} onClick={()=>{if(delivery.whatsappUrl)window.open(delivery.whatsappUrl,'_blank','noopener,noreferrer');}}><MessageCircle/>فتح رسالة واتساب</ProjectButton><ProjectButton variant="secondary" disabled={!delivery.emailUrl} onClick={()=>{if(delivery.emailUrl)window.location.href=delivery.emailUrl;}}><Mail className="text-blue-500"/>فتح رسالة البريد</ProjectButton></div><p className="text-xs leading-6 text-slate-500">إذا دمج واتساب الأسطر عند فتح الرابط، استخدم «نسخ الرسالة» والصقها مباشرة في المحادثة.</p>{!delivery.whatsappUrl&&<p className="text-xs text-amber-600">أضف رقم واتساب دوليًا صحيحًا إلى ملف العميل لتفعيل الزر.</p>}{!delivery.emailUrl&&<p className="text-xs text-amber-600">راجع البريد الإلكتروني في ملف العميل لتفعيل الزر.</p>}</div>}
       </ProjectDialog>
