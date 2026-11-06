@@ -57,7 +57,9 @@ const startServer = (port: number) => {
   });
 };
 
-void migrateManualEnvironment()
+void (process.env.RADIUS_MIGRATE_MANUAL_ENVIRONMENT_ON_START === '1'
+  ? migrateManualEnvironment()
+  : Promise.resolve())
   .then(() => startServer(env.PORT))
   .catch((error: NodeJS.ErrnoException) => {
     console.error('Central manual environment migration failed:', error.code || error.message);

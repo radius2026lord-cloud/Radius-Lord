@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import type {Response} from 'express';
 import {db} from '../config/db';
 import type {AuthenticatedRequest} from '../middleware/auth.middleware';
+import {migrateManualEnvironment} from '../services/manual-environment-migration.service';
 import {writeAuditLog} from '../services/audit.service';
 import {requireInfrastructureReady,InfrastructureNotReady} from '../services/infrastructure-health.service';
 import {enqueueInitialEnvironment,ensureCentralSubscription,EnvironmentRequestError,validLimits} from '../services/subscription-environment.service';
@@ -38,16 +39,17 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
  try{
   const [previous]:any=await db.query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]);
   if(previous[0])return res.json({orderId:previous[0].id});
-  const [columns]:any=await db.query(`SELECT TABLE_NAME tableName,COLUMN_NAME columnName,IS_NULLABLE isNullable,COLUMN_TYPE columnType
-   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
-   AND ((TABLE_NAME='payment_orders' AND COLUMN_NAME IN ('status','plan_id'))
-    OR (TABLE_NAME='subscriptions' AND COLUMN_NAME='plan_id'))`);
-  const statusColumn=columns.find((column:any)=>column.tableName==='payment_orders'&&column.columnName==='status');
-  const nullablePlan=(table:string)=>columns.some((column:any)=>column.tableName===table&&column.columnName==='plan_id'&&column.isNullable==='YES');
-  if(!statusColumn?.columnType.includes("'manual_authorized'")||custom&&(!nullablePlan('payment_orders')||!nullablePlan('subscriptions'))){
-   return res.status(503).json({code:'MANUAL_ENVIRONMENT_SCHEMA_REQUIRED',message:'طبّق ملف 20261106_manual_environment.sql على القاعدة المركزية، ثم أعد المحاولة. سينشئ عامل التجهيز قاعدة العميل المستقلة بعد تسجيل الطلب.'});
-  }
   await requireInfrastructureReady();
+  try{
+   await migrateManualEnvironment();
+  }catch(error){
+   const code=(error as NodeJS.ErrnoException).code||(error instanceof Error?error.message:'UNKNOWN');
+   console.error('[manual-environment migration]',{code});
+   const message=['ER_TABLEACCESS_DENIED_ERROR','ER_DBACCESS_DENIED_ERROR','ER_PROCACCESS_DENIED_ERROR','ER_SPECIFIC_ACCESS_DENIED_ERROR'].includes(code)
+    ? 'حساب MySQL للباك إند يفتقر إلى صلاحيات ترحيل القاعدة المركزية.'
+    : 'تعذر تحديث القاعدة المركزية تلقائيًا. راجع سجل الباك إند ثم أعد المحاولة.';
+   return res.status(503).json({code:'MANUAL_ENVIRONMENT_MIGRATION_FAILED',message});
+  }
   const passwordHash=existing?null:await bcrypt.hash(password,12);
   conn=await db.pool.getConnection();
   await conn.beginTransaction();

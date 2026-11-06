@@ -7,7 +7,6 @@ import {splitTenantTemplate} from './tenant-template.service';
 const lockName = 'radius-lord:central-manual-environment-migration';
 
 export async function migrateManualEnvironment() {
-  if (process.env.RADIUS_MIGRATE_MANUAL_ENVIRONMENT_ON_START !== '1') return;
   const connection = await db.pool.getConnection();
   let locked = false;
   try {

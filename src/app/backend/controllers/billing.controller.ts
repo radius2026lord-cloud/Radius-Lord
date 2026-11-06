@@ -118,7 +118,7 @@ export async function getSubscriptionRequestController(req:AuthenticatedRequest,
  const id=String(req.params.id??'');
  if(!/^[1-9][0-9]*$/.test(id)||!Number.isSafeInteger(Number(id)))return res.status(400).json({success:false,message:'رقم الاشتراك غير صالح.'});
  try{
-  const [rows]=await db.query(`SELECT po.*,c.full_name customer_name,c.username customer_username,c.email customer_email,m.full_name confirmed_by_name,m.username confirmed_by_username FROM payment_orders po JOIN customers c ON c.id=po.customer_id LEFT JOIN master_admins m ON m.id=po.confirmed_by_master_admin_id WHERE po.id=? AND po.payment_purpose='initial_subscription' AND EXISTS (SELECT 1 FROM payment_order_events e WHERE e.payment_order_id=po.id AND e.event_type='sent_to_whatsapp') LIMIT 1`,[Number(id)]);
+  const [rows]=await db.query(`SELECT po.*,c.full_name customer_name,c.username customer_username,c.email customer_email,m.full_name confirmed_by_name,m.username confirmed_by_username FROM payment_orders po JOIN customers c ON c.id=po.customer_id LEFT JOIN master_admins m ON m.id=po.confirmed_by_master_admin_id WHERE po.id=? AND po.payment_purpose='initial_subscription' AND (po.status='manual_authorized' OR EXISTS (SELECT 1 FROM payment_order_events e WHERE e.payment_order_id=po.id AND e.event_type='sent_to_whatsapp')) LIMIT 1`,[Number(id)]);
   const r=(rows as any[])[0];
   if(!r)return res.status(404).json({success:false,message:'طلب الاشتراك غير موجود.'});
   let addons:any[]=[];
