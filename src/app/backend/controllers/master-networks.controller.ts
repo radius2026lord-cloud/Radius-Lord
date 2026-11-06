@@ -32,7 +32,7 @@ export async function listMasterNetworks(_req:AuthenticatedRequest,res:Response)
    let upgradeRequest:any=null;try{const request=typeof upgradeRequestSnapshot==='string'?JSON.parse(upgradeRequestSnapshot):upgradeRequestSnapshot;if(request?.status==='requested'&&Number(request.subscriptionId)===Number(item.subscriptionId))upgradeRequest={requestedAt:request.requestedAt,requestedPppoeLimit:request.requestedPppoeLimit,requestedNasLimit:request.requestedNasLimit,includeRenewal:request.includeRenewal};}catch{}
    return {...item,upgradeRequest,renewalRequest,metrics:snapshot?.metrics??null,metricsReadAt:snapshot?.readAt??null,
     metricsStatus:snapshot?.status??'pending',metricsScope:snapshot?.scope??null,
-    metricsStale:!snapshot?.readAt||Date.now()-Date.parse(snapshot.readAt)>6*60*1000};
+    metricsStale:!Number.isFinite(Date.parse(snapshot?.readAt??''))||Date.now()-Date.parse(snapshot.readAt)>6*60*1000};
   })});
  }catch(error){console.error('[master-networks]',{code:(error as any)?.code});return res.status(500).json({message:'تعذر تحميل الشبكات.'});}
 }

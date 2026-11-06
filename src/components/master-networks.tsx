@@ -82,19 +82,51 @@ function SubscriptionDates({item,days,now}:{item:NetworkRow;days:number;now:numb
  {(approaching||expired)&&<p role="status" className="flex items-start gap-1.5 border-t border-amber-200 pt-2 leading-5 text-amber-700 dark:border-amber-400/20 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>{expired?"انتهى الاشتراك، يلزم التجديد":"بادر بتجديد الخطة"}</p>}
  </div>;
 }
+function readingLabel(item:NetworkRow){
+ return item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":!item.metricsReadAt?"بانتظار أول قراءة":item.metricsStale?"قراءة قديمة":"قراءة حديثة";
+}
+
 export default function MasterNetworks({networkId}:{networkId?:number}){
  const router=useRouter();
- const [items,setItems]=useState<NetworkRow[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
+ const [items,setItems]=useState<NetworkRow[]>([]),[loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false),[error,setError]=useState(""),[revision,setRevision]=useState(0);
  const [now,setNow]=useState(()=>Date.now());
  const [validityFilter,setValidityFilter]=useState("all");
  const [requestFilter,setRequestFilter]=useState("all");
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
+ const [hasLoaded,setHasLoaded]=useState(false);
  const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false),[selected,setSelected]=useState<NetworkRow|null>(null);
  const [subscriptionFilter,setSubscriptionFilter]=useState("all"),[readingFilter,setReadingFilter]=useState("all"),[serverFilter,setServerFilter]=useState("all");
  const [sort,setSort]=useState("name"),[descending,setDescending]=useState(false),[pageSize,setPageSize]=useState("50"),[page,setPage]=useState(1);
  const {view,setView,selected:selection,setSelected:setSelection,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("master-networks","row");
- useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");if(!controller.signal.aborted){setItems(body.items||[]);setReminderDays(body.reminderSettings?.expiryDays??7);}}).catch(reason=>{if(!controller.signal.aborted)setError(reason.message||"تعذر تحميل الشبكات.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[revision]);
+ useEffect(()=>{
+  const controller=new AbortController();
+  let inFlight=false;
+  async function read(){
+   if(inFlight||controller.signal.aborted)return;
+   inFlight=true;setRefreshing(true);
+   try{
+    const response=await fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal});
+    const body=await response.json();
+    if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");
+    if(controller.signal.aborted)return;
+    setItems(body.items||[]);setReminderDays(body.reminderSettings?.expiryDays??7);
+    setError("");setHasLoaded(true);
+   }catch(reason){
+    if(controller.signal.aborted)return;
+    const message=reason instanceof Error?reason.message:"تعذر تحميل الشبكات.";
+    setError(message);
+   }finally{
+    inFlight=false;
+    if(!controller.signal.aborted){setLoading(false);setRefreshing(false);}
+   }
+  }
+  const refreshVisible=()=>{if(document.visibilityState==="visible")void read();};
+  void read();
+  const timer=setInterval(refreshVisible,60000);
+  document.addEventListener("visibilitychange",refreshVisible);
+  return()=>{controller.abort();clearInterval(timer);document.removeEventListener("visibilitychange",refreshVisible);};
+ },[revision]);
  useEffect(()=>{if(networkId)setSelected(items.find(item=>Number(item.id)===networkId)||null);},[networkId,items]);
  const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||item.subscriptionStatus===subscriptionFilter)
  &&(requestFilter==="all"||(requestFilter==="renewal"?Boolean(item.renewalRequest||item.upgradeRequest?.includeRenewal):Boolean(item.upgradeRequest)))
@@ -129,7 +161,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  return <div dir="rtl" className="space-y-4">
  {networkId&&<Link href="/Dashboard/networks" className="inline-flex text-sm text-blue-600">العودة إلى الشبكات</Link>}
  {!networkId&&<>
- <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/>تحديث</ProjectButton>}/>
+ <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={refreshing} onClick={()=>setRevision(value=>value+1)}><RefreshCw className={refreshing?'animate-spin':''}/>تحديث</ProjectButton>}/>
  {filtersOpen&&<div id="master-network-filters" className="grid items-start gap-3 rounded-2xl border border-slate-200 p-3 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-3">
  <ProjectFilterGroup icon={CheckCircle2} title="الاشتراك" tone="subscription"><ProjectFilterChoices value={subscriptionFilter} onChange={setSubscriptionFilter} items={[{value:"all",label:"الكل",icon:Layers,accent:"text-blue-500"},{value:"active",label:"نشط",icon:CheckCircle2,accent:"text-emerald-600"},{value:"expired",label:"منتهي",icon:Clock3,accent:"text-amber-600"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={CalendarClock} title="صلاحية الاشتراك" tone="subscription"><ProjectDropdown compact bareOptionIcons value={validityFilter} onChange={setValidityFilter} options={[{value:"all",label:"كل الاشتراكات"},{value:"current",label:"ساري"},{value:"soon",label:"قريب من الانتهاء"},{value:"expired",label:"منتهي"},{value:"pending",label:"لم يبدأ"},{value:"other",label:"حالة أخرى أو موعد غير محدد"}]}/></ProjectFilterGroup>
@@ -162,7 +194,8 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div className="flex min-w-0 items-center justify-between gap-2 border-t border-slate-200/70 pt-3 dark:border-white/10 lg:border-r lg:border-t-0 lg:pr-3 lg:pt-0"><span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300"><Rows3 aria-hidden="true" className="h-4 w-4 shrink-0"/>عدد العناصر</span><ProjectDropdown bareOptionIcons value={pageSize} onChange={setPageSize} compact className="w-[124px] max-w-full" placeholder="العدد" options={[{value:"50",label:"50 عنصرًا"},{value:"100",label:"100 عنصر"},{value:"150",label:"150 عنصر"},{value:"all",label:"كل النتائج"}]}/></div>
  </div>
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
- {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item,reminderDays,now),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
+ {hasLoaded&&error&&<ProjectInfoCard tone="warning" role="status">تعذر تحديث القائمة. تُعرض آخر بيانات متاحة.</ProjectInfoCard>}
+ {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error&&!hasLoaded?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item,reminderDays,now),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>router.push("/Dashboard/networks/"+item.id)}>
  <div className={view==="row"?"grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(160px,.8fr)_minmax(210px,1fr)_minmax(450px,2fr)]":"space-y-4"}>
  <div className="min-w-0">
  <div className="flex flex-wrap items-center gap-2"><span aria-label={"معرّف الشبكة "+item.id+" · "+state.label} className={`inline-flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-semibold ${state.tone}`}><Hash className="h-3.5 w-3.5"/>{item.id}</span><h3 className="min-w-0 break-words text-sm font-semibold">{item.name}</h3></div>
@@ -185,7 +218,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <summary className="cursor-pointer text-slate-600 dark:text-slate-300"><Database className="mx-1 inline h-4 w-4 text-violet-500"/>التفاصيل التقنية</summary>
  <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2"><div><dt className="text-slate-500 dark:text-slate-400">قاعدة البيانات</dt><dd className="mt-1 break-all"><bdi>{item.databaseName||"لم تُجهّز"}</bdi></dd></div><div><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><Server className="h-3.5 w-3.5 text-sky-500"/>الخادم</dt><dd className="mt-1 break-words">{item.databaseServerName||"غير محدد"}</dd></div></dl>
  </details>
- <div className="flex flex-wrap items-center justify-between gap-2 text-[10px]"><p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-3.5 w-3.5 shrink-0"/><span>آخر قراءة · {date(item.metricsReadAt)}</span></p><p className={item.metricsStatus==="unavailable"||item.metricsStale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}>{item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":item.metricsStale?"قديمة أو بانتظار التحديث":"قراءة حديثة"}</p></div>
+ <div className="flex flex-wrap items-center justify-between gap-2 text-[10px]"><p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-3.5 w-3.5 shrink-0"/><span>آخر قراءة · {date(item.metricsReadAt)}</span></p><p className={item.metricsStatus==="unavailable"||item.metricsStale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}>{readingLabel(item)}</p></div>
  </footer>
  </CollectionCard>})}</CollectionGrid>}
  <div className="flex items-center justify-between"><ProjectButton variant="secondary" disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>السابق</ProjectButton><span className="text-xs">{currentPage} / {pageCount}</span><ProjectButton variant="secondary" disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}>التالي</ProjectButton></div>
@@ -198,7 +231,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  ["بيانات الشبكة",[["المعرّف",selected.id],["المالك",selected.ownerName],["الرخصة",selected.licenseNumber],["الحالة",label(selected.status)]]],
  ["الاشتراك والبيئة",[["الخطة",selected.planName||"غير محددة"],["بدء الاشتراك",selected.startsAt?date(selected.startsAt):"لم يبدأ"],["الاشتراك",label(selected.subscriptionStatus)],["البيئة",label(selected.environmentStatus)],["انتهاء الاشتراك",date(selected.expiresAt)]]],
  ["قاعدة البيانات المستقلة",[["القاعدة",selected.databaseName||"لم تُجهّز"],["الخادم",selected.databaseServerName||"غير محدد"],["الصحة",label(selected.databaseStatus)]]],
- ["آخر مؤشرات التشغيل",[["إجمالي حسابات PPPoE",selected.metrics?.totalPppoeAccounts??"غير متاح"],["حسابات PPPoE المتصلة",selected.metrics?.connectedPppoeAccounts??"غير متاح"],["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["حسابات الهوتسبوت المتصلة",selected.metrics?.connectedHotspotAccounts??"غير متاح"],["إجمالي حسابات الهوتسبوت",selected.metrics?.totalHotspotAccounts??"غير متاح"],["جلسات الهوتسبوت",selected.metrics?.hotspotSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
+ ["آخر مؤشرات التشغيل",[["إجمالي حسابات PPPoE",selected.metrics?.totalPppoeAccounts??"غير متاح"],["حسابات PPPoE المتصلة",selected.metrics?.connectedPppoeAccounts??"غير متاح"],["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["حسابات الهوتسبوت المتصلة",selected.metrics?.connectedHotspotAccounts??"غير متاح"],["إجمالي حسابات الهوتسبوت",selected.metrics?.totalHotspotAccounts??"غير متاح"],["جلسات الهوتسبوت",selected.metrics?.hotspotSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["حالة القراءة",readingLabel(selected)],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
  ].map(([title,fields])=><ProjectInfoCard key={String(title)}><h3 className="mb-3 font-semibold">{String(title)}</h3><dl className="space-y-3">{(fields as Array<[string,string|number]>).map(([name,value])=><div key={name}><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl></ProjectInfoCard>)}</div>}
  </section>
  </div>;
