@@ -1,8 +1,7 @@
 "use client";
 import {useRouter} from "next/navigation";
-import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink,KeyRound,Radio} from "lucide-react";
+import {ArrowRight,Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink,KeyRound,Radio} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import {useClock24h} from "@/components/ui/project-clock-provider";
 import ProjectDropdown from "@/components/ui/project-dropdown";
@@ -161,7 +160,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  {value:"expired",title:"منتهية",Icon:Clock3,tone:"warning" as const,ink:"text-amber-700 dark:text-amber-200"},
  {value:"suspended",title:"موقوفة",Icon:Power,tone:"danger" as const,ink:"text-rose-700 dark:text-rose-200"}];
  return <div dir="rtl" className="space-y-4">
- {networkId&&<Link href="/Dashboard/networks" className="inline-flex text-sm text-blue-600">العودة إلى الشبكات</Link>}
+ {networkId&&<div className="flex justify-end"><ProjectButton variant="back" onClick={()=>router.push("/Dashboard/networks")}><ArrowRight aria-hidden="true"/>العودة إلى الشبكات</ProjectButton></div>}
  {!networkId&&<>
  <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews showSelectionControl selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={refreshing} onClick={()=>setRevision(value=>value+1)}><RefreshCw className={refreshing?'animate-spin':''}/>تحديث</ProjectButton>}/>
  {filtersOpen&&<div id="master-network-filters" className="grid items-start gap-3 rounded-2xl border border-slate-200 p-3 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-3">
