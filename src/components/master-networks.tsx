@@ -2,16 +2,17 @@
 import {useRouter} from "next/navigation";
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3} from "lucide-react";
+import {Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import {useClock24h} from "@/components/ui/project-clock-provider";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-filter-panel";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
 import ProjectButton from "@/components/ui/project-button";
-import {ProjectInfoCard} from "@/components/ui/project-info-card";
+import FloatingNotice from "@/components/ui/floating-notice";
+import {ProjectInfoCard,ProjectCardIcon} from "@/components/ui/project-info-card";
 type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
-type NetworkRow={upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
+type NetworkRow={systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
@@ -95,7 +96,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
  const [hasLoaded,setHasLoaded]=useState(false);
- const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false),[selected,setSelected]=useState<NetworkRow|null>(null);
+ const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false);
  const [subscriptionFilter,setSubscriptionFilter]=useState("all"),[readingFilter,setReadingFilter]=useState("all"),[serverFilter,setServerFilter]=useState("all");
  const [sort,setSort]=useState("name"),[descending,setDescending]=useState(false),[pageSize,setPageSize]=useState("50"),[page,setPage]=useState(1);
  const {view,setView,selected:selection,setSelected:setSelection,toggle,setAll,selectionMode,setSelectionMode}=useCollectionDisplay<number>("master-networks","row");
@@ -106,7 +107,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
    if(inFlight||controller.signal.aborted)return;
    inFlight=true;setRefreshing(true);
    try{
-    const response=await fetch("/api/billing/admin/networks",{credentials:"include",cache:"no-store",signal:controller.signal});
+    const response=await fetch("/api/billing/admin/networks"+(networkId?`?networkId=${networkId}`:""),{credentials:"include",cache:"no-store",signal:controller.signal});
     const body=await response.json();
     if(!response.ok)throw Error(body.message||"تعذر تحميل الشبكات.");
     if(controller.signal.aborted)return;
@@ -126,8 +127,8 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   const timer=setInterval(refreshVisible,60000);
   document.addEventListener("visibilitychange",refreshVisible);
   return()=>{controller.abort();clearInterval(timer);document.removeEventListener("visibilitychange",refreshVisible);};
- },[revision]);
- useEffect(()=>{if(networkId)setSelected(items.find(item=>Number(item.id)===networkId)||null);},[networkId,items]);
+ },[revision,networkId]);
+ const selected=networkId?items.find(item=>Number(item.id)===networkId):undefined;
  const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||item.subscriptionStatus===subscriptionFilter)
  &&(requestFilter==="all"||(requestFilter==="renewal"?Boolean(item.renewalRequest||item.upgradeRequest?.includeRenewal):Boolean(item.upgradeRequest)))
  &&(validityFilter==="all"||expiryState(item,reminderDays,now)===validityFilter)
@@ -223,18 +224,102 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  </CollectionCard>})}</CollectionGrid>}
  <div className="flex items-center justify-between"><ProjectButton variant="secondary" disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>السابق</ProjectButton><span className="text-xs">{currentPage} / {pageCount}</span><ProjectButton variant="secondary" disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}>التالي</ProjectButton></div>
  </>}
- {networkId&&!loading&&!error&&!selected&&<CollectionState>الشبكة غير موجودة أو غير متاحة.</CollectionState>}
- {networkId&&selected&&<h2 className="text-lg font-semibold">ملف الشبكة · {selected.name}</h2>}
- <section aria-label="ملف الشبكة" className="space-y-4">
- {selected&&<SubscriptionDates item={selected} days={reminderDays} now={now}/>}
- {selected&&<div className="grid gap-4 sm:grid-cols-2">{[
- ["بيانات الشبكة",[["المعرّف",selected.id],["المالك",selected.ownerName],["الرخصة",selected.licenseNumber],["الحالة",label(selected.status)]]],
- ["الاشتراك والبيئة",[["الخطة",selected.planName||"غير محددة"],["بدء الاشتراك",selected.startsAt?date(selected.startsAt):"لم يبدأ"],["الاشتراك",label(selected.subscriptionStatus)],["البيئة",label(selected.environmentStatus)],["انتهاء الاشتراك",date(selected.expiresAt)]]],
- ["قاعدة البيانات المستقلة",[["القاعدة",selected.databaseName||"لم تُجهّز"],["الخادم",selected.databaseServerName||"غير محدد"],["الصحة",label(selected.databaseStatus)]]],
- ["آخر مؤشرات التشغيل",[["إجمالي حسابات PPPoE",selected.metrics?.totalPppoeAccounts??"غير متاح"],["حسابات PPPoE المتصلة",selected.metrics?.connectedPppoeAccounts??"غير متاح"],["إجمالي مشتركي PPPoE",selected.metrics?.totalSubscribers??"غير متاح"],["المتصلون",selected.metrics?.connectedSubscribers??"غير متاح"],["غير المتصلين",selected.metrics?.disconnectedSubscribers??"غير متاح"],["الجدد خلال 24 ساعة",selected.metrics?.newSubscribers24h??"غير متاح"],["الجلسات النشطة",selected.metrics?.activeSessions??"غير متاح"],["حسابات الهوتسبوت المتصلة",selected.metrics?.connectedHotspotAccounts??"غير متاح"],["إجمالي حسابات الهوتسبوت",selected.metrics?.totalHotspotAccounts??"غير متاح"],["جلسات الهوتسبوت",selected.metrics?.hotspotSessions??"غير متاح"],["NAS المتصلة",selected.metrics?.connectedNas??"غير متاح"],["إجمالي NAS",selected.metrics?.totalNas??"غير متاح"],["حالة القراءة",readingLabel(selected)],["وقت قراءة المؤشرات",date(selected.metricsReadAt)],["صحة RADIUS",label(selected.radiusStatus)],["آخر تقرير",date(selected.reportedAt)],["آخر ظهور",date(selected.lastSeenAt)]]]
- ].map(([title,fields])=><ProjectInfoCard key={String(title)}><h3 className="mb-3 font-semibold">{String(title)}</h3><dl className="space-y-3">{(fields as Array<[string,string|number]>).map(([name,value])=><div key={name}><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl></ProjectInfoCard>)}</div>}
- </section>
+ {networkId&&loading&&<CollectionState loading>جارٍ تحميل ملف الشبكة…</CollectionState>}
+ {networkId&&!loading&&!selected&&<CollectionState>{error?<><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></>:"الشبكة غير موجودة أو غير متاحة."}</CollectionState>}
+ {selected&&<NetworkDetails item={selected} days={reminderDays} now={now} error={error} refreshing={refreshing} onRefresh={()=>setRevision(value=>value+1)}/>}
  </div>;
 }
 
+function UsageBar({title,used,limit}:{title:string;used?:number;limit?:number}){
+ const fraction=typeof used==="number"&&typeof limit==="number"&&limit>0?Math.min(100,Math.round(used/limit*100)):null;
+ return <div className="space-y-2">
+  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+   <h4 className="font-semibold">{title}</h4>
+   <span>{used?.toLocaleString("ar")??"القراءة غير متاحة"}{limit===0?" · غير محدود":typeof limit==="number"?" / "+limit.toLocaleString("ar"):" · الحد غير متاح"}</span>
+  </div>
+  {fraction!==null&&<div role="progressbar" aria-label={title} aria-valuenow={fraction} aria-valuetext={used+" من "+limit} className="h-2 overflow-hidden rounded-full bg-blue-100 dark:bg-white/10"><div className={`h-full rounded-full ${fraction>=100?"bg-amber-500":"bg-blue-600"}`} style={{width:fraction+"%"}}/></div>}
+ </div>;
+}
 
+function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:NetworkRow;days:number;now:number;error:string;refreshing:boolean;onRefresh:()=>void}){
+ const [notice,setNotice]=useState({message:"",error:""});
+ const status=networkState(item,days,now),StatusIcon=status.Icon;
+ const expiry=expiryState(item,days,now);
+ const readAt=Date.parse(item.metricsReadAt??"");
+ const elapsed=Number.isFinite(readAt)?Math.max(0,Math.floor((now-readAt)/60000)):null;
+ const reading=elapsed===null?readingLabel(item):`${readingLabel(item)} · آخر قراءة منذ ${elapsed.toLocaleString("ar")} دقيقة`;
+ const stale=item.metricsStale||item.metricsStatus==="unavailable";
+ const metrics=item.metrics;
+ const limit=item.planLimits;
+ const alerts=[
+  ...(expiry==="expired"||expiry==="soon"?[{text:expiry==="expired"?"انتهى اشتراك الشبكة":"اقترب موعد انتهاء الاشتراك",href:"#network-subscription"}]:[]),
+  ...(!stale&&limit&&limit.nas>0&&metrics&&metrics.totalNas>=limit.nas?[{text:"بلغت الشبكة حد أجهزة NAS",href:"#network-subscription"}]:[]),
+  ...(!stale&&limit&&limit.pppoe>0&&typeof metrics?.totalPppoeAccounts==="number"&&metrics.totalPppoeAccounts>=limit.pppoe?[{text:"بلغت الشبكة حد حسابات PPPoE",href:"#network-subscription"}]:[]),
+  ...(item.metricsReadAt&&stale||item.metricsStatus==="unavailable"?[{text:"تأخرت مؤشرات التشغيل أو تعذرت قراءتها",href:"#network-overview"}]:[]),
+ ];
+ let portal:string|undefined;
+ try{const url=new URL(item.systemUrl??"");if(item.environmentStatus==="ready"&&["https:","http:"].includes(url.protocol)&&!url.username&&!url.password)portal=url.href;}catch{/* Missing or invalid environment URL. */}
+ const healthSummary=[
+  ["قاعدة البيانات",label(item.databaseStatus)],["FreeRADIUS",label(item.radiusStatus)],["خادم البيانات",item.databaseServerName||"غير محدد"],
+  ["اسم القاعدة",item.databaseName||"غير متاح"],["آخر تقرير",date(item.reportedAt)],["آخر ظهور",date(item.lastSeenAt)],
+ ];
+ const stats=[
+  {name:"المشتركون المتصلون",value:metrics?.connectedSubscribers,icon:Users},
+  {name:"الجلسات النشطة",value:metrics?.activeSessions,icon:Activity},
+  {name:"أجهزة NAS المتصلة",value:metrics?.connectedNas,icon:Router},
+  {name:"حسابات الهوتسبوت المتصلة",value:metrics?.connectedHotspotAccounts,icon:Wifi},
+ ];
+ async function copy(value:string,message:string){
+  try{
+   if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+   else{
+    const field=document.createElement("textarea");field.value=value;field.readOnly=true;field.style.position="fixed";field.style.opacity="0";
+    const focused=document.activeElement;
+    document.body.appendChild(field);field.select();
+    try{if(!document.execCommand("copy"))throw Error("COPY_FAILED");}finally{field.remove();if(focused instanceof HTMLElement)focused.focus();}
+   }
+   setNotice({message,error:""});
+  }catch{setNotice({message:"",error:"تعذر النسخ في هذا المتصفح."});}
+ }
+ const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${label(item.subscriptionStatus)}`,`البيئة: ${label(item.environmentStatus)}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
+ return <section aria-label="ملف الشبكة" className="space-y-4">
+  <FloatingNotice {...notice} onDismiss={()=>setNotice({message:"",error:""})}/>
+  <ProjectInfoCard className="flex flex-wrap items-start justify-between gap-4">
+   <div className="min-w-0 space-y-2">
+    <div className="flex flex-wrap items-center gap-2"><ProjectCardIcon icon={Network}/><h1 className="break-words text-xl font-bold">{item.name}</h1><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${status.tone}`}><StatusIcon className="size-3.5"/>{status.label}</span></div>
+    <p className="text-sm">{item.ownerName||"المالك غير محدد"} · شبكة <bdi>#{item.id}</bdi></p>
+    {item.licenseNumber&&<div className="flex flex-wrap items-center gap-2 text-xs">الرخصة <bdi className="break-all font-mono">{item.licenseNumber}</bdi><ProjectButton variant="ghost" aria-label="نسخ الرخصة" onClick={()=>void copy(item.licenseNumber,"تم نسخ رقم الرخصة.")}><Copy className="size-4"/></ProjectButton></div>}
+   </div>
+   <div className="flex flex-wrap items-center gap-2">
+    {portal&&<ProjectButton onClick={()=>window.open(portal,"_blank","noopener,noreferrer")}><ExternalLink className="size-4"/>فتح واجهة الشبكة</ProjectButton>}
+    <ProjectButton variant="secondary" onClick={()=>void copy(summary,"تم نسخ ملخص الشبكة.")}><Copy className="size-4"/>نسخ ملخص الشبكة</ProjectButton>
+    <ProjectButton variant="ghost" disabled={refreshing} onClick={onRefresh}><RefreshCw className={`size-4 ${refreshing?"animate-spin":""}`}/>تحديث</ProjectButton>
+   </div>
+  </ProjectInfoCard>
+  {error&&<ProjectInfoCard tone="warning"><p role="alert">{error} · تُعرض آخر بيانات متاحة.</p></ProjectInfoCard>}
+  {alerts.length>0&&<ProjectInfoCard tone="warning">
+   <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={AlertTriangle} tone="warning"/>تنبيهات تحتاج متابعة</h2>
+   <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm">{alerts.map(alert=><li key={alert.text}><a className="underline underline-offset-4" href={alert.href}>{alert.text}</a></li>)}</ul>
+  </ProjectInfoCard>}
+  <section id="network-overview" className="scroll-mt-4 space-y-3">
+   <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Activity}/>نظرة عامة</h2><span className={`text-xs ${stale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}`}>{reading}</span></div>
+   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat=><ProjectInfoCard key={stat.name}><p className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={stat.icon}/>{stat.name}</p><p className="mt-2 text-lg font-bold tabular-nums">{stat.value?.toLocaleString("ar")??"—"}</p></ProjectInfoCard>)}</div>
+   {metrics&&<dl className="flex flex-wrap gap-x-5 gap-y-2 text-xs">{[
+    ["حسابات PPPoE المتصلة",metrics.connectedPppoeAccounts],["مشتركو PPPoE",metrics.totalSubscribers],["غير المتصلين",metrics.disconnectedSubscribers],["الجدد خلال 24 ساعة",metrics.newSubscribers24h],["حسابات الهوتسبوت",metrics.totalHotspotAccounts],["جلسات الهوتسبوت",metrics.hotspotSessions],
+   ].map(([name,value])=><div key={name}><dt className="inline text-slate-500 dark:text-slate-400">{name} </dt><dd className="inline font-semibold">{value??"—"}</dd></div>)}</dl>}
+  </section>
+  <div className="grid items-start gap-4 lg:grid-cols-2">
+   <section id="network-subscription" className="scroll-mt-4"><ProjectInfoCard className="space-y-4">
+    <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Package}/>الاشتراك وحدود الخطة</h2>
+    <p className="text-xs text-slate-600 dark:text-slate-300">الاشتراك: {label(item.subscriptionStatus)} · البيئة: {label(item.environmentStatus)}</p>
+    <SubscriptionDates item={item} days={days} now={now}/>
+    <UsageBar title="حسابات PPPoE" used={metrics?.totalPppoeAccounts} limit={limit?.pppoe}/>
+    <UsageBar title="أجهزة NAS" used={metrics?.totalNas} limit={limit?.nas}/>
+   </ProjectInfoCard></section>
+   <section><ProjectInfoCard className="space-y-4">
+    <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={ShieldCheck}/>صحة البيئة</h2>
+    <dl className="grid grid-cols-2 gap-3">{healthSummary.map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl>
+   </ProjectInfoCard></section>
+  </div>
+ </section>;
+}
