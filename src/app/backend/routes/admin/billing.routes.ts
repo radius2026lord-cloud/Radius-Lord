@@ -1,4 +1,4 @@
-import {applySubscriptionChange,listSubscriptionChanges} from '../../services/master-subscription-changes.service';
+import {applySubscriptionChange,listSubscriptionChanges,readUpgradePaymentSettings,saveUpgradePaymentSettings} from '../../services/master-subscription-changes.service';
 import {listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
 import {deleteEnvironment} from '../../controllers/environment-delete.controller';
 import {requestEnvironmentNotification} from '../../controllers/environment-notification.controller';
@@ -10,18 +10,24 @@ import { requestEnvironmentController } from '../../controllers/environment.cont
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
 router.get('/admin/subscription-changes',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
- try{res.set('Cache-Control','no-store');return res.json({items:await listSubscriptionChanges()});}
+ try{res.set('Cache-Control','no-store');return res.json({items:await listSubscriptionChanges(),paymentSettings:await readUpgradePaymentSettings()});}
  catch{return res.status(503).json({message:'تعذر تحميل طلبات التجديد والترقية.'});}
+});
+router.put('/admin/subscription-changes/payment-settings',authenticate,requireAccountType('master_admin'),async(req,res)=>{
+ try{return res.json({paymentSettings:await saveUpgradePaymentSettings(req.body)});}
+ catch(error){if((error as Error).message==='UPGRADE_PAYMENT_SETTINGS')return res.status(400).json({message:'أدخل رمز عملة من ثلاثة أحرف ورمز تحويل صالحًا.'});return res.status(503).json({message:'تعذر حفظ إعدادات التحويل.'});}
 });
 router.post('/admin/subscription-changes/:tenantId/:kind/apply',authenticate,requireAccountType('master_admin'),async(req,res)=>{
  const {kind}=req.params;
  if(kind!=='renewal'&&kind!=='upgrade')return res.status(400).json({message:'نوع الطلب غير صالح.'});
  try{
-  const result=await applySubscriptionChange(Number(req.params.tenantId),kind,String(req.body?.requestedAt??''),Number(req.body?.months),(req as import('../../middleware/auth.middleware').AuthenticatedRequest).auth!.accountId);
+  const result=await applySubscriptionChange(Number(req.params.tenantId),kind,String(req.body?.requestedAt??''),Number(req.body?.months),(req as import('../../middleware/auth.middleware').AuthenticatedRequest).auth!.accountId,req.body?.upgradeAmount);
   return res.json({result});
  }catch(error){
   const code=(error as Error).message;
   const messages:Record<string,string>={
+   UPGRADE_AMOUNT_INPUT:'أدخل قيمة ترقية صحيحة، أو صفرًا للترقية المجانية.',
+   UPGRADE_PAYMENT_SETTINGS:'اضبط رمز التحويل والعملة من إعدادات تحويل الترقية.',
    CHANGE_INPUT:'اختر مدة تمديد من شهر إلى 120 شهرًا.',
    CHANGE_STALE:'تغير الطلب أو الرخصة. حدّث القائمة وراجع الطلب.',
    CHANGE_BUSY:'تجري معالجة عملية أخرى. أعد المحاولة بعد اكتمالها.',

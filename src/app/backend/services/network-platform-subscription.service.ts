@@ -46,13 +46,13 @@ export async function readPlatformSubscription(scope:any){
    (SELECT COUNT(*) FROM lord_nas WHERE archived_at IS NULL) nas,
    (SELECT COUNT(*) FROM hotspot_accounts WHERE archived_at IS NULL) hotspot`,timeout:5000});
   const capacity=(used:any,limit:any)=>{used=Number(used);limit=Number(limit);return {used,limit,available:limit===0?null:Math.max(0,limit-used),overLimit:limit>0&&used>limit};};
-  const [request,upgrade]=await Promise.all([readPrivateSetting('subscription_renewal_requests','tenant_'+scope.tenant_id),readPrivateSetting('subscription_upgrade_requests','tenant_'+scope.tenant_id)]);
+  const [upgradeReceipt,request,upgrade]=await Promise.all([readPrivateSetting('subscription_upgrade_receipts','tenant_'+scope.tenant_id),readPrivateSetting('subscription_renewal_requests','tenant_'+scope.tenant_id),readPrivateSetting('subscription_upgrade_requests','tenant_'+scope.tenant_id)]);
   const current=request&&Number(request.subscriptionId)===Number(scope.subscription_id)&&request.expiresAt===details.expiresAt;
   const recentChange=[request,upgrade]
    .filter(item=>item?.status==='applied'&&Number(item.subscriptionId)===Number(scope.subscription_id)&&item.applied?.appliedAt)
    .map(item=>item.applied)
    .sort((a,b)=>String(b.appliedAt).localeCompare(String(a.appliedAt)))[0]??null;
-  return {...details,recentChange,planName:license.plan_name_snapshot,license:license.license_number,status:license.subscription_status,
+  return {...details,recentChange,upgradeReceipt,planName:license.plan_name_snapshot,license:license.license_number,status:license.subscription_status,
    durationMonths:Number(license.duration_months_snapshot),syncVersion:Number(license.sync_version),
    pppoe:capacity(counts[0].pppoe,license.max_pppoe_accounts),nas:capacity(counts[0].nas,Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)),
    hotspotAccounts:Number(counts[0].hotspot),upgradeRequest:pendingUpgrade(upgrade,scope,license),renewalRequest:current?{status:'requested',requestedAt:request.requestedAt}:null};

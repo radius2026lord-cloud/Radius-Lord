@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {CalendarClock,PackagePlus,Network,CheckCircle2,RefreshCw} from 'lucide-react';
+import {CalendarClock,PackagePlus,Network,CheckCircle2,RefreshCw,Settings,Wallet,Users,Server,ArrowLeft,KeyRound} from 'lucide-react';
 import Link from 'next/link';
 import ProjectButton from './ui/project-button';
 import ProjectDialog from './ui/project-dialog';
@@ -9,11 +9,13 @@ import FloatingNotice from './ui/floating-notice';
 import {ProjectCardIcon,ProjectInfoCard} from './ui/project-info-card';
 import {CollectionState} from './ui/collection-display';
 
+type PaymentSettings={currency:string;transferCode:string};
+type UpgradePayment=PaymentSettings&{amount:string};
 type Change={
  tenantId:number;networkName:string;kind:'renewal'|'upgrade';status:'requested'|'applying'|'applied';
  requestedAt:string;expiresAt:string;planName:string;durationMonths:number|null;includeRenewal?:boolean;
  currentPppoeLimit?:number;currentNasLimit?:number;requestedPppoeLimit?:number|null;requestedNasLimit?:number|null;
- applied?:{expiresAt:string;maxSubscribers:number;maxNas:number};
+ applied?:{upgradePayment?:UpgradePayment|null;expiresAt:string;maxSubscribers:number;maxNas:number};
 };
 const endpoint='/api/billing/admin/subscription-changes';
 const name=(item:Change)=>item.kind==='renewal'?'تجديد الاشتراك':item.includeRenewal?'ترقية السعة مع التجديد':'ترقية السعة';
@@ -22,22 +24,38 @@ const format=(value:string)=>new Intl.DateTimeFormat('ar',{dateStyle:'medium',ti
 export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'upgrade'}){
  const [items,setItems]=useState<Change[]>([]),[loading,setLoading]=useState(true),[revision,setRevision]=useState(0);
  const [status,setStatus]=useState<'open'|'applied'|'all'>('open'),[selected,setSelected]=useState<Change|null>(null);
+ const [paymentSettings,setPaymentSettings]=useState<PaymentSettings>({currency:'',transferCode:''});
+ const [draft,setDraft]=useState<PaymentSettings|null>(null);
+ const [amount,setAmount]=useState('');
  const [months,setMonths]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  useEffect(()=>{
   const controller=new AbortController();setLoading(true);
   fetch(endpoint,{credentials:'include',cache:'no-store',signal:controller.signal})
-   .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.message);if(!controller.signal.aborted)setItems(data.items??[]);})
+   .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.message);if(!controller.signal.aborted){setItems(data.items??[]);setPaymentSettings(data.paymentSettings??{currency:'',transferCode:''});}})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message||'تعذر تحميل الطلبات.');})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return ()=>controller.abort();
  },[revision]);
  const filtered=items.filter(item=>(kind==='all'||item.kind===kind)&&(status==='all'||(status==='applied'?item.status==='applied':item.status!=='applied')));
  const needsMonths=selected?.status==='requested'&&(selected.kind==='renewal'||selected.includeRenewal);
+ const needsAmount=selected?.kind==='upgrade'&&selected.status==='requested';
+ const validAmount=/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/.test(amount);
+ const missingTransfer=Number(amount)>0&&(!paymentSettings.currency||!paymentSettings.transferCode);
+ async function saveSettings(){
+  if(!draft||busy)return;
+  setBusy(true);setError('');
+  try{
+   const response=await fetch(endpoint+'/payment-settings',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(draft)});
+   const data=await response.json();if(!response.ok)throw Error(data.message);
+   setPaymentSettings(data.paymentSettings);setDraft(null);setMessage('تم حفظ إعدادات تحويل الترقية.');
+  }catch(e){setError(e instanceof Error?e.message:'تعذر حفظ إعدادات التحويل.');}
+  finally{setBusy(false);}
+ }
  async function apply(){
   if(!selected||busy)return;
   setBusy(true);setError('');
   try{
-   const response=await fetch(`${endpoint}/${selected.tenantId}/${selected.kind}/apply`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestedAt:selected.requestedAt,months:months?Number(months):null})});
+   const response=await fetch(`${endpoint}/${selected.tenantId}/${selected.kind}/apply`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestedAt:selected.requestedAt,months:months?Number(months):null,upgradeAmount:amount})});
    const data=await response.json();if(!response.ok)throw Error(data.message);
    setMessage('تم تطبيق الطلب على قاعدة العميل والتحقق من بيانات الاشتراك.');
   }catch(e){setError(e instanceof Error?e.message:'تعذر تطبيق الطلب.');}
@@ -48,6 +66,7 @@ export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'
    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={CalendarClock}/>طلبات التجديد والترقية</h2>
    <div className="flex flex-wrap gap-2">
     {([{key:'open',label:'بانتظار المعالجة'},{key:'applied',label:'مطبّقة'},{key:'all',label:'الكل'}] as const).map(option=><ProjectButton key={option.key} variant={status===option.key?'primary':'secondary'} aria-pressed={status===option.key} onClick={()=>setStatus(option.key)}>{option.label}</ProjectButton>)}
+    <ProjectButton variant="secondary" disabled={busy||loading} onClick={()=>setDraft({...paymentSettings})}><Settings/>إعدادات تحويل الترقية</ProjectButton>
     <ProjectButton variant="ghost" size="icon" aria-label="تحديث الطلبات" disabled={loading} onClick={()=>setRevision(value=>value+1)}><RefreshCw/></ProjectButton>
    </div>
   </div>
@@ -56,12 +75,14 @@ export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'
     <h3 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={item.kind==='renewal'?CalendarClock:PackagePlus}/>{name(item)}</h3>
     <p className="mt-3 break-words text-sm">{item.networkName} · {item.planName}</p>
     <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{item.status==='applied'?'تم التطبيق':item.status==='applying'?'بانتظار استكمال التطبيق':'بانتظار الاعتماد'} · <bdi>{format(item.requestedAt)}</bdi></p>
-    <ProjectButton className="mt-4" variant="secondary" onClick={()=>{setMonths(item.durationMonths?String(item.durationMonths):'');setSelected(item);}}>عرض الطلب</ProjectButton>
+    {item.kind==='upgrade'&&<UpgradeLimits item={item}/>}
+    {item.applied?.upgradePayment&&<p className="mt-3 flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Wallet} tone="success"/>قيمة الترقية <bdi>{item.applied.upgradePayment.amount} {item.applied.upgradePayment.currency}</bdi></p>}
+    <ProjectButton className="mt-4" variant="secondary" onClick={()=>{setAmount('');setMonths(item.durationMonths?String(item.durationMonths):'');setSelected(item);}}>عرض الطلب</ProjectButton>
    </ProjectInfoCard>)}
   </div>}
   {selected&&<ProjectDialog title={name(selected)} description={selected.networkName} onClose={()=>setSelected(null)} busy={busy} hostingerStyle compact footer={<>
    <ProjectButton variant="secondary" disabled={busy} onClick={()=>setSelected(null)}>إغلاق</ProjectButton>
-   {selected.status!=='applied'&&<ProjectButton disabled={busy||Boolean(needsMonths&&(!/^[0-9]+$/.test(months)||Number(months)<1||Number(months)>120))} onClick={()=>void apply()}><CheckCircle2/>{busy?'جارٍ التطبيق…':selected.status==='applying'?'استكمال التطبيق':'اعتماد وتطبيق الطلب'}</ProjectButton>}
+   {selected.status!=='applied'&&<ProjectButton disabled={busy||Boolean(needsAmount&&(!validAmount||missingTransfer))||Boolean(needsMonths&&(!/^[0-9]+$/.test(months)||Number(months)<1||Number(months)>120))} onClick={()=>void apply()}><CheckCircle2/>{busy?'جارٍ التطبيق…':selected.status==='applying'?'استكمال التطبيق':'اعتماد وتطبيق الطلب'}</ProjectButton>}
   </>}>
    <div className="space-y-4 text-sm">
     <Link className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-300" href={`/Dashboard/networks/${selected.tenantId}`}><Network className="h-4 w-4"/>فتح بيانات الشبكة</Link>
@@ -69,11 +90,40 @@ export default function MasterSubscriptionChanges({kind}:{kind:'all'|'renewal'|'
      {selected.requestedPppoeLimit!=null&&<p className="mt-2">حسابات PPPoE من {selected.currentPppoeLimit} إلى {selected.requestedPppoeLimit}</p>}
      {selected.requestedNasLimit!=null&&<p className="mt-2">أجهزة NAS من {selected.currentNasLimit} إلى {selected.requestedNasLimit}</p>}
     </ProjectInfoCard>
+    {needsAmount&&<ProjectInfoCard>
+     <label className="block space-y-2"><span className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Wallet}/>قيمة الترقية {paymentSettings.currency&&<bdi>{paymentSettings.currency}</bdi>}</span>
+      <ProjectInput inputMode="decimal" dir="ltr" maxLength={13} value={amount} disabled={busy} placeholder="0.00" onChange={e=>{if(/^[0-9]*(?:\.[0-9]{0,2})?$/.test(e.target.value))setAmount(e.target.value);}}/>
+     </label>
+     <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">أدخل صفرًا للترقية المجانية.</p>
+     {missingTransfer&&<ProjectButton className="mt-2" variant="secondary" onClick={()=>{setSelected(null);setDraft({...paymentSettings});}}><Settings/>اضبط العملة ورمز التحويل</ProjectButton>}
+    </ProjectInfoCard>}
     {needsMonths&&<label className="block space-y-2"><span>مدة التمديد بالأشهر</span><ProjectInput inputMode="numeric" maxLength={3} value={months} disabled={busy} onChange={e=>{if(/^[0-9]*$/.test(e.target.value))setMonths(e.target.value);}}/><span className="block text-xs text-slate-600 dark:text-slate-300">تبدأ المدة من انتهاء الاشتراك الساري أو من وقت اعتماد الاشتراك المنتهي.</span></label>}
     {selected.applied&&<ProjectInfoCard tone="success"><p>موعد الانتهاء بعد التطبيق <bdi>{format(selected.applied.expiresAt)}</bdi></p><p className="mt-2">حد PPPoE {selected.applied.maxSubscribers||'غير محدود'} · حد NAS {selected.applied.maxNas||'غير محدود'}</p></ProjectInfoCard>}
     {selected.status!=='applied'&&<p className="text-xs leading-6 text-slate-600 dark:text-slate-300">يطبّق الاعتماد التغيير مباشرة على قاعدة العميل. تأكيد أي دفعة يتم من شاشة عمليات الدفع.</p>}
    </div>
   </ProjectDialog>}
+  {draft&&<ProjectDialog title="إعدادات تحويل الترقية" description="تظهر العملة ورمز التحويل للعميل مع قيمة الترقية بعد تطبيقها." onClose={()=>setDraft(null)} busy={busy} hostingerStyle compact footer={<>
+   <ProjectButton variant="secondary" disabled={busy} onClick={()=>setDraft(null)}>إلغاء</ProjectButton>
+   <ProjectButton disabled={busy||!draft.transferCode.trim()||!/^[A-Z]{3}$/.test(draft.currency)} onClick={()=>void saveSettings()}><CheckCircle2/>حفظ الإعدادات</ProjectButton>
+  </>}>
+   <div className="space-y-4">
+    <label className="block space-y-2"><span className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={Wallet}/>رمز العملة</span><ProjectInput dir="ltr" maxLength={3} placeholder="USD" value={draft.currency} disabled={busy} onChange={e=>setDraft({...draft,currency:e.target.value.toUpperCase()})}/></label>
+    <label className="block space-y-2"><span className="flex items-center gap-2 text-sm"><ProjectCardIcon icon={KeyRound}/>رمز التحويل</span><ProjectInput dir="ltr" maxLength={100} value={draft.transferCode} disabled={busy} onChange={e=>setDraft({...draft,transferCode:e.target.value})}/></label>
+   </div>
+  </ProjectDialog>}
   <FloatingNotice error={error} message={message} onDismiss={()=>{setError('');setMessage('');}}/>
  </section>;
+}
+
+function UpgradeLimits({item}:{item:Change}){
+ const limits=[
+  {label:'حسابات PPPoE',current:item.currentPppoeLimit,target:item.requestedPppoeLimit,icon:Users},
+  {label:'أجهزة NAS',current:item.currentNasLimit,target:item.requestedNasLimit,icon:Server},
+ ].filter(limit=>limit.target!=null);
+ return <dl className="mt-3 space-y-2 border-t border-current/10 pt-3">
+  {limits.map(limit=><div key={limit.label} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+   <dt className="flex items-center gap-2"><ProjectCardIcon icon={limit.icon}/>{limit.label}</dt>
+   <dd className="flex items-center gap-2 tabular-nums"><span>الحالي {limit.current??'—'}</span><ArrowLeft className="h-3.5 w-3.5 text-blue-500" aria-hidden="true"/><strong>المطلوب {limit.target}</strong></dd>
+  </div>)}
+ </dl>;
 }

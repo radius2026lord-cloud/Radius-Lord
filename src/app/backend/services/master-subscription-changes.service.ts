@@ -1,8 +1,24 @@
+import {readPrivateSetting,savePrivateSetting} from './radius-provision.service';
 import {db} from '../config/db';
 import {networkScope,validateLocalLicense,withNetwork} from './network-runtime.service';
 import {writeLocalLicense} from './environment-bootstrap.service';
 import {readNetworkOvpn,reserveNetworkNasCapacity} from './network-ovpn.service';
 import {validLimits} from './subscription-environment.service';
+
+const paymentGroup='subscription_upgrade_payment';
+export async function readUpgradePaymentSettings(){
+ const saved=await readPrivateSetting(paymentGroup,'settings');
+ return {currency:String(saved?.currency||''),transferCode:String(saved?.transferCode||'')};
+}
+export async function saveUpgradePaymentSettings(input:unknown){
+ const value=input as {currency?:unknown;transferCode?:unknown}|null;
+ const currency=String(value?.currency??'').trim().toUpperCase();
+ const transferCode=String(value?.transferCode??'').trim();
+ if(!/^[A-Z]{3}$/.test(currency)||!transferCode||transferCode.length>100||/[\x00-\x1f\x7f]/.test(transferCode))throw Error('UPGRADE_PAYMENT_SETTINGS');
+ const settings={currency,transferCode};
+ await savePrivateSetting(paymentGroup,'settings',settings);
+ return settings;
+}
 
 const groups={renewal:'subscription_renewal_requests',upgrade:'subscription_upgrade_requests'} as const;
 type Kind=keyof typeof groups;
@@ -28,7 +44,7 @@ function extendMonths(base:Date,months:number){
  return result.toISOString();
 }
 
-export async function applySubscriptionChange(tenantId:number,kind:Kind,requestedAt:string,months:number,adminId:number){
+export async function applySubscriptionChange(tenantId:number,kind:Kind,requestedAt:string,months:number,adminId:number,upgradeAmount:unknown){
  if(!Number.isSafeInteger(tenantId)||tenantId<1||!Object.prototype.hasOwnProperty.call(groups,kind)||!requestedAt)throw Error('CHANGE_INPUT');
  const connection=await db.pool.getConnection(),locks:string[]=[];
  const key='tenant_'+tenantId,group=groups[kind];
@@ -68,13 +84,24 @@ export async function applySubscriptionChange(tenantId:number,kind:Kind,requeste
     if(requestedPppoe!==null&&(maxSubscribers===0||requestedPppoe<=maxSubscribers)||requestedNas!==null&&(nasTotal===0||requestedNas<=nasTotal))throw Error('CHANGE_STALE');
     const oldEnd=Date.parse(license.canonicalExpiresAt),now=Date.now();
     if(!renew&&(oldEnd<=now||license.subscription_status==='expired'))throw Error('CHANGE_RENEW_FIRST');
+    let upgradePayment=null;
+    if(kind==='upgrade'){
+     if(typeof upgradeAmount!=='string'||!/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/.test(upgradeAmount))throw Error('UPGRADE_AMOUNT_INPUT');
+     const [whole,fraction='']=upgradeAmount.split('.');
+     const amount=whole+'.'+fraction.padEnd(2,'0');
+     if(Number(amount)>0){
+      const settings=await readUpgradePaymentSettings();
+      if(!settings.currency||!settings.transferCode)throw Error('UPGRADE_PAYMENT_SETTINGS');
+      upgradePayment={amount,...settings};
+     }
+    }
     target={
      version:Number(license.sync_version),planName:license.plan_name_snapshot,
      duration:renew?months:Number(license.duration_months_snapshot),
      startsAt:renew&&oldEnd<=now?new Date(Math.floor(now/1000)*1000).toISOString():license.canonicalStartsAt,
      expiresAt:renew?extendMonths(new Date(Math.max(oldEnd,Math.floor(now/1000)*1000)),months):license.canonicalExpiresAt,
      maxSubscribers:requestedPppoe??maxSubscribers,maxNas:requestedNas===null?maxNas:requestedNas-additionalNas,additionalNas,
-     reserveNas:requestedNas!==null,
+     reserveNas:requestedNas!==null,upgradePayment,
     };
     // Persist the exact target before writing the tenant so retries cannot extend twice.
     await save({...request,status:'applying',target,approvedBy:adminId});
@@ -99,12 +126,15 @@ export async function applySubscriptionChange(tenantId:number,kind:Kind,requeste
     await app.commit();
    }catch(error){await app.rollback();throw error;}
   });
-  const applied={renewed:renew,upgraded:kind==='upgrade',expiresAt:target.expiresAt,maxSubscribers:target.maxSubscribers,maxNas:target.maxNas===0?0:target.maxNas+target.additionalNas,appliedAt:new Date().toISOString()};
+  const applied={upgradePayment:target.upgradePayment??null,renewed:renew,upgraded:kind==='upgrade',expiresAt:target.expiresAt,maxSubscribers:target.maxSubscribers,maxNas:target.maxNas===0?0:target.maxNas+target.additionalNas,appliedAt:new Date().toISOString()};
   await connection.beginTransaction();
   try{
    await connection.query("UPDATE subscriptions SET status='active',starts_at=?,expires_at=?,duration_months_snapshot=?,plan_limits_snapshot=? WHERE id=? AND tenant_id=?",[new Date(target.startsAt),new Date(target.expiresAt),target.duration,JSON.stringify({...limits,maxSubscribers:target.maxSubscribers,maxNas:target.maxNas}),scope.subscription_id,tenantId]);
    await connection.query("UPDATE subscription_licenses SET status='active' WHERE subscription_id=? AND tenant_id=?",[scope.subscription_id,tenantId]);
    await save({...request,status:'applied',target,approvedBy:request.approvedBy??adminId,applied});
+   if(applied.upgradePayment){
+    await connection.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public) VALUES ('subscription_upgrade_receipts',?,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",[key,JSON.stringify({appliedAt:applied.appliedAt,...applied.upgradePayment})]);
+   }
    if(kind==='upgrade'&&renew){
     const renewal=parse(rows.find((row:any)=>row.setting_group===groups.renewal)?.setting_value);
     if(renewal?.status==='requested'&&renewal.expiresAt===request.expiresAt&&Number(renewal.subscriptionId)===Number(scope.subscription_id)){
