@@ -125,6 +125,9 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
   await central.query("UPDATE subscription_licenses SET status='active' WHERE tenant_id=? AND subscription_id=?",[job.tenant_id,job.subscription_id]);
   await central.query("UPDATE tenants SET status='active' WHERE id=?",[job.tenant_id]);
   await central.query("UPDATE tenant_environments SET status='ready',ready_at=NOW(),system_url=? WHERE id=? AND tenant_id=?",[url,job.environment_id,job.tenant_id]);
+  if(hosting.mode==='local_ip'){
+   await central.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public) VALUES ('network_quick_setup',?,'1','json',0) ON DUPLICATE KEY UPDATE setting_key=VALUES(setting_key)",[key]);
+  }
   await central.query("UPDATE tenant_environment_status SET database_status='healthy',radius_status='healthy',reported_at=NOW(),last_seen_at=NOW() WHERE environment_id=?",[job.environment_id]);
   await central.query("UPDATE subscription_addons SET status='active' WHERE subscription_id=? AND tenant_id=? AND status='pending'",[job.subscription_id,job.tenant_id]);
   await central.query("UPDATE environment_provisioning_jobs SET status='success',current_step='environment_activation',finished_at=NOW(),error_code=NULL,error_message=NULL WHERE id=?",[job.id]);

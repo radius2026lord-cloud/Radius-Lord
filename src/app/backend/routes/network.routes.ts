@@ -309,11 +309,37 @@ router.post('/:slug/logout',async(req,res)=>{try{const token:any=jwt.verify(cook
 router.get('/:slug/platform-subscription',async(req,res)=>{try{return res.json(await readPlatformSubscription(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:503).json({message:'تعذر تحميل معلومات الاشتراك. تحقق من الاتصال وتوقيت الشبكة ثم أعد المحاولة.'});}});
 router.post('/:slug/platform-subscription/upgrade-request',async(req,res)=>{try{return res.json(await requestPlatformUpgrade(await principal(req,true),req.body));}catch(e){const code=(e as Error).message;const messages:Record<string,string>={UPGRADE_REQUEST_INPUT:'حدد نوع الزيادة وأدخل حدودًا صحيحة.',UPGRADE_REQUEST_LIMIT:'الحد المطلوب يجب أن يكون أكبر من الحد الحالي؛ السعة غير المحدودة لا تحتاج إلى زيادة.',UPGRADE_REQUEST_PENDING:'لديك طلب ترقية قيد المراجعة؛ تواصل مع الإدارة لمتابعته.',UPGRADE_REQUEST_BUSY:'يجري تسجيل طلب آخر؛ أعد المحاولة بعد قليل.',UPGRADE_RENEWAL_NOT_DUE:'يتاح إرفاق التجديد عند اقتراب انتهاء الاشتراك.'};return res.status(code==='NETWORK_AUTH'?403:code==='UPGRADE_REQUEST_INPUT'||code==='UPGRADE_REQUEST_LIMIT'?422:409).json({message:messages[code]||'تعذر تسجيل طلب الترقية.'});}});
 router.post('/:slug/platform-subscription/renewal-request',async(req,res)=>{try{return res.json(await requestPlatformRenewal(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:409).json({message:(e as Error).message==='RENEWAL_NOT_DUE'?'يتاح طلب التجديد عند اقتراب انتهاء الاشتراك.':(e as Error).message==='RENEWAL_REQUEST_BUSY'?'يجري تسجيل طلب التجديد؛ أعد المحاولة بعد قليل.':'تعذر تسجيل طلب التجديد. أعد المحاولة.'});}});
+router.post('/:slug/quick-setup',async(req,res)=>{
+ try{
+  const scope=await principal(req);
+  const step=req.body?.step;
+  if(![1,2,3,4].includes(step))return res.status(422).json({message:'خطوة الإعداد غير صالحة.'});
+  const key='environment_'+scope.environment_id;
+  const current=await readPrivateSetting('network_quick_setup',key);
+  if(Number.isInteger(current)&&current>step)return res.json({quickSetupStep:current});
+  if(current!==step)return res.status(409).json({message:'تغيّرت مرحلة الإعداد. حدّث الصفحة.'});
+  if(step===1||step===2){
+   const ready=await withNetwork(scope,async connection=>{
+    const [rows]:any=await connection.query(step===1
+     ? "SELECT 1 FROM network_settings WHERE id=1 AND TRIM(network_name)<>'' AND timezone IS NOT NULL AND TRIM(timezone)<>'' AND TRIM(primary_contact_phone)<>''"
+     : 'SELECT 1 FROM customer_categories WHERE archived_at IS NULL LIMIT 1');
+    return Boolean(rows[0]);
+   });
+   if(!ready)return res.status(422).json({message:step===1?'احفظ اسم الشبكة ورقم التواصل والمنطقة الزمنية في إعدادات الشبكة أولًا.':'أضف تصنيفًا واحدًا على الأقل للمتابعة.'});
+  }
+  await db.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='network_quick_setup' AND setting_key=? AND setting_value=?",[JSON.stringify(step+1),key,JSON.stringify(step)]);
+  return res.json({quickSetupStep:await readPrivateSetting('network_quick_setup',key)});
+ }catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:'تعذر حفظ تقدم الإعداد. أعد المحاولة.'});}
+});
 router.get('/:slug/me',async(req,res)=>{
  try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('SCOPE');const scope=await networkScope(String(req.params.slug),false,true);if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('SCOPE');
  if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub)))throw new Error('NETWORK_AUTH');
  const mustChangeCredentials=await credentialsRequired(scope);
- const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope,false,true);const [rows]:any=await connection.query("SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL))",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');const access=await managerAccess(connection,Number(rows[0].id),token.authVersion);const [networkSettingsRows]:any=await connection.query('SELECT network_name,timezone FROM network_settings WHERE id=1');const networkSettings=networkSettingsRows[0];return {mustChangeCredentials,manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type,account_role:access.role,permissions:access.permissions},networkName:networkSettings?.network_name||scope.name,subscription:await subscriptionPresentation(scope,license,networkSettings?.timezone),license:license.license_number,expiresAt:license.canonicalExpiresAt,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.canonicalStartsAt,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});return res.json(result);
+ const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope,false,true);const [rows]:any=await connection.query("SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL))",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');const access=await managerAccess(connection,Number(rows[0].id),token.authVersion);const [networkSettingsRows]:any=await connection.query('SELECT network_name,timezone FROM network_settings WHERE id=1');const networkSettings=networkSettingsRows[0];return {mustChangeCredentials,manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type,account_role:access.role,permissions:access.permissions},networkName:networkSettings?.network_name||scope.name,subscription:await subscriptionPresentation(scope,license,networkSettings?.timezone),license:license.license_number,expiresAt:license.canonicalExpiresAt,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.canonicalStartsAt,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});
+ const quickSetupStep=result.manager.manager_type==='principal'&&scope.subscription_status==='active'
+  ? await readPrivateSetting('network_quick_setup','environment_'+scope.environment_id)
+  : null;
+ return res.json({...result,quickSetupStep:[1,2,3,4].includes(quickSetupStep)?quickSetupStep:null});
  }catch{return res.status(401).json({message:'انتهت الجلسة أو البيئة غير متاحة.'});}
 });
 // Worker-only HTTP proof: this exercises the same network scope, DB and password verification as login.
