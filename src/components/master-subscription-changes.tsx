@@ -4,13 +4,15 @@ import {CalendarClock,PackagePlus,Network,CheckCircle2,RefreshCw,Wallet,Users,Se
 import Link from 'next/link';
 import ProjectButton from './ui/project-button';
 import ProjectDialog from './ui/project-dialog';
+import {CURRENCY_OPTIONS} from '@/lib/currencies';
+import ProjectDropdown from './ui/project-dropdown';
 import ProjectInput from './ui/project-input';
 import FloatingNotice from './ui/floating-notice';
 import {ProjectCardIcon,ProjectInfoCard} from './ui/project-info-card';
 import {CollectionState} from './ui/collection-display';
 
-type PaymentSettings={currency:string;transferCode:string};
-type UpgradePayment=PaymentSettings&{amount:string};
+type TransferMethod={name:string;transferCode:string};
+type UpgradePayment={amount:string;currency:string;transferCode:string;methodName?:string};
 type Change={
  tenantId:number;networkName:string;kind:'renewal'|'upgrade';status:'requested'|'applying'|'applied';
  requestedAt:string;expiresAt:string;planName:string;durationMonths:number|null;includeRenewal?:boolean;
@@ -24,13 +26,14 @@ const format=(value:string)=>new Intl.DateTimeFormat('ar',{dateStyle:'medium',ti
 export default function MasterSubscriptionChanges({kind,status}:{kind:'all'|'renewal'|'upgrade';status:'open'|'applied'|'all'}){
  const [items,setItems]=useState<Change[]>([]),[loading,setLoading]=useState(true),[revision,setRevision]=useState(0);
  const [selected,setSelected]=useState<Change|null>(null);
- const [paymentSettings,setPaymentSettings]=useState<PaymentSettings>({currency:'',transferCode:''});
+ const [methods,setMethods]=useState<TransferMethod[]>([]);
+ const [currency,setCurrency]=useState(''),[methodName,setMethodName]=useState('');
  const [amount,setAmount]=useState('');
  const [months,setMonths]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  useEffect(()=>{
   const controller=new AbortController();setLoading(true);
   fetch(endpoint,{credentials:'include',cache:'no-store',signal:controller.signal})
-   .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.message);if(!controller.signal.aborted){setItems(data.items??[]);setPaymentSettings(data.paymentSettings??{currency:'',transferCode:''});}})
+   .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.message);if(!controller.signal.aborted){setItems(data.items??[]);setMethods(data.paymentSettings?.methods??[]);}})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message||'تعذر تحميل الطلبات.');})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return ()=>controller.abort();
@@ -39,12 +42,13 @@ export default function MasterSubscriptionChanges({kind,status}:{kind:'all'|'ren
  const needsMonths=selected?.status==='requested'&&(selected.kind==='renewal'||selected.includeRenewal);
  const needsAmount=selected?.kind==='upgrade'&&selected.status==='requested';
  const validAmount=/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/.test(amount);
- const missingTransfer=Number(amount)>0&&(!paymentSettings.currency||!paymentSettings.transferCode);
+ const method=methods.find(item=>item.name===methodName);
+ const missingTransfer=Number(amount)>0&&(!currency||!method);
  async function apply(){
   if(!selected||busy)return;
   setBusy(true);setError('');
   try{
-   const response=await fetch(`${endpoint}/${selected.tenantId}/${selected.kind}/apply`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestedAt:selected.requestedAt,months:months?Number(months):null,upgradeAmount:amount})});
+   const response=await fetch(`${endpoint}/${selected.tenantId}/${selected.kind}/apply`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestedAt:selected.requestedAt,months:months?Number(months):null,upgradeAmount:amount,upgradeCurrency:currency,transferMethod:method?.name,transferCode:method?.transferCode})});
    const data=await response.json();if(!response.ok)throw Error(data.message);
    setMessage('تم تطبيق الطلب على قاعدة العميل والتحقق من بيانات الاشتراك.');
   }catch(e){setError(e instanceof Error?e.message:'تعذر تطبيق الطلب.');}
@@ -64,7 +68,7 @@ export default function MasterSubscriptionChanges({kind,status}:{kind:'all'|'ren
     <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{item.status==='applied'?'تم التطبيق':item.status==='applying'?'بانتظار استكمال التطبيق':'بانتظار الاعتماد'} · <bdi>{format(item.requestedAt)}</bdi></p>
     {item.kind==='upgrade'&&<UpgradeLimits item={item}/>}
     {item.applied?.upgradePayment&&<p className="mt-3 flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Wallet} tone="success"/>قيمة الترقية <bdi>{item.applied.upgradePayment.amount} {item.applied.upgradePayment.currency}</bdi></p>}
-    <ProjectButton className="mt-4" variant="secondary" onClick={()=>{setAmount('');setMonths(item.durationMonths?String(item.durationMonths):'');setSelected(item);}}>عرض الطلب</ProjectButton>
+    <ProjectButton className="mt-4" variant="secondary" onClick={()=>{setAmount('');setCurrency('');setMethodName(methods.length===1?methods[0].name:'');setMonths(item.durationMonths?String(item.durationMonths):'');setSelected(item);}}>عرض الطلب</ProjectButton>
    </ProjectInfoCard>)}
   </div>}
   {selected&&<ProjectDialog title={name(selected)} description={selected.networkName} onClose={()=>setSelected(null)} busy={busy} hostingerStyle compact footer={<>
@@ -78,11 +82,19 @@ export default function MasterSubscriptionChanges({kind,status}:{kind:'all'|'ren
      {selected.requestedNasLimit!=null&&<p className="mt-2">أجهزة NAS من {selected.currentNasLimit} إلى {selected.requestedNasLimit}</p>}
     </ProjectInfoCard>
     {needsAmount&&<ProjectInfoCard>
-     <label className="block space-y-2"><span className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Wallet}/>قيمة الترقية {paymentSettings.currency&&<bdi>{paymentSettings.currency}</bdi>}</span>
+     <label className="block space-y-2"><span className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Wallet}/>قيمة الترقية</span>
       <ProjectInput inputMode="decimal" dir="ltr" maxLength={13} value={amount} disabled={busy} placeholder="0.00" onChange={e=>{if(/^[0-9]*(?:\.[0-9]{0,2})?$/.test(e.target.value))setAmount(e.target.value);}}/>
      </label>
      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">أدخل صفرًا للترقية المجانية.</p>
-     {missingTransfer&&<p className="mt-2 text-xs text-amber-700 dark:text-amber-300">اضبط العملة ورمز التحويل من الإعدادات ← طرق الدفع.</p>}
+     {Number(amount)>0&&<div className="mt-4 grid items-start gap-4 sm:grid-cols-2">
+      <div className="min-w-0 space-y-2"><p className="text-xs font-semibold">العملة</p>
+       <ProjectDropdown fieldStyle searchable bareOptionIcons disabled={busy} icon={Wallet} value={currency} onChange={setCurrency} placeholder="اختر العملة" options={CURRENCY_OPTIONS}/>
+      </div>
+      <div className="min-w-0 space-y-2"><p className="text-xs font-semibold">طريقة التحويل</p>
+       <ProjectDropdown fieldStyle bareOptionIcons disabled={busy} icon={Wallet} value={methodName} onChange={setMethodName} placeholder="اختر طريقة التحويل" options={methods.map(item=>({value:item.name,label:item.name}))}/>
+      </div>
+     </div>}
+     {Number(amount)>0&&methods.length===0&&<p className="mt-2 text-xs text-amber-700 dark:text-amber-300">أضف طريقة تحويل من الإعدادات ← طرق الدفع.</p>}
     </ProjectInfoCard>}
     {needsMonths&&<label className="block space-y-2"><span>مدة التمديد بالأشهر</span><ProjectInput inputMode="numeric" maxLength={3} value={months} disabled={busy} onChange={e=>{if(/^[0-9]*$/.test(e.target.value))setMonths(e.target.value);}}/><span className="block text-xs text-slate-600 dark:text-slate-300">تبدأ المدة من انتهاء الاشتراك الساري أو من وقت اعتماد الاشتراك المنتهي.</span></label>}
     {selected.applied&&<ProjectInfoCard tone="success"><p>موعد الانتهاء بعد التطبيق <bdi>{format(selected.applied.expiresAt)}</bdi></p><p className="mt-2">حد PPPoE {selected.applied.maxSubscribers||'غير محدود'} · حد NAS {selected.applied.maxNas||'غير محدود'}</p></ProjectInfoCard>}

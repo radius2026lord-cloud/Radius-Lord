@@ -11,7 +11,7 @@ import FloatingNotice from './ui/floating-notice';
 import {useClock24h} from './ui/project-clock-provider';
 export type SubscriptionMeta={restricted?:boolean;tenantId:number;subscriptionId:number;timezone:string;startsAt:string|null;expiresAt:string|null;serverNow:string;reminderDays:number;reminder:'soon'|'expired'|null;contact:{whatsapp:string|null;email:string|null;phone:string|null}};
 type Capacity={used:number;limit:number;available:number|null;overLimit:boolean};
-type UpgradePayment={amount:string;currency:string;transferCode:string};
+type UpgradePayment={amount:string;currency:string;transferCode:string;methodName?:string};
 type Details=SubscriptionMeta&{upgradeReceipt?:UpgradePayment&{appliedAt:string};recentChange?:{appliedAt:string;renewed:boolean;upgraded:boolean;upgradePayment?:UpgradePayment|null};planName:string;license:string;status:string;durationMonths:number;syncVersion:number;upgradeRequest:UpgradeRequest|null;pppoe:Capacity;nas:Capacity;hotspotAccounts:number;renewalRequest:{status:string;requestedAt:string}|null};
 export function useSubscriptionNow(serverNow?:string){
  const anchor=useRef({server:0,local:0});const [now,setNow]=useState<number|null>(null);
@@ -36,7 +36,7 @@ export default function NetworkPlatformSubscription({endpoint,networkName}:{endp
   try{if(localStorage.getItem(key))return;localStorage.setItem(key,'seen');}catch{}
   if(change.upgradePayment){
    const payment=change.upgradePayment;
-   setMessage(`تمت ترقية سعة خطتك. قيمة الترقية ${payment.amount} ${payment.currency}، ورمز التحويل ${payment.transferCode}.`);
+   setMessage(`تمت ترقية سعة خطتك. قيمة الترقية ${payment.amount} ${payment.currency}، ورمز التحويل ${payment.transferCode}${payment.methodName?` عبر ${payment.methodName}`:''}.`);
    return;
   }
   setMessage(change.renewed&&change.upgraded?'تم تجديد اشتراكك وترقية سعة خطتك.':change.renewed?'تم تجديد اشتراكك. يظهر موعد الانتهاء الجديد في بيانات الاشتراك.':'تمت ترقية سعة خطتك. تظهر الحدود الجديدة في بطاقة استخدام السعة.');
@@ -94,7 +94,7 @@ export default function NetworkPlatformSubscription({endpoint,networkName}:{endp
   <h3 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={CheckCircle2} tone="success"/>بيانات تحويل آخر ترقية بقيمة مالية</h3>
   <dl className="mt-4 grid min-w-0 gap-4 text-sm sm:grid-cols-2">
    <div className="min-w-0"><dt className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><ProjectCardIcon icon={Wallet} tone="success"/>قيمة الترقية</dt><dd className="mt-2 font-semibold"><bdi>{data.upgradeReceipt.amount} {data.upgradeReceipt.currency}</bdi></dd></div>
-   <div className="min-w-0"><dt className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><ProjectCardIcon icon={KeyRound} tone="success"/>رمز التحويل</dt><dd className="mt-2 select-text break-all font-mono"><bdi>{data.upgradeReceipt.transferCode}</bdi></dd></div>
+   <div className="min-w-0"><dt className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><ProjectCardIcon icon={KeyRound} tone="success"/>رمز التحويل {data.upgradeReceipt.methodName&&<bdi>· {data.upgradeReceipt.methodName}</bdi>}</dt><dd className="mt-2 select-text break-all font-mono"><bdi>{data.upgradeReceipt.transferCode}</bdi></dd></div>
   </dl>
   <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">تاريخ التطبيق <bdi>{format(data.upgradeReceipt.appliedAt)}</bdi></p>
  </ProjectInfoCard>}

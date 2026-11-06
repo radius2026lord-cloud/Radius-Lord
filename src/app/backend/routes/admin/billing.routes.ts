@@ -20,19 +20,20 @@ router.get('/admin/subscription-changes/payment-settings',authenticate,requireAc
 });
 router.put('/admin/subscription-changes/payment-settings',authenticate,requireAccountType('master_admin'),async(req,res)=>{
  try{return res.json({paymentSettings:await saveUpgradePaymentSettings(req.body)});}
- catch(error){if((error as Error).message==='UPGRADE_PAYMENT_SETTINGS')return res.status(400).json({message:'أدخل رمز عملة من ثلاثة أحرف ورمز تحويل صالحًا.'});return res.status(503).json({message:'تعذر حفظ إعدادات التحويل.'});}
+ catch(error){if((error as Error).message==='UPGRADE_PAYMENT_SETTINGS')return res.status(400).json({message:'أدخل اسمًا فريدًا ورمز تحويل لكل طريقة دفع. الحد الأقصى 30 طريقة.'});return res.status(503).json({message:'تعذر حفظ إعدادات التحويل.'});}
 });
 router.post('/admin/subscription-changes/:tenantId/:kind/apply',authenticate,requireAccountType('master_admin'),async(req,res)=>{
  const {kind}=req.params;
  if(kind!=='renewal'&&kind!=='upgrade')return res.status(400).json({message:'نوع الطلب غير صالح.'});
  try{
-  const result=await applySubscriptionChange(Number(req.params.tenantId),kind,String(req.body?.requestedAt??''),Number(req.body?.months),(req as import('../../middleware/auth.middleware').AuthenticatedRequest).auth!.accountId,req.body?.upgradeAmount);
+  const result=await applySubscriptionChange(Number(req.params.tenantId),kind,String(req.body?.requestedAt??''),Number(req.body?.months),(req as import('../../middleware/auth.middleware').AuthenticatedRequest).auth!.accountId,req.body?.upgradeAmount,req.body?.upgradeCurrency,req.body?.transferMethod,req.body?.transferCode);
   return res.json({result});
  }catch(error){
   const code=(error as Error).message;
   const messages:Record<string,string>={
    UPGRADE_AMOUNT_INPUT:'أدخل قيمة ترقية صحيحة، أو صفرًا للترقية المجانية.',
-   UPGRADE_PAYMENT_SETTINGS:'اضبط رمز التحويل والعملة من إعدادات تحويل الترقية.',
+   UPGRADE_CURRENCY_INPUT:'اختر عملة الترقية.',
+   UPGRADE_PAYMENT_SETTINGS:'طريقة التحويل غير متاحة أو تغيرت. حدّث الطلب واختر طريقة من القائمة.',
    CHANGE_INPUT:'اختر مدة تمديد من شهر إلى 120 شهرًا.',
    CHANGE_STALE:'تغير الطلب أو الرخصة. حدّث القائمة وراجع الطلب.',
    CHANGE_BUSY:'تجري معالجة عملية أخرى. أعد المحاولة بعد اكتمالها.',

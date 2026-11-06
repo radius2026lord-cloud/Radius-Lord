@@ -6,16 +6,25 @@ import {readNetworkOvpn,reserveNetworkNasCapacity} from './network-ovpn.service'
 import {validLimits} from './subscription-environment.service';
 
 const paymentGroup='subscription_upgrade_payment';
+type TransferMethod={name:string;transferCode:string};
+
 export async function readUpgradePaymentSettings(){
  const saved=await readPrivateSetting(paymentGroup,'settings');
- return {currency:String(saved?.currency||''),transferCode:String(saved?.transferCode||'')};
+ const methods:TransferMethod[]=Array.isArray(saved?.methods)?saved.methods:
+  saved?.transferCode?[{name:'تحويل',transferCode:String(saved.transferCode)}]:[];
+ return {methods};
 }
 export async function saveUpgradePaymentSettings(input:unknown){
- const value=input as {currency?:unknown;transferCode?:unknown}|null;
- const currency=String(value?.currency??'').trim().toUpperCase();
- const transferCode=String(value?.transferCode??'').trim();
- if(!/^[A-Z]{3}$/.test(currency)||!transferCode||transferCode.length>100||/[\x00-\x1f\x7f]/.test(transferCode))throw Error('UPGRADE_PAYMENT_SETTINGS');
- const settings={currency,transferCode};
+ const entries=(input as {methods?:unknown}|null)?.methods;
+ if(!Array.isArray(entries)||entries.length>30)throw Error('UPGRADE_PAYMENT_SETTINGS');
+ const methods:TransferMethod[]=entries.map(entry=>{
+  if(typeof entry?.name!=='string'||typeof entry?.transferCode!=='string')throw Error('UPGRADE_PAYMENT_SETTINGS');
+  const name=entry.name.trim(),transferCode=entry.transferCode.trim();
+  if(!name||name.length>80||!transferCode||transferCode.length>100||/[\x00-\x1f\x7f]/.test(name+transferCode))throw Error('UPGRADE_PAYMENT_SETTINGS');
+  return {name,transferCode};
+ });
+ if(new Set(methods.map(method=>method.name.toLowerCase())).size!==methods.length)throw Error('UPGRADE_PAYMENT_SETTINGS');
+ const settings={methods};
  await savePrivateSetting(paymentGroup,'settings',settings);
  return settings;
 }
@@ -44,7 +53,7 @@ function extendMonths(base:Date,months:number){
  return result.toISOString();
 }
 
-export async function applySubscriptionChange(tenantId:number,kind:Kind,requestedAt:string,months:number,adminId:number,upgradeAmount:unknown){
+export async function applySubscriptionChange(tenantId:number,kind:Kind,requestedAt:string,months:number,adminId:number,upgradeAmount:unknown,upgradeCurrency:unknown,transferMethod:unknown,transferCode:unknown){
  if(!Number.isSafeInteger(tenantId)||tenantId<1||!Object.prototype.hasOwnProperty.call(groups,kind)||!requestedAt)throw Error('CHANGE_INPUT');
  const connection=await db.pool.getConnection(),locks:string[]=[];
  const key='tenant_'+tenantId,group=groups[kind];
@@ -91,8 +100,10 @@ export async function applySubscriptionChange(tenantId:number,kind:Kind,requeste
      const amount=whole+'.'+fraction.padEnd(2,'0');
      if(Number(amount)>0){
       const settings=await readUpgradePaymentSettings();
-      if(!settings.currency||!settings.transferCode)throw Error('UPGRADE_PAYMENT_SETTINGS');
-      upgradePayment={amount,...settings};
+      if(typeof upgradeCurrency!=='string'||!/^[A-Z]{3}$/.test(upgradeCurrency))throw Error('UPGRADE_CURRENCY_INPUT');
+      const method=settings.methods.find(item=>item.name===transferMethod&&item.transferCode===transferCode);
+      if(!method)throw Error('UPGRADE_PAYMENT_SETTINGS');
+      upgradePayment={amount,currency:upgradeCurrency,methodName:method.name,transferCode:method.transferCode};
      }
     }
     target={
