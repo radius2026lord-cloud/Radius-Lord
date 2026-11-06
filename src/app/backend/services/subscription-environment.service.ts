@@ -79,6 +79,21 @@ export async function ensureCentralSubscription(conn: PoolConnection, req: Authe
   return {tenantId,subscriptionId,environmentId,licenseNumber:licenses[0].license_key};
 }
 
+// Call inside the transaction that owns the payment and its environment.
+export async function enqueueInitialEnvironment(
+  conn: PoolConnection,
+  central: {tenantId: number; environmentId: number; subscriptionId: number},
+  paymentOrderId: number,
+  adminId: number,
+) {
+  const key = `initial-environment:${central.environmentId}:${central.subscriptionId}`;
+  const [job]: any = await conn.query(
+    "INSERT INTO environment_provisioning_jobs (tenant_id,environment_id,subscription_id,payment_order_id,requested_by_master_admin_id,idempotency_key,status) VALUES (?,?,?,?,?,?,'queued')",
+    [central.tenantId,central.environmentId,central.subscriptionId,paymentOrderId,adminId,key],
+  );
+  return job.insertId;
+}
+
 export type EnvironmentSummary = {
   registered:boolean;canRequest:boolean;blockedReason:string|null;
   tenantId?:number;subscriptionId?:number;networkName?:string;licenseNumber?:string;licenseStatus?:string;

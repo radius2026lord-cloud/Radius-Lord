@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { db } from '../config/db';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { writeAuditLog } from '../services/audit.service';
-import { ensureCentralSubscription, readEnvironmentSummary, EnvironmentRequestError } from '../services/subscription-environment.service';
+import { enqueueInitialEnvironment, ensureCentralSubscription, readEnvironmentSummary, EnvironmentRequestError } from '../services/subscription-environment.service';
 
 export async function requestEnvironmentController(req: AuthenticatedRequest, res: Response) {
   const id=String(req.params.id ?? '');
@@ -39,8 +39,7 @@ export async function requestEnvironmentController(req: AuthenticatedRequest, re
     if (jobId) {
       await conn.query("UPDATE environment_provisioning_jobs SET status='queued',available_at=CURRENT_TIMESTAMP,lock_token=NULL,locked_until=NULL,finished_at=NULL,error_code=NULL,error_message=NULL WHERE id=?",[jobId]);
     } else {
-      const [job]:any=await conn.query("INSERT INTO environment_provisioning_jobs (tenant_id,environment_id,subscription_id,payment_order_id,requested_by_master_admin_id,idempotency_key,status) VALUES (?,?,?,?,?,?,'queued')",[central.tenantId,central.environmentId,central.subscriptionId,order.id,req.auth!.accountId,key]);
-      jobId=job.insertId;
+      jobId=await enqueueInitialEnvironment(conn,central,order.id,req.auth!.accountId);
     }
     await writeAuditLog(req,{actionCode:jobs[0]?'UPDATE':'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:jobs[0]?'إعادة طلب تجهيز البيئة بعد فشل المحاولة':'تسجيل طلب إنشاء البيئة بعد اعتماد الطلب',metadata:{eventType:jobs[0]?'environment_request_retried':'environment_requested',paymentOrderId:order.id,subscriptionId:central.subscriptionId,environmentId:central.environmentId,jobId}},conn);
     const environment=await readEnvironmentSummary((sql,params)=>conn!.query(sql,params),order);

@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { Response } from 'express';
 import { db } from '../config/db';
 import { writeAuditLog } from '../services/audit.service';
-import { ensureCentralSubscription, readEnvironmentSummary, EnvironmentRequestError } from '../services/subscription-environment.service';
+import { enqueueInitialEnvironment, ensureCentralSubscription, readEnvironmentSummary, EnvironmentRequestError, validLimits } from '../services/subscription-environment.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 const publicKeys=['contact_name','whatsapp_number','whatsapp_enabled','whatsapp_button_text','whatsapp_message_template','payment_instructions','support_email','support_phone_primary','support_phone_secondary'];
@@ -102,9 +102,16 @@ export async function confirmPaymentOrderController(req:AuthenticatedRequest,res
   await conn.query("UPDATE payment_orders SET status='paid',paid_at=CURRENT_TIMESTAMP,confirmed_by_master_admin_id=? WHERE id=?",[req.auth!.accountId,order.id]);
   await conn.query("INSERT INTO payment_order_events (payment_order_id,event_type,from_status,to_status,master_admin_id,metadata) VALUES (?,'confirmed_paid',?,'paid',?,?)",[order.id,order.status,req.auth!.accountId,JSON.stringify({customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code})]);
   await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'CUSTOMER',entityId:order.customer_id,tenantId:central.tenantId,description:`تأكيد استلام دفعة ${code} بقيمة ${order.total_amount} ${order.currency_code}`,metadata:{eventType:'payment_confirmed',tenantId:central.tenantId,subscriptionId:central.subscriptionId,paymentOrderId:order.id,paymentCode:code,customerId:order.customer_id,totalAmount:String(order.total_amount),currency:order.currency_code,fromStatus:order.status,toStatus:'paid'}},conn);
+  const [deployments]:any=await conn.query('SELECT code FROM deployment_types WHERE id=?',[order.deployment_type_id]);
+  let provisioningJobId:number|null=null;
+  if(deployments[0]?.code==='shared_cloud'&&validLimits(order.plan_limits_snapshot)){
+   // The worker checks infrastructure after commit. A readiness outage must not undo a received payment.
+   provisioningJobId=await enqueueInitialEnvironment(conn,central,order.id,req.auth!.accountId);
+   await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:provisioningJobId!,tenantId:central.tenantId,description:'جدولة تجهيز البيئة تلقائيًا بعد تأكيد الدفع',metadata:{eventType:'environment_queued_after_payment',paymentOrderId:order.id,subscriptionId:central.subscriptionId,environmentId:central.environmentId}},conn);
+  }
   const [confirmed]:any=await conn.query('SELECT paid_at FROM payment_orders WHERE id=?',[order.id]);
   await conn.commit();
-  return res.json({success:true,status:'paid',central,paidAt:confirmed[0].paid_at,message:'تم تأكيد استلام الدفعة وتسجيلها في سجل النشاط.'});
+  return res.json({success:true,status:'paid',central,provisioningJobId,paidAt:confirmed[0].paid_at,message:provisioningJobId?'تم تأكيد الدفعة وإدراج البيئة للتجهيز التلقائي.':'تم تأكيد استلام الدفعة وتسجيلها في سجل النشاط.'});
  } catch(error) {
   if(conn)await conn.rollback();
   if(error instanceof EnvironmentRequestError)return res.status(error.status).json({success:false,message:error.message});

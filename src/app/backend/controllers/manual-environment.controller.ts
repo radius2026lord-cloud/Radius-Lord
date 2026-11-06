@@ -5,7 +5,7 @@ import {db} from '../config/db';
 import type {AuthenticatedRequest} from '../middleware/auth.middleware';
 import {writeAuditLog} from '../services/audit.service';
 import {requireInfrastructureReady,InfrastructureNotReady} from '../services/infrastructure-health.service';
-import {ensureCentralSubscription,EnvironmentRequestError,validLimits} from '../services/subscription-environment.service';
+import {enqueueInitialEnvironment,ensureCentralSubscription,EnvironmentRequestError,validLimits} from '../services/subscription-environment.service';
 
 const planSql=`SELECT p.id,p.name,p.duration_months,p.max_tenants,p.max_subscribers,p.max_nas,c.code currency_code
  FROM payment_plans p LEFT JOIN currencies c ON c.id=p.currency_id
@@ -90,10 +90,8 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
   const order={id:result.insertId,customer_id:customerId,plan_id:planId,deployment_type_id:deployment[0].id,payment_purpose:'initial_subscription',duration_months_snapshot:duration,plan_limits_snapshot:limits,addons_snapshot:[],currency_code:currency};
   const central=await ensureCentralSubscription(conn,req,order);
   await conn.query('UPDATE tenants SET name=? WHERE id=?',[networkName,central.tenantId]);
-  const [job]:any=await conn.query(`INSERT INTO environment_provisioning_jobs
-   (tenant_id,environment_id,subscription_id,payment_order_id,requested_by_master_admin_id,idempotency_key,status)
-   VALUES (?,?,?,?,?,?,'queued')`,[central.tenantId,central.environmentId,central.subscriptionId,order.id,req.auth!.accountId,`initial-environment:${central.environmentId}:${central.subscriptionId}`]);
-  await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:job.insertId,tenantId:central.tenantId,description:'اعتماد إداري لتجهيز بيئة دون تسجيل دفعة',metadata:{eventType:'manual_environment_requested',customerId,subscriptionId:central.subscriptionId,environmentId:central.environmentId,paymentOrderId:order.id,custom}},conn);
+  const jobId=await enqueueInitialEnvironment(conn,central,order.id,req.auth!.accountId);
+  await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:'اعتماد إداري لتجهيز بيئة دون تسجيل دفعة',metadata:{eventType:'manual_environment_requested',customerId,subscriptionId:central.subscriptionId,environmentId:central.environmentId,paymentOrderId:order.id,custom}},conn);
   await conn.commit();
   return res.status(202).json({orderId:order.id,message:'تم تسجيل طلب توليد البيئة.'});
  }catch(error){
