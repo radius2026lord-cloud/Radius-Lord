@@ -46,7 +46,7 @@ export async function requestEnvironmentNotification(req:AuthenticatedRequest,re
     'اسم المستخدم المؤقت:',whatsapp?'`'+String(state.username)+'`':String(state.username),
     'كلمة المرور المؤقتة:',whatsapp?'`'+String(temporaryPassword)+'`':String(temporaryPassword),
     '',
-    'صفحة تسجيل الدخول:',new URL('/login',e.system_url).href,
+    'صفحة تسجيل الدخول:',e.system_url,
     '',
     'عند أول تسجيل دخول سيُطلب منك اختيار اسم مستخدم وكلمة مرور خاصين بك قبل فتح إدارة الشبكة.',
     'صلاحية البيانات المؤقتة حتى:',value(date(state.credentialsExpiresAt)),
