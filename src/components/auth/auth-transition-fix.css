@@ -6,6 +6,13 @@ html:has(.auth-shell)::view-transition-new(root) {
   animation: none !important;
 }
 
+/* The network portal also serves the dashboard. Keep its entry animation
+   from transforming the full-screen authentication form and fixed controls. */
+body.dashboard-enter:has(.auth-shell) {
+  animation: none;
+  will-change: auto;
+}
+
 .auth-shell {
   opacity: 1 !important;
   transform: none !important;
