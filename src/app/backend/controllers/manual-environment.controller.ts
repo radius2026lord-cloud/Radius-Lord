@@ -30,14 +30,23 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
  if(!['new','existing'].includes(body.customerMode)||!['plan','custom'].includes(body.planMode)||!/^[a-f0-9]{32}$/.test(requestId)||!networkName||networkName.length>150||email.length>254||/[^\x21-\x7e]/.test(email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
   return res.status(400).json({message:'راجع اسم الشبكة والبريد الإلكتروني وخيارات الطلب.'});
  }
- if(!existing&&(!fullName||fullName.length>150||!/^\+[0-9]{7,15}$/.test(phone)||!country||country.length>100||password.length<8||Buffer.byteLength(password,'utf8')>72)){
-  return res.status(400).json({message:'أدخل اسم العميل والدولة ورقم هاتف دوليًا، وكلمة مرور من 8 أحرف على الأقل وبحد أقصى 72 بايت.'});
+ if(!existing&&(!fullName||fullName.length>150||!/^\+[0-9]{7,15}$/.test(phone)||!country||country.length>100||/\p{Script=Arabic}/u.test(password)||password.length<8||Buffer.byteLength(password,'utf8')>72)){
+  return res.status(400).json({message:'أدخل اسم العميل والدولة ورقم هاتف دوليًا، وكلمة مرور من 8 أحرف على الأقل وبحد أقصى 72 بايت، دون أحرف عربية.'});
  }
  const paymentCode='MAN-RL-'+requestId;
  let conn:Awaited<ReturnType<typeof db.pool.getConnection>>|undefined;
  try{
   const [previous]:any=await db.query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]);
   if(previous[0])return res.json({orderId:previous[0].id});
+  const [columns]:any=await db.query(`SELECT TABLE_NAME tableName,COLUMN_NAME columnName,IS_NULLABLE isNullable,COLUMN_TYPE columnType
+   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
+   AND ((TABLE_NAME='payment_orders' AND COLUMN_NAME IN ('status','plan_id'))
+    OR (TABLE_NAME='subscriptions' AND COLUMN_NAME='plan_id'))`);
+  const statusColumn=columns.find((column:any)=>column.tableName==='payment_orders'&&column.columnName==='status');
+  const nullablePlan=(table:string)=>columns.some((column:any)=>column.tableName===table&&column.columnName==='plan_id'&&column.isNullable==='YES');
+  if(!statusColumn?.columnType.includes("'manual_authorized'")||custom&&(!nullablePlan('payment_orders')||!nullablePlan('subscriptions'))){
+   return res.status(503).json({code:'MANUAL_ENVIRONMENT_SCHEMA_REQUIRED',message:'طبّق ملف 20261106_manual_environment.sql على القاعدة المركزية، ثم أعد المحاولة. سينشئ عامل التجهيز قاعدة العميل المستقلة بعد تسجيل الطلب.'});
+  }
   await requireInfrastructureReady();
   const passwordHash=existing?null:await bcrypt.hash(password,12);
   conn=await db.pool.getConnection();
@@ -97,7 +106,6 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
    if(previous[0])return res.json({orderId:previous[0].id});
    return res.status(409).json({message:'البريد الإلكتروني أو الهاتف مستخدم مسبقًا.'});
   }
-  if(['ER_BAD_NULL_ERROR','ER_TRUNCATED_WRONG_VALUE_FOR_FIELD','WARN_DATA_TRUNCATED'].includes(code??''))return res.status(503).json({message:'تحقق من تطبيق ترحيل التجهيز اليدوي على القاعدة المركزية.'});
   console.error('[manual-environment]',{code:code||'UNKNOWN'});
   return res.status(500).json({message:'تعذر تسجيل طلب التجهيز. يمكنك إعادة المحاولة من النموذج نفسه.'});
  }finally{conn?.release();}

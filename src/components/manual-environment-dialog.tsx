@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useRef,useState,type KeyboardEvent} from 'react';
-import {CreditCard,Mail,Network,Server,UserRound} from 'lucide-react';
+import {CalendarClock,CreditCard,Database,Globe,KeyRound,Mail,Network,Phone,Server,UserRound,Users} from 'lucide-react';
 import {arabCountries,defaultArabCountry} from '@/components/auth/auth-content';
 import {CountryPhoneInput} from './ui/country-phone-input';
 import ProjectButton from './ui/project-button';
@@ -18,6 +18,12 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
  const [customerMode,setCustomerMode]=useState('new'),[planMode,setPlanMode]=useState('plan');
  const [busy,setBusy]=useState(false),[loadingPlans,setLoadingPlans]=useState(true),[error,setError]=useState(''),[planError,setPlanError]=useState(''),[revision,setRevision]=useState(0);
  const requestId=useRef('');
+ const [arabicWarning,setArabicWarning]=useState({email:false,password:false});
+ function setLatinField(field:'email'|'password',value:string){
+  const blocked=/\p{Script=Arabic}/u.test(value);
+  setArabicWarning(previous=>({...previous,[field]:blocked}));
+  if(!blocked)set(field,field==='email'?value.replace(/[^\x21-\x7e]/g,''):value);
+ }
  const [country,setCountry]=useState(defaultArabCountry),[review,setReview]=useState(false);
  const phoneLimit=15-country.code.replace(/\D/g,'').length;
  const internationalPhone=country.code+form.phone;
@@ -26,7 +32,7 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
   if(event.key!=='Enter'||event.nativeEvent.isComposing||!(event.target instanceof HTMLInputElement))return;
   event.preventDefault();
   const input=event.target;
-  if(!input.reportValidity()||input.type==='email'&&!emailValid)return;
+  if(!input.reportValidity()||input.type==='email'&&(!emailValid||arabicWarning.email)||input.type==='password'&&arabicWarning.password)return;
   const fields=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('input:not([disabled]),button[aria-haspopup]:not([disabled])'));
   const next=fields[fields.indexOf(input)+1];
   if(next)next.focus();
@@ -47,8 +53,8 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
  const digits=(value:string)=>/^[0-9]+$/.test(value)&&Number.isSafeInteger(Number(value));
  const planValid=planMode==='plan'?Boolean(plan):
   digits(form.duration)&&Number(form.duration)>=1&&Number(form.duration)<=120&&digits(form.maxPppoe)&&digits(form.maxNas)&&Number(form.maxNas)<=1024;
- const accountValid=Boolean(form.networkName.trim()&&emailValid)&&
-  (customerMode==='existing'||Boolean(form.fullName.trim()&&form.phone.length>0&&/^\+[0-9]{7,15}$/.test(internationalPhone)&&form.password.length>=8&&new TextEncoder().encode(form.password).length<=72));
+ const accountValid=Boolean(form.networkName.trim()&&emailValid&&!arabicWarning.email)&&
+  (customerMode==='existing'||Boolean(form.fullName.trim()&&form.phone.length>0&&/^\+[0-9]{7,15}$/.test(internationalPhone)&&!arabicWarning.password&&form.password.length>=8&&new TextEncoder().encode(form.password).length<=72));
  async function submit(){
   if(busy||!accountValid||!planValid)return;
   if(!requestId.current)requestId.current=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -68,34 +74,48 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
   <ProjectButton disabled={busy||!accountValid||!planValid} onClick={()=>review?void submit():setReview(true)}><Server/>{busy?'جارٍ فحص الجاهزية وتسجيل الطلب…':review?'تأكيد وتوليد البيئة':'مراجعة البيانات'}</ProjectButton>
  </>}>
   <div className="space-y-4">
-  {review?<ProjectInfoCard tone="info">
-   <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Server}/>البيانات المعتمدة للتوليد</h2>
-   <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-    {[
-     ['الشبكة',form.networkName],['حساب العميل',customerMode==='new'?form.fullName:'عميل موجود'],
-     ['البريد الإلكتروني',form.email],...(customerMode==='new'?[['الهاتف',internationalPhone],['الدولة',country.name]]:[]),
-     ['الخطة',planMode==='custom'?'اشتراك مخصص':plan?.name],
-     ['المدة بالأشهر',planMode==='custom'?form.duration:plan?.duration_months],
-     ['حد PPPoE',(planMode==='custom'?Number(form.maxPppoe):plan?.max_subscribers)||'غير محدود'],
-     ['حد NAS',(planMode==='custom'?Number(form.maxNas):plan?.max_nas)||'غير محدود'],
-     ['الاستضافة','الاستضافة المشتركة'],
-    ].map(([label,value])=><div key={label} className="min-w-0"><dt className="text-xs text-slate-600 dark:text-slate-300">{label}</dt><dd className="mt-1 break-words font-semibold"><bdi>{value}</bdi></dd></div>)}
-   </dl>
-  </ProjectInfoCard>:<div className="space-y-4" onKeyDown={advance}>
+  {review?<div className="space-y-4">
+   <ProjectInfoCard>
+    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Network}/>هوية الشبكة والعميل</h2>
+    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+     <ReviewField label="اسم الشبكة" icon={Network} value={form.networkName}/>
+     <ReviewField label="حساب العميل" icon={UserRound} value={customerMode==='new'?form.fullName:'عميل موجود'}/>
+     <ReviewField label="البريد الإلكتروني" icon={Mail} value={form.email}/>
+     {customerMode==='new'&&<>
+      <ReviewField label="الهاتف" icon={Phone} value={internationalPhone}/>
+      <ReviewField label="الدولة" icon={Globe} value={country.name}/>
+      <ReviewField label="كلمة مرور الحساب" icon={KeyRound} value="تم تعيينها"/>
+     </>}
+    </dl>
+   </ProjectInfoCard>
+   <ProjectInfoCard tone="pending">
+    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={CreditCard} tone="pending"/>الخطة والسعة</h2>
+    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+     <ReviewField label="الخطة" icon={CreditCard} value={planMode==='custom'?'اشتراك مخصص':plan?.name}/>
+     <ReviewField label="المدة بالأشهر" icon={CalendarClock} value={planMode==='custom'?form.duration:plan?.duration_months}/>
+     <ReviewField label="حد PPPoE" icon={Users} value={(planMode==='custom'?Number(form.maxPppoe):plan?.max_subscribers)||'غير محدود'}/>
+     <ReviewField label="حد NAS" icon={Server} value={(planMode==='custom'?Number(form.maxNas):plan?.max_nas)||'غير محدود'}/>
+    </dl>
+   </ProjectInfoCard>
+   <ProjectInfoCard>
+    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Database}/>قاعدة بيانات الشبكة</h2>
+    <p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">سينشئ عامل التجهيز قاعدة مستقلة على الاستضافة المشتركة. يُحدَّد اسمها من رقم الشبكة بعد تسجيل الطلب، وتُحفظ حدود الخطة في رخصتها المحلية.</p>
+   </ProjectInfoCard>
+  </div>:<div className="space-y-4" onKeyDown={advance}>
    <p className="text-xs text-slate-600 dark:text-slate-300">جميع الحقول الظاهرة إلزامية.</p>
    <ProjectInfoCard>
     <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={UserRound}/>العميل والشبكة</h2>
     <div className="mt-4 grid items-start gap-4 sm:grid-cols-2">
      <div className="min-w-0 space-y-2"><p className="text-xs font-semibold">حساب العميل</p><ProjectDropdown fieldStyle value={customerMode} disabled={busy} onChange={setCustomerMode} icon={UserRound} options={[{value:'new',label:'إنشاء عميل جديد'},{value:'existing',label:'عميل موجود'}]}/></div>
      <label className="min-w-0 space-y-2 text-xs font-semibold"><span className="flex items-center gap-2"><ProjectCardIcon icon={Network}/>اسم الشبكة</span><ProjectInput required maxLength={150} disabled={busy} value={form.networkName} onChange={e=>set('networkName',e.target.value)}/></label>
-     <label className="min-w-0 space-y-2 text-xs font-semibold"><span className="flex items-center gap-2"><ProjectCardIcon icon={Mail}/>البريد الإلكتروني</span><ProjectInput type="email" dir="ltr" maxLength={254} required disabled={busy} value={form.email} onChange={e=>set('email',e.target.value.replace(/[^\x21-\x7e]/g,''))} aria-invalid={Boolean(form.email&&!emailValid)}/>{form.email&&!emailValid&&<span className="block text-red-700 dark:text-red-300">أدخل بريدًا صالحًا يتضمن @.</span>}{customerMode==='existing'&&<span className="block font-normal text-slate-600 dark:text-slate-300">أدخل البريد المسجل للعميل.</span>}</label>
+     <label className="min-w-0 space-y-2 text-xs font-semibold"><span className="flex items-center gap-2"><ProjectCardIcon icon={Mail}/>البريد الإلكتروني</span><ProjectInput type="email" dir="ltr" maxLength={254} required disabled={busy} value={form.email} onChange={e=>setLatinField('email',e.target.value)} aria-invalid={arabicWarning.email||Boolean(form.email&&!emailValid)} aria-describedby={arabicWarning.email?'manual-email-script-warning':undefined}/>{arabicWarning.email&&<span id="manual-email-script-warning" role="status" className="block text-red-700 dark:text-red-300">الأحرف العربية غير مسموحة في البريد الإلكتروني. بدّل لغة لوحة المفاتيح.</span>}{!arabicWarning.email&&form.email&&!emailValid&&<span className="block text-red-700 dark:text-red-300">أدخل بريدًا صالحًا يتضمن @.</span>}{customerMode==='existing'&&<span className="block font-normal text-slate-600 dark:text-slate-300">أدخل البريد المسجل للعميل.</span>}</label>
      {customerMode==='new'&&<>
       <label className="min-w-0 space-y-2 text-xs font-semibold"><span>اسم العميل الكامل</span><ProjectInput required maxLength={150} disabled={busy} value={form.fullName} onChange={e=>set('fullName',e.target.value)}/></label>
       <CountryPhoneInput className="sm:col-span-2" countries={arabCountries} country={country}
        onCountryChange={value=>{setCountry(value);set('phone',form.phone.slice(0,15-value.code.replace(/\D/g,'').length));}}
        phone={form.phone} onPhoneChange={value=>set('phone',value)} maxLength={phoneLimit} required subtle/>
       <p className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">الرقم الدولي مع نداء الدولة يصل إلى 15 رقمًا.</p>
-      <label className="min-w-0 space-y-2 text-xs font-semibold sm:col-span-2"><span>كلمة مرور حساب العميل</span><ProjectInput required type="password" autoComplete="new-password" dir="ltr" minLength={8} maxLength={72} disabled={busy} value={form.password} onChange={e=>set('password',e.target.value)}/><span className="block font-normal text-slate-600 dark:text-slate-300">ثمانية أحرف على الأقل. بيانات دخول مدير الشبكة تُنشأ بعد التجهيز.</span></label>
+      <label className="min-w-0 space-y-2 text-xs font-semibold sm:col-span-2"><span>كلمة مرور حساب العميل</span><ProjectInput required type="password" autoComplete="new-password" dir="ltr" minLength={8} maxLength={72} disabled={busy} value={form.password} onChange={e=>setLatinField('password',e.target.value)} aria-invalid={arabicWarning.password} aria-describedby={arabicWarning.password?'manual-password-script-warning':undefined}/>{arabicWarning.password&&<span id="manual-password-script-warning" role="status" className="block text-red-700 dark:text-red-300">الأحرف العربية غير مسموحة في كلمة المرور. بدّل لغة لوحة المفاتيح.</span>}<span className="block font-normal text-slate-600 dark:text-slate-300">ثمانية أحرف على الأقل. بيانات دخول مدير الشبكة تُنشأ بعد التجهيز.</span></label>
      </>}
     </div>
    </ProjectInfoCard>
@@ -116,4 +136,11 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
    {error&&<p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
   </div>
  </ProjectDialog>;
+}
+
+function ReviewField({label,icon,value}:{label:string;icon:Parameters<typeof ProjectCardIcon>[0]['icon'];value?:string|number}){
+ return <div className="min-w-0">
+  <dt className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><ProjectCardIcon icon={icon}/>{label}</dt>
+  <dd className="mt-1 break-words text-sm font-semibold"><bdi>{value??'—'}</bdi></dd>
+ </div>;
 }
