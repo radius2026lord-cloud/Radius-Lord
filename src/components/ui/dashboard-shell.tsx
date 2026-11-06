@@ -97,6 +97,7 @@ const masterAdminGroups: NavGroup[] = [
     { label: "حالة الأجهزة", href: "/Dashboard/nas/status", icon: Activity },
   ]},
   { label: "النظام", icon: Database, items: [
+    { label: "تحديثات النظام", href: "/Dashboard/system/updates", icon: PackagePlus },
     { label: "طرفية SSH", href: "/Dashboard/ssh-terminal", icon: TerminalSquare },
     { label: "قواعد البيانات", href: "/Dashboard/system/databases", icon: Database },
     { label: "حالة الخدمات", href: "/Dashboard/system/services", icon: Activity },

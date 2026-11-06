@@ -63,7 +63,16 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
   await applyRadiusDatabase({sshServerId:radiusConfig.sshServerId,radiusHost:radiusConfig.host,databaseHost:await radiusDatabaseHost(server,radiusConfig.host),databasePort:server.port,databaseName:d.db_name,username:d.radius_username,password:decryptProvisioningSecret(d.radius_password_encrypted),authPort:state.authPort,accountingPort:state.accountingPort,name:'rl_env_'+job.environment_id,secret:decryptProvisioningSecret(state.radiusSecretEncrypted),clients:await nasRadiusClients(app)});
   await markNasRadiusConfigured(app);
  },true);
- await step('network_radius_verify',async()=>{await verifyRadiusDatabase({host:radiusConfig.host,authPort:state.authPort,accountingPort:state.accountingPort,secretEncrypted:state.radiusSecretEncrypted,testUsername:state.radiusUsername,testPasswordEncrypted:state.radiusPasswordEncrypted},app);},true);
+ await step('network_radius_verify',async()=>{
+  try {
+   await verifyRadiusDatabase({host:radiusConfig.host,authPort:state.authPort,accountingPort:state.accountingPort,secretEncrypted:state.radiusSecretEncrypted,testUsername:state.radiusUsername,testPasswordEncrypted:state.radiusPasswordEncrypted},app);
+  } finally {
+   // Remove the temporary principal and any records written by the RADIUS probe.
+   await app.query('DELETE FROM radcheck WHERE username=?',[state.radiusUsername]);
+   await app.query('DELETE FROM radacct WHERE username=?',[state.radiusUsername]);
+   await app.query('DELETE FROM radpostauth WHERE username=?',[state.radiusUsername]);
+  }
+ },true);
  await step('network_database_isolation',async()=>{
   const [databases]:any=await central.query('SELECT db_name FROM tenant_databases WHERE database_server_id=? AND tenant_id<>? AND credentials_state=?',[server.id,job.tenant_id,'ready']);
   for(const sql of ['SELECT 1 FROM mysql.user LIMIT 1',...databases.map((other:any)=>{if(!/^rl_tenant_(?:zone_[0-9]+|[0-9]+_[a-f0-9]{16})$/.test(other.db_name))fail('ISOLATION_DATABASE_NAME');return `SELECT 1 FROM \`${other.db_name}\`.managers LIMIT 1`;})]){

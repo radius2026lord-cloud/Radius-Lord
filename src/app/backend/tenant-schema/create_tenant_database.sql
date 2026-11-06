@@ -1,7 +1,7 @@
--- Radius Lord complete tenant database template / 2026-10-07 / MySQL 8.0.46.
+-- Radius Lord complete tenant database template / 2026-11-06 / MySQL 8.0.46.
 -- SPDX-License-Identifier: GPL-2.0-or-later
--- Includes FreeRADIUS v3.2.x MySQL schema verbatim (upstream blob 84846b20c93e92ba785a9f9e49375246309b48b9).
--- Upstream notices remain in the embedded section; license: vendor/FREERADIUS-LICENSE.
+-- Based on the development structure export. FreeRADIUS table definitions
+-- derive from v3.2.x MySQL schema; upstream license: vendor/FREERADIUS-LICENSE.
 -- Empty isolated database only. No fixed database name, credentials or active sample license.
 -- Import this ONE FILE, not the component files as well. DDL is not transactional.
 SET NAMES utf8mb4;
@@ -28,346 +28,1747 @@ DELIMITER ;
 CALL rl_complete_tenant_guard();
 DROP PROCEDURE rl_complete_tenant_guard;
 
--- SECTION 1: Network, subscription, managers and customers.
--- Radius Lord tenant database: foundation v1. Target MySQL 8.0.46.
--- NEW, ISOLATED network database only; NEVER apply to lord_radius_core.
--- No CREATE DATABASE, credentials, live data, RADIUS provisioning or activation.
--- DDL commits implicitly. Run the whole file in one session and stop on errors.
--- IF NOT EXISTS supports resuming additions, not upgrading incompatible old tables.
-DROP PROCEDURE IF EXISTS rl_tenant_foundation_guard;
-DELIMITER $$
-CREATE PROCEDURE rl_tenant_foundation_guard()
-BEGIN
- IF DATABASE() IS NULL OR DATABASE()='lord_radius_core' THEN
-   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Select a new isolated tenant database, not lord_radius_core';
- END IF;
- IF EXISTS (SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('payment_orders','master_admins','tenant_databases','tenants')) THEN
-   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Central platform tables detected; tenant foundation refused';
- END IF;
- IF EXISTS (SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME NOT IN
-   ('time_units','network_settings','network_contact_numbers','platform_subscription','permission_groups','permissions','permission_group_permissions','managers','customers','customer_identity_documents','address_keywords','customer_categories','customer_category_manager_assignments','customer_category_memberships','activity_log')) THEN
-   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Existing unrelated tables found; use a new tenant database';
- END IF;
-END$$
-DELIMITER ;
-CALL rl_tenant_foundation_guard();
-DROP PROCEDURE rl_tenant_foundation_guard;
-
-CREATE TABLE IF NOT EXISTS time_units (
-  id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  code VARCHAR(20) NOT NULL UNIQUE,
-  name_ar VARCHAR(50) NOT NULL,
-  calculation_kind ENUM('fixed','calendar') NOT NULL,
-  seconds_per_unit INT UNSIGNED NULL,
-  actual_usage_seconds INT UNSIGNED NOT NULL,
-  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
-  CONSTRAINT chk_actual_usage_conversion CHECK (actual_usage_seconds>0),
-  CONSTRAINT chk_time_conversion CHECK ((calculation_kind='fixed' AND seconds_per_unit IS NOT NULL AND seconds_per_unit>0) OR (calculation_kind='calendar' AND seconds_per_unit IS NULL))
+CREATE TABLE `activity_log` (
+  `id` bigint UNSIGNED NOT NULL,
+  `actor_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `actor_snapshot` json DEFAULT NULL,
+  `actor_kind` enum('manager','system') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_id` bigint UNSIGNED DEFAULT NULL,
+  `customer_id` bigint UNSIGNED DEFAULT NULL,
+  `account_id` bigint UNSIGNED DEFAULT NULL COMMENT 'Stable radius_identities.id across PPPoE and hotspot',
+  `before_data` json DEFAULT NULL,
+  `after_data` json DEFAULT NULL,
+  `result` enum('success','failed') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `failure_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_reason` text COLLATE utf8mb4_unicode_ci,
+  `request_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `operation_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `occurred_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `address_keywords` (
+  `id` bigint UNSIGNED NOT NULL,
+  `keyword` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `created_by_manager_id` bigint UNSIGNED NOT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `connection_methods` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `service_type_id` tinyint UNSIGNED NOT NULL,
+  `code` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `name` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `currencies` (
+  `id` smallint UNSIGNED NOT NULL,
+  `code` varchar(10) NOT NULL,
+  `name_ar` varchar(80) NOT NULL,
+  `symbol` varchar(12) NOT NULL DEFAULT '',
+  `decimal_places` tinyint UNSIGNED NOT NULL DEFAULT '2',
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customers` (
+  `id` bigint UNSIGNED NOT NULL,
+  `manager_id` bigint UNSIGNED NOT NULL,
+  `status` enum('active','suspended') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `first_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `last_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `phone` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `payment_code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by_manager_id` bigint UNSIGNED NOT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `archived_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `scope_id` bigint UNSIGNED DEFAULT NULL,
+  `assigned_manager_id` bigint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customer_address_suggestions` (
+  `id` bigint UNSIGNED NOT NULL,
+  `manager_id` bigint UNSIGNED NOT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address_hash` binary(32) NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `last_used_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customer_categories` (
+  `id` bigint UNSIGNED NOT NULL,
+  `manager_id` bigint UNSIGNED NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `created_by_manager_id` bigint UNSIGNED NOT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `archived_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `scope_id` bigint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customer_category_manager_assignments` (
+  `category_id` bigint UNSIGNED NOT NULL,
+  `manager_id` bigint UNSIGNED NOT NULL,
+  `assigned_by_manager_id` bigint UNSIGNED NOT NULL,
+  `assigned_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customer_category_memberships` (
+  `customer_id` bigint UNSIGNED NOT NULL,
+  `category_id` bigint UNSIGNED NOT NULL,
+  `manager_id` bigint UNSIGNED NOT NULL,
+  `assigned_by_manager_id` bigint UNSIGNED NOT NULL,
+  `assigned_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `scope_id` bigint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customer_identity_documents` (
+  `id` bigint UNSIGNED NOT NULL,
+  `customer_id` bigint UNSIGNED NOT NULL,
+  `first_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `last_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `father_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mother_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `birth_place` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `birth_date` date DEFAULT NULL,
+  `national_number` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `identity_number` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `front_image_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `back_image_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `front_image_data` longblob,
+  `back_image_data` longblob,
+  `capture_method` enum('manual','qr') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual',
+  `updated_by_manager_id` bigint UNSIGNED NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `data_units` (
+  `id` smallint UNSIGNED NOT NULL,
+  `code` varchar(10) NOT NULL,
+  `name_ar` varchar(50) NOT NULL,
+  `bytes_factor` bigint UNSIGNED NOT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `equipment_ip_pools` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `cidr` varchar(18) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `gateway_ipv4` int UNSIGNED NOT NULL,
+  `range_start_ipv4` int UNSIGNED NOT NULL,
+  `range_end_ipv4` int UNSIGNED NOT NULL,
+  `excluded_ipv4` json NOT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_accounting_segments` (
+  `id` bigint UNSIGNED NOT NULL,
+  `period_id` bigint UNSIGNED NOT NULL,
+  `acctuniqueid` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `segment_start` datetime(6) NOT NULL,
+  `segment_end` datetime(6) NOT NULL,
+  `input_start` bigint UNSIGNED NOT NULL,
+  `input_end` bigint UNSIGNED NOT NULL,
+  `output_start` bigint UNSIGNED NOT NULL,
+  `output_end` bigint UNSIGNED NOT NULL,
+  `time_start` bigint UNSIGNED NOT NULL,
+  `time_end` bigint UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_accounts` (
+  `id` bigint UNSIGNED NOT NULL,
+  `radius_identity_id` bigint UNSIGNED NOT NULL,
+  `identity_kind` enum('pppoe','hotspot') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'hotspot',
+  `account_kind` enum('batch','standalone') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `owner_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `login_mode` enum('code','username_password') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('enabled','disabled') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'enabled',
+  `bind_first_mac` tinyint UNSIGNED NOT NULL DEFAULT '0',
+  `bound_mac` char(17) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `archived_at` datetime(6) DEFAULT NULL,
+  `archived_by` bigint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_batch_cards` (
+  `account_id` bigint UNSIGNED NOT NULL,
+  `account_kind` enum('batch','standalone') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'batch',
+  `batch_id` bigint UNSIGNED NOT NULL,
+  `owner_manager_id` bigint UNSIGNED NOT NULL,
+  `serial_no` int UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_card_batches` (
+  `id` bigint UNSIGNED NOT NULL,
+  `package_version_id` bigint UNSIGNED NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quantity` int UNSIGNED NOT NULL,
+  `owner_manager_id` bigint UNSIGNED NOT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `login_mode` enum('code','username_password') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `generation_options` json NOT NULL,
+  `unit_price` decimal(12,2) NOT NULL,
+  `currency_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_gift` tinyint UNSIGNED NOT NULL DEFAULT '0',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_card_output_jobs` (
+  `id` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `batch_id` bigint UNSIGNED NOT NULL,
+  `actor_manager_id` bigint UNSIGNED NOT NULL,
+  `output_kind` enum('print','pdf') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `card_count` int UNSIGNED NOT NULL,
+  `serials_json` json NOT NULL,
+  `confirmed_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_card_print_marks` (
+  `account_id` bigint UNSIGNED NOT NULL,
+  `last_job_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `printed_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_packages` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `owner_manager_id` bigint UNSIGNED NOT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `base_price` decimal(12,2) NOT NULL,
+  `currency_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `archived_at` datetime(6) DEFAULT NULL,
+  `archived_by` bigint UNSIGNED DEFAULT NULL,
+  `login_mode` enum('code','username_password') COLLATE utf8mb4_unicode_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_package_versions` (
+  `id` bigint UNSIGNED NOT NULL,
+  `package_id` bigint UNSIGNED NOT NULL,
+  `version_no` int UNSIGNED NOT NULL,
+  `radius_group_name` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `download_bps` bigint UNSIGNED NOT NULL,
+  `upload_bps` bigint UNSIGNED NOT NULL,
+  `quota_bytes` bigint UNSIGNED DEFAULT NULL,
+  `duration_value` int UNSIGNED NOT NULL,
+  `duration_unit_id` smallint UNSIGNED NOT NULL,
+  `duration_mode` enum('continuous','connected_time') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `simultaneous_sessions` smallint UNSIGNED NOT NULL DEFAULT '1',
+  `radius_snapshot` json NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_period_usage` (
+  `period_id` bigint UNSIGNED NOT NULL,
+  `upload_bytes` bigint UNSIGNED NOT NULL DEFAULT '0',
+  `download_bytes` bigint UNSIGNED NOT NULL DEFAULT '0',
+  `used_seconds` bigint UNSIGNED NOT NULL DEFAULT '0' COMMENT 'Duration of UNION of connection intervals, not sum of sessions',
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_service_periods` (
+  `id` bigint UNSIGNED NOT NULL,
+  `account_id` bigint UNSIGNED NOT NULL,
+  `package_version_id` bigint UNSIGNED NOT NULL,
+  `previous_period_id` bigint UNSIGNED DEFAULT NULL,
+  `event_type` enum('issue','renew') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `activated_at` datetime(6) DEFAULT NULL,
+  `ended_at` datetime(6) DEFAULT NULL,
+  `expires_at` datetime(6) DEFAULT NULL,
+  `duration_mode` enum('continuous','connected_time') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `duration_value` int UNSIGNED NOT NULL,
+  `duration_unit_id` smallint UNSIGNED NOT NULL,
+  `time_allowance_seconds` bigint UNSIGNED DEFAULT NULL,
+  `carried_seconds` bigint UNSIGNED NOT NULL DEFAULT '0',
+  `quota_allowance_bytes` bigint UNSIGNED DEFAULT NULL,
+  `price_snapshot` decimal(12,2) NOT NULL,
+  `currency_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_gift` tinyint UNSIGNED NOT NULL DEFAULT '0',
+  `unit_snapshot` json NOT NULL COMMENT 'Capture code, fixed_seconds and actual_usage_seconds',
+  `lifecycle` enum('pending','active','ended','cancelled') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `live_account_id` bigint UNSIGNED GENERATED ALWAYS AS ((case when (`lifecycle` in (_utf8mb4'pending',_utf8mb4'active')) then `account_id` else NULL end)) STORED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_standalone_cards` (
+  `account_id` bigint UNSIGNED NOT NULL,
+  `account_kind` enum('batch','standalone') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'standalone',
+  `customer_id` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `hotspot_usage_intervals` (
+  `period_id` bigint UNSIGNED NOT NULL,
+  `interval_start` datetime(6) NOT NULL,
+  `interval_end` datetime(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `lord_nas` (
+  `id` bigint UNSIGNED NOT NULL,
+  `radius_nas_id` int NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `vendor` enum('mikrotik','ubiquiti','cisco','other') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'mikrotik',
+  `model` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `radius_services` set('ppp','hotspot') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `routeros_version` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `coa_host` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `management_host` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `auth_port` smallint UNSIGNED NOT NULL DEFAULT '1812',
+  `acct_port` smallint UNSIGNED NOT NULL DEFAULT '1813',
+  `coa_port` smallint UNSIGNED NOT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `activity_status` enum('recent','stale','unknown') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unknown',
+  `last_seen_at` datetime(6) DEFAULT NULL,
+  `location` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `archived_at` datetime(6) DEFAULT NULL,
+  `archived_by` bigint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `managers` (
+  `id` bigint UNSIGNED NOT NULL,
+  `full_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `manager_type` enum('principal','subordinate') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `permission_group_id` bigint UNSIGNED DEFAULT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  `created_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `archived_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `principal_guard` tinyint UNSIGNED GENERATED ALWAYS AS ((case when (`manager_type` = _utf8mb4'principal') then 1 else NULL end)) STORED,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `account_role` enum('principal','center_employee','agent','agent_employee') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `scope_id` bigint UNSIGNED DEFAULT NULL,
+  `parent_agent_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `contact_email` varchar(254) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `purged_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `manager_contact_numbers` (
+  `id` bigint UNSIGNED NOT NULL,
+  `manager_id` bigint UNSIGNED NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `label` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `display_order` smallint UNSIGNED NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `nas` (
+  `id` int NOT NULL,
+  `nasname` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shortname` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT 'other',
+  `ports` int DEFAULT NULL,
+  `secret` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'secret',
+  `server` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `community` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT 'RADIUS Client'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `nasreload` (
+  `nasipaddress` varchar(15) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reloadtime` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `nas_management_credentials` (
+  `id` bigint UNSIGNED NOT NULL,
+  `lord_nas_id` bigint UNSIGNED NOT NULL,
+  `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password_encrypted` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `encryption_key_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `updated_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `nas_management_services` (
+  `id` bigint UNSIGNED NOT NULL,
+  `lord_nas_id` bigint UNSIGNED NOT NULL,
+  `service_type` enum('api','api_tls','winbox','webconfig','ssh','custom') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `host` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `port` smallint UNSIGNED NOT NULL,
+  `external_host` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `external_port` smallint UNSIGNED DEFAULT NULL,
+  `protocol` enum('tcp','udp') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'tcp',
+  `scheme` enum('http','https') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `nas_ovpn_connections` (
+  `id` bigint UNSIGNED NOT NULL,
+  `nas_id` bigint UNSIGNED NOT NULL COMMENT 'lord_nas.id, the local administrative NAS identifier',
+  `central_tunnel_id` bigint UNSIGNED NOT NULL,
+  `central_gateway_id` bigint UNSIGNED NOT NULL,
+  `server_host` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `server_port` smallint UNSIGNED NOT NULL DEFAULT '1194',
+  `transport_protocol` enum('tcp','udp') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tunnel_username` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tunnel_password_encrypted` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `encryption_key_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tunnel_address` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ca_certificate_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `client_certificate_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `client_private_key_encrypted` text COLLATE utf8mb4_unicode_ci,
+  `radius_server_address` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `routeros_version` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `configuration_snapshot` json NOT NULL,
+  `sync_version` bigint UNSIGNED NOT NULL,
+  `synced_at` datetime(6) NOT NULL,
+  `updated_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_archive_policy` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `retention_days` smallint UNSIGNED NOT NULL DEFAULT '90',
+  `automatic_cleanup` tinyint UNSIGNED NOT NULL DEFAULT '0',
+  `updated_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_contact_numbers` (
+  `id` bigint UNSIGNED NOT NULL,
+  `network_settings_id` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `label` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `display_order` smallint UNSIGNED NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_equipment_devices` (
+  `id` bigint UNSIGNED NOT NULL,
+  `device_role` enum('ap','station') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` bigint UNSIGNED DEFAULT NULL,
+  `pool_id` bigint UNSIGNED NOT NULL,
+  `management_ipv4` int UNSIGNED DEFAULT NULL,
+  `last_management_ipv4` int UNSIGNED DEFAULT NULL,
+  `vendor` enum('ubnt','mimosa','mikrotik','other') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `serial_number` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mac_address` varchar(17) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL,
+  `parent_ap_id` bigint UNSIGNED DEFAULT NULL,
+  `status` enum('active','maintenance','retired') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `address` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `notes` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_hotspot_card_templates` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `library_json` json NOT NULL,
+  `revision` int UNSIGNED NOT NULL DEFAULT '0',
+  `updated_by` bigint UNSIGNED DEFAULT NULL,
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_ovpn_settings` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `configuration_snapshot` json NOT NULL,
+  `synced_at` datetime(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_scopes` (
+  `id` bigint UNSIGNED NOT NULL,
+  `scope_kind` enum('center','agent','legacy_private') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `owner_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `created_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `archived_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `center_guard` tinyint UNSIGNED GENERATED ALWAYS AS ((case when (`scope_kind` = _utf8mb4'center') then 1 else NULL end)) STORED,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_service_areas` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `scope_id` bigint UNSIGNED DEFAULT NULL COMMENT 'Optional agent scope; one area has at most one agent, an agent may have many areas',
+  `status` enum('active','inactive','planned') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'planned',
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  `created_by_manager_id` bigint UNSIGNED NOT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `archived_by_manager_id` bigint UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_settings` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `network_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `radius_server_address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `radius_interim_update_seconds` int UNSIGNED NOT NULL DEFAULT '180',
+  `timezone` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'IANA timezone, explicitly selected for this network',
+  `primary_contact_phone` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `identity_capture_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `grace_policy` enum('package','global') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'package',
+  `global_grace_days` smallint UNSIGNED NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `contact_email` varchar(254) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `government_license_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `logo_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `internal_notes` text COLLATE utf8mb4_unicode_ci,
+  `default_currency_id` smallint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `network_subscriber_card_templates` (
+  `id` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `template_json` json NOT NULL,
+  `is_approved` tinyint(1) NOT NULL DEFAULT '0',
+  `approved_by` bigint UNSIGNED DEFAULT NULL,
+  `approved_at` datetime(3) DEFAULT NULL,
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `package_radius_defaults` (
+  `package_id` bigint UNSIGNED NOT NULL,
+  `mikrotik_group` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Existing PPP profile on NAS',
+  `framed_pool` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Existing IP pool on NAS'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `package_service_policies` (
+  `package_id` bigint UNSIGNED NOT NULL,
+  `download_bps` bigint UNSIGNED NOT NULL,
+  `upload_bps` bigint UNSIGNED NOT NULL,
+  `quota_bytes` bigint UNSIGNED DEFAULT NULL COMMENT 'NULL = unlimited; otherwise positive bytes',
+  `simultaneous_sessions` smallint UNSIGNED NOT NULL DEFAULT '1',
+  `validity_mode` enum('duration','fixed_day','calendar_monthly') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'duration',
+  `duration_value` int UNSIGNED DEFAULT NULL,
+  `duration_unit_id` smallint UNSIGNED DEFAULT NULL,
+  `expiry_day` tinyint UNSIGNED DEFAULT NULL,
+  `expiry_time` time DEFAULT NULL,
+  `starts_at` enum('activation','first_connection','creation') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `grace_days` smallint UNSIGNED NOT NULL DEFAULT '0',
+  `quota_exhaustion_action` enum('stop','reduce_speed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'stop',
+  `reduced_download_bps` bigint UNSIGNED DEFAULT NULL,
+  `reduced_upload_bps` bigint UNSIGNED DEFAULT NULL,
+  `quota_renewal_policy` enum('reset','carry_over') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reset',
+  `download_unit_id` smallint UNSIGNED DEFAULT NULL,
+  `upload_unit_id` smallint UNSIGNED DEFAULT NULL,
+  `quota_unit_id` smallint UNSIGNED DEFAULT NULL,
+  `reduced_download_unit_id` smallint UNSIGNED DEFAULT NULL,
+  `reduced_upload_unit_id` smallint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `permissions` (
+  `id` bigint UNSIGNED NOT NULL,
+  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name_ar` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `module` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `principal_only` tinyint(1) NOT NULL DEFAULT '0',
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `permission_groups` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `archived_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `scope_id` bigint UNSIGNED DEFAULT NULL,
+  `scope_name_guard` bigint UNSIGNED GENERATED ALWAYS AS (coalesce(`scope_id`,0)) STORED,
+  `purged_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `permission_group_permissions` (
+  `permission_group_id` bigint UNSIGNED NOT NULL,
+  `permission_id` bigint UNSIGNED NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `platform_subscription` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `central_tenant_id` bigint UNSIGNED NOT NULL,
+  `central_subscription_id` bigint UNSIGNED NOT NULL,
+  `license_number` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `license_status` enum('pending','active','suspended','expired','revoked') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `subscription_status` enum('pending','active','expired','cancelled','suspended') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `plan_name_snapshot` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `deployment_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `max_pppoe_accounts` bigint UNSIGNED NOT NULL,
+  `base_max_nas` int UNSIGNED NOT NULL,
+  `additional_nas_capacity` int UNSIGNED NOT NULL DEFAULT '0',
+  `duration_months_snapshot` int UNSIGNED NOT NULL,
+  `activated_at` datetime DEFAULT NULL,
+  `starts_at` datetime DEFAULT NULL,
+  `expires_at` datetime DEFAULT NULL,
+  `sync_version` bigint UNSIGNED NOT NULL,
+  `synced_at` datetime NOT NULL,
+  `signed_payload` json NOT NULL,
+  `payload_signature` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `signing_key_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_accounting_segments` (
+  `id` bigint UNSIGNED NOT NULL,
+  `subscription_id` bigint UNSIGNED NOT NULL,
+  `acctuniqueid` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `segment_start` datetime(6) NOT NULL,
+  `segment_end` datetime(6) NOT NULL,
+  `input_start` bigint UNSIGNED NOT NULL,
+  `input_end` bigint UNSIGNED NOT NULL,
+  `output_start` bigint UNSIGNED NOT NULL,
+  `output_end` bigint UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_accounts` (
+  `id` bigint UNSIGNED NOT NULL,
+  `customer_id` bigint UNSIGNED NOT NULL,
+  `radius_identity_id` bigint UNSIGNED NOT NULL,
+  `identity_kind` enum('pppoe','hotspot') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pppoe',
+  `line_name` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `admin_status` enum('enabled','disabled') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'enabled',
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `service_type_id` tinyint UNSIGNED DEFAULT NULL,
+  `connection_method_id` tinyint UNSIGNED DEFAULT NULL,
+  `distribution_box_serial` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `distribution_box_description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `station_vendor` enum('ubnt','mimosa','mikrotik') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `station_ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `station_device_id` bigint UNSIGNED DEFAULT NULL,
+  `allowed_nas_id` int DEFAULT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `archived_at` datetime(6) DEFAULT NULL,
+  `archived_by` bigint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_account_radius_overrides` (
+  `account_id` bigint UNSIGNED NOT NULL,
+  `framed_route` varchar(253) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `updated_by_manager_id` bigint UNSIGNED NOT NULL,
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_import_batches` (
+  `id` bigint UNSIGNED NOT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `category_id` bigint UNSIGNED NOT NULL,
+  `source_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `total_rows` int UNSIGNED NOT NULL DEFAULT '0',
+  `imported_rows` int UNSIGNED NOT NULL DEFAULT '0',
+  `duplicate_rows` int UNSIGNED NOT NULL DEFAULT '0',
+  `rejected_rows` int UNSIGNED NOT NULL DEFAULT '0',
+  `status` enum('processing','completed','completed_with_issues') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_import_review_rows` (
+  `id` bigint UNSIGNED NOT NULL,
+  `batch_id` bigint UNSIGNED NOT NULL,
+  `source_row_number` int UNSIGNED NOT NULL,
+  `username` varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+  `reason_code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `encrypted_payload` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `resolved_at` datetime(6) DEFAULT NULL,
+  `resolved_by` bigint UNSIGNED DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_line_speed_boosts` (
+  `id` bigint UNSIGNED NOT NULL,
+  `account_id` bigint UNSIGNED NOT NULL,
+  `username` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `multiplier` tinyint UNSIGNED DEFAULT NULL,
+  `download_bps` bigint UNSIGNED DEFAULT NULL,
+  `upload_bps` bigint UNSIGNED DEFAULT NULL,
+  `original_rate_limit` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `boosted_rate_limit` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `original_user_reply` json NOT NULL,
+  `started_at` datetime(6) NOT NULL,
+  `expires_at` datetime(6) NOT NULL,
+  `status` enum('active','reverted','cancelled') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `active_account_id` bigint UNSIGNED GENERATED ALWAYS AS ((case when (`status` = _utf8mb4'active') then `account_id` else NULL end)) STORED,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `reverted_at` datetime(6) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_packages` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `owner_manager_id` bigint UNSIGNED NOT NULL,
+  `package_type` enum('prepaid','daily','addon','free') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepaid',
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1',
+  `base_price` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `offer_price` decimal(12,2) DEFAULT NULL,
+  `offer_ends_at` datetime(6) DEFAULT NULL COMMENT 'Exclusive UTC boundary; offer valid only before this instant',
+  `is_gift` tinyint UNSIGNED NOT NULL DEFAULT '0',
+  `currency_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `daily_package_id` bigint UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `archived_at` datetime(6) DEFAULT NULL,
+  `archived_by` bigint UNSIGNED DEFAULT NULL,
+  `currency_id` smallint UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_package_speed_boosts` (
+  `id` bigint UNSIGNED NOT NULL,
+  `package_id` bigint UNSIGNED NOT NULL,
+  `multiplier` tinyint UNSIGNED NOT NULL,
+  `original_download_bps` bigint UNSIGNED NOT NULL,
+  `original_upload_bps` bigint UNSIGNED NOT NULL,
+  `boosted_download_bps` bigint UNSIGNED NOT NULL,
+  `boosted_upload_bps` bigint UNSIGNED NOT NULL,
+  `started_at` datetime(6) NOT NULL,
+  `expires_at` datetime(6) NOT NULL,
+  `status` enum('active','reverted') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `active_package_id` bigint UNSIGNED GENERATED ALWAYS AS ((case when (`status` = _utf8mb4'active') then `package_id` else NULL end)) STORED,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `reverted_at` datetime(6) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_package_versions` (
+  `id` bigint UNSIGNED NOT NULL,
+  `package_id` bigint UNSIGNED NOT NULL,
+  `version_no` int UNSIGNED NOT NULL,
+  `radius_group_name` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `service_snapshot` json NOT NULL,
+  `radius_snapshot` json NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_radius_jobs` (
+  `id` bigint UNSIGNED NOT NULL,
+  `radacctid` bigint NOT NULL,
+  `reason` enum('expiry','reauth') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `revision` bigint UNSIGNED NOT NULL DEFAULT '1',
+  `attempts` smallint UNSIGNED NOT NULL DEFAULT '0',
+  `next_attempt_at` datetime(6) NOT NULL,
+  `acknowledged_at` datetime(6) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_radius_job_state` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `scan_cursor` bigint NOT NULL DEFAULT '0',
+  `cleanup_cursor` bigint NOT NULL DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_subscriptions` (
+  `id` bigint UNSIGNED NOT NULL,
+  `account_id` bigint UNSIGNED NOT NULL,
+  `package_version_id` bigint UNSIGNED NOT NULL,
+  `service_role` enum('base','daily','addon') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'base',
+  `parent_subscription_id` bigint UNSIGNED DEFAULT NULL,
+  `created_by` bigint UNSIGNED NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `activated_at` datetime(6) DEFAULT NULL,
+  `expires_at` datetime(6) DEFAULT NULL,
+  `ended_at` datetime(6) DEFAULT NULL,
+  `event_type` enum('activation','renewal','package_change','daily_fallback','addon') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `previous_subscription_id` bigint UNSIGNED DEFAULT NULL,
+  `renewal_mode` enum('normal','fixed_due','full_month') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'normal',
+  `base_price_snapshot` decimal(12,2) NOT NULL,
+  `offer_price_snapshot` decimal(12,2) DEFAULT NULL,
+  `offer_ends_at_snapshot` datetime(6) DEFAULT NULL,
+  `effective_price_snapshot` decimal(12,2) NOT NULL,
+  `currency_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_gift_snapshot` tinyint UNSIGNED NOT NULL,
+  `grace_source_snapshot` enum('global','package') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `grace_days_snapshot` smallint UNSIGNED NOT NULL DEFAULT '0',
+  `grace_expires_at` datetime(6) DEFAULT NULL,
+  `effective_service_snapshot` json NOT NULL,
+  `quota_allowance_bytes` bigint UNSIGNED DEFAULT NULL,
+  `carried_quota_bytes` bigint UNSIGNED NOT NULL DEFAULT '0',
+  `lifecycle` enum('pending','active','ended','cancelled') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `live_role` varchar(10) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS ((case when (`lifecycle` in (_utf8mb4'pending',_utf8mb4'active')) then `service_role` else NULL end)) STORED,
+  `daily_parent_id` bigint UNSIGNED GENERATED ALWAYS AS ((case when (`service_role` = _utf8mb4'daily') then `parent_subscription_id` else NULL end)) STORED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pppoe_subscription_usage` (
+  `subscription_id` bigint UNSIGNED NOT NULL,
+  `upload_bytes` bigint UNSIGNED NOT NULL DEFAULT '0',
+  `download_bytes` bigint UNSIGNED NOT NULL DEFAULT '0',
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radacct` (
+  `radacctid` bigint NOT NULL,
+  `acctsessionid` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `acctuniqueid` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `realm` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `nasipaddress` varchar(15) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `nasportid` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `nasporttype` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `acctstarttime` datetime DEFAULT NULL,
+  `acctupdatetime` datetime DEFAULT NULL,
+  `acctstoptime` datetime DEFAULT NULL,
+  `acctinterval` int DEFAULT NULL,
+  `acctsessiontime` int UNSIGNED DEFAULT NULL,
+  `acctauthentic` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `connectinfo_start` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `connectinfo_stop` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `acctinputoctets` bigint DEFAULT NULL,
+  `acctoutputoctets` bigint DEFAULT NULL,
+  `calledstationid` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `callingstationid` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `acctterminatecause` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `servicetype` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `framedprotocol` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `framedipaddress` varchar(15) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `framedipv6address` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `framedipv6prefix` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `framedinterfaceid` varchar(44) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `delegatedipv6prefix` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `class` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radcheck` (
+  `id` int UNSIGNED NOT NULL,
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `attribute` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `op` char(2) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '==',
+  `value` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radgroupcheck` (
+  `id` int UNSIGNED NOT NULL,
+  `groupname` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `attribute` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `op` char(2) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '==',
+  `value` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radgroupreply` (
+  `id` int UNSIGNED NOT NULL,
+  `groupname` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `attribute` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `op` char(2) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '=',
+  `value` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radius_identities` (
+  `id` bigint UNSIGNED NOT NULL,
+  `service_kind` enum('pppoe','hotspot') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `contract_number` varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+  `line_payment_code` varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+  `current_username` varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radius_username_reservations` (
+  `username` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `radius_identity_id` bigint UNSIGNED NOT NULL,
+  `reserved_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `last_retired_at` datetime(6) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radpostauth` (
+  `id` int NOT NULL,
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `pass` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `reply` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `authdate` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `class` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radreply` (
+  `id` int UNSIGNED NOT NULL,
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `attribute` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `op` char(2) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '=',
+  `value` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `radusergroup` (
+  `id` int UNSIGNED NOT NULL,
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `groupname` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `priority` int NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `service_types` (
+  `id` tinyint UNSIGNED NOT NULL,
+  `code` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `name` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `speed_units` (
+  `id` smallint UNSIGNED NOT NULL,
+  `code` varchar(10) NOT NULL,
+  `name_ar` varchar(50) NOT NULL,
+  `bps_factor` bigint UNSIGNED NOT NULL,
+  `is_enabled` tinyint UNSIGNED NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `time_units` (
+  `id` smallint UNSIGNED NOT NULL,
+  `code` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name_ar` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `calculation_kind` enum('fixed','calendar') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `seconds_per_unit` int UNSIGNED DEFAULT NULL,
+  `actual_usage_seconds` int UNSIGNED NOT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `username_change_history` (
+  `id` bigint UNSIGNED NOT NULL,
+  `radius_identity_id` bigint UNSIGNED NOT NULL,
+  `old_username` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `new_username` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `changed_by` bigint UNSIGNED NOT NULL,
+  `changed_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `user_ui_preferences` (
+  `owner_key` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `preferences_json` json NOT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `activity_log`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_activity_customer_time` (`customer_id`,`occurred_at`,`id`),
+  ADD KEY `idx_activity_actor_time` (`actor_manager_id`,`occurred_at`,`id`),
+  ADD KEY `idx_activity_target_time` (`target_type`,`target_id`,`occurred_at`,`id`),
+  ADD KEY `idx_activity_operation` (`operation_id`,`id`),
+  ADD KEY `idx_activity_account_time` (`account_id`,`occurred_at`,`id`);
+
+ALTER TABLE `address_keywords`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `keyword` (`keyword`),
+  ADD KEY `fk_address_keyword_creator` (`created_by_manager_id`);
+
+ALTER TABLE `connection_methods`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_connection_code` (`code`),
+  ADD UNIQUE KEY `uq_method_service` (`id`,`service_type_id`),
+  ADD KEY `fk_method_service` (`service_type_id`);
+
+ALTER TABLE `currencies`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+ALTER TABLE `customers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_customer_payment_code` (`payment_code`),
+  ADD UNIQUE KEY `uq_customer_id_manager` (`id`,`manager_id`),
+  ADD KEY `idx_customer_owner_archive` (`manager_id`,`archived_at`,`id`),
+  ADD KEY `idx_customer_name` (`last_name`,`first_name`),
+  ADD KEY `fk_customer_creator` (`created_by_manager_id`),
+  ADD KEY `fk_customer_archiver` (`archived_by_manager_id`);
+
+ALTER TABLE `customer_address_suggestions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_customer_address_suggestion_hash` (`manager_id`,`address_hash`),
+  ADD KEY `idx_customer_address_suggestions_prefix` (`manager_id`,`address`(191));
+
+ALTER TABLE `customer_categories`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_category_owner_name` (`manager_id`,`name`),
+  ADD UNIQUE KEY `uq_category_id_manager` (`id`,`manager_id`),
+  ADD KEY `idx_category_owner_archive` (`manager_id`,`archived_at`,`id`),
+  ADD KEY `fk_category_creator` (`created_by_manager_id`),
+  ADD KEY `fk_category_archiver` (`archived_by_manager_id`);
+
+ALTER TABLE `customer_category_manager_assignments`
+  ADD PRIMARY KEY (`category_id`,`manager_id`),
+  ADD KEY `idx_category_assignment_manager` (`manager_id`,`category_id`),
+  ADD KEY `fk_category_assignment_actor` (`assigned_by_manager_id`);
+
+ALTER TABLE `customer_category_memberships`
+  ADD PRIMARY KEY (`customer_id`,`category_id`),
+  ADD KEY `fk_membership_customer_owner` (`customer_id`,`manager_id`),
+  ADD KEY `fk_membership_actor` (`assigned_by_manager_id`),
+  ADD KEY `idx_membership_category_manager` (`category_id`,`manager_id`);
+
+ALTER TABLE `customer_identity_documents`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_customer_one_identity` (`customer_id`),
+  ADD UNIQUE KEY `uq_identity_number` (`identity_number`),
+  ADD KEY `fk_identity_editor` (`updated_by_manager_id`);
+
+ALTER TABLE `data_units`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+ALTER TABLE `equipment_ip_pools`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_equipment_pool_name` (`name`),
+  ADD KEY `idx_equipment_pool_range` (`is_enabled`,`range_start_ipv4`,`range_end_ipv4`),
+  ADD KEY `fk_equipment_pool_creator` (`created_by`);
+
+ALTER TABLE `hotspot_accounting_segments`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_hs_segment` (`acctuniqueid`,`segment_start`),
+  ADD KEY `idx_hs_segment_period` (`period_id`,`segment_start`,`segment_end`);
+
+ALTER TABLE `hotspot_accounts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_hs_identity` (`radius_identity_id`),
+  ADD UNIQUE KEY `uq_hs_account_kind` (`id`,`account_kind`),
+  ADD UNIQUE KEY `uq_hotspot_accounts_owner` (`id`,`owner_manager_id`),
+  ADD KEY `fk_hotspot_accounts_creator` (`created_by`),
+  ADD KEY `fk_hs_radius_identity` (`radius_identity_id`,`identity_kind`),
+  ADD KEY `fk_hs_account_archiver` (`archived_by`),
+  ADD KEY `idx_hs_account_owner` (`owner_manager_id`,`status`);
+
+ALTER TABLE `hotspot_batch_cards`
+  ADD PRIMARY KEY (`account_id`),
+  ADD UNIQUE KEY `uq_hs_batch_serial` (`batch_id`,`serial_no`),
+  ADD KEY `fk_hs_batch_card_account` (`account_id`,`account_kind`),
+  ADD KEY `fk_hs_batch_card_owner` (`account_id`,`owner_manager_id`),
+  ADD KEY `fk_hs_batch_batch_owner` (`batch_id`,`owner_manager_id`);
+
+ALTER TABLE `hotspot_card_batches`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_hotspot_card_batches_owner` (`id`,`owner_manager_id`),
+  ADD KEY `fk_hotspot_card_batches_creator` (`created_by`),
+  ADD KEY `idx_hs_batch_owner` (`owner_manager_id`,`created_at`),
+  ADD KEY `fk_hs_batch_version` (`package_version_id`);
+
+ALTER TABLE `hotspot_card_output_jobs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_hotspot_output_batch_time` (`batch_id`,`output_kind`,`confirmed_at`),
+  ADD KEY `fk_hotspot_output_actor` (`actor_manager_id`);
+
+ALTER TABLE `hotspot_card_print_marks`
+  ADD PRIMARY KEY (`account_id`),
+  ADD KEY `idx_hotspot_print_job` (`last_job_id`);
+
+ALTER TABLE `hotspot_packages`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_hs_package_archiver` (`archived_by`),
+  ADD KEY `idx_hs_package_owner` (`owner_manager_id`);
+
+ALTER TABLE `hotspot_package_versions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_hs_version` (`package_id`,`version_no`),
+  ADD UNIQUE KEY `uq_hs_radius_group` (`radius_group_name`),
+  ADD KEY `fk_hs_version_unit` (`duration_unit_id`);
+
+ALTER TABLE `hotspot_period_usage`
+  ADD PRIMARY KEY (`period_id`);
+
+ALTER TABLE `hotspot_service_periods`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_hs_period_account` (`id`,`account_id`),
+  ADD UNIQUE KEY `uq_hs_one_live_period` (`live_account_id`),
+  ADD UNIQUE KEY `uq_hs_period_successor` (`previous_period_id`),
+  ADD KEY `fk_hotspot_service_periods_creator` (`created_by`),
+  ADD KEY `idx_hs_period_account_time` (`account_id`,`created_at`),
+  ADD KEY `fk_hs_period_version` (`package_version_id`),
+  ADD KEY `fk_hs_period_unit` (`duration_unit_id`),
+  ADD KEY `fk_hs_period_previous` (`previous_period_id`,`account_id`);
+
+ALTER TABLE `hotspot_standalone_cards`
+  ADD PRIMARY KEY (`account_id`),
+  ADD KEY `fk_hs_standalone_customer` (`customer_id`),
+  ADD KEY `fk_hs_standalone_account` (`account_id`,`account_kind`);
+
+ALTER TABLE `hotspot_usage_intervals`
+  ADD PRIMARY KEY (`period_id`,`interval_start`);
+
+ALTER TABLE `lord_nas`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_lord_radius_nas` (`radius_nas_id`),
+  ADD KEY `fk_nas_creator` (`created_by`),
+  ADD KEY `fk_nas_archiver` (`archived_by`);
+
+ALTER TABLE `managers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_manager_username` (`username`),
+  ADD UNIQUE KEY `uq_single_principal` (`principal_guard`),
+  ADD KEY `idx_managers_group_status` (`permission_group_id`,`is_enabled`,`archived_at`),
+  ADD KEY `fk_manager_creator` (`created_by_manager_id`),
+  ADD KEY `fk_manager_archiver` (`archived_by_manager_id`);
+
+ALTER TABLE `manager_contact_numbers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_manager_extra_phone` (`manager_id`,`phone`);
+
+ALTER TABLE `nas`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `nasname` (`nasname`);
+
+ALTER TABLE `nasreload`
+  ADD PRIMARY KEY (`nasipaddress`);
+
+ALTER TABLE `nas_management_credentials`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_nas_credential` (`lord_nas_id`),
+  ADD KEY `fk_credential_actor` (`updated_by`);
+
+ALTER TABLE `nas_management_services`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_management_service_nas` (`lord_nas_id`);
+
+ALTER TABLE `nas_ovpn_connections`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_ovpn_local_nas` (`nas_id`),
+  ADD UNIQUE KEY `uq_ovpn_central_tunnel` (`central_tunnel_id`),
+  ADD UNIQUE KEY `uq_ovpn_gateway_username` (`central_gateway_id`,`tunnel_username`),
+  ADD UNIQUE KEY `uq_ovpn_gateway_address` (`central_gateway_id`,`tunnel_address`),
+  ADD KEY `fk_ovpn_actor` (`updated_by_manager_id`);
+
+ALTER TABLE `network_archive_policy`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_archive_policy_actor` (`updated_by_manager_id`);
+
+ALTER TABLE `network_contact_numbers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_network_optional_phone` (`network_settings_id`,`phone`);
+
+ALTER TABLE `network_equipment_devices`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_equipment_management_ipv4` (`management_ipv4`),
+  ADD UNIQUE KEY `uq_equipment_serial` (`serial_number`),
+  ADD UNIQUE KEY `uq_equipment_mac` (`mac_address`),
+  ADD KEY `idx_equipment_customer` (`customer_id`,`device_role`,`status`),
+  ADD KEY `idx_equipment_pool` (`pool_id`,`status`),
+  ADD KEY `idx_equipment_parent_ap` (`parent_ap_id`),
+  ADD KEY `fk_equipment_creator` (`created_by`);
+
+ALTER TABLE `network_hotspot_card_templates`
+  ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `network_ovpn_settings`
+  ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `network_scopes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_scope_one_center` (`center_guard`),
+  ADD UNIQUE KEY `uq_scope_kind_owner` (`scope_kind`,`owner_manager_id`),
+  ADD UNIQUE KEY `uq_scope_id_owner` (`id`,`owner_manager_id`),
+  ADD KEY `fk_scope_owner` (`owner_manager_id`),
+  ADD KEY `fk_scope_creator` (`created_by_manager_id`),
+  ADD KEY `fk_scope_archiver` (`archived_by_manager_id`);
+
+ALTER TABLE `network_service_areas`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_service_area_scope_status` (`scope_id`,`status`,`archived_at`),
+  ADD KEY `fk_service_area_creator` (`created_by_manager_id`),
+  ADD KEY `fk_service_area_archiver` (`archived_by_manager_id`);
+
+ALTER TABLE `network_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_network_currency_reference` (`default_currency_id`);
+
+ALTER TABLE `network_subscriber_card_templates`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_subscriber_card_template_approval` (`is_approved`,`updated_at`),
+  ADD KEY `fk_subscriber_card_template_approver` (`approved_by`);
+
+ALTER TABLE `package_radius_defaults`
+  ADD PRIMARY KEY (`package_id`);
+
+ALTER TABLE `package_service_policies`
+  ADD PRIMARY KEY (`package_id`),
+  ADD KEY `fk_ppp_policy_unit` (`duration_unit_id`),
+  ADD KEY `fk_ppp_download_unit` (`download_unit_id`),
+  ADD KEY `fk_ppp_upload_unit` (`upload_unit_id`),
+  ADD KEY `fk_ppp_quota_unit` (`quota_unit_id`),
+  ADD KEY `fk_ppp_reduced_download_unit` (`reduced_download_unit_id`),
+  ADD KEY `fk_ppp_reduced_upload_unit` (`reduced_upload_unit_id`);
+
+ALTER TABLE `permissions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+ALTER TABLE `permission_groups`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_group_scope_name` (`scope_name_guard`,`name`);
+
+ALTER TABLE `permission_group_permissions`
+  ADD PRIMARY KEY (`permission_group_id`,`permission_id`),
+  ADD KEY `fk_group_permission_definition` (`permission_id`);
+
+ALTER TABLE `platform_subscription`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_local_platform_license` (`license_number`);
+
+ALTER TABLE `pppoe_accounting_segments`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_ppp_accounting_segment` (`acctuniqueid`,`segment_start`),
+  ADD KEY `idx_ppp_segment_subscription` (`subscription_id`,`segment_start`);
+
+ALTER TABLE `pppoe_accounts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_ppp_identity` (`radius_identity_id`),
+  ADD UNIQUE KEY `uq_ppp_station_device` (`station_device_id`),
+  ADD KEY `idx_ppp_customer_archive` (`customer_id`,`archived_at`),
+  ADD KEY `fk_ppp_radius_identity` (`radius_identity_id`,`identity_kind`),
+  ADD KEY `fk_ppp_service` (`service_type_id`),
+  ADD KEY `fk_ppp_connection` (`connection_method_id`,`service_type_id`),
+  ADD KEY `fk_ppp_nas` (`allowed_nas_id`),
+  ADD KEY `fk_ppp_creator` (`created_by`),
+  ADD KEY `fk_ppp_archiver` (`archived_by`);
+
+ALTER TABLE `pppoe_account_radius_overrides`
+  ADD PRIMARY KEY (`account_id`),
+  ADD KEY `fk_ppp_route_actor` (`updated_by_manager_id`);
+
+ALTER TABLE `pppoe_import_batches`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_pppoe_import_batch_time` (`created_at`,`id`),
+  ADD KEY `fk_pppoe_import_batch_actor` (`created_by`),
+  ADD KEY `fk_pppoe_import_batch_category` (`category_id`);
+
+ALTER TABLE `pppoe_import_review_rows`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_pppoe_import_review_source` (`batch_id`,`source_row_number`),
+  ADD KEY `idx_pppoe_import_review_open` (`resolved_at`,`batch_id`,`id`),
+  ADD KEY `fk_pppoe_import_review_actor` (`resolved_by`);
+
+ALTER TABLE `pppoe_line_speed_boosts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_active_line_speed_boost` (`active_account_id`),
+  ADD KEY `idx_line_speed_boost_expiry` (`status`,`expires_at`,`id`),
+  ADD KEY `idx_line_speed_boost_username` (`username`,`status`),
+  ADD KEY `fk_line_speed_boost_creator` (`created_by`),
+  ADD KEY `idx_line_boost_account_state` (`account_id`,`status`,`expires_at`,`id`);
+
+ALTER TABLE `pppoe_packages`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_ppp_package_archiver` (`archived_by`),
+  ADD KEY `idx_pppoe_packages_type_enabled` (`package_type`,`is_enabled`),
+  ADD KEY `idx_pppoe_packages_daily` (`daily_package_id`),
+  ADD KEY `idx_pppoe_packages_owner` (`owner_manager_id`),
+  ADD KEY `fk_ppp_currency_reference` (`currency_id`);
+
+ALTER TABLE `pppoe_package_speed_boosts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_active_profile_speed_boost` (`active_package_id`),
+  ADD KEY `idx_profile_speed_boost_expiry` (`status`,`expires_at`,`id`),
+  ADD KEY `fk_profile_speed_boost_package` (`package_id`),
+  ADD KEY `fk_profile_speed_boost_creator` (`created_by`);
+
+ALTER TABLE `pppoe_package_versions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_pppoe_package_version` (`package_id`,`version_no`),
+  ADD UNIQUE KEY `uq_pppoe_radius_group` (`radius_group_name`);
+
+ALTER TABLE `pppoe_radius_jobs`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_ppp_radius_job_session` (`radacctid`),
+  ADD KEY `idx_ppp_radius_job_due` (`next_attempt_at`,`id`);
+
+ALTER TABLE `pppoe_radius_job_state`
+  ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `pppoe_subscriptions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_ppp_subscription_account` (`id`,`account_id`),
+  ADD UNIQUE KEY `uq_live_ppp_role` (`account_id`,`live_role`),
+  ADD UNIQUE KEY `uq_ppp_daily_once` (`daily_parent_id`),
+  ADD KEY `idx_ppp_subscription_account` (`account_id`,`lifecycle`),
+  ADD KEY `fk_ppp_subscription_version` (`package_version_id`),
+  ADD KEY `fk_ppp_subscription_parent` (`parent_subscription_id`,`account_id`),
+  ADD KEY `fk_ppp_subscription_previous` (`previous_subscription_id`,`account_id`),
+  ADD KEY `fk_ppp_subscription_creator` (`created_by`),
+  ADD KEY `idx_ppp_subscription_account_role_time` (`account_id`,`service_role`,`id`);
+
+ALTER TABLE `pppoe_subscription_usage`
+  ADD PRIMARY KEY (`subscription_id`);
+
+ALTER TABLE `radacct`
+  ADD PRIMARY KEY (`radacctid`),
+  ADD UNIQUE KEY `acctuniqueid` (`acctuniqueid`),
+  ADD KEY `username` (`username`),
+  ADD KEY `framedipaddress` (`framedipaddress`),
+  ADD KEY `framedipv6address` (`framedipv6address`),
+  ADD KEY `framedipv6prefix` (`framedipv6prefix`),
+  ADD KEY `framedinterfaceid` (`framedinterfaceid`),
+  ADD KEY `delegatedipv6prefix` (`delegatedipv6prefix`),
+  ADD KEY `acctsessionid` (`acctsessionid`),
+  ADD KEY `acctsessiontime` (`acctsessiontime`),
+  ADD KEY `acctstarttime` (`acctstarttime`),
+  ADD KEY `acctinterval` (`acctinterval`),
+  ADD KEY `acctstoptime` (`acctstoptime`),
+  ADD KEY `nasipaddress` (`nasipaddress`),
+  ADD KEY `class` (`class`),
+  ADD KEY `idx_radacct_username_live` (`username`,`acctstoptime`,`acctupdatetime`,`radacctid`);
+
+ALTER TABLE `radcheck`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `username` (`username`(32));
+
+ALTER TABLE `radgroupcheck`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `groupname` (`groupname`(32));
+
+ALTER TABLE `radgroupreply`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `groupname` (`groupname`(32));
+
+ALTER TABLE `radius_identities`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_identity_kind` (`id`,`service_kind`),
+  ADD UNIQUE KEY `uq_current_username` (`current_username`),
+  ADD UNIQUE KEY `uq_identity_contract_number` (`contract_number`),
+  ADD UNIQUE KEY `uq_identity_line_payment_code` (`line_payment_code`),
+  ADD KEY `fk_identity_current_name` (`id`,`current_username`);
+
+ALTER TABLE `radius_username_reservations`
+  ADD PRIMARY KEY (`username`),
+  ADD UNIQUE KEY `uq_username_owner` (`radius_identity_id`,`username`);
+
+ALTER TABLE `radpostauth`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `username` (`username`),
+  ADD KEY `class` (`class`),
+  ADD KEY `idx_radpostauth_username_time` (`username`,`authdate`,`id`);
+
+ALTER TABLE `radreply`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `username` (`username`(32));
+
+ALTER TABLE `radusergroup`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `username` (`username`(32));
+
+ALTER TABLE `service_types`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_service_code` (`code`);
+
+ALTER TABLE `speed_units`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+ALTER TABLE `time_units`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+ALTER TABLE `username_change_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_name_history_old` (`radius_identity_id`,`old_username`),
+  ADD KEY `fk_name_history_new` (`radius_identity_id`,`new_username`),
+  ADD KEY `fk_name_history_actor` (`changed_by`);
+
+ALTER TABLE `user_ui_preferences`
+  ADD PRIMARY KEY (`owner_key`);
+
+ALTER TABLE `activity_log`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `address_keywords`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `currencies`
+  MODIFY `id` smallint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `customers`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `customer_address_suggestions`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `customer_categories`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `customer_identity_documents`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `equipment_ip_pools`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `hotspot_accounting_segments`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `hotspot_accounts`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `hotspot_card_batches`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `hotspot_packages`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `hotspot_package_versions`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `hotspot_service_periods`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `lord_nas`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `managers`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `manager_contact_numbers`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `nas`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `nas_management_credentials`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `nas_management_services`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `nas_ovpn_connections`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `network_contact_numbers`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `network_equipment_devices`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `network_scopes`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `network_service_areas`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `permissions`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `permission_groups`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_accounting_segments`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_accounts`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_import_batches`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_import_review_rows`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_line_speed_boosts`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_packages`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_package_speed_boosts`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_package_versions`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_radius_jobs`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `pppoe_subscriptions`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radacct`
+  MODIFY `radacctid` bigint NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radcheck`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radgroupcheck`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radgroupreply`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radius_identities`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radpostauth`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radreply`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `radusergroup`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `time_units`
+  MODIFY `id` smallint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `username_change_history`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `activity_log`
+  ADD CONSTRAINT `fk_activity_actor` FOREIGN KEY (`actor_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_activity_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_activity_radius_identity` FOREIGN KEY (`account_id`) REFERENCES `radius_identities` (`id`);
+
+ALTER TABLE `address_keywords`
+  ADD CONSTRAINT `fk_address_keyword_creator` FOREIGN KEY (`created_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `connection_methods`
+  ADD CONSTRAINT `fk_method_service` FOREIGN KEY (`service_type_id`) REFERENCES `service_types` (`id`);
+
+ALTER TABLE `customers`
+  ADD CONSTRAINT `fk_customer_archiver` FOREIGN KEY (`archived_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_customer_creator` FOREIGN KEY (`created_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_customer_manager` FOREIGN KEY (`manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `customer_address_suggestions`
+  ADD CONSTRAINT `fk_customer_address_suggestion_manager` FOREIGN KEY (`manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `customer_categories`
+  ADD CONSTRAINT `fk_category_archiver` FOREIGN KEY (`archived_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_category_creator` FOREIGN KEY (`created_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_category_owner` FOREIGN KEY (`manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `customer_category_manager_assignments`
+  ADD CONSTRAINT `fk_category_assignment_actor` FOREIGN KEY (`assigned_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_category_assignment_category` FOREIGN KEY (`category_id`) REFERENCES `customer_categories` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_category_assignment_manager` FOREIGN KEY (`manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `customer_category_memberships`
+  ADD CONSTRAINT `fk_membership_actor` FOREIGN KEY (`assigned_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_membership_category_assignment` FOREIGN KEY (`category_id`,`manager_id`) REFERENCES `customer_category_manager_assignments` (`category_id`, `manager_id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_membership_customer_owner` FOREIGN KEY (`customer_id`,`manager_id`) REFERENCES `customers` (`id`, `manager_id`) ON DELETE RESTRICT;
+
+ALTER TABLE `customer_identity_documents`
+  ADD CONSTRAINT `fk_identity_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_identity_editor` FOREIGN KEY (`updated_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `equipment_ip_pools`
+  ADD CONSTRAINT `fk_equipment_pool_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`);
+
+ALTER TABLE `hotspot_accounting_segments`
+  ADD CONSTRAINT `fk_hs_segment_period` FOREIGN KEY (`period_id`) REFERENCES `hotspot_service_periods` (`id`);
+
+ALTER TABLE `hotspot_accounts`
+  ADD CONSTRAINT `fk_hotspot_accounts_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hotspot_accounts_owner` FOREIGN KEY (`owner_manager_id`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hs_account_archiver` FOREIGN KEY (`archived_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hs_radius_identity` FOREIGN KEY (`radius_identity_id`,`identity_kind`) REFERENCES `radius_identities` (`id`, `service_kind`);
+
+ALTER TABLE `hotspot_batch_cards`
+  ADD CONSTRAINT `fk_hs_batch_batch_owner` FOREIGN KEY (`batch_id`,`owner_manager_id`) REFERENCES `hotspot_card_batches` (`id`, `owner_manager_id`),
+  ADD CONSTRAINT `fk_hs_batch_card_account` FOREIGN KEY (`account_id`,`account_kind`) REFERENCES `hotspot_accounts` (`id`, `account_kind`),
+  ADD CONSTRAINT `fk_hs_batch_card_batch` FOREIGN KEY (`batch_id`) REFERENCES `hotspot_card_batches` (`id`),
+  ADD CONSTRAINT `fk_hs_batch_card_owner` FOREIGN KEY (`account_id`,`owner_manager_id`) REFERENCES `hotspot_accounts` (`id`, `owner_manager_id`);
+
+ALTER TABLE `hotspot_card_batches`
+  ADD CONSTRAINT `fk_hotspot_card_batches_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hotspot_card_batches_owner` FOREIGN KEY (`owner_manager_id`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hs_batch_version` FOREIGN KEY (`package_version_id`) REFERENCES `hotspot_package_versions` (`id`);
+
+ALTER TABLE `hotspot_card_output_jobs`
+  ADD CONSTRAINT `fk_hotspot_output_actor` FOREIGN KEY (`actor_manager_id`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hotspot_output_batch` FOREIGN KEY (`batch_id`) REFERENCES `hotspot_card_batches` (`id`);
+
+ALTER TABLE `hotspot_card_print_marks`
+  ADD CONSTRAINT `fk_hotspot_print_account` FOREIGN KEY (`account_id`) REFERENCES `hotspot_accounts` (`id`),
+  ADD CONSTRAINT `fk_hotspot_print_job` FOREIGN KEY (`last_job_id`) REFERENCES `hotspot_card_output_jobs` (`id`);
+
+ALTER TABLE `hotspot_packages`
+  ADD CONSTRAINT `fk_hotspot_packages_owner` FOREIGN KEY (`owner_manager_id`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hs_package_archiver` FOREIGN KEY (`archived_by`) REFERENCES `managers` (`id`);
+
+ALTER TABLE `hotspot_package_versions`
+  ADD CONSTRAINT `fk_hs_version_package` FOREIGN KEY (`package_id`) REFERENCES `hotspot_packages` (`id`),
+  ADD CONSTRAINT `fk_hs_version_unit` FOREIGN KEY (`duration_unit_id`) REFERENCES `time_units` (`id`);
+
+ALTER TABLE `hotspot_period_usage`
+  ADD CONSTRAINT `fk_hs_usage_period` FOREIGN KEY (`period_id`) REFERENCES `hotspot_service_periods` (`id`);
+
+ALTER TABLE `hotspot_service_periods`
+  ADD CONSTRAINT `fk_hotspot_service_periods_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_hs_period_account` FOREIGN KEY (`account_id`) REFERENCES `hotspot_accounts` (`id`),
+  ADD CONSTRAINT `fk_hs_period_previous` FOREIGN KEY (`previous_period_id`,`account_id`) REFERENCES `hotspot_service_periods` (`id`, `account_id`),
+  ADD CONSTRAINT `fk_hs_period_unit` FOREIGN KEY (`duration_unit_id`) REFERENCES `time_units` (`id`),
+  ADD CONSTRAINT `fk_hs_period_version` FOREIGN KEY (`package_version_id`) REFERENCES `hotspot_package_versions` (`id`);
+
+ALTER TABLE `hotspot_standalone_cards`
+  ADD CONSTRAINT `fk_hs_standalone_account` FOREIGN KEY (`account_id`,`account_kind`) REFERENCES `hotspot_accounts` (`id`, `account_kind`),
+  ADD CONSTRAINT `fk_hs_standalone_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`);
+
+ALTER TABLE `hotspot_usage_intervals`
+  ADD CONSTRAINT `fk_hs_interval_period` FOREIGN KEY (`period_id`) REFERENCES `hotspot_service_periods` (`id`);
+
+ALTER TABLE `lord_nas`
+  ADD CONSTRAINT `fk_lord_nas_radius` FOREIGN KEY (`radius_nas_id`) REFERENCES `nas` (`id`),
+  ADD CONSTRAINT `fk_nas_archiver` FOREIGN KEY (`archived_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_nas_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`);
+
+ALTER TABLE `managers`
+  ADD CONSTRAINT `fk_manager_archiver` FOREIGN KEY (`archived_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_manager_creator` FOREIGN KEY (`created_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_manager_group` FOREIGN KEY (`permission_group_id`) REFERENCES `permission_groups` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `manager_contact_numbers`
+  ADD CONSTRAINT `fk_extra_phone_manager` FOREIGN KEY (`manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `nas_management_credentials`
+  ADD CONSTRAINT `fk_credential_actor` FOREIGN KEY (`updated_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_credential_nas` FOREIGN KEY (`lord_nas_id`) REFERENCES `lord_nas` (`id`);
+
+ALTER TABLE `nas_management_services`
+  ADD CONSTRAINT `fk_management_service_nas` FOREIGN KEY (`lord_nas_id`) REFERENCES `lord_nas` (`id`);
+
+ALTER TABLE `nas_ovpn_connections`
+  ADD CONSTRAINT `fk_ovpn_actor` FOREIGN KEY (`updated_by_manager_id`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_ovpn_nas` FOREIGN KEY (`nas_id`) REFERENCES `lord_nas` (`id`);
+
+ALTER TABLE `network_archive_policy`
+  ADD CONSTRAINT `fk_archive_policy_actor` FOREIGN KEY (`updated_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `network_contact_numbers`
+  ADD CONSTRAINT `fk_contact_network_settings` FOREIGN KEY (`network_settings_id`) REFERENCES `network_settings` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `network_equipment_devices`
+  ADD CONSTRAINT `fk_equipment_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_equipment_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
+  ADD CONSTRAINT `fk_equipment_parent_ap` FOREIGN KEY (`parent_ap_id`) REFERENCES `network_equipment_devices` (`id`),
+  ADD CONSTRAINT `fk_equipment_pool` FOREIGN KEY (`pool_id`) REFERENCES `equipment_ip_pools` (`id`);
+
+ALTER TABLE `network_scopes`
+  ADD CONSTRAINT `fk_scope_archiver` FOREIGN KEY (`archived_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_scope_creator` FOREIGN KEY (`created_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_scope_owner` FOREIGN KEY (`owner_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `network_service_areas`
+  ADD CONSTRAINT `fk_service_area_archiver` FOREIGN KEY (`archived_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_service_area_creator` FOREIGN KEY (`created_by_manager_id`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_service_area_scope` FOREIGN KEY (`scope_id`) REFERENCES `network_scopes` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `network_settings`
+  ADD CONSTRAINT `fk_network_currency_reference` FOREIGN KEY (`default_currency_id`) REFERENCES `currencies` (`id`);
+
+ALTER TABLE `network_subscriber_card_templates`
+  ADD CONSTRAINT `fk_subscriber_card_template_approver` FOREIGN KEY (`approved_by`) REFERENCES `managers` (`id`);
+
+ALTER TABLE `package_radius_defaults`
+  ADD CONSTRAINT `fk_package_radius_package` FOREIGN KEY (`package_id`) REFERENCES `pppoe_packages` (`id`);
+
+ALTER TABLE `package_service_policies`
+  ADD CONSTRAINT `fk_package_service_package` FOREIGN KEY (`package_id`) REFERENCES `pppoe_packages` (`id`),
+  ADD CONSTRAINT `fk_ppp_download_unit` FOREIGN KEY (`download_unit_id`) REFERENCES `speed_units` (`id`),
+  ADD CONSTRAINT `fk_ppp_policy_unit` FOREIGN KEY (`duration_unit_id`) REFERENCES `time_units` (`id`),
+  ADD CONSTRAINT `fk_ppp_quota_unit` FOREIGN KEY (`quota_unit_id`) REFERENCES `data_units` (`id`),
+  ADD CONSTRAINT `fk_ppp_reduced_download_unit` FOREIGN KEY (`reduced_download_unit_id`) REFERENCES `speed_units` (`id`),
+  ADD CONSTRAINT `fk_ppp_reduced_upload_unit` FOREIGN KEY (`reduced_upload_unit_id`) REFERENCES `speed_units` (`id`),
+  ADD CONSTRAINT `fk_ppp_upload_unit` FOREIGN KEY (`upload_unit_id`) REFERENCES `speed_units` (`id`);
+
+ALTER TABLE `permission_group_permissions`
+  ADD CONSTRAINT `fk_group_permission_definition` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_group_permission_group` FOREIGN KEY (`permission_group_id`) REFERENCES `permission_groups` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `pppoe_accounting_segments`
+  ADD CONSTRAINT `fk_ppp_segment_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `pppoe_subscriptions` (`id`);
+
+ALTER TABLE `pppoe_accounts`
+  ADD CONSTRAINT `fk_ppp_archiver` FOREIGN KEY (`archived_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_ppp_connection` FOREIGN KEY (`connection_method_id`,`service_type_id`) REFERENCES `connection_methods` (`id`, `service_type_id`),
+  ADD CONSTRAINT `fk_ppp_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_ppp_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
+  ADD CONSTRAINT `fk_ppp_nas` FOREIGN KEY (`allowed_nas_id`) REFERENCES `nas` (`id`),
+  ADD CONSTRAINT `fk_ppp_radius_identity` FOREIGN KEY (`radius_identity_id`,`identity_kind`) REFERENCES `radius_identities` (`id`, `service_kind`),
+  ADD CONSTRAINT `fk_ppp_service` FOREIGN KEY (`service_type_id`) REFERENCES `service_types` (`id`),
+  ADD CONSTRAINT `fk_ppp_station_device` FOREIGN KEY (`station_device_id`) REFERENCES `network_equipment_devices` (`id`);
+
+ALTER TABLE `pppoe_account_radius_overrides`
+  ADD CONSTRAINT `fk_ppp_route_account` FOREIGN KEY (`account_id`) REFERENCES `pppoe_accounts` (`id`),
+  ADD CONSTRAINT `fk_ppp_route_actor` FOREIGN KEY (`updated_by_manager_id`) REFERENCES `managers` (`id`);
+
+ALTER TABLE `pppoe_import_batches`
+  ADD CONSTRAINT `fk_pppoe_import_batch_actor` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_pppoe_import_batch_category` FOREIGN KEY (`category_id`) REFERENCES `customer_categories` (`id`);
+
+ALTER TABLE `pppoe_import_review_rows`
+  ADD CONSTRAINT `fk_pppoe_import_review_actor` FOREIGN KEY (`resolved_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_pppoe_import_review_batch` FOREIGN KEY (`batch_id`) REFERENCES `pppoe_import_batches` (`id`);
+
+ALTER TABLE `pppoe_line_speed_boosts`
+  ADD CONSTRAINT `fk_line_speed_boost_account` FOREIGN KEY (`account_id`) REFERENCES `pppoe_accounts` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_line_speed_boost_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `pppoe_packages`
+  ADD CONSTRAINT `fk_ppp_currency_reference` FOREIGN KEY (`currency_id`) REFERENCES `currencies` (`id`),
+  ADD CONSTRAINT `fk_ppp_package_archiver` FOREIGN KEY (`archived_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_ppp_package_owner` FOREIGN KEY (`owner_manager_id`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_pppoe_packages_daily` FOREIGN KEY (`daily_package_id`) REFERENCES `pppoe_packages` (`id`);
+
+ALTER TABLE `pppoe_package_speed_boosts`
+  ADD CONSTRAINT `fk_profile_speed_boost_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_profile_speed_boost_package` FOREIGN KEY (`package_id`) REFERENCES `pppoe_packages` (`id`) ON DELETE RESTRICT;
+
+ALTER TABLE `pppoe_package_versions`
+  ADD CONSTRAINT `fk_pppoe_version_package` FOREIGN KEY (`package_id`) REFERENCES `pppoe_packages` (`id`);
+
+ALTER TABLE `pppoe_subscriptions`
+  ADD CONSTRAINT `fk_ppp_subscription_account` FOREIGN KEY (`account_id`) REFERENCES `pppoe_accounts` (`id`),
+  ADD CONSTRAINT `fk_ppp_subscription_creator` FOREIGN KEY (`created_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_ppp_subscription_parent` FOREIGN KEY (`parent_subscription_id`,`account_id`) REFERENCES `pppoe_subscriptions` (`id`, `account_id`),
+  ADD CONSTRAINT `fk_ppp_subscription_previous` FOREIGN KEY (`previous_subscription_id`,`account_id`) REFERENCES `pppoe_subscriptions` (`id`, `account_id`),
+  ADD CONSTRAINT `fk_ppp_subscription_version` FOREIGN KEY (`package_version_id`) REFERENCES `pppoe_package_versions` (`id`);
+
+ALTER TABLE `pppoe_subscription_usage`
+  ADD CONSTRAINT `fk_ppp_usage_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `pppoe_subscriptions` (`id`);
+
+ALTER TABLE `radius_identities`
+  ADD CONSTRAINT `fk_identity_current_name` FOREIGN KEY (`id`,`current_username`) REFERENCES `radius_username_reservations` (`radius_identity_id`, `username`);
+
+ALTER TABLE `radius_username_reservations`
+  ADD CONSTRAINT `fk_reserved_identity` FOREIGN KEY (`radius_identity_id`) REFERENCES `radius_identities` (`id`);
+
+ALTER TABLE `username_change_history`
+  ADD CONSTRAINT `fk_name_history_actor` FOREIGN KEY (`changed_by`) REFERENCES `managers` (`id`),
+  ADD CONSTRAINT `fk_name_history_identity` FOREIGN KEY (`radius_identity_id`) REFERENCES `radius_identities` (`id`),
+  ADD CONSTRAINT `fk_name_history_new` FOREIGN KEY (`radius_identity_id`,`new_username`) REFERENCES `radius_username_reservations` (`radius_identity_id`, `username`),
+  ADD CONSTRAINT `fk_name_history_old` FOREIGN KEY (`radius_identity_id`,`old_username`) REFERENCES `radius_username_reservations` (`radius_identity_id`, `username`);
 
 INSERT INTO time_units (code,name_ar,calculation_kind,seconds_per_unit,actual_usage_seconds) VALUES
 ('minute','دقيقة','fixed',60,60),('hour','ساعة','fixed',3600,3600),
 ('day','يوم','fixed',86400,86400),('week','أسبوع','fixed',604800,604800),('month','شهر','calendar',NULL,2592000)
 ON DUPLICATE KEY UPDATE code=VALUES(code);
--- Calendar month is NOT a fixed 30-day interval.
-
-CREATE TABLE IF NOT EXISTS network_settings (
-  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-  network_name VARCHAR(150) NOT NULL,
-  description TEXT NULL,
-  radius_server_address VARCHAR(255) NULL,
-  radius_interim_update_seconds INT UNSIGNED NOT NULL DEFAULT 180,
-  timezone VARCHAR(64) NOT NULL COMMENT 'IANA timezone, explicitly selected for this network',
-  primary_contact_phone VARCHAR(20) NOT NULL,
-  identity_capture_enabled TINYINT(1) NOT NULL DEFAULT 0,
-  grace_policy ENUM('package','global') NOT NULL DEFAULT 'package',
-  global_grace_days SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT chk_network_singleton CHECK (id=1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS network_contact_numbers (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  network_settings_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  phone VARCHAR(20) NOT NULL,
-  label VARCHAR(80) NULL,
-  display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_network_optional_phone (network_settings_id,phone),
-  CONSTRAINT fk_contact_network_settings FOREIGN KEY (network_settings_id) REFERENCES network_settings(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS platform_subscription (
-  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-  central_tenant_id BIGINT UNSIGNED NOT NULL,
-  central_subscription_id BIGINT UNSIGNED NOT NULL,
-  license_number VARCHAR(64) NOT NULL,
-  license_status ENUM('pending','active','suspended','expired','revoked') NOT NULL DEFAULT 'pending',
-  subscription_status ENUM('pending','active','expired','cancelled','suspended') NOT NULL DEFAULT 'pending',
-  plan_name_snapshot VARCHAR(150) NOT NULL,
-  deployment_code VARCHAR(50) NOT NULL,
-  max_pppoe_accounts BIGINT UNSIGNED NOT NULL,
-  base_max_nas INT UNSIGNED NOT NULL,
-  additional_nas_capacity INT UNSIGNED NOT NULL DEFAULT 0,
-  duration_months_snapshot INT UNSIGNED NOT NULL,
-  activated_at DATETIME NULL,
-  starts_at DATETIME NULL,
-  expires_at DATETIME NULL,
-  sync_version BIGINT UNSIGNED NOT NULL,
-  synced_at DATETIME NOT NULL,
-  signed_payload JSON NOT NULL,
-  payload_signature TEXT NOT NULL,
-  signing_key_id VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_local_platform_license (license_number),
-  CONSTRAINT chk_platform_singleton CHECK (id=1),
-  CONSTRAINT chk_platform_duration CHECK (duration_months_snapshot>0),
-  CONSTRAINT chk_platform_sync_version CHECK (sync_version>0),
-  CONSTRAINT chk_platform_period CHECK ((starts_at IS NULL AND expires_at IS NULL) OR (starts_at IS NOT NULL AND expires_at IS NOT NULL AND expires_at>starts_at))
--- Central IDs are logical references; no cross-database FOREIGN KEY.
--- 0 base limits mean unlimited. Additional capacity cannot turn unlimited into finite.
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS permission_groups (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  description TEXT NULL,
-  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
-  archived_at DATETIME NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_permission_group_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS permissions (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  code VARCHAR(100) NOT NULL UNIQUE,
-  name_ar VARCHAR(150) NOT NULL,
-  module VARCHAR(50) NOT NULL,
-  principal_only TINYINT(1) NOT NULL DEFAULT 0,
-  is_enabled TINYINT(1) NOT NULL DEFAULT 1
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS permission_group_permissions (
-  permission_group_id BIGINT UNSIGNED NOT NULL,
-  permission_id BIGINT UNSIGNED NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (permission_group_id,permission_id),
-  CONSTRAINT fk_group_permission_group FOREIGN KEY (permission_group_id) REFERENCES permission_groups(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_group_permission_definition FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS managers (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  full_name VARCHAR(150) NOT NULL,
-  username VARCHAR(100) NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  manager_type ENUM('principal','subordinate') NOT NULL,
-  permission_group_id BIGINT UNSIGNED NULL,
-  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
-  phone VARCHAR(20) NULL,
-  notes TEXT NULL,
-  created_by_manager_id BIGINT UNSIGNED NULL,
-  archived_at DATETIME NULL,
-  archived_by_manager_id BIGINT UNSIGNED NULL,
-  principal_guard TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN manager_type='principal' THEN 1 ELSE NULL END) STORED,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_manager_username (username),
-  UNIQUE KEY uq_single_principal (principal_guard),
-  KEY idx_managers_group_status (permission_group_id,is_enabled,archived_at),
-  CONSTRAINT chk_manager_group CHECK ((manager_type='principal' AND permission_group_id IS NULL) OR (manager_type='subordinate' AND permission_group_id IS NOT NULL)),
-  CONSTRAINT fk_manager_group FOREIGN KEY (permission_group_id) REFERENCES permission_groups(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_manager_creator FOREIGN KEY (created_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_manager_archiver FOREIGN KEY (archived_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS customers (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  manager_id BIGINT UNSIGNED NOT NULL,
-  status ENUM('active','suspended') NOT NULL DEFAULT 'active',
-  first_name VARCHAR(100) NOT NULL,
-  last_name VARCHAR(100) NOT NULL,
-  phone VARCHAR(40) NULL,
-  notes TEXT NULL,
-  address TEXT NULL,
-  latitude DECIMAL(10,7) NULL,
-  longitude DECIMAL(10,7) NULL,
-  payment_code VARCHAR(64) NOT NULL,
-  created_by_manager_id BIGINT UNSIGNED NOT NULL,
-  archived_at DATETIME NULL,
-  archived_by_manager_id BIGINT UNSIGNED NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_customer_payment_code (payment_code),
-  UNIQUE KEY uq_customer_phone (phone),
-  UNIQUE KEY uq_customer_id_manager (id,manager_id),
-  KEY idx_customer_owner_archive (manager_id,archived_at,id),
-  KEY idx_customer_name (last_name,first_name),
-  CONSTRAINT chk_customer_first_name CHECK (CHAR_LENGTH(TRIM(first_name))>0),
-  CONSTRAINT chk_customer_payment_code CHECK (CHAR_LENGTH(TRIM(payment_code))>0),
-  CONSTRAINT chk_customer_coordinates CHECK ((latitude IS NULL AND longitude IS NULL) OR (latitude IS NOT NULL AND longitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)),
-  CONSTRAINT fk_customer_manager FOREIGN KEY (manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_customer_creator FOREIGN KEY (created_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_customer_archiver FOREIGN KEY (archived_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS customer_identity_documents (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  customer_id BIGINT UNSIGNED NOT NULL,
-  first_name VARCHAR(100) NULL,
-  last_name VARCHAR(100) NULL,
-  father_name VARCHAR(100) NULL,
-  mother_name VARCHAR(100) NULL,
-  birth_place VARCHAR(150) NULL,
-  birth_date DATE NULL,
-  national_number VARCHAR(50) NULL,
-  identity_number VARCHAR(50) NULL,
-  address TEXT NULL,
-  front_image_reference VARCHAR(500) NULL,
-  back_image_reference VARCHAR(500) NULL,
-  front_image_data LONGBLOB NULL,
-  back_image_data LONGBLOB NULL,
-  capture_method ENUM('manual','qr') NOT NULL DEFAULT 'manual',
-  updated_by_manager_id BIGINT UNSIGNED NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_customer_one_identity (customer_id),
-  UNIQUE KEY uq_national_number (national_number),
-  CONSTRAINT chk_identity_number CHECK (identity_number IS NULL OR CHAR_LENGTH(TRIM(identity_number))>0),
-  CONSTRAINT fk_identity_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_identity_editor FOREIGN KEY (updated_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS address_keywords (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  keyword VARCHAR(150) NOT NULL UNIQUE,
-  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
-  created_by_manager_id BIGINT UNSIGNED NOT NULL,
-  archived_at DATETIME NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_address_keyword_creator FOREIGN KEY (created_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
--- Suggestions only; customers.address stays text with no mandatory area_id.
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS customer_categories (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  manager_id BIGINT UNSIGNED NOT NULL COMMENT 'Legacy anchor manager; active visibility is defined by customer_category_manager_assignments',
-  name VARCHAR(100) NOT NULL,
-  description TEXT NULL,
-  created_by_manager_id BIGINT UNSIGNED NOT NULL,
-  archived_at DATETIME NULL,
-  archived_by_manager_id BIGINT UNSIGNED NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_category_owner_name (manager_id,name),
-  UNIQUE KEY uq_category_id_manager (id,manager_id),
-  KEY idx_category_owner_archive (manager_id,archived_at,id),
-  CONSTRAINT fk_category_owner FOREIGN KEY (manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_category_creator FOREIGN KEY (created_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_category_archiver FOREIGN KEY (archived_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS customer_category_manager_assignments (
-  category_id BIGINT UNSIGNED NOT NULL,
-  manager_id BIGINT UNSIGNED NOT NULL,
-  assigned_by_manager_id BIGINT UNSIGNED NOT NULL,
-  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (category_id,manager_id),
-  KEY idx_category_assignment_manager (manager_id,category_id),
-  CONSTRAINT fk_category_assignment_category FOREIGN KEY (category_id) REFERENCES customer_categories(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_category_assignment_manager FOREIGN KEY (manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_category_assignment_actor FOREIGN KEY (assigned_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS customer_category_memberships (
-  customer_id BIGINT UNSIGNED NOT NULL,
-  category_id BIGINT UNSIGNED NOT NULL,
-  manager_id BIGINT UNSIGNED NOT NULL,
-  assigned_by_manager_id BIGINT UNSIGNED NOT NULL,
-  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (customer_id,category_id),
-  KEY idx_membership_category_manager (category_id,manager_id),
-  CONSTRAINT fk_membership_customer_owner FOREIGN KEY (customer_id,manager_id) REFERENCES customers(id,manager_id) ON DELETE RESTRICT,
-  CONSTRAINT fk_membership_category_assignment FOREIGN KEY (category_id,manager_id) REFERENCES customer_category_manager_assignments(category_id,manager_id) ON DELETE RESTRICT,
-  CONSTRAINT fk_membership_actor FOREIGN KEY (assigned_by_manager_id) REFERENCES managers(id) ON DELETE RESTRICT
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS pppoe_import_batches (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
- created_by BIGINT UNSIGNED NOT NULL,
- category_id BIGINT UNSIGNED NOT NULL,
- source_name VARCHAR(255) NULL,
- total_rows INT UNSIGNED NOT NULL DEFAULT 0,
- imported_rows INT UNSIGNED NOT NULL DEFAULT 0,
- duplicate_rows INT UNSIGNED NOT NULL DEFAULT 0,
- rejected_rows INT UNSIGNED NOT NULL DEFAULT 0,
-  status ENUM('processing','completed','completed_with_issues') NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- KEY idx_pppoe_import_batch_time(created_at,id),
- CONSTRAINT fk_pppoe_import_batch_actor FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT fk_pppoe_import_batch_category FOREIGN KEY(category_id) REFERENCES customer_categories(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS pppoe_import_review_rows (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
- batch_id BIGINT UNSIGNED NOT NULL,
- source_row_number INT UNSIGNED NOT NULL,
- username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
- reason_code VARCHAR(64) NOT NULL,
- encrypted_payload TEXT NOT NULL,
- resolved_at DATETIME(6) NULL,
- resolved_by BIGINT UNSIGNED NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- UNIQUE KEY uq_pppoe_import_review_source(batch_id,source_row_number),
- KEY idx_pppoe_import_review_open(resolved_at,batch_id,id),
- CONSTRAINT fk_pppoe_import_review_batch FOREIGN KEY(batch_id) REFERENCES pppoe_import_batches(id),
- CONSTRAINT fk_pppoe_import_review_actor FOREIGN KEY(resolved_by) REFERENCES managers(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS activity_log (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  actor_manager_id BIGINT UNSIGNED NULL,
-  actor_snapshot JSON NULL,
-  actor_kind ENUM('manager','system') NOT NULL,
-  action_code VARCHAR(100) NOT NULL,
-  target_type VARCHAR(100) NOT NULL,
-  target_id BIGINT UNSIGNED NULL,
-  customer_id BIGINT UNSIGNED NULL,
-  account_id BIGINT UNSIGNED NULL COMMENT 'Stable radius_identities.id across PPPoE and hotspot',
-  before_data JSON NULL,
-  after_data JSON NULL,
-  result ENUM('success','failed') NOT NULL,
-  failure_code VARCHAR(100) NULL,
-  failure_reason TEXT NULL,
-  request_id VARCHAR(100) NULL,
-  operation_id VARCHAR(100) NULL,
-  occurred_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  KEY idx_activity_customer_time (customer_id,occurred_at,id),
-  KEY idx_activity_actor_time (actor_manager_id,occurred_at,id),
-  KEY idx_activity_target_time (target_type,target_id,occurred_at,id),
-  KEY idx_activity_operation (operation_id,id),
-  CONSTRAINT fk_activity_actor FOREIGN KEY (actor_manager_id) REFERENCES managers(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_activity_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT
--- Append-only by application/DB grants, not enforced merely by table definition.
--- Never include passwords, tunnel secrets, identity images or sensitive identity data.
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO permissions (code,name_ar,module,principal_only) VALUES
 ('customers.view','عرض العملاء','customers',0),
@@ -389,888 +1790,9 @@ INSERT INTO permissions (code,name_ar,module,principal_only) VALUES
 ('permission_groups.manage','إدارة مجموعات الصلاحيات','permissions',1)
 ON DUPLICATE KEY UPDATE code=VALUES(code);
 
--- No default manager/password, sample customer, activated license or speculative group grants.
--- Foundation section finished; service tables follow.
-
--- SECTION 2: Official FreeRADIUS SQL schema (verbatim).
-###########################################################################
-# $Id$                 #
-#                                                                         #
-#  schema.sql                       rlm_sql - FreeRADIUS SQL Module       #
-#                                                                         #
-#     Database schema for MySQL rlm_sql module                            #
-#                                                                         #
-#     To load:                                                            #
-#         mysql -uroot -prootpass radius < schema.sql                     #
-#                                                                         #
-#                                   Mike Machado <mike@innercite.com>     #
-###########################################################################
-#
-# Table structure for table 'radacct'
-#
-
-CREATE TABLE IF NOT EXISTS radacct (
-  radacctid bigint(21) NOT NULL auto_increment,
-  acctsessionid varchar(64) NOT NULL default '',
-  acctuniqueid varchar(32) NOT NULL default '',
-  username varchar(64) NOT NULL default '',
-  realm varchar(64) default '',
-  nasipaddress varchar(15) NOT NULL default '',
-  nasportid varchar(32) default NULL,
-  nasporttype varchar(32) default NULL,
-  acctstarttime datetime NULL default NULL,
-  acctupdatetime datetime NULL default NULL,
-  acctstoptime datetime NULL default NULL,
-  acctinterval int(12) default NULL,
-  acctsessiontime int(12) unsigned default NULL,
-  acctauthentic varchar(32) default NULL,
-  connectinfo_start varchar(128) default NULL,
-  connectinfo_stop varchar(128) default NULL,
-  acctinputoctets bigint(20) default NULL,
-  acctoutputoctets bigint(20) default NULL,
-  calledstationid varchar(50) NOT NULL default '',
-  callingstationid varchar(50) NOT NULL default '',
-  acctterminatecause varchar(32) NOT NULL default '',
-  servicetype varchar(32) default NULL,
-  framedprotocol varchar(32) default NULL,
-  framedipaddress varchar(15) NOT NULL default '',
-  framedipv6address varchar(45) NOT NULL default '',
-  framedipv6prefix varchar(45) NOT NULL default '',
-  framedinterfaceid varchar(44) NOT NULL default '',
-  delegatedipv6prefix varchar(45) NOT NULL default '',
-  class varchar(64) default NULL,
-  PRIMARY KEY (radacctid),
-  UNIQUE KEY acctuniqueid (acctuniqueid),
-  KEY username (username),
-  KEY framedipaddress (framedipaddress),
-  KEY framedipv6address (framedipv6address),
-  KEY framedipv6prefix (framedipv6prefix),
-  KEY framedinterfaceid (framedinterfaceid),
-  KEY delegatedipv6prefix (delegatedipv6prefix),
-  KEY acctsessionid (acctsessionid),
-  KEY acctsessiontime (acctsessiontime),
-  KEY acctstarttime (acctstarttime),
-  KEY acctinterval (acctinterval),
-  KEY acctstoptime (acctstoptime),
-  KEY nasipaddress (nasipaddress),
-  KEY class (class)
-) ENGINE = INNODB;
-
-#
-# Table structure for table 'radcheck'
-#
-
-CREATE TABLE IF NOT EXISTS radcheck (
-  id int(11) unsigned NOT NULL auto_increment,
-  username varchar(64) NOT NULL default '',
-  attribute varchar(64)  NOT NULL default '',
-  op char(2) NOT NULL DEFAULT '==',
-  value varchar(253) NOT NULL default '',
-  PRIMARY KEY  (id),
-  KEY username (username(32))
-);
-
-#
-# Table structure for table 'radgroupcheck'
-#
-
-CREATE TABLE IF NOT EXISTS radgroupcheck (
-  id int(11) unsigned NOT NULL auto_increment,
-  groupname varchar(64) NOT NULL default '',
-  attribute varchar(64)  NOT NULL default '',
-  op char(2) NOT NULL DEFAULT '==',
-  value varchar(253)  NOT NULL default '',
-  PRIMARY KEY  (id),
-  KEY groupname (groupname(32))
-);
-
-#
-# Table structure for table 'radgroupreply'
-#
-
-CREATE TABLE IF NOT EXISTS radgroupreply (
-  id int(11) unsigned NOT NULL auto_increment,
-  groupname varchar(64) NOT NULL default '',
-  attribute varchar(64)  NOT NULL default '',
-  op char(2) NOT NULL DEFAULT '=',
-  value varchar(253)  NOT NULL default '',
-  PRIMARY KEY  (id),
-  KEY groupname (groupname(32))
-);
-
-#
-# Table structure for table 'radreply'
-#
-
-CREATE TABLE IF NOT EXISTS radreply (
-  id int(11) unsigned NOT NULL auto_increment,
-  username varchar(64) NOT NULL default '',
-  attribute varchar(64) NOT NULL default '',
-  op char(2) NOT NULL DEFAULT '=',
-  value varchar(253) NOT NULL default '',
-  PRIMARY KEY  (id),
-  KEY username (username(32))
-);
-
-
-#
-# Table structure for table 'radusergroup'
-#
-
-CREATE TABLE IF NOT EXISTS radusergroup (
-  id int(11) unsigned NOT NULL auto_increment,
-  username varchar(64) NOT NULL default '',
-  groupname varchar(64) NOT NULL default '',
-  priority int(11) NOT NULL default '1',
-  PRIMARY KEY  (id),
-  KEY username (username(32))
-);
-
-#
-# Table structure for table 'radpostauth'
-#
-# Note: MySQL versions since 5.6.4 support fractional precision timestamps
-#        which we use here. Replace the authdate definition with the following
-#        if your software is too old:
-#
-#   authdate timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-#
-CREATE TABLE IF NOT EXISTS radpostauth (
-  id int(11) NOT NULL auto_increment,
-  username varchar(64) NOT NULL default '',
-  pass varchar(64) NOT NULL default '',
-  reply varchar(32) NOT NULL default '',
-  authdate timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  class varchar(64) default NULL,
-  PRIMARY KEY  (id),
-  KEY username (username),
-  KEY class (class)
-) ENGINE = INNODB;
-
-#
-# Table structure for table 'nas'
-#
-CREATE TABLE IF NOT EXISTS nas (
-  id int(10) NOT NULL auto_increment,
-  nasname varchar(128) NOT NULL,
-  shortname varchar(32),
-  type varchar(30) DEFAULT 'other',
-  ports int(5),
-  secret varchar(60) DEFAULT 'secret' NOT NULL,
-  server varchar(64),
-  community varchar(50),
-  description varchar(200) DEFAULT 'RADIUS Client',
-  PRIMARY KEY (id),
-  KEY nasname (nasname)
-) ENGINE = INNODB;
-
-#
-# Table structure for table 'nasreload'
-#
-CREATE TABLE IF NOT EXISTS nasreload (
-  nasipaddress varchar(15) NOT NULL,
-  reloadtime datetime NOT NULL,
-  PRIMARY KEY (nasipaddress)
-) ENGINE = INNODB;
-
--- SECTION 3: PPPoE, hotspot, NAS and OpenVPN.
--- Tenant service tables consolidated from approved 2026-10-02/04 references.
--- Apply only through create_tenant_database.sql on an EMPTY isolated database.
--- References to managers use the latest permission-group design.
-
-CREATE TABLE radius_identities (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- service_kind ENUM('pppoe','hotspot') NOT NULL,
- contract_number VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
- line_payment_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
- current_username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- UNIQUE KEY uq_identity_kind(id,service_kind),
- UNIQUE KEY uq_identity_contract_number(contract_number),
- UNIQUE KEY uq_identity_line_payment_code(line_payment_code),
- UNIQUE KEY uq_current_username(current_username),
- CONSTRAINT chk_current_username CHECK(current_username IS NULL OR (CHAR_LENGTH(current_username)>0 AND BINARY current_username=BINARY LOWER(current_username)))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE radius_username_reservations (
- username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- radius_identity_id BIGINT UNSIGNED NOT NULL,
- reserved_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- last_retired_at DATETIME(6) NULL,
- PRIMARY KEY(username),
- UNIQUE KEY uq_username_owner(radius_identity_id,username),
- CONSTRAINT fk_reserved_identity FOREIGN KEY(radius_identity_id) REFERENCES radius_identities(id),
- CONSTRAINT chk_reserved_name CHECK(CHAR_LENGTH(username)>0 AND BINARY username=BINARY LOWER(username))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-ALTER TABLE radius_identities ADD CONSTRAINT fk_identity_current_name FOREIGN KEY(id,current_username) REFERENCES radius_username_reservations(radius_identity_id,username);
-
-CREATE TABLE username_change_history (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- radius_identity_id BIGINT UNSIGNED NOT NULL,
- old_username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- new_username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- changed_by BIGINT UNSIGNED NOT NULL,
- changed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- CONSTRAINT fk_name_history_identity FOREIGN KEY(radius_identity_id) REFERENCES radius_identities(id),
- CONSTRAINT fk_name_history_old FOREIGN KEY(radius_identity_id,old_username) REFERENCES radius_username_reservations(radius_identity_id,username),
- CONSTRAINT fk_name_history_new FOREIGN KEY(radius_identity_id,new_username) REFERENCES radius_username_reservations(radius_identity_id,username),
- CONSTRAINT fk_name_history_actor FOREIGN KEY(changed_by) REFERENCES managers(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE service_types (
- id TINYINT UNSIGNED NOT NULL,
- code VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- name VARCHAR(80) NOT NULL,
- is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
- PRIMARY KEY(id),
- UNIQUE KEY uq_service_code(code),
- CONSTRAINT chk_service_enabled CHECK(is_enabled IN(0,1))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE connection_methods (
- id TINYINT UNSIGNED NOT NULL,
- service_type_id TINYINT UNSIGNED NOT NULL,
- code VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- name VARCHAR(80) NOT NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_connection_code(code),
- UNIQUE KEY uq_method_service(id,service_type_id),
- CONSTRAINT fk_method_service FOREIGN KEY(service_type_id) REFERENCES service_types(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 INSERT INTO service_types(id,code,name) VALUES(1,'ftth','FTTH'),(2,'adsl','ADSL'),(3,'wifi_outdoor','WiFi Outdoor');
+
 INSERT INTO connection_methods(id,service_type_id,code,name) VALUES(1,3,'distribution_box','علبة توزيع'),(2,3,'station','Station');
-
-CREATE TABLE equipment_ip_pools (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- name VARCHAR(120) NOT NULL,
- cidr VARCHAR(18) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- gateway_ipv4 INT UNSIGNED NOT NULL,
- range_start_ipv4 INT UNSIGNED NOT NULL,
- range_end_ipv4 INT UNSIGNED NOT NULL,
- excluded_ipv4 JSON NOT NULL,
- is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- UNIQUE KEY uq_equipment_pool_name(name),
- KEY idx_equipment_pool_range(is_enabled,range_start_ipv4,range_end_ipv4),
- CONSTRAINT fk_equipment_pool_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT chk_equipment_pool_range CHECK(range_start_ipv4<=range_end_ipv4 AND is_enabled IN(0,1))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE network_equipment_devices (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- device_role ENUM('ap','station') NOT NULL,
- customer_id BIGINT UNSIGNED NULL,
- pool_id BIGINT UNSIGNED NOT NULL,
- management_ipv4 INT UNSIGNED NULL,
- last_management_ipv4 INT UNSIGNED NULL,
- vendor ENUM('ubnt','mimosa','mikrotik','other') NOT NULL,
- model VARCHAR(100) NULL,
- name VARCHAR(150) NOT NULL,
- serial_number VARCHAR(120) NULL,
- mac_address VARCHAR(17) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
- parent_ap_id BIGINT UNSIGNED NULL,
- status ENUM('active','maintenance','retired') NOT NULL DEFAULT 'active',
- address VARCHAR(1000) NULL,
- latitude DECIMAL(10,7) NULL,
- longitude DECIMAL(10,7) NULL,
- notes VARCHAR(1000) NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- UNIQUE KEY uq_equipment_management_ipv4(management_ipv4),
- UNIQUE KEY uq_equipment_serial(serial_number),
- UNIQUE KEY uq_equipment_mac(mac_address),
- KEY idx_equipment_customer(customer_id,device_role,status),
- KEY idx_equipment_pool(pool_id,status),
- KEY idx_equipment_parent_ap(parent_ap_id),
- CONSTRAINT fk_equipment_customer FOREIGN KEY(customer_id) REFERENCES customers(id),
- CONSTRAINT fk_equipment_pool FOREIGN KEY(pool_id) REFERENCES equipment_ip_pools(id),
- CONSTRAINT fk_equipment_parent_ap FOREIGN KEY(parent_ap_id) REFERENCES network_equipment_devices(id),
- CONSTRAINT fk_equipment_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT chk_equipment_owner CHECK((device_role='ap' AND customer_id IS NULL) OR (device_role='station' AND customer_id IS NOT NULL)),
- CONSTRAINT chk_equipment_location CHECK((latitude IS NULL AND longitude IS NULL) OR (latitude IS NOT NULL AND longitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE lord_nas (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- radius_nas_id INT NOT NULL,
- name VARCHAR(150) NOT NULL,
- vendor ENUM('mikrotik','ubiquiti','cisco','other') NOT NULL DEFAULT 'mikrotik',
- model VARCHAR(100) NULL,
- radius_services SET('ppp','hotspot') NOT NULL,
- routeros_version VARCHAR(40) NULL,
- coa_host VARCHAR(255) NOT NULL,
- management_host VARCHAR(255) NOT NULL,
- auth_port SMALLINT UNSIGNED NOT NULL DEFAULT 1812,
- acct_port SMALLINT UNSIGNED NOT NULL DEFAULT 1813,
- coa_port SMALLINT UNSIGNED NOT NULL,
- is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
- activity_status ENUM('recent','stale','unknown') NOT NULL DEFAULT 'unknown',
- last_seen_at DATETIME(6) NULL,
- location VARCHAR(150) NULL,
- description TEXT NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- archived_at DATETIME(6) NULL,
- archived_by BIGINT UNSIGNED NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_lord_radius_nas(radius_nas_id),
- CONSTRAINT fk_lord_nas_radius FOREIGN KEY(radius_nas_id) REFERENCES nas(id),
- CONSTRAINT fk_nas_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT fk_nas_archiver FOREIGN KEY(archived_by) REFERENCES managers(id),
- CONSTRAINT chk_nas_settings CHECK(auth_port>0 AND acct_port>0 AND coa_port>0 AND is_enabled IN(0,1) AND CHAR_LENGTH(radius_services)>0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE nas_management_credentials (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- lord_nas_id BIGINT UNSIGNED NOT NULL,
- username VARCHAR(100) NOT NULL,
- password_encrypted TEXT NOT NULL,
- encryption_key_id VARCHAR(100) NOT NULL,
- updated_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- UNIQUE KEY uq_nas_credential(lord_nas_id),
- CONSTRAINT fk_credential_nas FOREIGN KEY(lord_nas_id) REFERENCES lord_nas(id),
- CONSTRAINT fk_credential_actor FOREIGN KEY(updated_by) REFERENCES managers(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE nas_management_services (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- lord_nas_id BIGINT UNSIGNED NOT NULL,
- service_type ENUM('api','api_tls','winbox','webconfig','ssh','custom') NOT NULL,
- name VARCHAR(100) NOT NULL,
- host VARCHAR(255) NULL,
- port SMALLINT UNSIGNED NOT NULL,
- external_host VARCHAR(255) NULL,
- external_port SMALLINT UNSIGNED NULL,
- protocol ENUM('tcp','udp') NOT NULL DEFAULT 'tcp',
- scheme ENUM('http','https') NULL,
- is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
- description TEXT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- CONSTRAINT fk_management_service_nas FOREIGN KEY(lord_nas_id) REFERENCES lord_nas(id),
- CONSTRAINT chk_endpoint CHECK(port>0 AND (external_port IS NULL OR external_port>0) AND is_enabled IN(0,1) AND ((external_host IS NULL AND external_port IS NULL) OR (external_host IS NOT NULL AND external_port IS NOT NULL)) AND (scheme IS NULL OR protocol='tcp'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_accounts (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- customer_id BIGINT UNSIGNED NOT NULL,
- radius_identity_id BIGINT UNSIGNED NOT NULL,
- identity_kind ENUM('pppoe','hotspot') NOT NULL DEFAULT 'pppoe',
- line_name VARCHAR(150) NULL,
- admin_status ENUM('enabled','disabled') NOT NULL DEFAULT 'enabled',
- address TEXT NULL,
- latitude DECIMAL(10,7) NULL,
- longitude DECIMAL(10,7) NULL,
- service_type_id TINYINT UNSIGNED NULL,
- connection_method_id TINYINT UNSIGNED NULL,
- distribution_box_serial VARCHAR(100) NULL,
- distribution_box_description VARCHAR(500) NULL,
- station_vendor ENUM('ubnt','mimosa','mikrotik') NULL,
- station_ip_address VARCHAR(45) NULL,
- station_device_id BIGINT UNSIGNED NULL,
- allowed_nas_id INT NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- archived_at DATETIME(6) NULL,
- archived_by BIGINT UNSIGNED NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_ppp_identity(radius_identity_id),
- UNIQUE KEY uq_ppp_station_device(station_device_id),
- KEY idx_ppp_customer_archive(customer_id,archived_at),
- CONSTRAINT fk_ppp_customer FOREIGN KEY(customer_id) REFERENCES customers(id),
- CONSTRAINT fk_ppp_radius_identity FOREIGN KEY(radius_identity_id,identity_kind) REFERENCES radius_identities(id,service_kind),
- CONSTRAINT fk_ppp_service FOREIGN KEY(service_type_id) REFERENCES service_types(id),
- CONSTRAINT fk_ppp_connection FOREIGN KEY(connection_method_id,service_type_id) REFERENCES connection_methods(id,service_type_id),
- CONSTRAINT fk_ppp_station_device FOREIGN KEY(station_device_id) REFERENCES network_equipment_devices(id),
- CONSTRAINT fk_ppp_nas FOREIGN KEY(allowed_nas_id) REFERENCES nas(id),
- CONSTRAINT fk_ppp_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT fk_ppp_archiver FOREIGN KEY(archived_by) REFERENCES managers(id),
- CONSTRAINT chk_ppp_kind CHECK(identity_kind='pppoe'),
- CONSTRAINT chk_ppp_location CHECK((latitude IS NULL AND longitude IS NULL) OR (latitude IS NOT NULL AND longitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)),
- CONSTRAINT chk_ppp_connection CHECK((service_type_id IS NULL AND connection_method_id IS NULL) OR (service_type_id IS NOT NULL AND service_type_id<>3 AND connection_method_id IS NULL) OR (service_type_id IS NOT NULL AND service_type_id=3 AND connection_method_id IS NOT NULL))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_packages (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  name VARCHAR(150) NOT NULL,
-  description TEXT NULL,
-  owner_manager_id BIGINT UNSIGNED NOT NULL,
-  package_type ENUM('prepaid','daily','addon') NOT NULL DEFAULT 'prepaid',
-  is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  base_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-  offer_price DECIMAL(12,2) NULL,
-  offer_ends_at DATETIME(6) NULL COMMENT 'Exclusive UTC boundary; offer valid only before this instant',
-  is_gift TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  currency_code VARCHAR(10) NOT NULL,
-  daily_package_id BIGINT UNSIGNED NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  archived_at DATETIME(6) NULL,
-  archived_by BIGINT UNSIGNED NULL,
-  PRIMARY KEY (id),
-  CONSTRAINT fk_ppp_package_owner FOREIGN KEY(owner_manager_id) REFERENCES managers(id),
-  CONSTRAINT fk_ppp_package_archiver FOREIGN KEY(archived_by) REFERENCES managers(id),
-  KEY idx_pppoe_packages_type_enabled (package_type,is_enabled),
-  KEY idx_pppoe_packages_daily (daily_package_id),
-  KEY idx_pppoe_packages_owner (owner_manager_id),
-  CONSTRAINT fk_pppoe_packages_daily FOREIGN KEY (daily_package_id)
-    REFERENCES pppoe_packages(id),
-  CONSTRAINT chk_pppoe_package_price CHECK (base_price >= 0),
-  CONSTRAINT chk_pppoe_package_gift CHECK (is_gift IN (0,1)),
-  CONSTRAINT chk_pppoe_package_offer CHECK (
-    (offer_price IS NULL AND offer_ends_at IS NULL) OR
-    (offer_price IS NOT NULL AND offer_ends_at IS NOT NULL
-      AND offer_price >= 0 AND offer_price <= base_price)
-  ),
-  CONSTRAINT chk_pppoe_package_enabled CHECK (is_enabled IN (0,1)),
-  CONSTRAINT chk_pppoe_daily_link_owner CHECK (daily_package_id IS NULL OR package_type = 'prepaid')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE package_service_policies (
-  package_id BIGINT UNSIGNED NOT NULL,
-  download_bps BIGINT UNSIGNED NOT NULL,
-  upload_bps BIGINT UNSIGNED NOT NULL,
-  quota_bytes BIGINT UNSIGNED NULL COMMENT 'NULL = unlimited; otherwise positive bytes',
-  simultaneous_sessions SMALLINT UNSIGNED NOT NULL DEFAULT 1,
-  validity_mode ENUM('duration','fixed_day','calendar_monthly') NOT NULL DEFAULT 'duration',
-  duration_value INT UNSIGNED NULL,
-  duration_unit_id SMALLINT UNSIGNED NULL,
-  expiry_day TINYINT UNSIGNED NULL,
-  expiry_time TIME NULL DEFAULT NULL COMMENT 'Local time for fixed-day profile expiry',
-  starts_at ENUM('activation','first_connection','creation') NULL,
-  grace_days SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  quota_exhaustion_action ENUM('stop','reduce_speed') NOT NULL DEFAULT 'stop',
-  reduced_download_bps BIGINT UNSIGNED NULL,
-  reduced_upload_bps BIGINT UNSIGNED NULL,
-  quota_renewal_policy ENUM('reset','carry_over') NOT NULL DEFAULT 'reset',
-  PRIMARY KEY (package_id),
-  CONSTRAINT fk_ppp_policy_unit FOREIGN KEY(duration_unit_id) REFERENCES time_units(id),
-  CONSTRAINT fk_package_service_package FOREIGN KEY (package_id)
-    REFERENCES pppoe_packages(id),
-  CONSTRAINT chk_pppoe_speeds CHECK (download_bps > 0 AND upload_bps > 0),
-  CONSTRAINT chk_pppoe_quota CHECK (quota_bytes IS NULL OR quota_bytes > 0),
-  CONSTRAINT chk_pppoe_sessions CHECK (simultaneous_sessions >= 1),
-  CONSTRAINT chk_pppoe_validity CHECK (
-    (validity_mode = 'calendar_monthly' AND duration_value IS NULL
-      AND duration_unit_id IS NULL AND expiry_day IS NULL AND starts_at IS NULL)
-    OR
-    (validity_mode = 'duration' AND duration_value IS NOT NULL AND duration_value > 0
-      AND duration_unit_id IS NOT NULL AND expiry_day IS NULL AND starts_at IS NOT NULL)
-    OR
-    (validity_mode = 'fixed_day' AND duration_value IS NOT NULL AND duration_value > 0
-      AND duration_unit_id IS NOT NULL AND expiry_day IS NOT NULL
-      AND expiry_day BETWEEN 1 AND 31 AND starts_at IS NOT NULL)
-  ),
-  CONSTRAINT chk_pppoe_exhaustion CHECK (
-    (quota_exhaustion_action = 'stop' AND reduced_download_bps IS NULL AND reduced_upload_bps IS NULL)
-    OR
-    (quota_exhaustion_action = 'reduce_speed' AND quota_bytes IS NOT NULL
-      AND reduced_download_bps IS NOT NULL AND reduced_upload_bps IS NOT NULL
-      AND reduced_download_bps > 0 AND reduced_upload_bps > 0
-      AND reduced_download_bps <= download_bps AND reduced_upload_bps <= upload_bps)
-  )
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE package_radius_defaults (
-  package_id BIGINT UNSIGNED NOT NULL,
-  mikrotik_group VARCHAR(150) NULL COMMENT 'Existing PPP profile on NAS',
-  framed_pool VARCHAR(150) NULL COMMENT 'Existing IP pool on NAS',
-  PRIMARY KEY (package_id),
-  CONSTRAINT fk_package_radius_package FOREIGN KEY (package_id)
-    REFERENCES pppoe_packages(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_package_versions (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  package_id BIGINT UNSIGNED NOT NULL,
-  version_no INT UNSIGNED NOT NULL,
-  radius_group_name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  service_snapshot JSON NOT NULL,
-  radius_snapshot JSON NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_pppoe_package_version (package_id,version_no),
-  UNIQUE KEY uq_pppoe_radius_group (radius_group_name),
-  CONSTRAINT fk_pppoe_version_package FOREIGN KEY (package_id)
-    REFERENCES pppoe_packages(id),
-  CONSTRAINT chk_pppoe_version_number CHECK (version_no >= 1),
-  CONSTRAINT chk_pppoe_service_snapshot CHECK (JSON_TYPE(service_snapshot) = 'OBJECT'),
-  CONSTRAINT chk_pppoe_radius_snapshot CHECK (JSON_TYPE(radius_snapshot) = 'OBJECT')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_package_speed_boosts (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- package_id BIGINT UNSIGNED NOT NULL,
- multiplier TINYINT UNSIGNED NOT NULL,
- original_download_bps BIGINT UNSIGNED NOT NULL,
- original_upload_bps BIGINT UNSIGNED NOT NULL,
- boosted_download_bps BIGINT UNSIGNED NOT NULL,
- boosted_upload_bps BIGINT UNSIGNED NOT NULL,
- started_at DATETIME(6) NOT NULL,
- expires_at DATETIME(6) NOT NULL,
- status ENUM('active','reverted') NOT NULL DEFAULT 'active',
- active_package_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status='active' THEN package_id ELSE NULL END) STORED,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- reverted_at DATETIME(6) NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_active_profile_speed_boost(active_package_id),
- KEY idx_profile_speed_boost_expiry(status,expires_at,id),
- CONSTRAINT fk_profile_speed_boost_package FOREIGN KEY(package_id) REFERENCES pppoe_packages(id) ON DELETE RESTRICT,
- CONSTRAINT fk_profile_speed_boost_creator FOREIGN KEY(created_by) REFERENCES managers(id) ON DELETE RESTRICT,
- CONSTRAINT chk_profile_boost_multiplier CHECK(multiplier BETWEEN 1 AND 5),
- CONSTRAINT chk_profile_boost_speeds CHECK(original_download_bps>0 AND original_upload_bps>0 AND boosted_download_bps>=original_download_bps AND boosted_upload_bps>=original_upload_bps),
- CONSTRAINT chk_profile_boost_expiry CHECK(expires_at>started_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_line_speed_boosts (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- account_id BIGINT UNSIGNED NOT NULL,
- username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- multiplier TINYINT UNSIGNED NULL,
- download_bps BIGINT UNSIGNED NULL,
- upload_bps BIGINT UNSIGNED NULL,
- original_rate_limit VARCHAR(255) NOT NULL,
- boosted_rate_limit VARCHAR(255) NOT NULL,
- original_user_reply JSON NOT NULL,
- started_at DATETIME(6) NOT NULL,
- expires_at DATETIME(6) NOT NULL,
- status ENUM('active','reverted','cancelled') NOT NULL DEFAULT 'active',
- active_account_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status='active' THEN account_id ELSE NULL END) STORED,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- reverted_at DATETIME(6) NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_active_line_speed_boost(active_account_id),
- KEY idx_line_speed_boost_expiry(status,expires_at,id),
- KEY idx_line_speed_boost_username(username,status),
- CONSTRAINT fk_line_speed_boost_account FOREIGN KEY(account_id) REFERENCES pppoe_accounts(id) ON DELETE RESTRICT,
- CONSTRAINT fk_line_speed_boost_creator FOREIGN KEY(created_by) REFERENCES managers(id) ON DELETE RESTRICT,
- CONSTRAINT chk_line_speed_boost_multiplier CHECK(multiplier BETWEEN 2 AND 5),
- CONSTRAINT chk_line_speed_boost_expiry CHECK(expires_at>started_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_subscriptions (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- account_id BIGINT UNSIGNED NOT NULL,
- package_version_id BIGINT UNSIGNED NOT NULL,
- service_role ENUM('base','daily','addon') NOT NULL DEFAULT 'base',
- parent_subscription_id BIGINT UNSIGNED NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- activated_at DATETIME(6) NULL,
- expires_at DATETIME(6) NULL,
- ended_at DATETIME(6) NULL,
- event_type ENUM('activation','renewal','package_change','daily_fallback','addon') NOT NULL,
- previous_subscription_id BIGINT UNSIGNED NULL,
- renewal_mode ENUM('normal','fixed_due','full_month') NOT NULL DEFAULT 'normal',
- base_price_snapshot DECIMAL(12,2) NOT NULL,
- offer_price_snapshot DECIMAL(12,2) NULL,
- offer_ends_at_snapshot DATETIME(6) NULL,
- effective_price_snapshot DECIMAL(12,2) NOT NULL,
- currency_code VARCHAR(10) NOT NULL,
- is_gift_snapshot TINYINT UNSIGNED NOT NULL,
- grace_source_snapshot ENUM('global','package') NOT NULL,
- grace_days_snapshot SMALLINT UNSIGNED NOT NULL DEFAULT 0,
- grace_expires_at DATETIME(6) NULL,
- effective_service_snapshot JSON NOT NULL,
- quota_allowance_bytes BIGINT UNSIGNED NULL,
- carried_quota_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
- lifecycle ENUM('pending','active','ended','cancelled') NOT NULL DEFAULT 'pending',
- live_role VARCHAR(10) GENERATED ALWAYS AS (CASE WHEN lifecycle IN ('pending','active') THEN service_role ELSE NULL END) STORED,
- daily_parent_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN service_role='daily' THEN parent_subscription_id ELSE NULL END) STORED,
- PRIMARY KEY(id),
- UNIQUE KEY uq_live_ppp_role(account_id,live_role),
- UNIQUE KEY uq_ppp_daily_once(daily_parent_id),
- UNIQUE KEY uq_ppp_subscription_account(id,account_id),
- KEY idx_ppp_subscription_account(account_id,lifecycle),
- CONSTRAINT fk_ppp_subscription_account FOREIGN KEY(account_id) REFERENCES pppoe_accounts(id),
- CONSTRAINT fk_ppp_subscription_version FOREIGN KEY(package_version_id) REFERENCES pppoe_package_versions(id),
- CONSTRAINT fk_ppp_subscription_parent FOREIGN KEY(parent_subscription_id,account_id) REFERENCES pppoe_subscriptions(id,account_id),
- CONSTRAINT fk_ppp_subscription_previous FOREIGN KEY(previous_subscription_id,account_id) REFERENCES pppoe_subscriptions(id,account_id),
- CONSTRAINT chk_ppp_subscription_money CHECK(base_price_snapshot>=0 AND effective_price_snapshot>=0 AND is_gift_snapshot IN(0,1) AND (is_gift_snapshot=0 OR effective_price_snapshot=0) AND ((offer_price_snapshot IS NULL AND offer_ends_at_snapshot IS NULL) OR (offer_price_snapshot IS NOT NULL AND offer_price_snapshot>=0 AND offer_price_snapshot<=base_price_snapshot AND offer_ends_at_snapshot IS NOT NULL))),
- CONSTRAINT chk_ppp_subscription_snapshot CHECK(JSON_TYPE(effective_service_snapshot)='OBJECT'),
- CONSTRAINT chk_ppp_subscription_quota CHECK(quota_allowance_bytes IS NULL OR quota_allowance_bytes>0),
- CONSTRAINT chk_ppp_subscription_times CHECK((activated_at IS NULL AND expires_at IS NULL) OR (activated_at IS NOT NULL AND expires_at IS NOT NULL AND expires_at>activated_at) OR (lifecycle='ended' AND activated_at IS NULL AND expires_at IS NOT NULL) OR (lifecycle='active' AND activated_at IS NULL AND expires_at IS NOT NULL AND grace_expires_at IS NOT NULL AND grace_expires_at>expires_at)),
- CONSTRAINT chk_ppp_subscription_parent CHECK((service_role='base' AND parent_subscription_id IS NULL) OR (service_role<>'base' AND parent_subscription_id IS NOT NULL)),
- CONSTRAINT fk_ppp_subscription_creator FOREIGN KEY(created_by) REFERENCES managers(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_packages (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- name VARCHAR(150) NOT NULL,
- description TEXT NULL,
- owner_manager_id BIGINT UNSIGNED NOT NULL,
- is_enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
- base_price DECIMAL(12,2) NOT NULL,
- currency_code VARCHAR(10) NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- archived_at DATETIME(6) NULL,
- archived_by BIGINT UNSIGNED NULL,
- PRIMARY KEY(id),
- CONSTRAINT fk_hs_package_archiver FOREIGN KEY(archived_by) REFERENCES managers(id),
- CONSTRAINT fk_hotspot_packages_owner FOREIGN KEY(owner_manager_id) REFERENCES managers(id),
- KEY idx_hs_package_owner(owner_manager_id),
- CONSTRAINT chk_hs_package CHECK (is_enabled IN (0,1) AND base_price>=0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_package_versions (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- package_id BIGINT UNSIGNED NOT NULL,
- version_no INT UNSIGNED NOT NULL,
- radius_group_name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- download_bps BIGINT UNSIGNED NOT NULL,
- upload_bps BIGINT UNSIGNED NOT NULL,
- quota_bytes BIGINT UNSIGNED NULL,
- duration_value INT UNSIGNED NOT NULL,
- duration_unit_id SMALLINT UNSIGNED NOT NULL,
- duration_mode ENUM('continuous','connected_time') NOT NULL,
- simultaneous_sessions SMALLINT UNSIGNED NOT NULL DEFAULT 1,
- radius_snapshot JSON NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- UNIQUE KEY uq_hs_version(package_id,version_no),
- UNIQUE KEY uq_hs_radius_group(radius_group_name),
- CONSTRAINT fk_hs_version_package FOREIGN KEY (package_id) REFERENCES hotspot_packages(id),
- CONSTRAINT fk_hs_version_unit FOREIGN KEY (duration_unit_id) REFERENCES time_units(id),
- CONSTRAINT chk_hs_version CHECK(version_no>0 AND download_bps>0 AND upload_bps>0 AND (quota_bytes IS NULL OR quota_bytes>0) AND duration_value>0 AND simultaneous_sessions>0 AND JSON_TYPE(radius_snapshot)='OBJECT')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_card_batches (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- package_version_id BIGINT UNSIGNED NOT NULL,
- name VARCHAR(150) NOT NULL,
- quantity INT UNSIGNED NOT NULL,
- owner_manager_id BIGINT UNSIGNED NOT NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- login_mode ENUM('code','username_password') NOT NULL,
- generation_options JSON NOT NULL,
- unit_price DECIMAL(12,2) NOT NULL,
- currency_code VARCHAR(10) NOT NULL,
- is_gift TINYINT UNSIGNED NOT NULL DEFAULT 0,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- UNIQUE KEY uq_hotspot_card_batches_owner(id,owner_manager_id),
- CONSTRAINT fk_hotspot_card_batches_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT fk_hotspot_card_batches_owner FOREIGN KEY(owner_manager_id) REFERENCES managers(id),
- KEY idx_hs_batch_owner(owner_manager_id,created_at),
- CONSTRAINT fk_hs_batch_version FOREIGN KEY (package_version_id) REFERENCES hotspot_package_versions(id),
- CONSTRAINT chk_hs_batch CHECK(quantity>0 AND unit_price>=0 AND is_gift IN(0,1) AND (is_gift=0 OR unit_price=0) AND JSON_TYPE(generation_options)='OBJECT')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_accounts (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- radius_identity_id BIGINT UNSIGNED NOT NULL,
- identity_kind ENUM('pppoe','hotspot') NOT NULL DEFAULT 'hotspot',
- account_kind ENUM('batch','standalone') NOT NULL,
- owner_manager_id BIGINT UNSIGNED NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- login_mode ENUM('code','username_password') NOT NULL,
- status ENUM('enabled','disabled') NOT NULL DEFAULT 'enabled',
- bind_first_mac TINYINT UNSIGNED NOT NULL DEFAULT 0,
- bound_mac CHAR(17) CHARACTER SET ascii COLLATE ascii_bin NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- archived_at DATETIME(6) NULL,
- archived_by BIGINT UNSIGNED NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_hotspot_accounts_owner(id,owner_manager_id),
- CONSTRAINT fk_hotspot_accounts_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- CONSTRAINT fk_hotspot_accounts_owner FOREIGN KEY(owner_manager_id) REFERENCES managers(id),
- CONSTRAINT fk_hs_radius_identity FOREIGN KEY(radius_identity_id,identity_kind) REFERENCES radius_identities(id,service_kind),
- CONSTRAINT fk_hs_account_archiver FOREIGN KEY(archived_by) REFERENCES managers(id),
- UNIQUE KEY uq_hs_identity(radius_identity_id),
- UNIQUE KEY uq_hs_account_kind(id,account_kind),
- KEY idx_hs_account_owner(owner_manager_id,status),
- CONSTRAINT chk_hs_account CHECK(identity_kind='hotspot' AND bind_first_mac IN(0,1) AND ((account_kind='standalone' AND owner_manager_id IS NULL) OR (account_kind='batch' AND owner_manager_id IS NOT NULL)))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_standalone_cards (
- account_id BIGINT UNSIGNED NOT NULL,
- account_kind ENUM('batch','standalone') NOT NULL DEFAULT 'standalone',
- customer_id BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(account_id),
- CONSTRAINT fk_hs_standalone_customer FOREIGN KEY(customer_id) REFERENCES customers(id),
- CONSTRAINT fk_hs_standalone_account FOREIGN KEY (account_id,account_kind) REFERENCES hotspot_accounts(id,account_kind),
- CONSTRAINT chk_hs_standalone CHECK(account_kind='standalone')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_batch_cards (
- account_id BIGINT UNSIGNED NOT NULL,
- account_kind ENUM('batch','standalone') NOT NULL DEFAULT 'batch',
- batch_id BIGINT UNSIGNED NOT NULL,
- owner_manager_id BIGINT UNSIGNED NOT NULL,
- serial_no INT UNSIGNED NOT NULL,
- PRIMARY KEY(account_id),
- UNIQUE KEY uq_hs_batch_serial(batch_id,serial_no),
- CONSTRAINT fk_hs_batch_card_account FOREIGN KEY (account_id,account_kind) REFERENCES hotspot_accounts(id,account_kind),
- CONSTRAINT fk_hs_batch_card_owner FOREIGN KEY(account_id,owner_manager_id) REFERENCES hotspot_accounts(id,owner_manager_id),
- CONSTRAINT fk_hs_batch_batch_owner FOREIGN KEY(batch_id,owner_manager_id) REFERENCES hotspot_card_batches(id,owner_manager_id),
- CONSTRAINT fk_hs_batch_card_batch FOREIGN KEY (batch_id) REFERENCES hotspot_card_batches(id),
- CONSTRAINT chk_hs_batch_card CHECK(account_kind='batch' AND serial_no>0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_service_periods (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- account_id BIGINT UNSIGNED NOT NULL,
- package_version_id BIGINT UNSIGNED NOT NULL,
- previous_period_id BIGINT UNSIGNED NULL,
- event_type ENUM('issue','renew') NOT NULL,
- created_by BIGINT UNSIGNED NOT NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- activated_at DATETIME(6) NULL,
- ended_at DATETIME(6) NULL,
- expires_at DATETIME(6) NULL,
- duration_mode ENUM('continuous','connected_time') NOT NULL,
- duration_value INT UNSIGNED NOT NULL,
- duration_unit_id SMALLINT UNSIGNED NOT NULL,
- time_allowance_seconds BIGINT UNSIGNED NULL,
- carried_seconds BIGINT UNSIGNED NOT NULL DEFAULT 0,
- quota_allowance_bytes BIGINT UNSIGNED NULL,
- price_snapshot DECIMAL(12,2) NOT NULL,
- currency_code VARCHAR(10) NOT NULL,
- is_gift TINYINT UNSIGNED NOT NULL DEFAULT 0,
- unit_snapshot JSON NOT NULL COMMENT 'Capture code, fixed_seconds and actual_usage_seconds',
- lifecycle ENUM('pending','active','ended','cancelled') NOT NULL DEFAULT 'pending',
- live_account_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN lifecycle IN ('pending','active') THEN account_id ELSE NULL END) STORED,
- PRIMARY KEY(id),
- UNIQUE KEY uq_hs_one_live_period(live_account_id),
- CONSTRAINT fk_hotspot_service_periods_creator FOREIGN KEY(created_by) REFERENCES managers(id),
- UNIQUE KEY uq_hs_period_account(id,account_id),
- UNIQUE KEY uq_hs_period_successor(previous_period_id),
- KEY idx_hs_period_account_time(account_id,created_at),
- CONSTRAINT fk_hs_period_account FOREIGN KEY (account_id) REFERENCES hotspot_accounts(id),
- CONSTRAINT fk_hs_period_version FOREIGN KEY (package_version_id) REFERENCES hotspot_package_versions(id),
- CONSTRAINT fk_hs_period_unit FOREIGN KEY (duration_unit_id) REFERENCES time_units(id),
- CONSTRAINT fk_hs_period_previous FOREIGN KEY (previous_period_id,account_id) REFERENCES hotspot_service_periods(id,account_id),
- CONSTRAINT chk_hs_period_event CHECK((event_type='issue' AND previous_period_id IS NULL) OR (event_type='renew' AND previous_period_id IS NOT NULL)),
- CONSTRAINT chk_hs_period_money CHECK(price_snapshot>=0 AND is_gift IN(0,1) AND (is_gift=0 OR price_snapshot=0)),
- CONSTRAINT chk_hs_period_duration CHECK(duration_value>0 AND JSON_TYPE(unit_snapshot)='OBJECT' AND ((duration_mode='continuous' AND time_allowance_seconds IS NULL) OR (duration_mode='connected_time' AND time_allowance_seconds IS NOT NULL AND time_allowance_seconds>0 AND expires_at IS NULL))),
- CONSTRAINT chk_hs_period_times CHECK((activated_at IS NULL AND expires_at IS NULL AND (ended_at IS NULL OR ended_at>=created_at)) OR (activated_at IS NOT NULL AND (ended_at IS NULL OR ended_at>=activated_at) AND (expires_at IS NULL OR expires_at>activated_at))),
- CONSTRAINT chk_hs_period_quota CHECK(quota_allowance_bytes IS NULL OR quota_allowance_bytes>0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_period_usage (
- period_id BIGINT UNSIGNED NOT NULL,
- upload_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
- download_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
- used_seconds BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Duration of UNION of connection intervals, not sum of sessions',
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(period_id),
- CONSTRAINT fk_hs_usage_period FOREIGN KEY (period_id) REFERENCES hotspot_service_periods(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_accounting_segments (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- period_id BIGINT UNSIGNED NOT NULL,
- acctuniqueid VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- segment_start DATETIME(6) NOT NULL,
- segment_end DATETIME(6) NOT NULL,
- input_start BIGINT UNSIGNED NOT NULL,
- input_end BIGINT UNSIGNED NOT NULL,
- output_start BIGINT UNSIGNED NOT NULL,
- output_end BIGINT UNSIGNED NOT NULL,
- time_start BIGINT UNSIGNED NOT NULL,
- time_end BIGINT UNSIGNED NOT NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_hs_segment(acctuniqueid,segment_start),
- KEY idx_hs_segment_period(period_id,segment_start,segment_end),
- CONSTRAINT fk_hs_segment_period FOREIGN KEY (period_id) REFERENCES hotspot_service_periods(id),
- CONSTRAINT chk_hs_segment CHECK(segment_end>segment_start AND input_end>=input_start AND output_end>=output_start AND time_end>=time_start)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE hotspot_usage_intervals (
- period_id BIGINT UNSIGNED NOT NULL,
- interval_start DATETIME(6) NOT NULL,
- interval_end DATETIME(6) NOT NULL,
- PRIMARY KEY(period_id,interval_start),
- CONSTRAINT fk_hs_interval_period FOREIGN KEY (period_id) REFERENCES hotspot_service_periods(id),
- CONSTRAINT chk_hs_interval CHECK(interval_end>interval_start)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_account_radius_overrides (
- account_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
- framed_route VARCHAR(253) NULL,
- updated_by_manager_id BIGINT UNSIGNED NOT NULL,
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- CONSTRAINT fk_ppp_route_account FOREIGN KEY(account_id) REFERENCES pppoe_accounts(id),
- CONSTRAINT fk_ppp_route_actor FOREIGN KEY(updated_by_manager_id) REFERENCES managers(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_subscription_usage (
- subscription_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
- upload_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
- download_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- CONSTRAINT fk_ppp_usage_subscription FOREIGN KEY(subscription_id) REFERENCES pppoe_subscriptions(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE pppoe_accounting_segments (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
- subscription_id BIGINT UNSIGNED NOT NULL,
- acctuniqueid VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- segment_start DATETIME(6) NOT NULL,
- segment_end DATETIME(6) NOT NULL,
- input_start BIGINT UNSIGNED NOT NULL,
- input_end BIGINT UNSIGNED NOT NULL,
- output_start BIGINT UNSIGNED NOT NULL,
- output_end BIGINT UNSIGNED NOT NULL,
- UNIQUE KEY uq_ppp_accounting_segment(acctuniqueid,segment_start),
- KEY idx_ppp_segment_subscription(subscription_id,segment_start),
- CONSTRAINT fk_ppp_segment_subscription FOREIGN KEY(subscription_id) REFERENCES pppoe_subscriptions(id),
- CONSTRAINT chk_ppp_segment CHECK(segment_end>segment_start AND input_end>=input_start AND output_end>=output_start)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE nas_ovpn_connections (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
- nas_id BIGINT UNSIGNED NOT NULL COMMENT 'lord_nas.id, the local administrative NAS identifier',
- central_tunnel_id BIGINT UNSIGNED NOT NULL,
- central_gateway_id BIGINT UNSIGNED NOT NULL,
- server_host VARCHAR(255) NOT NULL,
- server_port SMALLINT UNSIGNED NOT NULL DEFAULT 1194,
- transport_protocol ENUM('tcp','udp') NOT NULL,
- tunnel_username VARCHAR(150) NOT NULL,
- tunnel_password_encrypted TEXT NOT NULL,
- encryption_key_id VARCHAR(100) NOT NULL,
- tunnel_address VARCHAR(45) NOT NULL,
- ca_certificate_reference VARCHAR(500) NULL,
- client_certificate_reference VARCHAR(500) NULL,
- client_private_key_encrypted TEXT NULL,
- radius_server_address VARCHAR(255) NOT NULL,
- routeros_version VARCHAR(40) NULL,
- configuration_snapshot JSON NOT NULL,
- sync_version BIGINT UNSIGNED NOT NULL,
- synced_at DATETIME(6) NOT NULL,
- updated_by_manager_id BIGINT UNSIGNED NULL,
- created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- UNIQUE KEY uq_ovpn_local_nas(nas_id),
- UNIQUE KEY uq_ovpn_central_tunnel(central_tunnel_id),
- UNIQUE KEY uq_ovpn_gateway_username(central_gateway_id,tunnel_username),
- UNIQUE KEY uq_ovpn_gateway_address(central_gateway_id,tunnel_address),
- CONSTRAINT fk_ovpn_nas FOREIGN KEY(nas_id) REFERENCES lord_nas(id),
- CONSTRAINT fk_ovpn_actor FOREIGN KEY(updated_by_manager_id) REFERENCES managers(id),
- CONSTRAINT chk_ovpn_configuration CHECK(server_port>0 AND sync_version>0 AND JSON_TYPE(configuration_snapshot)='OBJECT')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- activity_log.account_id records the stable radius identity across PPPoE/hotspot.
-ALTER TABLE activity_log ADD CONSTRAINT fk_activity_radius_identity FOREIGN KEY(account_id) REFERENCES radius_identities(id);
 
 INSERT INTO permissions(code,name_ar,module,principal_only) VALUES
 ('customers.restore','استعادة العميل','customers',0),
@@ -1298,55 +1820,135 @@ INSERT INTO permissions(code,name_ar,module,principal_only) VALUES
 ('network.settings.manage','إدارة إعدادات الشبكة','network',1)
 ON DUPLICATE KEY UPDATE code=VALUES(code);
 
--- Automatic session reauthentication outbox.
-CREATE TABLE pppoe_radius_jobs (
- id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
- radacctid BIGINT NOT NULL,
- reason ENUM('expiry','reauth') NOT NULL,
- revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
- attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
- next_attempt_at DATETIME(6) NOT NULL,
- acknowledged_at DATETIME(6) NULL,
- PRIMARY KEY(id),
- UNIQUE KEY uq_ppp_radius_job_session(radacctid),
- KEY idx_ppp_radius_job_due(next_attempt_at,id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO `currencies` (`id`, `code`, `name_ar`, `symbol`, `decimal_places`, `is_enabled`) VALUES
+(1, 'SYP', 'الليرة السورية', 'ل.س', 2, 1),
+(2, 'USD', 'الدولار الأمريكي', '$', 2, 1),
+(3, 'EUR', 'اليورو', '€', 2, 1),
+(4, 'TRY', 'الليرة التركية', '₺', 2, 1),
+(5, 'SAR', 'الريال السعودي', 'ر.س', 2, 1),
+(6, 'AED', 'الدرهم الإماراتي', 'د.إ', 2, 1);
 
-CREATE TABLE pppoe_radius_job_state (
- id TINYINT UNSIGNED NOT NULL,
- scan_cursor BIGINT NOT NULL DEFAULT 0,
- cleanup_cursor BIGINT NOT NULL DEFAULT 0,
- PRIMARY KEY(id),
- CONSTRAINT chk_ppp_radius_job_state_singleton CHECK(id=1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT IGNORE INTO pppoe_radius_job_state(id,scan_cursor) VALUES(1,0);
+INSERT INTO `data_units` (`id`, `code`, `name_ar`, `bytes_factor`, `is_enabled`) VALUES
+(1, 'MB', 'ميغابايت', 1000000, 1),
+(2, 'GB', 'غيغابايت', 1000000000, 1),
+(3, 'TB', 'تيرابايت', 1000000000000, 1);
 
+INSERT INTO `speed_units` (`id`, `code`, `name_ar`, `bps_factor`, `is_enabled`) VALUES
+(1, 'Kbps', 'كيلوبت/ثانية', 1000, 1),
+(2, 'Mbps', 'ميغابت/ثانية', 1000000, 1),
+(3, 'Gbps', 'غيغابت/ثانية', 1000000000, 1);
 
--- Hotspot confirmed output history.
--- Run on the existing tenant database. Keeps accounts, service periods and usage intact.
-CREATE TABLE IF NOT EXISTS hotspot_card_output_jobs (
- id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- batch_id BIGINT UNSIGNED NOT NULL,
- actor_manager_id BIGINT UNSIGNED NOT NULL,
- output_kind ENUM('print','pdf') NOT NULL,
- card_count INT UNSIGNED NOT NULL,
- serials_json JSON NOT NULL,
- confirmed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(id),
- KEY idx_hotspot_output_batch_time(batch_id,output_kind,confirmed_at),
- CONSTRAINT fk_hotspot_output_batch FOREIGN KEY(batch_id) REFERENCES hotspot_card_batches(id),
- CONSTRAINT fk_hotspot_output_actor FOREIGN KEY(actor_manager_id) REFERENCES managers(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS hotspot_card_print_marks (
- account_id BIGINT UNSIGNED NOT NULL,
- last_job_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- printed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- PRIMARY KEY(account_id),
- KEY idx_hotspot_print_job(last_job_id),
- CONSTRAINT fk_hotspot_print_account FOREIGN KEY(account_id) REFERENCES hotspot_accounts(id),
- CONSTRAINT fk_hotspot_print_job FOREIGN KEY(last_job_id) REFERENCES hotspot_card_output_jobs(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DELIMITER $$
+CREATE PROCEDURE `rl_customer_phone_unique_v1` ()  BEGIN
+ DECLARE acquired INT DEFAULT 0;
+ DECLARE duplicate_count INT DEFAULT 0;
+ DECLARE lock_name VARCHAR(64);
+ DECLARE CONTINUE HANDLER FOR 1061 BEGIN END;
+ DECLARE EXIT HANDLER FOR SQLEXCEPTION
+ BEGIN
+  IF acquired=1 THEN DO RELEASE_LOCK(lock_name); END IF;
+  RESIGNAL;
+ END;
 
-SELECT 'tenant_database_schema_created_not_activated' AS result;
+ IF DATABASE() IS NULL OR DATABASE()='lord_radius_core' OR BINARY LEFT(DATABASE(),10)<>BINARY 'rl_tenant_' THEN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Select the target rl_tenant_ database; central or unrelated databases are refused';
+ END IF;
 
+ SET lock_name=CONCAT('rl-customer-phone:',LEFT(SHA2(DATABASE(),256),40));
+ SELECT GET_LOCK(lock_name,0) INTO acquired;
+ IF COALESCE(acquired,0)<>1 THEN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Another customer phone upgrade is running';
+ END IF;
 
+ SELECT COUNT(*) INTO duplicate_count FROM (
+  SELECT phone FROM customers
+  WHERE phone IS NOT NULL AND CHAR_LENGTH(TRIM(phone))>0
+  GROUP BY phone HAVING COUNT(*)>1
+ ) duplicates_found;
+ IF duplicate_count>0 THEN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Duplicate customer phone numbers exist; inspect the duplicate report and resolve them before retrying';
+ END IF;
+
+ ALTER TABLE customers ADD UNIQUE KEY uq_customer_phone (phone);
+
+ DO RELEASE_LOCK(lock_name);
+ SET acquired=0;
+END$$
+
+CREATE PROCEDURE `rl_pppoe_import_workflow_v1` ()  BEGIN
+ DECLARE acquired INT DEFAULT 0;
+ DECLARE lock_name VARCHAR(64);
+ DECLARE EXIT HANDLER FOR SQLEXCEPTION
+ BEGIN
+  IF acquired=1 THEN DO RELEASE_LOCK(lock_name); END IF;
+  RESIGNAL;
+ END;
+ IF DATABASE() IS NULL OR DATABASE()='lord_radius_core' OR BINARY LEFT(DATABASE(),10)<>BINARY 'rl_tenant_' THEN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Select the target rl_tenant_ database; central or unrelated databases are refused';
+ END IF;
+ SET lock_name=CONCAT('rl-ppp-import:',LEFT(SHA2(DATABASE(),256),40));
+ SELECT GET_LOCK(lock_name,0) INTO acquired;
+ IF COALESCE(acquired,0)<>1 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Another PPPoE import upgrade is running'; END IF;
+ -- Probe the same tables and columns used by the importer without querying information_schema.
+ -- This works with tenant SQL accounts that are intentionally denied metadata access.
+ SELECT id,manager_id,first_name,last_name,phone,notes,payment_code,created_by_manager_id FROM customers LIMIT 0;
+ SELECT id,name,created_by_manager_id FROM customer_categories LIMIT 0;
+ SELECT id FROM managers LIMIT 0;
+ SELECT category_id,manager_id FROM customer_category_manager_assignments LIMIT 0;
+ SELECT customer_id,category_id,manager_id,assigned_by_manager_id FROM customer_category_memberships LIMIT 0;
+ SELECT id,current_username,service_kind FROM radius_identities LIMIT 0;
+ SELECT username,radius_identity_id FROM radius_username_reservations LIMIT 0;
+ SELECT username,attribute,op,value FROM radcheck LIMIT 0;
+ SELECT username,groupname,priority FROM radusergroup LIMIT 0;
+ SELECT id,customer_id,radius_identity_id,identity_kind,address,service_type_id,connection_method_id,station_device_id,admin_status,created_by FROM pppoe_accounts LIMIT 0;
+ SELECT id,account_id,package_version_id,effective_service_snapshot,lifecycle,expires_at FROM pppoe_subscriptions LIMIT 0;
+ SELECT subscription_id,upload_bytes,download_bytes FROM pppoe_subscription_usage LIMIT 0;
+ SELECT id,name,package_type,is_enabled,archived_at FROM pppoe_packages LIMIT 0;
+ SELECT id,package_id,version_no,radius_group_name,service_snapshot,radius_snapshot FROM pppoe_package_versions LIMIT 0;
+ SELECT id,nasname FROM nas LIMIT 0;
+ SELECT id,radius_nas_id,radius_services,is_enabled,archived_at FROM lord_nas LIMIT 0;
+ SELECT id,timezone FROM network_settings LIMIT 0;
+ SELECT id,name,code FROM service_types LIMIT 0;
+ SELECT id,service_type_id,name,code FROM connection_methods LIMIT 0;
+ SELECT groupname,attribute,op,value FROM radgroupreply LIMIT 0;
+ SELECT groupname,attribute,op,value FROM radgroupcheck LIMIT 0;
+ SELECT username,attribute,op,value FROM radreply LIMIT 0;
+ SELECT actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result FROM activity_log LIMIT 0;
+ CREATE TABLE IF NOT EXISTS pppoe_import_batches (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  created_by BIGINT UNSIGNED NOT NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  source_name VARCHAR(255) NULL,
+  total_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  imported_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  duplicate_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  rejected_rows INT UNSIGNED NOT NULL DEFAULT 0,
+  status ENUM('processing','completed','completed_with_issues') NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY(id), KEY idx_pppoe_import_batch_time(created_at,id),
+  CONSTRAINT fk_pppoe_import_batch_actor FOREIGN KEY(created_by) REFERENCES managers(id),
+  CONSTRAINT fk_pppoe_import_batch_category FOREIGN KEY(category_id) REFERENCES customer_categories(id)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ CREATE TABLE IF NOT EXISTS pppoe_import_review_rows (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_id BIGINT UNSIGNED NOT NULL,
+  source_row_number INT UNSIGNED NOT NULL,
+  username VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  reason_code VARCHAR(64) NOT NULL,
+  encrypted_payload TEXT NOT NULL,
+  resolved_at DATETIME(6) NULL,
+  resolved_by BIGINT UNSIGNED NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY(id), UNIQUE KEY uq_pppoe_import_review_source(batch_id,source_row_number),
+  KEY idx_pppoe_import_review_open(resolved_at,batch_id,id),
+  CONSTRAINT fk_pppoe_import_review_batch FOREIGN KEY(batch_id) REFERENCES pppoe_import_batches(id),
+  CONSTRAINT fk_pppoe_import_review_actor FOREIGN KEY(resolved_by) REFERENCES managers(id)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ SELECT created_by,category_id,status FROM pppoe_import_batches LIMIT 0;
+ SELECT batch_id,source_row_number,reason_code,encrypted_payload FROM pppoe_import_review_rows LIMIT 0;
+ -- Existing tenant databases have this canonical check; remove it so imports
+ -- can preserve a missing surname as an empty string. Fresh templates omit it.
+ ALTER TABLE customers DROP CHECK chk_customer_last_name;
+ DO RELEASE_LOCK(lock_name); SET acquired=0;
+END$$
+DELIMITER ;

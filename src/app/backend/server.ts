@@ -1,3 +1,4 @@
+import {migrateManualEnvironment} from './services/manual-environment-migration.service';
 import {startMasterNetworkMetricsWorker} from './services/master-network-metrics.worker';
 import {startNetworkArchiveWorker} from './services/network-archive.service';
 import {startProfileSpeedBoostWorker} from './services/profile-speed-boost.worker';
@@ -56,4 +57,9 @@ const startServer = (port: number) => {
   });
 };
 
-startServer(env.PORT);
+void migrateManualEnvironment()
+  .then(() => startServer(env.PORT))
+  .catch((error: NodeJS.ErrnoException) => {
+    console.error('Central manual environment migration failed:', error.code || error.message);
+    process.exit(1);
+  });

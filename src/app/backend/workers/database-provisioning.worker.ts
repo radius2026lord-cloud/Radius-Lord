@@ -8,7 +8,8 @@ import mysql from 'mysql2/promise';
 import {db} from '../config/db';
 import {encryptProvisioningSecret,decryptProvisioningSecret} from '../services/provisioning-secrets.service';
 import {splitTenantTemplate} from '../services/tenant-template.service';
-const VERSION='tenant-20261007-v1';
+import {tenantSchemaFingerprint} from '../services/tenant-schema-fingerprint.service';
+const VERSION='tenant-20261106-v1';
 class ProvisioningFailure extends Error{constructor(public code:string){super(code);}}
 // Dedicated sequential worker: no production provisioning starts just by launching API.
 async function main(){const central=await db.pool.getConnection();let admin:mysql.Connection|undefined,app:mysql.Connection|undefined,radius:mysql.Connection|undefined,job:any,currentStep='preflight',locked=false;
@@ -32,6 +33,8 @@ async function main(){const central=await db.pool.getConnection();let admin:mysq
  },true);
  await step('hosting_preflight',async()=>{const hosting=await readHostingPreflight((sql,params)=>central.query(sql,params));await central.query("UPDATE environment_provisioning_steps SET resource_reference=? WHERE job_id=? AND step_code='hosting_preflight'",['hosting-sha256:'+createHash('sha256').update(hosting.mode+'|'+hosting.baseUrl).digest('hex'),job.id]);},true);
 
+ const approvedFingerprint=process.env.TENANT_SCHEMA_REFERENCE_SHA256?.trim().toLowerCase();
+ if(!approvedFingerprint||!/^[a-f0-9]{64}$/.test(approvedFingerprint))throw new ProvisioningFailure('TENANT_SCHEMA_REFERENCE_REQUIRED');
  const template=readFileSync(join(__dirname,'../tenant-schema/create_tenant_database.sql'),'utf8'),digest=createHash('sha256').update(template).digest('hex');
  const zoneDatabaseName=`rl_tenant_zone_${String(job.tenant_id).padStart(6,'0')}`;
  let [databases]:any=await central.query('SELECT * FROM tenant_databases WHERE tenant_id=?',[job.tenant_id]);let d=databases[0],server:any;
@@ -40,7 +43,11 @@ async function main(){const central=await db.pool.getConnection();let admin:mysq
  if(server.tls_ca_reference)throw new ProvisioningFailure('CUSTOM_CA_NOT_SUPPORTED_YET');const options={host:server.host,port:server.port,connectTimeout:10000,...(server.tls_required?{ssl:{rejectUnauthorized:true}}:{})};admin=await mysql.createConnection({...options,user:server.provisioning_username,password:decryptProvisioningSecret(server.provisioning_password_encrypted)});const [version]:any=await admin.query({sql:'SELECT VERSION() version,USER() source',timeout:10000});if(!/^8\./.test(version[0].version)||/mariadb/i.test(version[0].version))throw new ProvisioningFailure('MYSQL_8_REQUIRED');if(d.db_name!==zoneDatabaseName&&!/^rl_tenant_[0-9]+_[a-f0-9]{16}$/.test(d.db_name))throw new ProvisioningFailure('INVALID_DATABASE_NAME');
  await step('database_create',async()=>{await admin!.query({sql:`CREATE DATABASE \`${d.db_name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,timeout:10000});});await admin.changeUser({database:d.db_name});
  const [pinned]:any=await central.query("SELECT resource_reference FROM environment_provisioning_steps WHERE job_id=? AND step_code='database_template' AND status='success'",[job.id]);if(pinned[0]&&pinned[0].resource_reference!==digest)throw new ProvisioningFailure('TEMPLATE_VERSION_CHANGED');
- await step('database_template',async()=>{const [tables]:any=await admin!.query('SELECT COUNT(*) count FROM information_schema.TABLES WHERE TABLE_SCHEMA=?',[d.db_name]);if(tables[0].count!==0)throw new ProvisioningFailure('PARTIAL_SCHEMA_REQUIRES_REVIEW');await central.query("UPDATE environment_provisioning_steps SET resource_reference=? WHERE job_id=? AND step_code='database_template'",[digest,job.id]);await central.query("INSERT INTO schema_versions (tenant_id,version,status) VALUES (?,?,'running')",[job.tenant_id,VERSION]);for(const sql of splitTenantTemplate(template))await admin!.query({sql,timeout:30000});await central.query("UPDATE schema_versions SET status='success',applied_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND version=? AND status='running'",[job.tenant_id,VERSION]);await central.query('UPDATE tenant_databases SET schema_version=? WHERE id=?',[VERSION,d.id]);});
+ await step('database_template',async()=>{const [tables]:any=await admin!.query('SELECT COUNT(*) count FROM information_schema.TABLES WHERE TABLE_SCHEMA=?',[d.db_name]);if(tables[0].count!==0)throw new ProvisioningFailure('PARTIAL_SCHEMA_REQUIRES_REVIEW');await central.query("UPDATE environment_provisioning_steps SET resource_reference=? WHERE job_id=? AND step_code='database_template'",[digest,job.id]);await central.query("INSERT INTO schema_versions (tenant_id,version,status) VALUES (?,?,'running')",[job.tenant_id,VERSION]);for(const sql of splitTenantTemplate(template))await admin!.query({sql,timeout:30000});if(await tenantSchemaFingerprint(admin!,d.db_name)!==approvedFingerprint)throw new ProvisioningFailure('TENANT_SCHEMA_MISMATCH');await central.query("UPDATE schema_versions SET status='success',applied_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND version=? AND status='running'",[job.tenant_id,VERSION]);await central.query('UPDATE tenant_databases SET schema_version=? WHERE id=?',[VERSION,d.id]);});
+ await step('database_schema_verify',async()=>{
+  if(await tenantSchemaFingerprint(admin!,d.db_name)!==approvedFingerprint)throw new ProvisioningFailure('TENANT_SCHEMA_MISMATCH');
+  await central.query("UPDATE environment_provisioning_steps SET resource_reference=? WHERE job_id=? AND step_code='database_schema_verify'",[approvedFingerprint,job.id]);
+ },true);
  const clientHost=String(version[0].source).split('@').slice(1).join('@');if(!clientHost||clientHost.length>255||/[\x00-\x20%_'"\\]/.test(clientHost))throw new ProvisioningFailure('DATABASE_CLIENT_HOST_DETECTION_FAILED');
  const [userStep]:any=await central.query("SELECT resource_reference FROM environment_provisioning_steps WHERE job_id=? AND step_code='database_users' AND status='success'",[job.id]);if(userStep[0]&&userStep[0].resource_reference!==clientHost)throw new ProvisioningFailure('DATABASE_CLIENT_HOST_CHANGED');
  const appPass=decryptProvisioningSecret(d.app_password_encrypted),radiusPass=decryptProvisioningSecret(d.radius_password_encrypted),appAccount=mysql.escape(d.db_username)+'@'+mysql.escape(clientHost),radiusAccount=mysql.escape(d.radius_username)+'@'+mysql.escape(clientHost);

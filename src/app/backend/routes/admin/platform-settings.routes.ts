@@ -1,3 +1,5 @@
+import {listStagedReleases, ReleaseUploadError, stageRelease} from '../../services/staged-releases.service';
+import {db} from '../../config/db';
 import {getServerReadiness,runServerReadiness,saveServerReadinessSchedule} from "../../controllers/server-readiness.controller";
 import {getInfrastructureHealth,saveInfrastructureSelection,runInfrastructureHealth} from '../../controllers/infrastructure-health.controller';
 import {listRadiusServers,saveRadiusServer,radiusServerHealth,discoverRadiusServers,addDiscoveredRadiusServer,setupRadiusServer} from '../../controllers/radius-servers.controller';
@@ -12,6 +14,38 @@ import { getMasterUiPreferences, saveMasterUiPreferences } from '../../controlle
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.get('/system-updates', async (_req, res) => {
+  try {
+    const [networks] = await db.query(
+      'SELECT t.id AS tenantId, t.name, d.schema_version AS schemaVersion FROM tenant_databases d JOIN tenants t ON t.id=d.tenant_id WHERE d.status=? AND t.archived_at IS NULL ORDER BY t.id',
+      ['active'],
+    );
+    res.json({
+      ...(await listStagedReleases()),
+      networks,
+      currentVersion: process.env.RADIUS_RELEASE_VERSION || null,
+      targetSchemaVersion: process.env.RADIUS_RELEASE_TENANT_SCHEMA_VERSION || null,
+    });
+  } catch {
+    res.status(503).json({message: 'تعذّر تحميل سجل الإصدارات وإصدارات قواعد الشبكات.'});
+  }
+});
+router.post('/system-updates', async (req, res) => {
+  if (!req.is('application/octet-stream')) {
+    res.status(415).json({message: 'صيغة إرسال الحزمة غير صالحة.'});
+    return;
+  }
+  try {
+    const release = await stageRelease(req, req.get('X-Release-Manifest'), req.get('X-Release-Signature'));
+    res.status(201).json({release});
+  } catch (error) {
+    if (error instanceof ReleaseUploadError) {
+      res.status(error.status).json({message: error.message});
+      return;
+    }
+    res.status(503).json({message: 'تعذّر حفظ حزمة الإصدار.'});
+  }
+});
 router.get('/ui-preferences',getMasterUiPreferences);
 router.put('/ui-preferences',(req,res,next)=>{if(req.headers.origin!==new URL(env.FRONTEND_URL).origin)return res.status(403).json({message:'مصدر الطلب غير مصرح.'});return next();},saveMasterUiPreferences);
 router.use('/server-readiness',(req,res,next)=>{
