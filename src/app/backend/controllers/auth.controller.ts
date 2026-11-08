@@ -1,3 +1,5 @@
+import {checkCentralSession} from '../services/central-session.service';
+import {renewVerifiedSession,writeSessionCookie} from '../services/session-policy.service';
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import {loginNetworkPrincipal} from '../services/network-login.service';
@@ -168,7 +170,7 @@ export const loginController = async (req: Request, res: Response) => {
       if(network){
         loginAttempts.delete(ip);
         res.clearCookie('token',{path:'/',httpOnly:true,secure:process.env.NODE_ENV==='production'});
-        res.cookie('network_token',network.token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/network',maxAge:1200000});
+        writeSessionCookie(res,'network',network.token);
         return res.json({success:true,accountType:'network_manager',redirectTo:network.redirectTo});
       }
     }
@@ -193,13 +195,7 @@ export const loginController = async (req: Request, res: Response) => {
 
     loginAttempts.delete(ip);
     res.clearCookie('network_token',{path:'/api/network',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});
-    res.cookie('token', result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 20 * 60 * 1000,
-      path: '/',
-    });
+    writeSessionCookie(res,'central',result.token);
 
     return res.json({
       success: true,
@@ -236,8 +232,19 @@ export const meController = async (req: AuthenticatedRequest, res: Response) => 
       return res.status(401).json({ success: false, message: 'الحساب غير متاح حاليًا.' });
     }
 
+    if(req.method==='POST'){
+      if(!req.auth.sessionClaims)return res.status(401).json({success:false,message:'انتهت الجلسة.'});
+      await checkCentralSession(req.auth.sessionClaims);
+      let renewed;
+      try{renewed=renewVerifiedSession(req.auth.sessionClaims,req.body?.activityAgeMs);}
+      catch{return res.status(422).json({success:false,message:'يلزم تفاعل حديث لتجديد الجلسة.'});}
+      writeSessionCookie(res,'central',renewed.token,renewed.maxAge);
+      req.auth.expiresAt=renewed.expiresAt;
+    }
+
     return res.json({
       success: true,
+      serverNow:new Date().toISOString(),
       sessionExpiresAt: req.auth.expiresAt ? new Date(req.auth.expiresAt * 1000).toISOString() : null,
       account: {
         id: account.id,

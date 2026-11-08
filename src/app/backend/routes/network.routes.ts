@@ -1,3 +1,5 @@
+import {SESSION_IDLE_SECONDS,renewVerifiedSession,writeSessionCookie} from '../services/session-policy.service';
+import {requireAuthOrigin} from '../middleware/auth-origin.middleware';
 import {recoverNetworkAccess,RecoveryError} from '../services/network-access-recovery.service';
 import {subscriptionPresentation,readPlatformSubscription,requestPlatformRenewal,requestPlatformUpgrade} from '../services/network-platform-subscription.service';
 import {confirmHotspotBatchOutput} from '../services/hotspot-print-tracking.service';
@@ -23,12 +25,12 @@ import {readRadiusSettings,saveRadiusSettings} from '../services/network-radius-
 import {auditNetworkEvent,auditRejectedLogin} from '../services/network-audit.service';
 import {managerAccess,managementAccess} from '../services/network-manager-access.service';
 import {readNetworkSettings,saveNetworkSettings,readNetworkLogo,saveNetworkLogo} from '../services/network-settings.service';
-import {networkSessionVersion} from '../services/network-session-version.service';
+import {networkSessionVersion,networkSessionId,revokeNetworkSession} from '../services/network-session-version.service';
 import {readManagers,mutateManagers} from '../services/network-managers.service';
 import {credentialsRequired,changeInitialCredentials} from '../services/network-credentials.service';
 import {readHostingPreflight} from '../services/hosting-preflight.service';
 import {consumeActivation} from '../services/environment-activation.service';
-import {createHash,timingSafeEqual} from 'crypto';
+import {createHash,randomUUID,timingSafeEqual} from 'crypto';
 import {Router,raw,type Request} from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -47,14 +49,14 @@ function cookie(header:string|undefined){try{return decodeURIComponent(header?.s
 async function principal(req:Request,subscriptionAccess=false){
  const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
  const scope=await networkScope(String(req.params.slug),false,subscriptionAccess);if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('NETWORK_AUTH');
- if(token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub)))throw new Error('NETWORK_AUTH');
+ if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token))throw new Error('NETWORK_AUTH');
  await withNetwork(scope,async connection=>{await validateLocalLicense(connection,scope,false,subscriptionAccess);const [rows]:any=await connection.query("SELECT password_hash FROM managers WHERE id=? AND manager_type='principal' AND is_enabled=1 AND archived_at IS NULL",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('NETWORK_AUTH');});
  if(await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  return {...scope,managerId:Number(token.sub),authVersion:token.authVersion};
 }
 async function management(req:Request){
  const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
- const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub))||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
+ const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||(token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token)||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  const result={...scope,managerId:Number(token.sub),authVersion:token.authVersion,groupsMode:req.query.groups==='1',archiveMode:req.query.archive==='1'};
  await withNetwork(scope,async app=>{await validateLocalLicense(app,scope);const actor=await managerAccess(app,result.managerId,result.authVersion);try{await managementAccess(app,result,req.method==='POST'?String(req.body?.action).startsWith('group-'):result.groupsMode);}catch(e){await auditNetworkEvent(app,{action:'managers.access',managerId:Number(actor.manager.id),result:'failed',reason:'PERMISSION_DENIED'});throw e;}});return result;
 }
@@ -62,7 +64,7 @@ async function uiPreferencesScope(req:Request){
  const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});
  if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
  const scope=await networkScope(String(req.params.slug),false,true);
- if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub))||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
+ if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||(token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token)||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  await withNetwork(scope,async app=>{await validateLocalLicense(app,scope,false,true);await managerAccess(app,Number(token.sub),token.authVersion);});
  return {environmentId:Number(scope.environment_id),managerId:Number(token.sub)};
 }
@@ -71,7 +73,7 @@ router.put('/:slug/ui-preferences',async(req,res)=>{try{const owner=await uiPref
 router.get('/:slug/follow-up-alerts',async(req,res)=>{try{const owner=await uiPreferencesScope(req);return res.json({success:true,settings:await readNetworkFollowUpSettings(owner.environmentId)});}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({success:false,message:'تعذر تحميل حدود تنبيهات المتابعة.'});}});
 router.put('/:slug/follow-up-alerts',async(req,res)=>{try{const scope=await principal(req);return res.json({success:true,settings:await writeNetworkFollowUpSettings(Number(scope.environment_id),req.body?.settings)});}catch(e){const error=e as Error;return res.status(error.message==='NETWORK_AUTH'?401:error.message==='FOLLOWUP_SETTINGS_INPUT'?422:503).json({success:false,message:error.message==='FOLLOWUP_SETTINGS_INPUT'?'أيام الانتهاء من 1 إلى 30، ونسبة الاستهلاك من 50 إلى 99.':'تعذر حفظ حدود تنبيهات المتابعة.'});}});
 router.get('/:slug/activity',async(req,res)=>{try{
- const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub))||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
+ const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||(token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token)||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');
  return res.json(await withNetwork(scope,async app=>{await validateLocalLicense(app,scope);const access=await managerAccess(app,Number(token.sub),token.authVersion);const result=await readNetworkActivity(app,access,req.query);await auditNetworkEvent(app,{action:'activity.view',managerId:Number(token.sub)});return result;}));
  }catch(e){const error=e as Error,code=error.message;if(code!=='NETWORK_AUTH'&&code!=='ACTIVITY_INPUT')console.error('[network-activity]',{name:error.name,code:(e as any).code||code,message:error.message});return res.status(code==='ACTIVITY_INPUT'?422:code==='NETWORK_AUTH'?403:503).json({message:code==='ACTIVITY_INPUT'?'تحقق من مرشحات السجل.':code==='NETWORK_AUTH'?'تعذر التحقق من صلاحية المستخدم أو الشبكة.':'تعذر تحميل السجل. تحقق من تحديث قاعدة بيانات الشبكة ثم أعد المحاولة.'});}});
 router.get('/:slug/radius-settings',async(req,res)=>{try{return res.json(await readRadiusSettings(await principal(req)));}catch{return res.status(403).json({message:'تعذر تحميل إعدادات RADIUS.'});}});
@@ -79,7 +81,7 @@ router.post('/:slug/radius-settings',async(req,res)=>{try{return res.json(await 
 router.get('/:slug/profile-references',async(req,res)=>{try{const scope=await principal(req);return res.json(await withNetwork(scope,profileReferences));}catch{return res.status(503).json({message:'تعذر تحميل مراجع الشبكة. طبّق ترقية مراجع البروفايلات أولًا.'});}});
 router.get('/:slug/profiles',async(req,res)=>{try{return res.json(await readNetworkProfiles({...await principal(req),archiveMode:req.query.archive==='1'}));}catch(e){return res.status(503).json({message:['ER_NO_SUCH_TABLE','ER_BAD_FIELD_ERROR'].includes((e as any).code)?'طبّق ترقيات البروفايلات من مجلد tenant-upgrades على قاعدة الزبون أولًا.':'تعذر تحميل البروفايلات.'});}});
 router.post('/:slug/profiles',async(req,res)=>{try{return res.json(await mutateNetworkProfile(await principal(req),req.body));}catch(e){const code=(e as Error).message;return res.status(code==='NETWORK_AUTH'?401:409).json({message:code==='PROFILE_CONFLICT'?'تغير البروفايل. حدّث القائمة قبل المضاعفة.':code==='PROFILE_BOOST_ACTIVE'?'هناك مضاعفة مؤقتة فعالة على هذا البروفايل. انتظر انتهاءها قبل التعديل أو بدء مضاعفة جديدة.':code==='PROFILE_BOOST_INPUT'?'تحقق من معامل السرعة والمدة؛ المدة من دقيقة واحدة حتى 30 يومًا.':code==='PROFILE_SPEED_BATCH_INPUT'?'تحقق من سرعات الملف والقيم الافتراضية للبروفايلات.':code==='PROFILE_INPUT'?'راجع حقول البروفايل.':'تعذر حفظ البروفايل.',fields:(e as any).fields||{}});}});
-async function categoryScope(req:Request){const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});const scope=await networkScope(String(req.params.slug));if(token.kind!=='network-manager'||token.slug!==scope.slug||Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||token.sessionVersion!==await networkSessionVersion(scope,Number(token.sub))||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');await withNetwork(scope,app=>validateLocalLicense(app,scope));return {...scope,managerId:Number(token.sub),authVersion:token.authVersion};}
+async function categoryScope(req:Request){const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});const scope=await networkScope(String(req.params.slug));if(token.kind!=='network-manager'||token.slug!==scope.slug||Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id)||(token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token)||await credentialsRequired(scope))throw new Error('NETWORK_AUTH');await withNetwork(scope,app=>validateLocalLicense(app,scope));return {...scope,managerId:Number(token.sub),authVersion:token.authVersion};}
 function hotspotTemplateFailure(res:any,e:any){const code=e?.message;if(!['NETWORK_AUTH','HOTSPOT_TEMPLATE_INPUT','HOTSPOT_TEMPLATE_CONFLICT','HOTSPOT_TEMPLATE_NOT_FOUND'].includes(code))console.error('[hotspot-card-templates]',{code:/^[A-Z][A-Z0-9_]{1,63}$/.test(String(e?.code||''))?e.code:'UNEXPECTED'});if(e?.code==='ER_BAD_FIELD_ERROR')return res.status(503).json({message:'نفّذ ترقية طريقة دخول الباقة على قاعدة الشبكة أولًا (20261101_hotspot_package_login_mode.sql).'});if(code==='NETWORK_AUTH')return res.status(401).json({message:'لا تملك صلاحية إدارة قوالب الهوتسبوت.'});if(code==='HOTSPOT_TEMPLATE_CONFLICT')return res.status(409).json({message:'تغيرت القوالب من جلسة أخرى. أعد تحميلها ثم أعد التعديل.'});if(code==='HOTSPOT_TEMPLATE_INPUT')return res.status(422).json({message:'راجع اسم القالب ومقاسه وحقوله والشعار والاختيارات الافتراضية.'});if(code==='HOTSPOT_TEMPLATE_NOT_FOUND')return res.status(404).json({message:'الحساب أو الدفعة غير متاحين للطباعة.'});return res.status(503).json({message:e?.code==='ER_NO_SUCH_TABLE'?'نفّذ ترقية قوالب الهوتسبوت على قاعدة بيانات الشبكة أولًا (20261101_hotspot_card_templates.sql).':'تعذر تحميل أو حفظ قوالب الهوتسبوت. أعد المحاولة.'});}
 router.get('/:slug/hotspot/card-templates',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await readHotspotCardTemplates(await principal(req)));}catch(e){return hotspotTemplateFailure(res,e);}});
 router.put('/:slug/hotspot/card-templates',async(req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await saveHotspotCardTemplates(await principal(req),req.body));}catch(e){return hotspotTemplateFailure(res,e);}});
@@ -311,20 +313,36 @@ router.post('/:slug/login',async(req,res)=>{
   const scope=await networkScope(String(req.params.slug),false,true);loginScope=scope;const manager=await withNetwork(scope,async connection=>{await validateLocalLicense(connection,scope,false,true);const [rows]:any=await connection.query("SELECT id,full_name,password_hash FROM managers WHERE username=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL))",[username]);if(rows[0])await managerAccess(connection,Number(rows[0].id));if(!rows[0]||!await bcrypt.compare(password,rows[0].password_hash))throw new Error('INVALID_LOGIN');return rows[0];});
   const runtime=await readPrivateSetting('environment_runtime','environment_'+scope.environment_id);
   if(runtime?.mustChangeCredentials===true&&username!==runtime.pendingUsername&&(!runtime.credentialsExpiresAt||new Date(runtime.credentialsExpiresAt).getTime()<=Date.now()))throw new Error('CREDENTIALS_EXPIRED');
-  failed.delete(key);const sessionVersion=await networkSessionVersion(scope,Number(manager.id));const token=jwt.sign({sessionVersion,kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'});
+  failed.delete(key);const sessionVersion=await networkSessionVersion(scope,Number(manager.id));const token=jwt.sign({jti:randomUUID(),sessionVersion,kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:SESSION_IDLE_SECONDS});
   await withNetwork(scope,app=>auditNetworkEvent(app,{action:'auth.login',managerId:Number(manager.id)}));
-  res.cookie('network_token',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/network',maxAge:1200000});return res.json({success:true,name:manager.full_name});
+  writeSessionCookie(res,'network',token);return res.json({success:true,name:manager.full_name});
  }catch{if(loginScope)await auditRejectedLogin(loginScope);for(const [k,v]of Array.from(failed))if(v.until<=now)failed.delete(k);if(failed.size>1000)failed.clear();failed.set(key,{count:attempts&&attempts.until>now?attempts.count+1:1,until:now+300000});return res.status(401).json({message:'بيانات الدخول غير صحيحة أو البيئة غير متاحة.'});}
 });
 router.post('/:slug/credentials',async(req,res)=>{try{
  const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});
  if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('NETWORK_AUTH');
  const scope=await networkScope(String(req.params.slug));if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('NETWORK_AUTH');
+ if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token))throw new Error('NETWORK_AUTH');
  const fresh=await changeInitialCredentials(scope,token,req.body);
- res.cookie('network_token',fresh,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/network',maxAge:1200000});return res.json({success:true});
+ writeSessionCookie(res,'network',fresh);return res.json({success:true});
  }catch(e){const code=(e as Error).message;const messages:Record<string,string>={USERNAME_TAKEN:'اسم المستخدم مستخدم بالفعل، اختر اسمًا آخر.',CREDENTIALS_INPUT:'استخدم اسمًا إنكليزيًا من 3 إلى 64 محرفًا يبدأ بحرف، وكلمة مرور من 8 إلى 128 محرفًا.',CREDENTIALS_REUSE:'اختر اسم مستخدم وكلمة مرور مختلفين عن البيانات المؤقتة.',CREDENTIALS_EXPIRED:'انتهت صلاحية البيانات المؤقتة؛ راجع الإدارة.',CREDENTIALS_BUSY:'جارٍ حفظ بيانات حساب آخر؛ أعد المحاولة.'};return res.status(409).json({message:messages[code]||'تعذر حفظ البيانات. أعد الدخول ثم حاول مجددًا.'});}
 });
-router.post('/:slug/logout',async(req,res)=>{try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});const scope=await networkScope(String(req.params.slug));if(token.kind==='network-manager'&&token.slug===scope.slug&&Number(token.tenantId)===Number(scope.tenant_id)&&Number(token.environmentId)===Number(scope.environment_id)&&token.sessionVersion===await networkSessionVersion(scope,Number(token.sub)))await withNetwork(scope,async app=>{await managerAccess(app,Number(token.sub),token.authVersion);await auditNetworkEvent(app,{action:'auth.logout',managerId:Number(token.sub)});});}catch{console.error('[network-audit]',{action:'auth.logout',result:'unverified_or_audit_unavailable'});}res.clearCookie('network_token',{path:'/api/network',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});return res.json({success:true});});
+router.post('/:slug/logout',async(req,res)=>{
+ let token:any;
+ try{token=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});}catch{}
+ if(token?.kind==='network-manager'&&token.slug===req.params.slug){
+  try{await revokeNetworkSession(token);}
+  catch{return res.status(503).json({message:'تعذر إنهاء الجلسة. أعد المحاولة.'});}
+  try{
+   const scope=await networkScope(String(req.params.slug));
+   if(Number(token.tenantId)===Number(scope.tenant_id)&&Number(token.environmentId)===Number(scope.environment_id)&&(token.sessionVersion||'0')===await networkSessionVersion(scope,Number(token.sub))){
+    await withNetwork(scope,async app=>{await managerAccess(app,Number(token.sub),token.authVersion);await auditNetworkEvent(app,{action:'auth.logout',managerId:Number(token.sub)});});
+   }
+  }catch{console.error('[network-audit]',{action:'auth.logout',result:'unverified_or_audit_unavailable'});}
+ }
+ res.clearCookie('network_token',{path:'/api/network',httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'});
+ return res.json({success:true});
+});
 router.get('/:slug/platform-subscription',async(req,res)=>{try{return res.json(await readPlatformSubscription(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:503).json({message:'تعذر تحميل معلومات الاشتراك. تحقق من الاتصال وتوقيت الشبكة ثم أعد المحاولة.'});}});
 router.post('/:slug/platform-subscription/upgrade-request',async(req,res)=>{try{return res.json(await requestPlatformUpgrade(await principal(req,true),req.body));}catch(e){const code=(e as Error).message;const messages:Record<string,string>={UPGRADE_REQUEST_INPUT:'حدد نوع الزيادة وأدخل حدودًا صحيحة.',UPGRADE_REQUEST_LIMIT:'الحد المطلوب يجب أن يكون أكبر من الحد الحالي؛ السعة غير المحدودة لا تحتاج إلى زيادة.',UPGRADE_REQUEST_PENDING:'لديك طلب ترقية قيد المراجعة؛ تواصل مع الإدارة لمتابعته.',UPGRADE_REQUEST_BUSY:'يجري تسجيل طلب آخر؛ أعد المحاولة بعد قليل.',UPGRADE_RENEWAL_NOT_DUE:'يتاح إرفاق التجديد عند اقتراب انتهاء الاشتراك.'};return res.status(code==='NETWORK_AUTH'?403:code==='UPGRADE_REQUEST_INPUT'||code==='UPGRADE_REQUEST_LIMIT'?422:409).json({message:messages[code]||'تعذر تسجيل طلب الترقية.'});}});
 router.post('/:slug/platform-subscription/renewal-request',async(req,res)=>{try{return res.json(await requestPlatformRenewal(await principal(req,true)));}catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?403:409).json({message:(e as Error).message==='RENEWAL_NOT_DUE'?'يتاح طلب التجديد عند اقتراب انتهاء الاشتراك.':(e as Error).message==='RENEWAL_REQUEST_BUSY'?'يجري تسجيل طلب التجديد؛ أعد المحاولة بعد قليل.':'تعذر تسجيل طلب التجديد. أعد المحاولة.'});}});
@@ -350,17 +368,35 @@ router.post('/:slug/quick-setup',async(req,res)=>{
   return res.json({quickSetupStep:await readPrivateSetting('network_quick_setup',key)});
  }catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:'تعذر حفظ تقدم الإعداد. أعد المحاولة.'});}
 });
-router.get('/:slug/me',async(req,res)=>{
+async function readNetworkSession(req:Request,res:import('express').Response){
  try{const token:any=jwt.verify(cookie(req.headers.cookie),env.JWT_SECRET,{algorithms:['HS256']});if(token.kind!=='network-manager'||token.slug!==req.params.slug)throw new Error('SCOPE');const scope=await networkScope(String(req.params.slug),false,true);if(Number(token.tenantId)!==Number(scope.tenant_id)||Number(token.environmentId)!==Number(scope.environment_id))throw new Error('SCOPE');
- if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub)))throw new Error('NETWORK_AUTH');
+ if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token))throw new Error('NETWORK_AUTH');
  const mustChangeCredentials=await credentialsRequired(scope);
  const result=await withNetwork(scope,async connection=>{const license=await validateLocalLicense(connection,scope,false,true);const [rows]:any=await connection.query("SELECT id,full_name,manager_type,password_hash FROM managers WHERE id=? AND is_enabled=1 AND archived_at IS NULL AND (manager_type='principal' OR EXISTS(SELECT 1 FROM permission_groups g WHERE g.id=managers.permission_group_id AND g.is_enabled=1 AND g.archived_at IS NULL))",[token.sub]);if(!rows[0]||token.authVersion!==createHash('sha256').update(rows[0].password_hash).digest('hex'))throw new Error('MANAGER');const access=await managerAccess(connection,Number(rows[0].id),token.authVersion);const [networkSettingsRows]:any=await connection.query('SELECT network_name,timezone FROM network_settings WHERE id=1');const networkSettings=networkSettingsRows[0];return {mustChangeCredentials,manager:{id:rows[0].id,full_name:rows[0].full_name,manager_type:rows[0].manager_type,account_role:access.role,permissions:access.permissions},networkName:networkSettings?.network_name||scope.name,subscription:await subscriptionPresentation(scope,license,networkSettings?.timezone),license:license.license_number,expiresAt:license.canonicalExpiresAt,planName:license.plan_name_snapshot,durationMonths:Number(license.duration_months_snapshot),startsAt:license.canonicalStartsAt,maxSubscribers:Number(license.max_pppoe_accounts),maxNas:Number(license.base_max_nas)===0?0:Number(license.base_max_nas)+Number(license.additional_nas_capacity)};});
  const quickSetupStep=result.manager.manager_type==='principal'&&scope.subscription_status==='active'
   ? await readPrivateSetting('network_quick_setup','environment_'+scope.environment_id)
   : null;
- return res.json({...result,quickSetupStep:[1,2,3,4].includes(quickSetupStep)?quickSetupStep:null});
- }catch{return res.status(401).json({message:'انتهت الجلسة أو البيئة غير متاحة.'});}
-});
+ let sessionExpiresAt=Number(token.exp);
+ if(req.method==='POST'){
+  if(!Number.isInteger(token.exp)||token.exp*1000<=Date.now())throw new Error('NETWORK_AUTH');
+  if((token.sessionVersion||'0')!==await networkSessionVersion(scope,Number(token.sub),token))throw new Error('NETWORK_AUTH');
+  token.sessionVersion=token.sessionVersion??'0';
+  token.jti=networkSessionId(token);
+  let renewed;
+  try{renewed=renewVerifiedSession(token,req.body?.activityAgeMs);}
+  catch{return res.status(422).json({message:'يلزم تفاعل حديث لتجديد الجلسة.'});}
+  writeSessionCookie(res,'network',renewed.token,renewed.maxAge);
+  sessionExpiresAt=renewed.expiresAt;
+ }
+ return res.json({...result,serverNow:new Date().toISOString(),sessionExpiresAt:new Date(sessionExpiresAt*1000).toISOString(),quickSetupStep:[1,2,3,4].includes(quickSetupStep)?quickSetupStep:null});
+ }catch(error){
+  const failure=error as Error;
+  const invalid=['TokenExpiredError','JsonWebTokenError','NotBeforeError'].includes(failure.name)||['SCOPE','NETWORK_AUTH','MANAGER'].includes(failure.message);
+  return res.status(invalid?401:503).json({message:invalid?'انتهت الجلسة أو أن الحساب لم يعد متاحًا.':'تعذر التحقق من البيئة مؤقتًا. أعد المحاولة.'});
+ }
+}
+router.get('/:slug/me',readNetworkSession);
+router.post('/:slug/session/renew',requireAuthOrigin,readNetworkSession);
 // Worker-only HTTP proof: this exercises the same network scope, DB and password verification as login.
 router.post('/:slug/verify',async(req,res)=>{
  try{const proof:any=jwt.verify(String(req.headers['x-provisioning-proof']??''),provisioningKey(),{algorithms:['HS256']});if(proof.kind!=='network-bootstrap'||proof.slug!==req.params.slug)throw new Error('PROOF');

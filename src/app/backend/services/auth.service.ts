@@ -1,3 +1,4 @@
+import {SESSION_IDLE_SECONDS} from './session-policy.service';
 import bcrypt from 'bcryptjs';
 import {randomUUID} from 'crypto';
 import {centralAuthVersion} from './central-session.service';
@@ -89,7 +90,7 @@ export class AuthService {
         username: account.username,
       },
       env.JWT_SECRET,
-      { expiresIn: '20m',algorithm:'HS256',issuer:'radius-lord',audience:'central',jwtid:randomUUID() },
+      { expiresIn: SESSION_IDLE_SECONDS,algorithm:'HS256',issuer:'radius-lord',audience:'central',jwtid:randomUUID() },
     );
 
     const table = accountType === 'master_admin' ? 'master_admins' : 'customers';

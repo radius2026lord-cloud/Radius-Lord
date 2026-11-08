@@ -1,9 +1,10 @@
+import {SESSION_IDLE_SECONDS} from './session-policy.service';
 import {auditNetworkEvent,auditRejectedLogin} from './network-audit.service';
 import {managerAccess} from './network-manager-access.service';
 import {networkSessionVersion} from './network-session-version.service';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import {createHash} from 'crypto';
+import {createHash,randomUUID} from 'crypto';
 import {db} from '../config/db';
 import {env} from '../config/env';
 import {networkScope,validateLocalLicense,withNetwork} from './network-runtime.service';
@@ -30,7 +31,7 @@ export async function loginNetworkPrincipal(username:string,password:string){
     const [stateRows]:any=await db.query("SELECT setting_value FROM platform_settings WHERE setting_group='environment_runtime' AND setting_key=?",['environment_'+scope.environment_id]);
     const state=stateRows[0]?JSON.parse(stateRows[0].setting_value):null;
     if(state?.mustChangeCredentials===true&&username!==state.pendingUsername&&(!state.credentialsExpiresAt||new Date(state.credentialsExpiresAt).getTime()<=Date.now())){await auditNetworkEvent(app,{action:'auth.login',result:'failed',reason:'TEMPORARY_CREDENTIALS_EXPIRED'});return null;}if(!manager||!await bcrypt.compare(password,manager.password_hash)){await auditNetworkEvent(app,{action:'auth.login',result:'failed',reason:'AUTH_REJECTED'});return null;}
-    return {scope,managerId:Number(manager.id),token:jwt.sign({sessionVersion:await networkSessionVersion(scope,Number(manager.id)),kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'}),redirectTo:`/network/${encodeURIComponent(scope.slug)}${license.subscription_status==='expired'||Date.parse(license.canonicalExpiresAt)<=Date.now()?'?tab=subscription':''}`};
+    return {scope,managerId:Number(manager.id),token:jwt.sign({jti:randomUUID(),sessionVersion:await networkSessionVersion(scope,Number(manager.id)),kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(manager.password_hash).digest('hex'),sub:String(manager.id),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:SESSION_IDLE_SECONDS}),redirectTo:`/network/${encodeURIComponent(scope.slug)}${license.subscription_status==='expired'||Date.parse(license.canonicalExpiresAt)<=Date.now()?'?tab=subscription':''}`};
    });
   }));
   for(const candidate of batch){if(!candidate)continue;if(match)throw new Error('NETWORK_LOGIN_AMBIGUOUS');match=candidate;}

@@ -14,5 +14,6 @@ router.use(requireAuthOrigin);
 router.post('/login', loginController);
 router.post('/signup', signupController);
 router.get('/me', authenticate, meController);
+router.post('/session/renew', authenticate, meController);
 
 export default router;

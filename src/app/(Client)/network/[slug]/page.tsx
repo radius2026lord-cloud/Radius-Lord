@@ -8,7 +8,8 @@ import NetworkQuickSetup from "@/components/network-quick-setup";
 import NetworkFirstLogin from "@/components/network-first-login";
 import NetworkDashboard from "@/components/network-dashboard";
 import FloatingNotice from "@/components/ui/floating-notice";
-import {useEffect,useState} from "react";
+import useSessionActivity from "@/components/auth/use-session-activity";
+import {useEffect,useRef,useState} from "react";
 import {useParams} from "next/navigation";
 import {AlertTriangle,KeyRound,Network as NetworkIcon,Radio,UserRound} from "lucide-react";
 import ProjectInput from "@/components/ui/project-input";
@@ -19,9 +20,15 @@ export default function NetworkPage(){
  const {slug}=useParams<{slug:string}>();const endpoint=`/api/network/${encodeURIComponent(slug)}`;
  const [activationToken,setActivationToken]=useState(""),[recovering,setRecovering]=useState(false),[confirmPassword,setConfirmPassword]=useState(""),[success,setSuccess]=useState("");
  useEffect(()=>{const params=new URLSearchParams(window.location.hash.slice(1)),recovery=params.get("recover"),token=recovery||params.get("activate");if(token){setRecovering(Boolean(recovery));setActivationToken(token);window.history.replaceState(null,"",window.location.pathname+window.location.search);}},[]);
+ const sessionEnded=useRef(false);
  const [network,setNetwork]=useState<Network|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[password,setPassword]=useState(""),[error,setError]=useState("");
- useEffect(()=>{let live=true;const controller=new AbortController();async function read(){try{const r=await fetch(`${endpoint}/me`,{credentials:"include",cache:"no-store",signal:controller.signal});if(!live)return;if(r.ok)setNetwork(await r.json());else if(r.status===401)setNetwork(null);}catch{/* Keep last display during a network interruption. */}finally{if(live)setLoading(false);}}
- void read();const timer=setInterval(()=>void read(),30000);const onFocus=()=>void read();window.addEventListener("focus",onFocus);return()=>{live=false;controller.abort();clearInterval(timer);window.removeEventListener("focus",onFocus);};},[endpoint]);
+ useSessionActivity({
+  enabled:Boolean(network)&&!activationToken&&!busy,
+  endpoint:endpoint+"/session/renew",
+  onExpired:()=>{sessionEnded.current=true;setNetwork(null);setError("انتهت الجلسة. سجّل الدخول للمتابعة.");},
+ });
+ useEffect(()=>{let live=true;sessionEnded.current=false;const controller=new AbortController();async function read(){try{const r=await fetch(`${endpoint}/me`,{credentials:"include",cache:"no-store",signal:controller.signal});if(!live)return;if(r.ok){const body=await r.json();if(!sessionEnded.current)setNetwork(body);}else if(r.status===401)setNetwork(null);}catch{/* Keep last display during a network interruption. */}finally{if(live)setLoading(false);}}
+ void read();const timer=setInterval(()=>{if(document.visibilityState==="visible")void read();},30000);const onFocus=()=>void read();window.addEventListener("focus",onFocus);return()=>{live=false;controller.abort();clearInterval(timer);window.removeEventListener("focus",onFocus);};},[endpoint]);
  const [recoveryNetwork,setRecoveryNetwork]=useState("");
  const [recoveryUsername,setRecoveryUsername]=useState("");
  const [blockedField,setBlockedField]=useState("");
@@ -46,12 +53,12 @@ export default function NetworkPage(){
   return blockedField===field&&<span role="alert" className="mt-2 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="size-4"/>الأحرف العربية غير مسموحة في هذا الحقل.</span>;
  }
  async function activate(e:React.FormEvent){e.preventDefault();if(busy)return;if(password!==confirmPassword){setError("كلمتا المرور غير متطابقتين.");return;}setBusy(true);setError("");try{const r=await fetch(`${endpoint}/${recovering?"access-recovery":"activate"}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:activationToken,password,...(recovering?{username:recoveryUsername}:{})})}),j=await r.json();if(!r.ok)throw new Error(j.message);if(recovering)setNetwork(null);setActivationToken("");setRecovering(false);setPassword("");setConfirmPassword("");setSuccess(j.message);}catch(e){setError(e instanceof Error?e.message:"تعذر التفعيل.");}finally{setBusy(false);}}
- async function logout(){setBusy(true);try{const response=await fetch(`${endpoint}/logout`,{method:"POST",credentials:"include"});if(!response.ok)return;setNetwork(null);setPassword("");}finally{setBusy(false);}}
+ async function logout(){setBusy(true);try{const response=await fetch(`${endpoint}/logout`,{method:"POST",credentials:"include"});if(!response.ok)return;sessionEnded.current=true;setNetwork(null);setPassword("");}finally{setBusy(false);}}
 
  if(network?.mustChangeCredentials&&!activationToken&&!loading)return <NetworkFirstLogin quickSetup={Boolean(network.quickSetupStep)} endpoint={endpoint} onLogout={logout} onComplete={async()=>{const response=await fetch(`${endpoint}/me`,{credentials:'include',cache:'no-store'});if(!response.ok)throw new Error('تم الحفظ؛ أعد تسجيل الدخول ببياناتك الجديدة.');setNetwork(await response.json());}}/>;
  if(network?.quickSetupStep&&!activationToken&&!loading)return <NetworkQuickSetup key={endpoint} endpoint={endpoint} initialStep={network.quickSetupStep} networkName={network.networkName} onComplete={()=>setNetwork(current=>current?{...current,quickSetupStep:null}:current)}/>;
  if(network&&!activationToken&&!loading)return <ProjectClockProvider key={endpoint} endpoint={`${endpoint}/ui-preferences`}><NetworkDashboard network={network} endpoint={endpoint} slug={slug} onLogout={logout}/></ProjectClockProvider>;
- if(!activationToken&&!loading)return <><div className={loginStyles.loginScope}><LordAuth mode="login" networkLogin={{endpoint:`${endpoint}/login`,onSuccess:async()=>{const response=await fetch(`${endpoint}/me`,{credentials:"include",cache:"no-store"});if(!response.ok)throw new Error("NETWORK_SESSION_UNAVAILABLE");setNetwork(await response.json());}}}/></div><FloatingNotice error={error} message={success} onDismiss={()=>{setError("");setSuccess("");}}/></>;
+ if(!activationToken&&!loading)return <><div className={loginStyles.loginScope}><LordAuth mode="login" networkLogin={{endpoint:`${endpoint}/login`,onSuccess:async()=>{sessionEnded.current=false;const response=await fetch(`${endpoint}/me`,{credentials:"include",cache:"no-store"});if(!response.ok)throw new Error("NETWORK_SESSION_UNAVAILABLE");setNetwork(await response.json());}}}/></div><FloatingNotice error={error} message={success} onDismiss={()=>{setError("");setSuccess("");}}/></>;
  if(!activationToken&&loading)return <main dir="rtl" className="grid min-h-[100dvh] place-items-center bg-[#edf3f8] px-4 py-8 text-[#102a63] dark:bg-[#061728] dark:text-slate-200"><section aria-busy="true" className="rl-surface w-full max-w-md rounded-[26px] border border-[#a9c8e8] bg-white p-7 shadow-[0_18px_48px_rgba(36,72,112,.10)] dark:border-white/10 dark:bg-[#0d243b] sm:p-9"><div className="flex flex-col items-center text-center"><span className="grid h-14 w-14 place-items-center rounded-[18px] bg-gradient-to-br from-[#1479ff] to-[#0758e9] text-white shadow-[0_10px_26px_rgba(20,121,255,.25)]"><Radio className="h-7 w-7"/></span><h1 className="mt-4 text-xl font-extrabold tracking-tight">Radius Lord</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">جارٍ التحقق من جلسة مدير الشبكة</p><div className="mt-5 w-full rounded-[18px] bg-[#f5f9ff] py-4 dark:bg-white/[.04]"><ProjectLoading compact>لحظة واحدة، نجهّز لوحة التحكم...</ProjectLoading></div></div><FloatingNotice error={error} message={success} onDismiss={()=>{setError("");setSuccess("");}}/></section></main>;
  return <main dir="rtl" className="grid min-h-[100dvh] place-items-center bg-slate-50 px-4 py-8 text-slate-800 dark:bg-[#061728] dark:text-slate-200">
   <ProjectInfoCard className="w-full max-w-xl space-y-5 !p-5 sm:!p-8">

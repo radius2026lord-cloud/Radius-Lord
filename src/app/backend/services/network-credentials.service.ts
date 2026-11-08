@@ -1,7 +1,9 @@
+import {SESSION_IDLE_SECONDS} from './session-policy.service';
+import {networkSessionVersion} from './network-session-version.service';
 import {auditNetworkEvent} from './network-audit.service';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import {createHash} from 'crypto';
+import {createHash,randomUUID} from 'crypto';
 import {db} from '../config/db';
 import {env} from '../config/env';
 import {readPrivateSetting,savePrivateSetting} from './radius-provision.service';
@@ -33,6 +35,6 @@ export async function changeInitialCredentials(scope:any,token:any,input:any){
  }catch(e){await app.rollback();throw e;}});
  state.username=username;state.mustChangeCredentials=false;state.credentialsChangedAt=new Date().toISOString();delete state.pendingUsername;delete state.passwordEncrypted;delete state.credentialsExpiresAt;
  await savePrivateSetting('environment_runtime',key,state);
- return jwt.sign({kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(passwordHash).digest('hex'),sub:String(token.sub),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:'20m'});
+ return jwt.sign({jti:randomUUID(),sessionVersion:await networkSessionVersion(scope,Number(token.sub)),kind:'network-manager',tenantId:scope.tenant_id,environmentId:scope.environment_id,authVersion:createHash('sha256').update(passwordHash).digest('hex'),sub:String(token.sub),slug:scope.slug},env.JWT_SECRET,{algorithm:'HS256',expiresIn:SESSION_IDLE_SECONDS});
  }finally{if(locked)await central.query("SELECT RELEASE_LOCK('radius-lord:manager-credentials')");central.release();}
 }

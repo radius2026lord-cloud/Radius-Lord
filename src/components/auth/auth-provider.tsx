@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
+import useSessionActivity from "./use-session-activity";
 import { useRouter } from "next/navigation";
 
 export type AccountType = "master_admin" | "customer";
@@ -30,7 +31,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const endingSession = useRef(false);
-  const expiresAt = useRef<number | null>(null);
+  const endSessionRef=useRef<()=>void>(()=>{});
+  useSessionActivity({
+    enabled:Boolean(account),
+    endpoint:"/api/auth/session/renew",
+    onExpired:()=>endSessionRef.current(),
+    onRenewed:data=>{if(!endingSession.current&&data.account)setAccount(data.account);},
+  });
 
   const refreshAccount = async (initial = true) => {
     if (endingSession.current) return;
@@ -46,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       if (!endingSession.current) {
         setAccount(data.account ?? null);
-        expiresAt.current = data.sessionExpiresAt ? new Date(data.sessionExpiresAt).getTime() : null;
       }
     } catch {
       // A network failure does not prove that the session has expired.
@@ -67,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch { /* Redirect even when logout notification is unavailable. */ }
       finally { router.replace("/login"); }
     };
+    endSessionRef.current=()=>void endSession();
     const authenticatedFetch: typeof window.fetch = async (input, init) => {
       const response = await originalFetch(input, init);
       const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
@@ -79,10 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refreshAccount();
     const checkSession = () => {
       if (endingSession.current) return;
-      if (expiresAt.current && Date.now() >= expiresAt.current) void endSession();
-      else void refreshAccount(false);
+      void refreshAccount(false);
     };
-    const timer = window.setInterval(checkSession, 30000);
+    const timer = window.setInterval(()=>{if(document.visibilityState==="visible")checkSession();}, 30000);
     const onVisible = () => { if (document.visibilityState === "visible") checkSession(); };
     window.addEventListener("focus", checkSession);
     document.addEventListener("visibilitychange", onVisible);
