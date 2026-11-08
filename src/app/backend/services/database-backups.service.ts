@@ -241,3 +241,11 @@ export function startDatabaseBackupWorker(){
  timer=setTimeout(()=>void tick(),15000);
  return ()=>{stopped=true;clearTimeout(timer);};
 }
+
+export async function restartFailedBackup(id:string,requestId:string,req:AuthenticatedRequest){
+ await ensureBackupSchema();
+ const [rows]:any=await db.query("SELECT * FROM database_backup_jobs WHERE id=? AND status='failed'",[id]);
+ if(!rows[0])throw new BackupError(409,'يمكن إعادة محاولة النسخ المتعذّر فقط.');
+ const previous=job(rows[0]);
+ return requestBackups({requestId,scope:previous.kind==='central'?'central':'network',tenantId:previous.tenant_id,destinations:previous.destinations},req);
+}

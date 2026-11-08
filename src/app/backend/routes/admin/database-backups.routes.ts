@@ -2,7 +2,7 @@ import {Router,type Response} from 'express';
 import {pipeline} from 'stream/promises';
 import {requireAccountType,type AuthenticatedRequest} from '../../middleware/auth.middleware';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
-import {BackupError,listBackups,saveBackupPolicy,requestBackups,backupForDownload,retryDelivery,reconcileBackup} from '../../services/database-backups.service';
+import {restartFailedBackup,BackupError,listBackups,saveBackupPolicy,requestBackups,backupForDownload,retryDelivery,reconcileBackup} from '../../services/database-backups.service';
 import {CloudError,cloudPublic,saveCloudSettings,testCloud,beginDriveConnection,finishDriveConnection} from '../../services/database-backup-cloud.service';
 import {backupStream,backupRemote} from '../../services/database-backup-remote.service';
 import {writeMasterAdminAuditLog} from '../../services/audit.service';
@@ -23,6 +23,7 @@ async function audit(req:AuthenticatedRequest,operation:string,description:strin
 }
 router.get('/',action(req=>{const page=Number(req.query.page??1);if(!Number.isInteger(page)||page<1||page>10000)throw new BackupError(422,'رقم الصفحة غير صالح.');return listBackups(page,{q:String(req.query.q??''),status:String(req.query.status??''),kind:String(req.query.kind??''),trigger:String(req.query.trigger??'')});}));
 router.put('/policy',action(async req=>{const policy=await saveBackupPolicy(req.body);await audit(req,'backup_policy','تعديل جدولة النسخ الاحتياطي وسياسة الاحتفاظ');return {policy};}));
+router.post('/:id/restart',action(req=>restartFailedBackup(String(req.params.id),String(req.body?.requestId??''),req)));
 router.post('/run',action(req=>requestBackups(req.body,req)));
 router.post('/inspect',action(async req=>{
  const serverId=Number(req.body?.serverId);

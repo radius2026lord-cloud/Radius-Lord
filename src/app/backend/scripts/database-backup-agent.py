@@ -80,6 +80,44 @@ def option(value):
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r") + '"'
 
 
+def mysql_failure(message):
+    text = message.lower()
+    for clues, code in [
+        (["1045", "1698", "access denied"], "MYSQL_BACKUP_ACCESS_DENIED"),
+        (["1130", "not allowed to connect"], "MYSQL_BACKUP_HOST_DENIED"),
+        (["2026", "certificate", "ssl connection"], "MYSQL_BACKUP_TLS_FAILED"),
+        (["2002", "2003", "2005"], "MYSQL_BACKUP_CONNECT_FAILED"),
+        (["unknown variable", "unknown option"], "MYSQL_BACKUP_CLIENT_OPTIONS"),
+        (["1227", "privilege"], "MYSQL_BACKUP_PRIVILEGES"),
+    ]:
+        if any(clue in text for clue in clues):
+            return code
+    return "MYSQL_SOURCE_CHECK_FAILED"
+
+
+def source_options(data, defaults):
+    # Accept a local root socket only when its instance UUID matches the source.
+    local = ["--no-defaults", "--protocol=SOCKET", "--user=root", "--connect-timeout=5"]
+    probe = ["--batch", "--skip-column-names", "-e", "SELECT @@server_uuid"]
+    try:
+        result = subprocess.run(["mysql", *local, *probe], capture_output=True, timeout=8)
+        if result.returncode == 0 and result.stdout.decode().strip() == data["serverUuid"]:
+            return local, "local_socket"
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    tls = ["--ssl-mode=VERIFY_IDENTITY", "--ssl-ca=/etc/ssl/certs/ca-certificates.crt"] if data["tls"] else ["--ssl-mode=DISABLED"]
+    remote = ["--defaults-file=" + str(defaults), *tls, "--connect-timeout=15"]
+    try:
+        result = subprocess.run(["mysql", *remote, *probe], capture_output=True, timeout=20)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("MYSQL_SOURCE_CHECK_TIMEOUT") from None
+    if result.returncode:
+        raise RuntimeError(mysql_failure(result.stderr.decode(errors="replace"))) from None
+    if result.stdout.decode().strip() != data["serverUuid"]:
+        raise RuntimeError("BACKUP_ENGINE_MISMATCH")
+    return remote, "configured_tcp"
+
+
 def run(identifier):
     root = directory(identifier)
     with (root / "lock").open("a") as lock:
@@ -106,16 +144,9 @@ def run(identifier):
                 raise RuntimeError("BACKUP_DISK_SPACE")
             defaults.write_text("[client]\n" + "\n".join(key + "=" + option(data[key]) for key in ("host", "port", "user", "password")) + "\nprotocol=tcp\n")
             defaults.chmod(0o600)
-            ssl = ["--ssl-mode=VERIFY_IDENTITY", "--ssl-ca=/etc/ssl/certs/ca-certificates.crt"] if data["tls"] else ["--ssl-mode=DISABLED"]
-            try:
-                engine = subprocess.check_output(["mysql", "--defaults-extra-file=" + str(defaults), *ssl, "--batch", "--skip-column-names", "-e", "SELECT @@server_uuid"], timeout=20, stderr=subprocess.DEVNULL).decode().strip()
-            except subprocess.CalledProcessError:
-                raise RuntimeError("MYSQL_SOURCE_CHECK_FAILED") from None
-            except subprocess.TimeoutExpired:
-                raise RuntimeError("MYSQL_SOURCE_CHECK_TIMEOUT") from None
-            if engine != data["serverUuid"]:
-                raise RuntimeError("BACKUP_ENGINE_MISMATCH")
-            args = ["mysqldump", "--defaults-extra-file=" + str(defaults), *ssl, "--single-transaction", "--quick",
+            connection_options, transport = source_options(data, defaults)
+            state["transport"] = transport
+            args = ["mysqldump", *connection_options, "--single-transaction", "--quick",
                     "--default-character-set=utf8mb4", "--routines", "--events", "--triggers", "--hex-blob", "--no-tablespaces",
                     "--tz-utc", "--set-gtid-purged=OFF", "--column-statistics=0", "--databases", data["database"]]
             with (root / "error.log").open("wb") as errors:
@@ -133,7 +164,7 @@ def run(identifier):
                         if count % 32 == 0 and shutil.disk_usage(ROOT).free < 64 * 1024**2:
                             raise RuntimeError("BACKUP_DISK_SPACE")
                 if process.wait(timeout=20):
-                    raise RuntimeError("MYSQL_DUMP_FAILED")
+                    raise RuntimeError(mysql_failure((root / "error.log").read_bytes()[:16384].decode(errors="replace")))
             state["status"] = "verifying"
             write(root / "status.json", state)
             total = 0
