@@ -1,0 +1,16 @@
+# Isolated restoration checks
+
+Central administration can queue a manual restoration check for an available verified backup. Requests are audited and retained in database_backup_verifications; the source database and tenant schema are not changed.
+
+The existing backup worker processes checks sequentially. An active verification takes priority until it finishes, while new backup requests may queue. Server backup retention excludes artifacts with queued/running verification requests. No restoration check runs merely by opening the UI; the administrator reviews and submits it.
+
+On the saved SSH server, the agent validates the backup SHA-256, decompresses it to estimate required disk, and starts a fresh MySQL 8 datadir under /var/tmp/radius-lord-restore-checks/<check UUID>. It runs mysqld as the mysql OS account with a private local socket, no classic or X protocol network listeners, event scheduling off, binary logging off, and file import/export disabled. The production service is not stopped or reconfigured. The isolated instance's datadir, socket and settings are checked before import. Importing the original dump preserves its CREATE DATABASE and USE statements within the independent instance.
+
+The check imports the complete SQL stream with mysql and runs CHECK TABLE on restored base tables. It reports table/view counts and cleanup status. It does not execute business workflows or prove routine/view semantics. The temporary daemon is killed and reaped, and its datadir is removed before success is recorded. A parent-death guard terminates the owned MySQL child if the supervisor disappears. A one-hour supervisor timeout bounds the task. Cleanup failure is reported explicitly and requires operator review.
+
+Requirements: Linux, mysql and mysqld 8.x binaries, the mysql OS account, enough temporary disk (decompressed SQL estimate times two plus 1 GiB), and OS policy permission for the temporary datadir/socket. AppArmor or service confinement may require an explicit administrator-approved path rule; this feature never disables OS protection. No source credentials are passed to the sandbox. The uninitialized sandbox root login is reachable only through its socket under a mysql-owned 0700 directory.
+
+The health tab reports the latest available successful backup for each active registered database, age computed by the backend, schedule delay using the saved backup timezone, and verification of that exact backup. Missing backups are a separate state. Terminal notifications are one per tracked batch after backup and delivery processing have ended; viewing old completed history does not replay notices.
+
+This change implements isolated restoration checks, health summaries, and tracked-batch completion notices. Production replacement/restoration and per-destination cloud-retention deletion are separate later stages and are not enabled here. No live verification has been run by the coding agent.
+\nWhen SSH status remains unavailable, the check is reported failed with cleanup unconfirmed; server retention keeps the source artifact until cleanup is confirmed or the operator reviews it. The remote timeout still bounds a live supervisor.\n

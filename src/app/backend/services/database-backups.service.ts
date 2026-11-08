@@ -37,7 +37,7 @@ export async function backupPolicy():Promise<Policy>{
  const saved=await setting();
  return {enabled:false,intervalValue:1,intervalUnit:'days',time:'03:00',timezone:'Asia/Damascus',centralServerId:null,retentionEnabled:false,retentionDays:30,keepLast:3,destinations:[],revision:'initial',nextRunAt:null,...saved};
 }
-function nextRun(policy:Policy,from:Date){
+export function nextRun(policy:Policy,from:Date){
  if(policy.intervalUnit==='hours')return new Date(from.getTime()+policy.intervalValue*3600000).toISOString();
  const format=new Intl.DateTimeFormat('en-CA',{timeZone:policy.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
  const parts=(date:Date)=>Object.fromEntries(format.formatToParts(date).map(part=>[part.type,part.value]));
@@ -205,6 +205,7 @@ async function processJob(value:BackupJob){
 async function retention(policy:Policy){
  if(!policy.retentionEnabled)return;
  const [rows]:any=await db.query(`SELECT j.* FROM database_backup_jobs j WHERE j.status='succeeded' AND j.delivery_state='done' AND j.removed_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM database_backup_verifications v WHERE v.backup_id=j.id AND (v.status IN ('queued','running') OR v.status='failed' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.result,'$.cleanupComplete')),'false')<>'true'))
  AND j.finished_at<UTC_TIMESTAMP()-INTERVAL ? DAY AND
  (SELECT COUNT(*) FROM database_backup_jobs n WHERE n.server_id=j.server_id AND n.database_name=j.database_name AND n.kind=j.kind
   AND n.status='succeeded' AND n.removed_at IS NULL AND (n.finished_at>j.finished_at OR n.finished_at=j.finished_at AND n.id>j.id))>=? ORDER BY j.finished_at LIMIT 1`,[policy.retentionDays,policy.keepLast]);
@@ -233,10 +234,12 @@ export function startDatabaseBackupWorker(){
     }catch(error){updated.lastError=error instanceof BackupError||error instanceof Error&&error.name==='CloudError'?error.message:'تعذر إدراج النسخ المجدولة. تحقق من الخوادم والوجهات.';}
     await db.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='database_backups' AND setting_key='policy' AND setting_value=?",[JSON.stringify(updated),JSON.stringify(policy)]);
    }
+   const {processNextVerification}=await import("./database-backup-verification.service");
+   if(await processNextVerification(true))return;
    const [rows]:any=await db.query(`SELECT * FROM database_backup_jobs WHERE
     (status IN ('queued','running','waiting_remote') OR status='succeeded' AND delivery_state IN ('pending','running'))
     AND next_attempt_at<=UTC_TIMESTAMP(6) ORDER BY status='running' DESC,created_at,id LIMIT 1`);
-   if(rows[0])await processJob(job(rows[0]));else await retention(policy);
+   if(rows[0])await processJob(job(rows[0]));else if(!await processNextVerification())await retention(policy);
   }catch(error){console.error('[database-backups]',{code:(error as any)?.code||'UNAVAILABLE'});}
   finally{
    if(heartbeat)clearInterval(heartbeat);

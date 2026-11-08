@@ -12,10 +12,10 @@ import BackupHistory,{type BackupJobView} from "@/components/backup-history";
 
 export const emptyBackupFilters={q:"",status:"all",kind:"all",trigger:"all",date:"all",from:"",to:"",timeFrom:"",timeTo:"",server:"all",network:"all",destination:"all",delivery:"all",sort:"newest"};
 export type BackupFilters=typeof emptyBackupFilters;
-export type BackupBatch={batch_key:string;status:string;trigger_type:string;created_at:string;finished_at:string|null;total:number;succeeded:number;failed:number;running:number;queued:number;attention:number;bytes:number};
+export type BackupBatch={batch_key:string;status:string;trigger_type:string;created_at:string;finished_at:string|null;total:number;succeeded:number;failed:number;running:number;queued:number;attention:number;uploading:number;bytes:number};
 type Counts={status:string;count:number;attention:number}[];
 type Details={items:BackupJobView[];total:number;page:number};
-type Actions=Pick<ComponentProps<typeof BackupHistory>,"busy"|"onCheck"|"onRestart"|"onRetry"|"onDownload"|"errorText">;
+type Actions=Pick<ComponentProps<typeof BackupHistory>,"busy"|"onCheck"|"onRestart"|"onRetry"|"onDownload"|"onVerify"|"errorText">;
 function archiveMemory(value?:string){try{if(value===undefined)return sessionStorage.getItem("radius-backup-archive");if(value)sessionStorage.setItem("radius-backup-archive",value);else sessionStorage.removeItem("radius-backup-archive");}catch{}return null;}
 const states={
  all:{label:"كل الحزم",Icon:Archive,tone:"info" as const},
@@ -26,7 +26,7 @@ const states={
  failed:{label:"متعذّرة بالكامل",Icon:CircleX,tone:"danger" as const},
  attention:{label:"رفع يحتاج متابعة",Icon:CloudUpload,tone:"warning" as const},
 };
-type Props=Actions&{batches:BackupBatch[];counts:Counts;total:number;page:number;timezone:string;revision:number;filters:BackupFilters;servers:{id:number;name:string}[];networks:{id:number;name:string}[];onFilter:(key:keyof BackupFilters|"reset",value:string)=>void;onPage:(page:number)=>void;loadDetails:(key:string,page:number)=>Promise<Details>;onRetryBatch:(key:string)=>void;archiveApi:(path:string,body?:unknown)=>Promise<any>;onNotice:(message:string,error?:boolean)=>void};
+type Props=Actions&{batches:BackupBatch[];counts:Counts;total:number;page:number;timezone:string;revision:number;filters:BackupFilters;servers:{id:number;name:string}[];networks:{id:number;name:string}[];onFilter:(key:keyof BackupFilters|"reset",value:string)=>void;onPage:(page:number)=>void;loadDetails:(key:string,page:number)=>Promise<Details>;onRetryBatch:(key:string)=>void;archiveApi:(path:string,body?:unknown)=>Promise<any>;onNotice:(message:string,error?:boolean,warning?:boolean)=>void};
 function BatchDetails({batch,revision,filters,loadDetails,timezone,...actions}:Actions&{batch:BackupBatch;revision:number;filters:BackupFilters;loadDetails:Props["loadDetails"];timezone:string}){
  const [page,setPage]=useState(1),[data,setData]=useState<Details>(),[error,setError]=useState("");
  const sequence=useRef(0);
@@ -66,6 +66,16 @@ export default function BackupBatches(props:Props){
   try{await archiveApi("/archives/"+archiveTask.id);const link=document.createElement("a");link.href="/api/admin/platform-settings/database-backups/archives/"+archiveTask.id+"/download";link.click();onNotice("أُرسل طلب تنزيل الحزمة إلى المتصفح.");}
   catch(error){onNotice(error instanceof Error?error.message:"تعذّر تنزيل الحزمة.",true);}
  }
+ const previousBatches=useRef<Record<string,{active:boolean;finishedAt:string|null}>>({});
+ useEffect(()=>{
+  const messages:string[]=[];let warning=false;
+  for(const batch of batches){
+   const active=batch.running+batch.queued+Number(batch.uploading??0)>0,previous=previousBatches.current[batch.batch_key];
+   if(previous?.active&&!active){messages.push("حزمة "+batch.batch_key.slice(0,8)+": "+batch.succeeded+" ناجحة، "+batch.failed+" متعذّرة"+(batch.attention?"، و"+batch.attention+" تحتاج متابعة الرفع":""));warning||=batch.failed>0||batch.attention>0;}
+   previousBatches.current[batch.batch_key]={active,finishedAt:batch.finished_at};
+  }
+  if(messages.length)onNotice(messages.join(" · "),false,warning);
+ },[batches,onNotice]);
  const all=counts.reduce((sum,row)=>sum+Number(row.count),0);
  const filterNames:Record<string,string>={q:"البحث",status:"الحالة",kind:"نوع القاعدة",trigger:"التنفيذ",date:"التاريخ",from:"من تاريخ",to:"إلى تاريخ",timeFrom:"من الساعة",timeTo:"إلى الساعة",server:"الخادم",network:"الشبكة",destination:"الوجهة",delivery:"حالة الرفع",sort:"الترتيب"};
  const valueNames:Record<string,string>={...Object.fromEntries(Object.entries(states).map(([k,v])=>[k,v.label])),central:"المركزية",tenant:"الشبكات",manual:"يدوي",scheduled:"دوري",today:"اليوم",yesterday:"أمس",week:"آخر 7 أيام",month:"هذا الشهر",custom:"فترة مخصّصة",local:"ملف الخادم",telegram:"تلجرام",drive:"Google Drive",pending:"بانتظار الرفع",uploading:"جارٍ الرفع",unknown:"غير مؤكّد",oldest:"الأقدم"};

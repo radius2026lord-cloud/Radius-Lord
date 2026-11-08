@@ -3,7 +3,7 @@ import {join} from 'path';
 import {runManagedRadiusScript,openBackupDownload} from './ssh-terminal.service';
 
 const agentPath='/var/lib/radius-lord/database-backups/agent.py';
-async function script(action:'start'|'status'|'download'|'remove'|'inspect',id:string,configuration?:unknown){
+async function script(action:'start'|'status'|'download'|'remove'|'inspect'|'verify-start'|'verify-status',id:string,configuration?:unknown){
  if(!/^[a-f0-9-]{36}$/.test(id))throw Error('BACKUP_ID');
  const source=Buffer.from(await readFile(join(__dirname,'../scripts/database-backup-agent.py'),'utf8')).toString('base64');
  const payload=Buffer.from(JSON.stringify(configuration??{})).toString('base64');
@@ -19,7 +19,7 @@ os.replace(temporary,agent)
 result=subprocess.run([sys.executable,str(agent),"${action}","${id}"],input=base64.b64decode("${payload}"),check=True)
 `;
 }
-export async function backupRemote(serverId:number,action:'start'|'status'|'remove'|'inspect',id:string,configuration?:unknown){
+export async function backupRemote(serverId:number,action:'start'|'status'|'remove'|'inspect'|'verify-start'|'verify-status',id:string,configuration?:unknown){
  return JSON.parse(await runManagedRadiusScript(serverId,await script(action,id,configuration)));
 }
 export async function backupStream(serverId:number,id:string){

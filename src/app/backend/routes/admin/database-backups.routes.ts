@@ -1,3 +1,4 @@
+import {requestVerification,verificationSummary} from '../../services/database-backup-verification.service';
 import {createReadStream} from 'fs';
 import {archiveSnapshot,archivePreview,beginArchive,readArchive,archiveDownload} from '../../services/database-backup-archive.service';
 import {backupFilename} from '../../services/database-backup-filename.service';
@@ -31,6 +32,8 @@ function filters(req:AuthenticatedRequest):BackupBatchFilters{
  return value;
 }
 function pageNumber(req:AuthenticatedRequest){const page=Number(req.query.page??1);if(!Number.isInteger(page)||page<1||page>10000)throw new BackupError(422,'رقم الصفحة غير صالح.');return page;}
+router.get('/health',action(()=>verificationSummary()));
+router.post('/:id/verify-restore',action(req=>{if(req.body?.confirmed!==true)throw new BackupError(422,'راجع بيانات الفحص وأكّد المتابعة.');return requestVerification(String(req.params.id),String(req.body?.requestId??''),req);}));
 router.get('/',action(req=>listBackupBatches(pageNumber(req),filters(req))));
 router.get('/batches/:key',action(req=>backupBatchDetails(String(req.params.key),pageNumber(req),filters(req))));
 router.post('/batches/:key/retry',action(req=>retryBackupBatch(String(req.params.key),String(req.body?.requestId??''),req)));

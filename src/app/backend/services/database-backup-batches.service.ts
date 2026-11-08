@@ -12,7 +12,7 @@ const latest=`WITH ranked AS (SELECT j.*,ROW_NUMBER() OVER(PARTITION BY batch_ke
  (SELECT MIN(original.created_at) FROM database_backup_jobs original WHERE original.batch_key=l.batch_key) created_at,
  MAX(finished_at) finished_at,COUNT(*) total,SUM(status='succeeded') succeeded,SUM(status='failed') failed,
  SUM(status IN ('running','waiting_remote')) running,SUM(status='queued') queued,
- SUM(delivery_state='attention') attention,SUM(COALESCE(JSON_EXTRACT(metadata,'$.bytes'),0)) bytes,
+ SUM(delivery_state='attention') attention,SUM(status='succeeded' AND delivery_state IN ('pending','running')) uploading,SUM(COALESCE(JSON_EXTRACT(metadata,'$.bytes'),0)) bytes,
  CASE WHEN SUM(status IN ('running','waiting_remote'))>0 THEN 'running'
  WHEN SUM(status='queued')>0 THEN 'queued'
  WHEN SUM(status='succeeded')=COUNT(*) THEN 'succeeded'
@@ -104,13 +104,16 @@ export async function backupBatchDetails(batchKey:string,page=1,filters:BackupBa
  await ensureBackupSchema();
  if(!batchKey||batchKey.length>128)throw new BackupError(422,'رقم الحزمة غير صالح.');
  const policy=await backupPolicy();
+ const {ensureVerificationSchema}=await import("./database-backup-verification.service");await ensureVerificationSchema();
  const match=childPredicate(filters);
  const [totals]:any=await db.query(latestForBatch+' SELECT COUNT(*) total FROM latest WHERE batch_key=?',[batchKey,batchKey]);
  const [rows]:any=await db.query(latestForBatch+` SELECT j.*,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%sZ') created_at,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%sZ') finished_at,DATE_FORMAT(removed_at,'%Y-%m-%dT%H:%i:%sZ') removed_at,(`+match.sql+`) matched FROM latest j WHERE batch_key=? ORDER BY matched DESC,j.name,j.database_name LIMIT 50 OFFSET ?`,[batchKey,...match.params,batchKey,(page-1)*50]);
  let history:any[]=[];
  if(rows.length){const [attempts]:any=await db.query(`WITH attempts AS (SELECT h.*,ROW_NUMBER() OVER(PARTITION BY kind,server_id,database_name ORDER BY created_at DESC,id DESC) history_rank FROM database_backup_jobs h WHERE batch_key=? AND (kind,server_id,database_name) IN (${rows.map(()=>'(?,?,?)').join(',')}))
  SELECT id,kind,server_id,database_name,status,last_error,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%sZ') created_at FROM attempts WHERE history_rank<=20`,[batchKey,...rows.flatMap((r:any)=>[r.kind,r.server_id,r.database_name])]);history=attempts;}
- return {items:rows.map((r:any)=>({...safe(r),filename:backupFilename({...r,metadata:parse(r.metadata,{})},policy.timezone),matched:Boolean(r.matched),history:history.filter(h=>h.kind===r.kind&&Number(h.server_id)===Number(r.server_id)&&h.database_name===r.database_name)})),total:Number(totals[0].total),page};
+ let checks:any[]=[];
+ if(rows.length){const [values]:any=await db.query("WITH ranked AS (SELECT v.*,ROW_NUMBER() OVER(PARTITION BY backup_id ORDER BY created_at DESC,id DESC) rn FROM database_backup_verifications v WHERE backup_id IN ("+rows.map(()=>'?').join(',')+")) SELECT backup_id,status,result,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%sZ') finished_at FROM ranked WHERE rn=1",rows.map((r:any)=>r.id));checks=values;}
+ return {items:rows.map((r:any)=>({...safe(r),verification:(()=>{const value=checks.find(v=>v.backup_id===r.id);return value?{status:value.status,result:parse(value.result,{}),finishedAt:value.finished_at}:null;})(),filename:backupFilename({...r,metadata:parse(r.metadata,{})},policy.timezone),matched:Boolean(r.matched),history:history.filter(h=>h.kind===r.kind&&Number(h.server_id)===Number(r.server_id)&&h.database_name===r.database_name)})),total:Number(totals[0].total),page};
 }
 export async function retryBackupBatch(batchKey:string,requestId:string,req:AuthenticatedRequest,jobId?:string){
  await ensureBackupSchema();
