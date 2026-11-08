@@ -102,7 +102,7 @@ def source_options(data, defaults):
     try:
         result = subprocess.run(["mysql", *local, *probe], capture_output=True, timeout=8)
         if result.returncode == 0 and result.stdout.decode().strip() == data["serverUuid"]:
-            return local, "local_socket"
+            return [value for value in local if not value.startswith("--connect-timeout=")], "local_socket"
     except (subprocess.TimeoutExpired, OSError):
         pass
     tls = ["--ssl-mode=VERIFY_IDENTITY", "--ssl-ca=/etc/ssl/certs/ca-certificates.crt"] if data["tls"] else ["--ssl-mode=DISABLED"]
@@ -115,7 +115,27 @@ def source_options(data, defaults):
         raise RuntimeError(mysql_failure(result.stderr.decode(errors="replace"))) from None
     if result.stdout.decode().strip() != data["serverUuid"]:
         raise RuntimeError("BACKUP_ENGINE_MISMATCH")
-    return remote, "configured_tcp"
+    return [value for value in remote if not value.startswith("--connect-timeout=")], "configured_tcp"
+
+
+def dump_options():
+    # Probe mysqldump itself: mysql and mysqldump do not share all options.
+    try:
+        result = subprocess.run(["mysqldump", "--no-defaults", "--help"],
+                                capture_output=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("MYSQL_DUMP_HELP_FAILED") from None
+    if result.returncode:
+        raise RuntimeError("MYSQL_DUMP_HELP_FAILED")
+    help_text = result.stdout.decode(errors="replace")
+    options = ["--single-transaction", "--quick", "--default-character-set=utf8mb4",
+               "--routines", "--events", "--triggers", "--hex-blob", "--tz-utc"]
+    for name, value in [("no-tablespaces", "--no-tablespaces"),
+                        ("set-gtid-purged", "--set-gtid-purged=OFF"),
+                        ("column-statistics", "--column-statistics=0")]:
+        if re.search(r"(?<![a-z-])" + re.escape(name) + r"(?![a-z-])", help_text):
+            options.append(value)
+    return options
 
 
 def run(identifier):
@@ -146,9 +166,8 @@ def run(identifier):
             defaults.chmod(0o600)
             connection_options, transport = source_options(data, defaults)
             state["transport"] = transport
-            args = ["mysqldump", *connection_options, "--single-transaction", "--quick",
-                    "--default-character-set=utf8mb4", "--routines", "--events", "--triggers", "--hex-blob", "--no-tablespaces",
-                    "--tz-utc", "--set-gtid-purged=OFF", "--column-statistics=0", "--databases", data["database"]]
+            args = ["mysqldump", *connection_options, *dump_options(),
+                    "--databases", data["database"]]
             with (root / "error.log").open("wb") as errors:
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors)
                 timer = threading.Timer(1800, process.kill)
