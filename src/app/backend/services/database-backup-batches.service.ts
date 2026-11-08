@@ -1,3 +1,4 @@
+import {backupFilename} from './database-backup-filename.service';
 import {createHash,randomUUID} from 'crypto';
 import {db} from '../config/db';
 import {ensureBackupSchema,backupPolicy,backupOptions,parse,BackupError} from './database-backups.service';
@@ -102,13 +103,14 @@ export async function listBackupBatches(page=1,filters:BackupBatchFilters={}){
 export async function backupBatchDetails(batchKey:string,page=1,filters:BackupBatchFilters={}){
  await ensureBackupSchema();
  if(!batchKey||batchKey.length>128)throw new BackupError(422,'رقم الحزمة غير صالح.');
+ const policy=await backupPolicy();
  const match=childPredicate(filters);
  const [totals]:any=await db.query(latestForBatch+' SELECT COUNT(*) total FROM latest WHERE batch_key=?',[batchKey,batchKey]);
  const [rows]:any=await db.query(latestForBatch+` SELECT j.*,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%sZ') created_at,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%sZ') finished_at,DATE_FORMAT(removed_at,'%Y-%m-%dT%H:%i:%sZ') removed_at,(`+match.sql+`) matched FROM latest j WHERE batch_key=? ORDER BY matched DESC,j.name,j.database_name LIMIT 50 OFFSET ?`,[batchKey,...match.params,batchKey,(page-1)*50]);
  let history:any[]=[];
  if(rows.length){const [attempts]:any=await db.query(`WITH attempts AS (SELECT h.*,ROW_NUMBER() OVER(PARTITION BY kind,server_id,database_name ORDER BY created_at DESC,id DESC) history_rank FROM database_backup_jobs h WHERE batch_key=? AND (kind,server_id,database_name) IN (${rows.map(()=>'(?,?,?)').join(',')}))
  SELECT id,kind,server_id,database_name,status,last_error,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%sZ') created_at FROM attempts WHERE history_rank<=20`,[batchKey,...rows.flatMap((r:any)=>[r.kind,r.server_id,r.database_name])]);history=attempts;}
- return {items:rows.map((r:any)=>({...safe(r),matched:Boolean(r.matched),history:history.filter(h=>h.kind===r.kind&&Number(h.server_id)===Number(r.server_id)&&h.database_name===r.database_name)})),total:Number(totals[0].total),page};
+ return {items:rows.map((r:any)=>({...safe(r),filename:backupFilename({...r,metadata:parse(r.metadata,{})},policy.timezone),matched:Boolean(r.matched),history:history.filter(h=>h.kind===r.kind&&Number(h.server_id)===Number(r.server_id)&&h.database_name===r.database_name)})),total:Number(totals[0].total),page};
 }
 export async function retryBackupBatch(batchKey:string,requestId:string,req:AuthenticatedRequest,jobId?:string){
  await ensureBackupSchema();
@@ -123,10 +125,11 @@ export async function retryBackupBatch(batchKey:string,requestId:string,req:Auth
   if(Number(existing[0].count))return {batchId:batchKey,count:Number(existing[0].count)};
   const [rows]:any=await connection.query(latestForBatch+" SELECT * FROM latest WHERE batch_key=? AND status='failed'"+(jobId?' AND id=?':''),jobId?[batchKey,batchKey,jobId]:[batchKey,batchKey]);
   if(!rows.length)throw new BackupError(409,'لا توجد قواعد متعذّرة قابلة لإعادة المحاولة.');
+  const policy=await backupPolicy();
   for(const row of rows)await cloudDestinationsReady(parse(row.destinations,[]));
   await connection.beginTransaction();
-  for(const row of rows)await connection.query(`INSERT INTO database_backup_jobs(id,batch_key,request_key,server_id,database_name,name,tenant_id,kind,trigger_type,actor_id,destinations,deliveries,created_at,next_attempt_at)
-   VALUES(?,?,?,?,?,?,?,?,?,?,?,'{}',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,[randomUUID(),batchKey,'retry:'+requestId+':'+row.id,row.server_id,row.database_name,row.name,row.tenant_id,row.kind,row.trigger_type,req.auth!.accountId,JSON.stringify(parse(row.destinations,[]))]);
+  for(const row of rows)await connection.query(`INSERT INTO database_backup_jobs(id,batch_key,request_key,server_id,database_name,name,tenant_id,kind,trigger_type,actor_id,destinations,deliveries,metadata,created_at,next_attempt_at)
+   VALUES(?,?,?,?,?,?,?,?,?,?,?,'{}',?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))`,[randomUUID(),batchKey,'retry:'+requestId+':'+row.id,row.server_id,row.database_name,row.name,row.tenant_id,row.kind,row.trigger_type,req.auth!.accountId,JSON.stringify(parse(row.destinations,[])),JSON.stringify({timezone:parse<any>(row.metadata,{}).timezone??policy.timezone})]);
   await writeMasterAdminAuditLog(req,req.auth!.accountId,{actionCode:'UPDATE',entityTypeCode:'DATABASE_SERVER',description:'إعادة محاولة قواعد متعذّرة داخل حزمة النسخ الأصلية',metadata:{operation:'database_backup_retry',batchId:batchKey,count:rows.length}},connection);
   await connection.commit();return {batchId:batchKey,count:rows.length};
  }catch(error){await connection.rollback().catch(()=>{});throw error;}

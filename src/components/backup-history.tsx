@@ -5,7 +5,7 @@ import {CollectionToolbar,CollectionState} from "@/components/ui/collection-disp
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 
-export type BackupJobView={destinations:("telegram"|"drive")[];id:string;name:string;kind:string;status:string;database_name:string;server_id:number;trigger_type:string;created_at:string;finished_at:string|null;removed_at:string|null;last_error:string|null;matched?:boolean;history?:{id:string;status:string;created_at:string;last_error:string|null}[];metadata:{status?:string;startedAt?:string;bytes?:number;sha256?:string};deliveries:Partial<Record<"telegram"|"drive",{status:string;error?:string}>>};
+export type BackupJobView={filename?:string;destinations:("telegram"|"drive")[];id:string;name:string;kind:string;status:string;database_name:string;server_id:number;trigger_type:string;created_at:string;finished_at:string|null;removed_at:string|null;last_error:string|null;matched?:boolean;history?:{id:string;status:string;created_at:string;last_error:string|null}[];metadata:{status?:string;startedAt?:string;bytes?:number;sha256?:string};deliveries:Partial<Record<"telegram"|"drive",{status:string;error?:string}>>};
 const stateNames:Record<string,string>={queued:"بانتظار التنفيذ",running:"جارٍ النسخ",waiting_remote:"بانتظار الخادم",succeeded:"نسخة متحقّق منها",failed:"تعذّر النسخ",pending:"بانتظار الرفع",uploading:"جارٍ الرفع",unknown:"الوصول غير مؤكد"};
 const surface="rounded-[22px] border border-[#e3e3e6] bg-white dark:border-white/10 dark:bg-[#13263b]";
 function Ring({value,total,label,color}:{value:number;total:number;label:string;color:string}){
@@ -53,7 +53,7 @@ export default function BackupHistory({items,counts,page,total,query,status,kind
  <section className={"min-w-0 "+(!embedded&&view==="row"?"xl:border-l xl:border-slate-200 xl:pl-4 dark:xl:border-white/10":"border-b border-slate-200 pb-4 dark:border-white/10")}>
  <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="flex min-w-0 items-center gap-2 font-semibold"><Database className="size-5 shrink-0 text-teal-500"/><span className="break-words">{job.name}</span></h3><span className="rounded-full border px-2 py-1 font-mono text-[10px]" style={{color,borderColor:color}} title={job.id}>#{job.id.slice(0,8)}</span></div>
  
- <p className="mt-3 flex items-start gap-2 break-all text-xs text-slate-500"><Database className="size-4 shrink-0 text-teal-500"/><bdi>{job.database_name}</bdi></p>
+ <p className="mt-3 flex items-start gap-2 break-all text-xs text-slate-500"><Database className="size-4 shrink-0 text-teal-500"/><bdi>{job.database_name}</bdi></p>{job.filename&&<p className="mt-2 flex items-start gap-2 break-all text-[11px] text-slate-500"><FileArchive className="size-4 shrink-0 text-violet-500"/><bdi dir="ltr">{job.filename}</bdi></p>}
  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500"><span className="flex items-center gap-1.5">{job.kind==="central"?<ShieldCheck className="size-4 text-violet-500"/>:<Network className="size-4 text-blue-500"/>}{job.kind==="central"?"قاعدة مركزية":"قاعدة شبكة"}</span><span className="flex items-center gap-1.5"><Server className="size-4 text-cyan-500"/>الخادم #{job.server_id}</span></div>
  </section>
  <section className="min-w-0 space-y-3">

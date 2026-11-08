@@ -1,9 +1,12 @@
+import {createReadStream} from 'fs';
+import {archiveSnapshot,archivePreview,beginArchive,readArchive,archiveDownload} from '../../services/database-backup-archive.service';
+import {backupFilename} from '../../services/database-backup-filename.service';
 import {listBackupBatches,backupBatchDetails,retryBackupBatch,type BackupBatchFilters} from '../../services/database-backup-batches.service';
 import {Router,type Response} from 'express';
 import {pipeline} from 'stream/promises';
 import {requireAccountType,type AuthenticatedRequest} from '../../middleware/auth.middleware';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
-import {restartFailedBackup,BackupError,saveBackupPolicy,requestBackups,backupForDownload,retryDelivery,reconcileBackup} from '../../services/database-backups.service';
+import {backupPolicy,restartFailedBackup,BackupError,saveBackupPolicy,requestBackups,backupForDownload,retryDelivery,reconcileBackup} from '../../services/database-backups.service';
 import {CloudError,cloudPublic,saveCloudSettings,testCloud,beginDriveConnection,finishDriveConnection} from '../../services/database-backup-cloud.service';
 import {backupStream,backupRemote} from '../../services/database-backup-remote.service';
 import {writeMasterAdminAuditLog} from '../../services/audit.service';
@@ -31,6 +34,20 @@ function pageNumber(req:AuthenticatedRequest){const page=Number(req.query.page??
 router.get('/',action(req=>listBackupBatches(pageNumber(req),filters(req))));
 router.get('/batches/:key',action(req=>backupBatchDetails(String(req.params.key),pageNumber(req),filters(req))));
 router.post('/batches/:key/retry',action(req=>retryBackupBatch(String(req.params.key),String(req.body?.requestId??''),req)));
+router.get('/batches/:key/download-preview',action(async req=>archivePreview(await archiveSnapshot(String(req.params.key)))));
+router.post('/batches/:key/archive',action(async req=>{await audit(req,'backup_archive_prepare','طلب تجهيز تنزيل حزمة النسخ',{batchId:String(req.params.key)});return beginArchive(String(req.params.key),req.auth!.accountId);}));
+router.get('/archives/:id',action(async req=>readArchive(String(req.params.id),req.auth!.accountId)));
+router.get('/archives/:id/download',async(req,res)=>{
+ if(downloads>=2)return res.status(429).json({message:'توجد تنزيلات قيد التنفيذ. أعد المحاولة بعد قليل.'});
+ downloads++;let archive:Awaited<ReturnType<typeof archiveDownload>>|undefined;
+ try{
+  archive=await archiveDownload(String(req.params.id),(req as AuthenticatedRequest).auth!.accountId);
+  await audit(req as AuthenticatedRequest,'backup_archive_download','تنزيل حزمة نسخ احتياطي',{batchId:archive.batchId});
+  res.set({'Cache-Control':'no-store','Content-Type':'application/zip','Content-Length':String(archive.bytes),'Content-Disposition':'attachment; filename="'+archive.filename+'"'});
+  await pipeline(createReadStream(archive.path),res);
+ }catch(error){if(res.headersSent)res.destroy();else{res.removeHeader('Content-Length');res.removeHeader('Content-Disposition');res.status(error instanceof BackupError?error.status:503).json({message:error instanceof BackupError?error.message:'تعذّر تنزيل الحزمة. أعد تجهيزها.'});}}
+ finally{archive?.close();downloads--;}
+});
 router.put('/policy',action(async req=>{const policy=await saveBackupPolicy(req.body);await audit(req,'backup_policy','تعديل جدولة النسخ الاحتياطي وسياسة الاحتفاظ');return {policy};}));
 router.post('/:id/restart',action(req=>restartFailedBackup(String(req.params.id),String(req.body?.requestId??''),req)));
 router.post('/run',action(req=>requestBackups(req.body,req)));
@@ -64,9 +81,10 @@ router.get('/:id/download',async(req,res)=>{
  downloads++;
  try{
   const value=await backupForDownload(String(req.params.id));
+  const filename=backupFilename(value,(await backupPolicy()).timezone);
   await audit(req as AuthenticatedRequest,'backup_download','تنزيل نسخة احتياطية',{backupId:value.id,tenantId:value.tenant_id});
   transfer=await backupStream(Number(value.server_id),value.id);
-  res.set({'Cache-Control':'no-store','Content-Type':'application/gzip','Content-Length':String(value.metadata.bytes),'Content-Disposition':'attachment; filename="radius-backup-'+value.id+'.sql.gz"','X-Backup-SHA256':value.metadata.sha256});
+  res.set({'Cache-Control':'no-store','Content-Type':'application/gzip','Content-Length':String(value.metadata.bytes),'Content-Disposition':'attachment; filename="'+filename+'"','X-Backup-SHA256':value.metadata.sha256});
   const close=()=>transfer?.close();res.once('close',close);
   try{await pipeline(transfer.stream,res);}finally{res.removeListener('close',close);}
  }catch(error){

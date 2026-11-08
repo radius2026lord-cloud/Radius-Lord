@@ -1,3 +1,4 @@
+import {backupFilename} from './database-backup-filename.service';
 import {randomBytes,randomUUID,createHash} from 'crypto';
 import {createReadStream,createWriteStream} from 'fs';
 import {mkdir,rm,writeFile,statfs,readdir,stat} from 'fs/promises';
@@ -194,7 +195,7 @@ export async function deliverBackup(job:BackupJob){
    const digest=createHash('sha256');
    for await(const chunk of createReadStream(path))digest.update(chunk);
    if(digest.digest('hex')!==job.metadata.sha256)throw new CloudError('TRANSFER_CHECKSUM','بصمة النسخة المنقولة غير مطابقة.');
-   const artifact={id:job.id,name:job.name,bytes:job.metadata.bytes,sha256:job.metadata.sha256,md5:job.metadata.md5,filename:'radius-backup-'+job.id+'.sql.gz'};
+   const artifact={id:job.id,name:job.name,bytes:job.metadata.bytes,sha256:job.metadata.sha256,md5:job.metadata.md5,filename:backupFilename(job,job.metadata.timezone||(await (await import('./database-backups.service')).backupPolicy()).timezone)};
    for(const destination of remaining){
     try{
      await cloudDestinationsReady([destination]);

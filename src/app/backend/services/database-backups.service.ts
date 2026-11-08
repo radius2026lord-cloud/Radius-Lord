@@ -103,8 +103,8 @@ export async function requestBackups(input:any,req?:AuthenticatedRequest,schedul
  try{
   await connection.beginTransaction();
   for(const target of targets){
-   await connection.query(`INSERT INTO database_backup_jobs(id,batch_key,request_key,server_id,database_name,name,tenant_id,kind,trigger_type,actor_id,destinations,deliveries,created_at,next_attempt_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE id=id`,[randomUUID(),requestId,requestId+':'+target.kind+':'+target.serverId+':'+target.database,target.serverId,target.database,target.name,target.tenantId,target.kind,scheduleKey?'scheduled':'manual',req?.auth?.accountId??null,JSON.stringify(destinations),'{}']);
+   await connection.query(`INSERT INTO database_backup_jobs(id,batch_key,request_key,server_id,database_name,name,tenant_id,kind,trigger_type,actor_id,destinations,deliveries,metadata,created_at,next_attempt_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE id=id`,[randomUUID(),requestId,requestId+':'+target.kind+':'+target.serverId+':'+target.database,target.serverId,target.database,target.name,target.tenantId,target.kind,scheduleKey?'scheduled':'manual',req?.auth?.accountId??null,JSON.stringify(destinations),'{}',JSON.stringify({timezone:policy.timezone})]);
   }
   if(req)await writeMasterAdminAuditLog(req,req.auth!.accountId,{actionCode:'CREATE',entityTypeCode:'DATABASE_SERVER',entityId:targets[0].serverId,description:'طلب نسخ احتياطي لقواعد البيانات',metadata:{operation:'database_backup',batchId:requestId,count:targets.length,destinations}},connection);
   await connection.commit();
@@ -156,7 +156,7 @@ export async function reconcileBackup(id:string){
  if(!rows[0])throw new BackupError(404,'النسخة غير موجودة.');
  const value=job(rows[0]),remote=await backupRemote(Number(value.server_id),'status',value.id);
  if(remote.status==='verified'&&remote.verified&&/^[a-f0-9]{64}$/.test(remote.sha256)){
-  await db.query("UPDATE database_backup_jobs SET status='succeeded',metadata=?,finished_at=COALESCE(finished_at,UTC_TIMESTAMP(6)),last_error=NULL,next_attempt_at=UTC_TIMESTAMP(6) WHERE id=?",[JSON.stringify(remote),id]);
+  await db.query("UPDATE database_backup_jobs SET status='succeeded',metadata=JSON_MERGE_PATCH(COALESCE(metadata,JSON_OBJECT()),?),finished_at=COALESCE(finished_at,UTC_TIMESTAMP(6)),last_error=NULL,next_attempt_at=UTC_TIMESTAMP(6) WHERE id=?",[JSON.stringify(remote),id]);
  }
  return {status:remote.status};
 }
@@ -191,10 +191,10 @@ async function processJob(value:BackupJob){
   const result=remote.status==='not_found'||remote.status==='queued'?await backupRemote(value.server_id,'start',value.id,await credentials(value)):remote;
   await db.query('UPDATE database_backup_jobs SET attempts=0 WHERE id=?',[value.id]);
   if(result.status==='verified'&&result.verified===true&&Number.isSafeInteger(result.bytes)&&result.bytes>0&&/^[a-f0-9]{64}$/.test(result.sha256)){
-   await db.query("UPDATE database_backup_jobs SET status='succeeded',metadata=?,finished_at=UTC_TIMESTAMP(6),last_error=NULL,next_attempt_at=UTC_TIMESTAMP(6) WHERE id=?",[JSON.stringify(result),value.id]);
+   await db.query("UPDATE database_backup_jobs SET status='succeeded',metadata=JSON_MERGE_PATCH(COALESCE(metadata,JSON_OBJECT()),?),finished_at=UTC_TIMESTAMP(6),last_error=NULL,next_attempt_at=UTC_TIMESTAMP(6) WHERE id=?",[JSON.stringify(result),value.id]);
   }else if(result.status==='failed')await db.query("UPDATE database_backup_jobs SET status='failed',last_error=?,finished_at=UTC_TIMESTAMP(6) WHERE id=?",[String(result.error??'BACKUP_FAILED').slice(0,160),value.id]);
   else if(['queued','running','verifying'].includes(result.status)){
-   await db.query("UPDATE database_backup_jobs SET metadata=?,last_error=NULL WHERE id=?",[JSON.stringify({status:result.status,startedAt:result.startedAt}),value.id]);
+   await db.query("UPDATE database_backup_jobs SET metadata=JSON_MERGE_PATCH(COALESCE(metadata,JSON_OBJECT()),?),last_error=NULL WHERE id=?",[JSON.stringify({status:result.status,startedAt:result.startedAt}),value.id]);
   }
  }catch(error){
   const code=String((error as any)?.code||(error as Error).message||'BACKUP_REMOTE_UNAVAILABLE');
