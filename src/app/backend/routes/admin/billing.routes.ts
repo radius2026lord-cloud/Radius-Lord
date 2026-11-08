@@ -1,3 +1,4 @@
+import {checkMasterNetworkConnections,NetworkCheckError} from '../../services/master-network-tunnels.service';
 import {manageNetworkAccess,RecoveryError} from '../../services/network-access-recovery.service';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
 import {createManualEnvironment,listManualEnvironmentPlans} from '../../controllers/manual-environment.controller';
@@ -52,6 +53,20 @@ router.post('/admin/subscription-changes/:tenantId/:kind/apply',authenticate,req
 router.get('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),getSubscriptionReminderSettings);
 router.put('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),saveSubscriptionReminderSettings);
 router.get('/admin/networks',authenticate,requireAccountType('master_admin'),listMasterNetworks);
+router.post('/admin/networks/:slug/connection-check',authenticate,requireAccountType('master_admin'),requireAuthOrigin,async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ try{
+  const result=await checkMasterNetworkConnections(String(req.params.slug));
+  return res.json(result);
+ }catch(error){
+  if(error instanceof NetworkCheckError){
+   if(error.retryAfter)res.set('Retry-After',String(error.retryAfter));
+   return res.status(error.status).json({message:error.message,retryAfter:error.retryAfter});
+  }
+  console.error('[master-network-check]',{code:(error as {code?:string})?.code||'UNAVAILABLE'});
+  return res.status(503).json({message:'تعذر إتمام فحص الاتصال. أعد المحاولة بعد قليل.'});
+ }
+});
 router.get('/admin/networks/:slug/access-recovery',authenticate,requireAccountType('master_admin'),async(req,res)=>{
  res.set('Cache-Control','no-store');
  try{return res.json(await manageNetworkAccess(req,String(req.params.slug),'read'));}

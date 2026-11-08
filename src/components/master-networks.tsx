@@ -17,7 +17,17 @@ type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHot
 type TunnelState="connected"|"disconnected"|"partial"|"pending"|"unavailable"|"stale"|"unlinked";
 type ConnectionEvent={at:string;state:"connected"|"disconnected"|"unknown";previousState:"connected"|"disconnected"|"unknown"|null;durationSeconds:number|null;baseline:boolean;tunnelId:number;nasId:number;gatewayId:number};
 type Tunnel={since?:string|null;tunnelId:number;nasId:number;name:string;gatewayId:number;gateway:string;state:TunnelState;readAt:string|null;lastSeenAt:string|null};
-type NetworkRow={ovpn?:{state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;history?:ConnectionEvent[];tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
+type GatewayHealth={id:number;name:string;total:number;connected:number;disconnected:number;unavailable:boolean;stale:boolean;pending:boolean;attemptedAt:string|null;readAt:string|null};
+function gatewayAffected(gateway:GatewayHealth){
+ return gateway.unavailable||gateway.stale||gateway.disconnected>0;
+}
+function matchesGateway(item:NetworkRow,filter:string){
+ if(filter==="all")return true;
+ const affected=filter.startsWith("affected:");
+ const id=Number(affected?filter.slice(9):filter);
+ return Boolean(item.ovpn?.gateways?.some(gateway=>gateway.id===id&&(!affected||gatewayAffected(gateway))));
+}
+type NetworkRow={ovpn?:{gateways?:GatewayHealth[];state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;history?:ConnectionEvent[];tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
@@ -120,12 +130,12 @@ const networkReturnKey="lord-radius:master-networks:return";
 
 type NetworkListReturn = {
  query:string; filter:string; filtersOpen:boolean; subscriptionFilter:string; readingFilter:string;
- serverFilter:string; validityFilter:string; requestFilter:string; tunnelFilter?:string; sort:string; descending:boolean;
+ serverFilter:string; validityFilter:string; requestFilter:string; tunnelFilter?:string; gatewayFilter?:string; sort:string; descending:boolean;
  pageSize:string; page:number; scrollTop:number;
 };
 
-function networkFilterKey(state:Pick<NetworkListReturn,"query"|"filter"|"subscriptionFilter"|"readingFilter"|"serverFilter"|"validityFilter"|"requestFilter"|"tunnelFilter"|"pageSize">){
- return JSON.stringify([state.query,state.filter,state.subscriptionFilter,state.readingFilter,state.serverFilter,state.validityFilter,state.requestFilter,state.tunnelFilter??"all",state.pageSize]);
+function networkFilterKey(state:Pick<NetworkListReturn,"query"|"filter"|"subscriptionFilter"|"readingFilter"|"serverFilter"|"validityFilter"|"requestFilter"|"tunnelFilter"|"gatewayFilter"|"pageSize">){
+ return JSON.stringify([state.query,state.filter,state.subscriptionFilter,state.readingFilter,state.serverFilter,state.validityFilter,state.requestFilter,state.tunnelFilter??"all",state.gatewayFilter??"all",state.pageSize]);
 }
 
 export default function MasterNetworks({networkId}:{networkId?:number}){
@@ -138,6 +148,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const [validityFilter,setValidityFilter]=useState("all");
  const [requestFilter,setRequestFilter]=useState("all");
  const [tunnelFilter,setTunnelFilter]=useState("all");
+ const [gatewayFilter,setGatewayFilter]=useState("all");
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
  const [hasLoaded,setHasLoaded]=useState(false);
@@ -175,13 +186,14 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  },[revision,networkId]);
  const selected=networkId?items.find(item=>Number(item.id)===networkId):undefined;
  const matchesFilters=(item:NetworkRow)=>(subscriptionFilter==="all"||(subscriptionFilter==="active"?["current","soon"].includes(expiryState(item,reminderDays,now)):expiryState(item,reminderDays,now)==="expired"))
+ &&matchesGateway(item,gatewayFilter)
  &&(tunnelFilter==="all"||(item.ovpn?.state??"pending")===tunnelFilter)
  &&(requestFilter==="all"||(requestFilter==="renewal"?Boolean(item.renewalRequest||item.upgradeRequest?.includeRenewal):Boolean(item.upgradeRequest)))
  &&(validityFilter==="all"||expiryState(item,reminderDays,now)===validityFilter)
  &&(serverFilter==="all"||item.databaseServerName===serverFilter)
  &&(readingFilter==="all"||(readingFilter==="fresh"?item.metricsStatus==="ok"&&!item.metricsStale:readingFilter==="failed"?item.metricsStatus==="unavailable":item.metricsStale))
  &&[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(query.trim().toLowerCase()));
- const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,reminderDays,now]);
+ const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,gatewayFilter,reminderDays,now]);
  const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||operationalState(item,reminderDays,now)===filter).sort((a,b)=>{
  if(sort==="expiry"){
  const left=a.expiresAt?Date.parse(a.expiresAt):NaN,right=b.expiresAt?Date.parse(b.expiresAt):NaN;
@@ -191,13 +203,13 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const comparison=sort==="id"?a.id-b.id:sort==="subscribers"?(a.metrics?.totalSubscribers??-1)-(b.metrics?.totalSubscribers??-1):a.name.localeCompare(b.name,"ar");
  return descending?-comparison:comparison;
  }),[baseItems,filter,sort,descending,reminderDays,now]);
- const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all")+Number(requestFilter!=="all")+Number(tunnelFilter!=="all");
+ const activeFilters=Number(subscriptionFilter!=="all")+Number(readingFilter!=="all")+Number(serverFilter!=="all")+Number(validityFilter!=="all")+Number(requestFilter!=="all")+Number(tunnelFilter!=="all")+Number(gatewayFilter!=="all");
  const effectivePageSize=pageSize==="all"?Math.max(1,filtered.length):Number(pageSize);
  const pageCount=Math.max(1,Math.ceil(filtered.length/effectivePageSize));
  const currentPage=Math.min(page,pageCount);
  const visible=filtered.slice((currentPage-1)*effectivePageSize,currentPage*effectivePageSize);
  const allVisibleSelected=visible.length>0&&visible.every(item=>selection.has(item.id));
- const filterKey=networkFilterKey({query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,pageSize});
+ const filterKey=networkFilterKey({query,filter,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,gatewayFilter,pageSize});
  useEffect(()=>{
   if(lastFilterKey.current!==null&&lastFilterKey.current!==filterKey){
    setPage(1);
@@ -215,7 +227,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
    lastFilterKey.current=networkFilterKey(saved);
    setQuery(saved.query);setFilter(saved.filter);setFiltersOpen(saved.filtersOpen);
    setSubscriptionFilter(saved.subscriptionFilter);setReadingFilter(saved.readingFilter);setServerFilter(saved.serverFilter);
-   setValidityFilter(saved.validityFilter);setRequestFilter(saved.requestFilter);setTunnelFilter(saved.tunnelFilter??"all");
+   setValidityFilter(saved.validityFilter);setRequestFilter(saved.requestFilter);setTunnelFilter(saved.tunnelFilter??"all");setGatewayFilter(saved.gatewayFilter??"all");
    setSort(saved.sort);setDescending(saved.descending);setPageSize(saved.pageSize);setPage(saved.page);
    setReturnScroll(saved.scrollTop);
   }catch{/* List navigation still works when session storage is unavailable. */}
@@ -234,7 +246,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
 
  function openNetwork(id:number){
   const saved:NetworkListReturn={
-   query,filter,filtersOpen,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,
+   query,filter,filtersOpen,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,gatewayFilter,
    sort,descending,pageSize,page:currentPage,
    scrollTop:listRoot.current?.closest<HTMLElement>(".workspace-scroll")?.scrollTop??0,
   };
@@ -242,6 +254,27 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   router.push("/Dashboard/networks/"+id);
  }
  const serverOptions=[{value:"all",label:"كل الخوادم"},...Array.from(new Set(items.map(item=>item.databaseServerName).filter((name):name is string=>Boolean(name)))).map(name=>({value:name,label:name}))];
+ const gatewayGroups=useMemo(()=>{
+  const groups=new Map<number,{id:number;name:string;networks:number;affectedNetworks:number;total:number;disconnected:number;unknown:number;unavailable:boolean;stale:boolean}>();
+  for(const item of items){
+   for(const gateway of item.ovpn?.gateways??[]){
+    const current=groups.get(gateway.id)??{id:gateway.id,name:gateway.name,networks:0,affectedNetworks:0,total:0,disconnected:0,unknown:0,unavailable:false,stale:false};
+    current.networks++;
+    current.total+=gateway.total;
+    current.affectedNetworks+=Number(gatewayAffected(gateway));
+    current.disconnected+=gateway.disconnected;
+    current.unknown+=gateway.unavailable||gateway.stale||gateway.pending?gateway.total:0;
+    current.unavailable||=gateway.unavailable;
+    current.stale||=gateway.stale;
+    groups.set(gateway.id,current);
+   }
+  }
+  return [...groups.values()].sort((a,b)=>b.affectedNetworks-a.affectedNetworks||a.name.localeCompare(b.name,"ar"));
+ },[items]);
+ function openGatewayAlert(id:number){
+  setQuery("");setFilter("all");setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");setRequestFilter("all");setTunnelFilter("all");
+  setGatewayFilter("affected:"+id);setFiltersOpen(true);
+ }
  const states=[
  {value:"all",title:"كل الشبكات",Icon:Layers,tone:"info" as const,ink:"text-blue-700 dark:text-blue-200"},
  {value:"active",title:"نشطة",Icon:CheckCircle2,tone:"success" as const,ink:"text-emerald-700 dark:text-emerald-200"},
@@ -253,12 +286,23 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  {networkId&&<div className="flex justify-end"><ProjectButton variant="back" onClick={()=>router.push("/Dashboard/networks")}><ArrowRight aria-hidden="true"/>العودة إلى الشبكات</ProjectButton></div>}
  {!networkId&&<>
  <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews showSelectionControl selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={refreshing} onClick={()=>setRevision(value=>value+1)}><RefreshCw className={refreshing?'animate-spin':''}/>تحديث</ProjectButton>}/>
+ {gatewayGroups.some(gateway=>gateway.affectedNetworks>0)&&<section aria-label="تنبيهات خوادم CHR" className="grid items-start gap-4 md:grid-cols-2">
+  {gatewayGroups.filter(gateway=>gateway.affectedNetworks>0).map(gateway=><ProjectInfoCard key={gateway.id} tone={gateway.unavailable||gateway.stale?"warning":"danger"} className="min-w-0 space-y-3">
+   <h2 className="flex min-w-0 items-center gap-2 font-semibold"><ProjectCardIcon icon={Server} tone={gateway.unavailable||gateway.stale?"warning":"danger"}/><span className="break-words">{gateway.name}</span></h2>
+   <p className="text-sm">{gateway.unavailable?"تعذّر فحص خادم CHR":gateway.stale?"قراءة CHR قديمة":"انقطاع أنفاق OpenVPN"}</p>
+   <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs"><span className="flex items-center gap-1"><Network className="size-4 text-blue-500"/>{gateway.affectedNetworks} شبكات متأثرة</span>{gateway.disconnected>0&&<span className="flex items-center gap-1"><WifiOff className="size-4 text-rose-500"/>{gateway.disconnected} أجهزة NAS منقطعة</span>}{gateway.unknown>0&&<span className="flex items-center gap-1"><AlertTriangle className="size-4 text-amber-500"/>{gateway.unknown} أجهزة تحتاج تحققًا</span>}</div>
+   <ProjectButton variant="secondary" onClick={()=>openGatewayAlert(gateway.id)}><Eye/>عرض الشبكات المتأثرة</ProjectButton>
+  </ProjectInfoCard>)}
+ </section>}
  {filtersOpen&&<div id="master-network-filters" className="grid items-start gap-3 rounded-2xl border border-slate-200 p-3 dark:border-white/10 sm:grid-cols-2 xl:grid-cols-3">
  <ProjectFilterGroup icon={CheckCircle2} title="الاشتراك" tone="subscription"><ProjectFilterChoices value={subscriptionFilter} onChange={setSubscriptionFilter} items={[{value:"all",label:"الكل",icon:Layers,accent:"text-blue-500"},{value:"active",label:"نشط",icon:CheckCircle2,accent:"text-emerald-600"},{value:"expired",label:"منتهي",icon:Clock3,accent:"text-amber-600"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={CalendarClock} title="صلاحية الاشتراك" tone="subscription"><ProjectDropdown compact bareOptionIcons value={validityFilter} onChange={setValidityFilter} options={[{value:"all",label:"كل الاشتراكات"},{value:"current",label:"ساري"},{value:"soon",label:"قريب من الانتهاء"},{value:"expired",label:"منتهي"},{value:"pending",label:"لم يبدأ"},{value:"other",label:"حالة أخرى أو موعد غير محدد"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={Activity} title="حداثة مؤشرات التشغيل" tone="connection"><ProjectDropdown compact bareOptionIcons value={readingFilter} onChange={setReadingFilter} options={[{value:"all",label:"كل القراءات"},{value:"fresh",label:"قراءة حديثة"},{value:"stale",label:"قديمة أو لم تصل"},{value:"failed",label:"تعذرت آخر قراءة"}]}/></ProjectFilterGroup>
  <ProjectFilterGroup icon={Router} title="اتصال OpenVPN" tone="connection">
   <ProjectDropdown compact bareOptionIcons value={tunnelFilter} onChange={setTunnelFilter} options={[{value:"all",label:"كل حالات الاتصال"},...Object.entries(tunnelLabels).map(([value,status])=>({value,label:status.label,icon:Router}))]}/>
+ </ProjectFilterGroup>
+ <ProjectFilterGroup icon={Server} title="خادم اتصال CHR" tone="server">
+  <ProjectDropdown compact searchable value={gatewayFilter} onChange={setGatewayFilter} options={[{value:"all",label:"كل خوادم CHR"},...gatewayGroups.flatMap(gateway=>[{value:String(gateway.id),label:gateway.name,icon:Server},{value:"affected:"+gateway.id,label:"المتأثرة على "+gateway.name,icon:AlertTriangle}])]}/>
  </ProjectFilterGroup>
  <ProjectFilterGroup icon={Package} title="طلبات الاشتراك" tone="subscription">
   <ProjectDropdown compact bareOptionIcons value={requestFilter} onChange={setRequestFilter} options={[
@@ -268,7 +312,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   ]}/>
  </ProjectFilterGroup>
  <ProjectFilterGroup icon={Database} title="خادم قاعدة البيانات" tone="server"><ProjectDropdown compact bareOptionIcons searchable value={serverFilter} onChange={setServerFilter} options={serverOptions}/></ProjectFilterGroup>
- {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");setRequestFilter("all");setTunnelFilter("all");}}>مسح التصفية</ProjectButton>}
+ {activeFilters>0&&<ProjectButton variant="ghost" onClick={()=>{setSubscriptionFilter("all");setReadingFilter("all");setServerFilter("all");setValidityFilter("all");setRequestFilter("all");setTunnelFilter("all");setGatewayFilter("all");}}>مسح التصفية</ProjectButton>}
  </div>}
  <div role="group" aria-label="تصفية حسب حالة الشبكة" className="grid items-stretch gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
  {states.map(({value,title,Icon,tone,ink})=>{const count=value==="all"?baseItems.length:baseItems.filter(item=>operationalState(item,reminderDays,now)===value).length,percent=baseItems.length?Math.round(count/baseItems.length*100):0;
@@ -284,6 +328,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-slate-200/70 pt-3 dark:border-white/10 lg:border-r lg:border-t-0 lg:pr-3 lg:pt-0"><span className="flex items-center gap-1.5 text-[11px]"><ArrowUpDown className="size-4"/>الترتيب</span><ProjectDropdown compact bareOptionIcons className="min-w-0 flex-1 lg:max-w-[260px]" value={sort} onChange={setSort} options={[{value:"expiry",label:"موعد انتهاء الاشتراك",icon:CalendarClock},{value:"name",label:"اسم الشبكة",icon:Network},{value:"id",label:"معرّف الشبكة",icon:Hash},{value:"subscribers",label:"عدد مشتركي PPPoE",icon:Users}]}/><ProjectButton variant="secondary" size="icon" aria-label={descending?"ترتيب تصاعدي":"ترتيب تنازلي"} onClick={()=>setDescending(value=>!value)}><ArrowUpDown className="h-4 w-4"/></ProjectButton></div>
  <div className="flex min-w-0 items-center justify-between gap-2 border-t border-slate-200/70 pt-3 dark:border-white/10 lg:border-r lg:border-t-0 lg:pr-3 lg:pt-0"><span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300"><Rows3 aria-hidden="true" className="h-4 w-4 shrink-0"/>عدد العناصر</span><ProjectDropdown bareOptionIcons value={pageSize} onChange={setPageSize} compact className="w-[124px] max-w-full" placeholder="العدد" options={[{value:"50",label:"50 عنصرًا"},{value:"100",label:"100 عنصر"},{value:"150",label:"150 عنصر"},{value:"all",label:"كل النتائج"}]}/></div>
  </div>
+ {gatewayFilter!=="all"&&<div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-400/20 dark:bg-amber-500/10"><Server className="size-4 text-amber-600"/><span>{gatewayFilter.startsWith("affected:")?"الشبكات المتأثرة على ":"الشبكات المرتبطة بـ "}{gatewayGroups.find(gateway=>gateway.id===Number(gatewayFilter.replace("affected:","")))?.name??"CHR"}</span><ProjectButton variant="ghost" onClick={()=>setGatewayFilter("all")}><X/>مسح</ProjectButton></div>}
  <BulkSelectionBar count={selection.size} noun="الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} onClearSelection={()=>setSelection(new Set())}/>
  {hasLoaded&&error&&<ProjectInfoCard tone="warning" role="status">تعذر تحديث القائمة. تُعرض آخر بيانات متاحة.</ProjectInfoCard>}
  {loading?<CollectionState loading>جارٍ تحميل الشبكات…</CollectionState>:error&&!hasLoaded?<CollectionState><p role="alert">{error}</p><ProjectButton onClick={()=>setRevision(value=>value+1)}>إعادة المحاولة</ProjectButton></CollectionState>:!filtered.length?<CollectionState>لا توجد شبكات مطابقة.</CollectionState>:<CollectionGrid className={view==="row"?"!grid-cols-1":""}>{visible.map(item=>{const state=networkState(item,reminderDays,now),StateIcon=state.Icon;return <CollectionCard hostingerStyle key={item.id} selectionMode={selectionMode} selected={selection.has(item.id)} onToggle={()=>toggle(item.id)} onOpen={()=>openNetwork(item.id)}>
@@ -374,7 +419,17 @@ function TunnelTimeline({tunnel,events,now}:{tunnel:Tunnel;events:ConnectionEven
 }
 
 function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:NetworkRow;days:number;now:number;error:string;refreshing:boolean;onRefresh:()=>void}){
- const [notice,setNotice]=useState({message:"",error:""});
+ const [notice,setNotice]=useState({message:"",error:"",warning:""});
+ const [checking,setChecking]=useState(false);
+ const [checkSummary,setCheckSummary]=useState("");
+ const [checkWaitUntil,setCheckWaitUntil]=useState(0);
+ const [checkClock,setCheckClock]=useState(()=>Date.now());
+ useEffect(()=>{
+  if(!checkWaitUntil)return;
+  const timer=setInterval(()=>{const current=Date.now();setCheckClock(current);if(current>=checkWaitUntil)clearInterval(timer);},1000);
+  return ()=>clearInterval(timer);
+ },[checkWaitUntil]);
+ const checkWait=Math.max(0,Math.ceil((checkWaitUntil-checkClock)/1000));
  const [recoveryOpen,setRecoveryOpen]=useState(false);
  const [historyNas,setHistoryNas]=useState("all");
  const [historyLimit,setHistoryLimit]=useState(20);
@@ -409,6 +464,26 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
   ["قاعدة البيانات",label(item.databaseStatus)],["FreeRADIUS",label(item.radiusStatus)],["خادم البيانات",item.databaseServerName||"غير محدد"],
   ["اسم القاعدة",item.databaseName||"غير متاح"],["آخر تقرير",date(item.reportedAt)],["آخر ظهور",date(item.lastSeenAt)],
  ];
+ async function checkConnection(){
+  if(checking||checkWait)return;
+  setChecking(true);setCheckSummary("");setNotice({message:"",error:"",warning:""});
+  try{
+   const response=await fetch("/api/billing/admin/networks/"+encodeURIComponent(item.slug)+"/connection-check",{method:"POST",credentials:"include",cache:"no-store",headers:{"Content-Type":"application/json"},body:"{}"});
+   const payload=await response.json();
+   const wait=Number(payload.retryAfter);
+   if(Number.isFinite(wait)&&wait>0){setCheckWaitUntil(Date.now()+wait*1000);setCheckClock(Date.now());}
+   if(!response.ok){
+    if(response.status===429){setNotice({message:"",error:"",warning:payload.message});return;}
+    throw Error(payload.message||"تعذر فحص الاتصال.");
+   }
+   const unavailable=payload.results?.filter((result:{status:string})=>result.status==="unavailable").length??0;
+   const message="اكتمل فحص الاتصال · "+date(payload.completedAt);
+   const checked=payload.results?.filter((result:{cached:boolean})=>!result.cached).length??0;
+   setCheckSummary(message+" · فُحص "+checked+" خوادم"+(unavailable?" · تعذّر فحص "+unavailable:""));
+   setNotice(unavailable?{message:"",error:"",warning:"تعذّر فحص "+unavailable+" من خوادم CHR. راجع حالة الاتصال المحدّثة."}:{message,error:"",warning:""});
+  }catch(error){setNotice({message:"",warning:"",error:error instanceof Error?error.message:"تعذر فحص الاتصال."});}
+  finally{setChecking(false);onRefresh();}
+ }
  async function copy(value:string,message:string){
   try{
    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
@@ -418,12 +493,12 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     document.body.appendChild(field);field.select();
     try{if(!document.execCommand("copy"))throw Error("COPY_FAILED");}finally{field.remove();if(focused instanceof HTMLElement)focused.focus();}
    }
-   setNotice({message,error:""});
-  }catch{setNotice({message:"",error:"تعذر النسخ في هذا المتصفح."});}
+   setNotice({message,error:"",warning:""});
+  }catch{setNotice({message:"",error:"تعذر النسخ في هذا المتصفح.",warning:""});}
  }
  const summary=[`الشبكة: ${item.name}`,`الرخصة: ${item.licenseNumber||"غير متاحة"}`,`الاشتراك: ${subscriptionLabels[expiry]}`,`البيئة: ${environment}`,`OpenVPN: ${tunnelDisplay.label}`,`قاعدة البيانات: ${label(item.databaseStatus)}`,`FreeRADIUS: ${label(item.radiusStatus)}`,`آخر قراءة: ${date(item.metricsReadAt)} · ${readingLabel(item)}`].join("\n");
  return <section aria-label="ملف الشبكة" className="space-y-4">
-  <FloatingNotice {...notice} onDismiss={()=>setNotice({message:"",error:""})}/>
+  <FloatingNotice {...notice} onDismiss={()=>setNotice({message:"",error:"",warning:""})}/>
   {recoveryOpen&&<NetworkAccessRecovery slug={item.slug} networkName={item.name} copy={copy} onClose={()=>setRecoveryOpen(false)}/>}
   <ProjectInfoCard tone="info" className="flex flex-wrap items-start justify-between gap-4">
    <div className="min-w-0 space-y-2">
@@ -445,8 +520,12 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    <ProjectInfoCard tone={tunnelDisplay.tone} className="flex min-w-0 flex-wrap items-center gap-4 sm:flex-nowrap sm:gap-5">
     <ConnectionRing label="نسبة أجهزة NAS المتصلة" percent={connectionPercent} tone={connectionInk} className="sm:size-24"/>
     <div className="min-w-0 flex-1 space-y-2">
-     <p className="flex items-center gap-2 text-xs"><ConnectionIcon className={`size-4 shrink-0 ${connectionInk}`}/>اتصال الشبكة عبر OpenVPN</p>
+     <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="flex items-center gap-2 text-xs"><ConnectionIcon className={`size-4 shrink-0 ${connectionInk}`}/>اتصال الشبكة عبر OpenVPN</p>
+      {item.environmentStatus==="ready"&&(ovpn?.total??0)>0&&<ProjectButton variant="secondary" disabled={checking||checkWait>0} onClick={()=>void checkConnection()}><RefreshCw className={checking?"animate-spin":""}/>{checking?"جارٍ الفحص…":checkWait>0?"إعادة الفحص بعد "+checkWait+" ث":"فحص الاتصال الآن"}</ProjectButton>}
+     </div>
      <h2 className={`text-lg font-bold ${connectionInk}`}>{tunnelDisplay.label}</h2>
+     {checkSummary&&<p role="status" className="text-xs">{checkSummary}</p>}
      {connectionPercent!==null&&ovpn&&<p className="text-sm"><bdi className="font-semibold">{ovpn.connected} / {ovpn.total}</bdi> أجهزة NAS متصلة</p>}
      {ovpn&&hasTunnelReading(tunnelStatus)&&<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300">متصل {ovpn.connected}</span><span className="rounded-full bg-rose-500/10 px-2 py-1 text-rose-700 dark:text-rose-300">منقطع {ovpn.disconnected}</span></div>}
      {tunnelStatus==="partial"&&affectedGateways.length>0&&<p className="break-words text-xs">أجهزة متأثرة على خوادم الاتصال · {affectedGateways.join("، ")}</p>}
