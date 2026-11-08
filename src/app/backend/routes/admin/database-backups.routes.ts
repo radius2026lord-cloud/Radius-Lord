@@ -1,8 +1,9 @@
+import {listBackupBatches,backupBatchDetails,retryBackupBatch,type BackupBatchFilters} from '../../services/database-backup-batches.service';
 import {Router,type Response} from 'express';
 import {pipeline} from 'stream/promises';
 import {requireAccountType,type AuthenticatedRequest} from '../../middleware/auth.middleware';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
-import {restartFailedBackup,BackupError,listBackups,saveBackupPolicy,requestBackups,backupForDownload,retryDelivery,reconcileBackup} from '../../services/database-backups.service';
+import {restartFailedBackup,BackupError,saveBackupPolicy,requestBackups,backupForDownload,retryDelivery,reconcileBackup} from '../../services/database-backups.service';
 import {CloudError,cloudPublic,saveCloudSettings,testCloud,beginDriveConnection,finishDriveConnection} from '../../services/database-backup-cloud.service';
 import {backupStream,backupRemote} from '../../services/database-backup-remote.service';
 import {writeMasterAdminAuditLog} from '../../services/audit.service';
@@ -21,7 +22,15 @@ function action(work:(req:AuthenticatedRequest,res:Response)=>Promise<unknown>){
 async function audit(req:AuthenticatedRequest,operation:string,description:string,metadata?:unknown){
  await writeMasterAdminAuditLog(req,req.auth!.accountId,{actionCode:'UPDATE',entityTypeCode:'DATABASE_SERVER',description,metadata:{operation,details:metadata}});
 }
-router.get('/',action(req=>{const page=Number(req.query.page??1);if(!Number.isInteger(page)||page<1||page>10000)throw new BackupError(422,'رقم الصفحة غير صالح.');return listBackups(page,{q:String(req.query.q??''),status:String(req.query.status??''),kind:String(req.query.kind??''),trigger:String(req.query.trigger??'')});}));
+function filters(req:AuthenticatedRequest):BackupBatchFilters{
+ const value:Record<string,string>={};
+ for(const key of ['q','status','kind','trigger','date','from','to','timeFrom','timeTo','server','network','destination','delivery','sort'])value[key]=typeof req.query[key]==='string'?String(req.query[key]):'';
+ return value;
+}
+function pageNumber(req:AuthenticatedRequest){const page=Number(req.query.page??1);if(!Number.isInteger(page)||page<1||page>10000)throw new BackupError(422,'رقم الصفحة غير صالح.');return page;}
+router.get('/',action(req=>listBackupBatches(pageNumber(req),filters(req))));
+router.get('/batches/:key',action(req=>backupBatchDetails(String(req.params.key),pageNumber(req),filters(req))));
+router.post('/batches/:key/retry',action(req=>retryBackupBatch(String(req.params.key),String(req.body?.requestId??''),req)));
 router.put('/policy',action(async req=>{const policy=await saveBackupPolicy(req.body);await audit(req,'backup_policy','تعديل جدولة النسخ الاحتياطي وسياسة الاحتفاظ');return {policy};}));
 router.post('/:id/restart',action(req=>restartFailedBackup(String(req.params.id),String(req.body?.requestId??''),req)));
 router.post('/run',action(req=>requestBackups(req.body,req)));

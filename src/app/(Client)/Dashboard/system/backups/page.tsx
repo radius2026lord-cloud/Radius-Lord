@@ -10,14 +10,14 @@ import ProjectDropdown from "@/components/ui/project-dropdown";
 import ProjectDialog from "@/components/ui/project-dialog";
 import FloatingNotice from "@/components/ui/floating-notice";
 
-import BackupHistory from "@/components/backup-history";
+import BackupBatches,{emptyBackupFilters,type BackupFilters,type BackupBatch} from "@/components/backup-batches";
 
 const endpoint="/api/admin/platform-settings/database-backups";
 type Destination="telegram"|"drive";
 type Policy={lastError?:string|null;enabled:boolean;intervalValue:number;intervalUnit:"hours"|"days";time:string;timezone:string;centralServerId:number|null;retentionEnabled:boolean;retentionDays:number;keepLast:number;destinations:Destination[];nextRunAt:string|null};
 type CloudConfig={telegram:{enabled:boolean;configured:boolean;chatId:string;token?:string;lastTest?:{ok:boolean;at:string}};drive:{enabled:boolean;configured:boolean;connected:boolean;clientId:string;clientSecret?:string;folderId?:string;callbackUrl:string;lastTest?:{ok:boolean;at:string}}};
 type Job={destinations:Destination[];id:string;name:string;kind:string;status:string;database_name:string;server_id:number;trigger_type:string;created_at:string;finished_at:string|null;removed_at:string|null;last_error:string|null;metadata:{bytes?:number;sha256?:string};deliveries:Partial<Record<Destination,{status:string;error?:string}>>};
-type Data={policy:Policy;cloud:CloudConfig;options:{servers:{id:number;name:string}[];networks:{id:number;name:string}[]};items:Job[];counts:{status:string;count:number;attention:number}[];total:number;page:number};
+type Data={policy:Policy;cloud:CloudConfig;options:{servers:{id:number;name:string}[];networks:{id:number;name:string}[]};batches:BackupBatch[];revision:number;timezone:string;counts:{status:string;count:number;attention:number}[];total:number;page:number};
 const labels:Record<string,string>={queued:"بانتظار التنفيذ",running:"جارٍ النسخ",waiting_remote:"بانتظار اتصال الخادم",succeeded:"اكتمل النسخ والتحقق",failed:"تعذّر التنفيذ",pending:"بانتظار الرفع",uploading:"جارٍ الرفع",unknown:"الوصول غير مؤكد"};
 const errors:Record<string,string>={MYSQL_SOURCE_CHECK_FAILED:"تعذّر فحص اتصال MySQL من خادم النسخ. تحقق من بيانات الدخول وإعدادات TLS والوصول إلى المصدر.",MYSQL_SOURCE_CHECK_TIMEOUT:"انتهت مهلة فحص MySQL من خادم النسخ.",MYSQL_BACKUP_ACCESS_DENIED:"رفض MySQL بيانات دخول حساب النسخ من الخادم. تحقق من اسم المستخدم وكلمة المرور وصلاحية الدخول المحلي.",MYSQL_BACKUP_HOST_DENIED:"MySQL لا يسمح بالاتصال من عنوان خادم النسخ.",MYSQL_BACKUP_TLS_FAILED:"فشل التحقق من شهادة TLS لمصدر MySQL. تحقق من الشهادة واسم الخادم.",MYSQL_BACKUP_CONNECT_FAILED:"تعذّر الوصول إلى MySQL من خادم النسخ. تحقق من الخدمة والعنوان والمنفذ.",MYSQL_BACKUP_CLIENT_OPTIONS:"إصدار أدوات MySQL لا يدعم أحد خيارات النسخ المطلوبة.",MYSQL_BACKUP_PRIVILEGES:"حساب النسخ يفتقد صلاحيات قراءة بعض عناصر القاعدة.",TELEGRAM_TOO_LARGE:"تجاوز حجم النسخة حد تلجرام 50 MB",TELEGRAM_DELIVERY_UNKNOWN:"راجع المحادثة قبل إعادة الرفع",TELEGRAM_SETUP:"تلجرام يحتاج إعدادًا",DRIVE_SETUP:"Google Drive يحتاج ربطًا",BACKUP_ENGINE_MISMATCH:"خادم القاعدة لا يطابق المصدر",BACKUP_CENTRAL_SERVER_MISMATCH:"اختر خادم القاعدة المركزية الصحيح",MYSQL_TOOLS_REQUIRED:"جهّز mysql وmysqldump على الخادم",MYSQL_DUMP_FAILED:"تحقق من صلاحيات النسخ وإصدار mysqldump",BACKUP_DISK_SPACE:"مساحة الخادم غير كافية",BACKUP_REMOTE_UNAVAILABLE:"تعذّر الاتصال بخادم النسخ",WORKER_INTERRUPTED:"توقفت عملية النسخ على الخادم"};
 async function request(path="",body?:unknown,method?:string){
@@ -32,14 +32,31 @@ export default function DatabaseBackupsPage(){
  const [tab,setTab]=useState("manual"),[data,setData]=useState<Data>(),[policy,setPolicy]=useState<Policy>(),[cloud,setCloud]=useState<CloudConfig>();
  const [busy,setBusy]=useState(false),[notice,setNotice]=useState<{error?:string;message?:string}>({});
  const [scope,setScope]=useState("all"),[tenantId,setTenantId]=useState(""),[destinations,setDestinations]=useState<Destination[]>([]),[page,setPage]=useState(1);
- const [historyFilters,setHistoryFilters]=useState({q:"",status:"all",kind:"all",trigger:"all"});
+ const [historyFilters,setHistoryFilters]=useState<BackupFilters>({...emptyBackupFilters});
+ const [appliedFilters,setAppliedFilters]=useState<BackupFilters>({...emptyBackupFilters});
+ useEffect(()=>{const timer=setTimeout(()=>setAppliedFilters(historyFilters),250);return()=>clearTimeout(timer);},[historyFilters]);
  const [retry,setRetry]=useState<{job:Job;destination:Destination}>();
  const initialized=useRef(false),requestId=useRef(""),polling=useRef(false),loadSequence=useRef(0);
  const load=useCallback(async(reset=false)=>{
   const sequence=++loadSequence.current;
-  const value=await request("?"+new URLSearchParams({page:String(page),...historyFilters})) as Data;if(sequence!==loadSequence.current)return;setData(value);
+  const value=await request("?"+new URLSearchParams({page:String(page),...appliedFilters})) as Data;if(sequence!==loadSequence.current)return;setData(value);
   if(reset||!initialized.current){setPolicy(value.policy);setCloud(value.cloud);setDestinations(value.policy.destinations);initialized.current=true;}
- },[page,historyFilters]);
+ },[page,appliedFilters]);
+ const detailRequest=useCallback((key:string,detailPage:number)=>request("/batches/"+encodeURIComponent(key)+"?"+new URLSearchParams({...appliedFilters,page:String(detailPage)})),[appliedFilters]);
+ const batchRetryIds=useRef<Record<string,string>>({});
+ function changeFilter(key:keyof BackupFilters|"reset",value:string){
+  setPage(1);
+  setHistoryFilters(current=>{
+   if(key==="reset")return {...emptyBackupFilters};
+   const next={...current,[key]:value};
+   if(key==="date"){
+    if(value!=="custom"){next.from="";next.to="";}
+    else if(!next.from||!next.to){const p=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:data?.timezone??"Asia/Damascus",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date()).map(p=>[p.type,p.value]));next.from=next.to=p.year+"-"+p.month+"-"+p.day;}
+   }
+   if((key==="timeFrom"||key==="timeTo")&&value&&next.date==="all")next.date="today";
+   return next;
+  });
+ }
  useEffect(()=>{if(isMasterAdmin)void load().catch(error=>setNotice({error:error.message}));},[isMasterAdmin,load]);
  useEffect(()=>{
   const params=new URLSearchParams(window.location.search);
@@ -63,7 +80,7 @@ export default function DatabaseBackupsPage(){
  async function run(event:FormEvent){
   event.preventDefault();
   requestId.current||=crypto.randomUUID();
-  await operation(async()=>{await request("/run",{requestId:requestId.current,scope,tenantId:Number(tenantId),destinations});requestId.current="";setPage(1);setTab("history");},"أُضيفت القواعد إلى طابور النسخ الاحتياطي.");
+  await operation(async()=>{await request("/run",{requestId:requestId.current,scope,tenantId:Number(tenantId),destinations});requestId.current="";setPage(1);setHistoryFilters({...emptyBackupFilters});setTab("history");},"أُنشئت حزمة النسخ وأُضيفت قواعدها إلى الطابور.");
  }
  function ready(destination:Destination){
   return destination==="telegram"?Boolean(cloud?.telegram.enabled&&cloud.telegram.configured):Boolean(cloud?.drive.enabled&&cloud.drive.connected);
@@ -79,7 +96,7 @@ export default function DatabaseBackupsPage(){
   <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 text-lg font-semibold"><ProjectCardIcon icon={HardDriveDownload}/>النسخ الاحتياطي لقواعد البيانات</h1><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">نسخ متتابع للقواعد المركزية وقواعد الشبكات مع متابعة كل وجهة رفع.</p></div><ProjectButton variant="secondary" disabled={busy} onClick={()=>void operation(()=>load())}><RefreshCw/>تحديث</ProjectButton></header>
   <nav className="flex flex-wrap gap-2" aria-label="أقسام النسخ الاحتياطي">{tabs.map(({value,label,Icon})=><ProjectButton key={value} variant={tab===value?"primary":"secondary"} aria-pressed={tab===value} onClick={()=>setTab(value)}><Icon/>{label}</ProjectButton>)}</nav>
   {!data||!policy||!cloud?<CollectionState loading>جارٍ تحميل الإعدادات والسجل…</CollectionState>:<>
-   {tab!=="history"&&<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[{label:"عمليات نسخ مكتملة",value:data.counts.find(value=>value.status==="succeeded")?.count??0,Icon:CheckCircle2,tone:"success" as const},{label:"قيد الانتظار أو التنفيذ",value:data.counts.filter(value=>["queued","running","waiting_remote"].includes(value.status)).reduce((sum,value)=>sum+Number(value.count),0),Icon:Clock3,tone:"pending" as const},{label:"تعذّر تنفيذها",value:data.counts.find(value=>value.status==="failed")?.count??0,Icon:AlertTriangle,tone:"danger" as const},{label:"رفع يحتاج متابعة",value:data.counts.reduce((sum,value)=>sum+Number(value.attention??0),0),Icon:Cloud,tone:"warning" as const}].map(stat=><ProjectInfoCard key={stat.label} tone={stat.tone} className="flex items-center gap-3"><ProjectCardIcon icon={stat.Icon} tone={stat.tone}/><div><p className="text-xs">{stat.label}</p><p className="text-xl font-semibold tabular-nums">{stat.value}</p></div></ProjectInfoCard>)}</div>}
+   {tab!=="history"&&<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[{label:"حزم نسخ مكتملة",value:data.counts.find(value=>value.status==="succeeded")?.count??0,Icon:CheckCircle2,tone:"success" as const},{label:"قيد الانتظار أو التنفيذ",value:data.counts.filter(value=>["queued","running"].includes(value.status)).reduce((sum,value)=>sum+Number(value.count),0),Icon:Clock3,tone:"pending" as const},{label:"حزم متعذّرة بالكامل",value:data.counts.find(value=>value.status==="failed")?.count??0,Icon:AlertTriangle,tone:"danger" as const},{label:"رفع يحتاج متابعة",value:data.counts.reduce((sum,value)=>sum+Number(value.attention??0),0),Icon:Cloud,tone:"warning" as const}].map(stat=><ProjectInfoCard key={stat.label} tone={stat.tone} className="flex items-center gap-3"><ProjectCardIcon icon={stat.Icon} tone={stat.tone}/><div><p className="text-xs">{stat.label}</p><p className="text-xl font-semibold tabular-nums">{stat.value}</p></div></ProjectInfoCard>)}</div>}
    {tab==="manual"&&<ProjectInfoCard className="space-y-4">
     <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Database}/>إنشاء نسخة الآن</h2>
     <form onSubmit={run} className="space-y-4">
@@ -115,7 +132,7 @@ export default function DatabaseBackupsPage(){
      <ProjectButton type="submit" disabled={busy} className="justify-self-start"><ShieldCheck/>حفظ إعدادات الوجهات</ProjectButton>
     </form>
    </div>}
-   {tab==="history"&&<BackupHistory items={data.items} counts={data.counts} total={data.total} page={page} query={historyFilters.q} status={historyFilters.status} kind={historyFilters.kind} trigger={historyFilters.trigger} busy={busy} onPage={setPage} onFilter={(key,value)=>{setPage(1);setHistoryFilters(current=>key==="reset"?{q:"",status:"all",kind:"all",trigger:"all"}:{...current,[key]:value});}} errorText={code=>code.startsWith("MYSQL_OPTION_")?"أداة MySQL رفضت الخيار: "+code.slice(13).toLowerCase().replaceAll("_","-"):errors[code]??(code==="CalledProcessError"?"تعذّر اتصال أداة MySQL بالمصدر. تحقق من بيانات الوصول وTLS على خادم النسخ.":"تعذّر تنفيذ النسخ. راجع اتصال الخادم وصلاحيات حساب النسخ.")} onRestart={job=>void operation(()=>request("/"+job.id+"/restart",{requestId:crypto.randomUUID()}),"أُضيفت محاولة نسخ جديدة إلى الطابور.")} onCheck={job=>void operation(()=>request("/"+job.id+"/check",{}),"تم تحديث حالة النسخة من الخادم.")} onRetry={(job,destination)=>setRetry({job,destination})} onDownload={job=>{const link=document.createElement("a");link.href=endpoint+"/"+job.id+"/download";link.download="radius-backup-"+job.id+".sql.gz";link.click();}}/>}
+   {tab==="history"&&<BackupBatches batches={data.batches} counts={data.counts} total={data.total} page={page} timezone={data.timezone} revision={data.revision} filters={historyFilters} servers={data.options.servers} networks={data.options.networks} loadDetails={detailRequest} onFilter={changeFilter} onPage={setPage} busy={busy} errorText={code=>code.startsWith("MYSQL_OPTION_")?"أداة MySQL رفضت الخيار: "+code.slice(13).toLowerCase().replaceAll("_","-"):errors[code]??(code==="CalledProcessError"?"تعذّر اتصال أداة MySQL بالمصدر. تحقق من بيانات الوصول وTLS على خادم النسخ.":"تعذّر تنفيذ النسخ. راجع اتصال الخادم وصلاحيات حساب النسخ.")} onRetryBatch={key=>void operation(async()=>{batchRetryIds.current[key]??=crypto.randomUUID();await request("/batches/"+encodeURIComponent(key)+"/retry",{requestId:batchRetryIds.current[key]});delete batchRetryIds.current[key];},"أُعيدت القواعد المتعذّرة داخل الحزمة نفسها.")} onRestart={job=>void operation(()=>request("/"+job.id+"/restart",{requestId:crypto.randomUUID()}),"أُضيفت محاولة داخل الحزمة الأصلية.")} onCheck={job=>void operation(()=>request("/"+job.id+"/check",{}),"تم تحديث حالة النسخة من الخادم.")} onRetry={(job,destination)=>setRetry({job,destination})} onDownload={job=>{const link=document.createElement("a");link.href=endpoint+"/"+job.id+"/download";link.download="radius-backup-"+job.id+".sql.gz";link.click();}}/>}
   </>}
   {retry&&<ProjectDialog open hostingerStyle title="إعادة رفع النسخة" onClose={()=>setRetry(undefined)} busy={busy} footer={<><ProjectButton variant="secondary" disabled={busy} onClick={()=>setRetry(undefined)}>رجوع</ProjectButton><ProjectButton disabled={busy} onClick={()=>void operation(async()=>{await request("/"+retry.job.id+"/retry",{destination:retry.destination});setRetry(undefined);},"أُضيفت محاولة الرفع إلى الطابور.")}>تأكيد إعادة الرفع</ProjectButton></>}><p className="text-sm">{retry.job.deliveries[retry.destination]?.status==="unknown"?"راجع محادثة تلجرام أولًا. قد يكون الملف وصل بالفعل، وإعادة المحاولة قد ترسل نسخة إضافية.":"ستُعاد محاولة رفع النسخة المحفوظة إلى الوجهة المحددة."}</p></ProjectDialog>}
  </div>;

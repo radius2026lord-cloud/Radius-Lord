@@ -14,7 +14,7 @@ type Policy={lastAttemptAt?:string;lastError?:string|null;enabled:boolean;interv
 export class BackupError extends Error{constructor(public status:number,message:string){super(message);}}
 let schema:Promise<unknown>|undefined;
 export function ensureBackupSchema(){
- return schema??=db.query(`CREATE TABLE IF NOT EXISTS database_backup_jobs(
+ return schema??=(async()=>{await db.query(`CREATE TABLE IF NOT EXISTS database_backup_jobs(
  id CHAR(36) PRIMARY KEY,batch_key VARCHAR(128) NOT NULL,request_key VARCHAR(220) NOT NULL UNIQUE,
  server_id BIGINT UNSIGNED NOT NULL,database_name VARCHAR(64) NOT NULL,name VARCHAR(200) NOT NULL,
  tenant_id BIGINT UNSIGNED NULL,kind VARCHAR(16) NOT NULL,trigger_type VARCHAR(16) NOT NULL,actor_id BIGINT UNSIGNED NULL,
@@ -23,7 +23,10 @@ export function ensureBackupSchema(){
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),finished_at DATETIME(6) NULL,
  next_attempt_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),removed_at DATETIME(6) NULL,
  INDEX backup_queue(status,next_attempt_at),INDEX backup_retention(server_id,database_name,status,finished_at)
- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch((error:unknown)=>{schema=undefined;throw error;});
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+ const [indexes]:any=await db.query("SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='database_backup_jobs' AND INDEX_NAME='backup_batch_targets'");
+ if(!indexes.length)try{await db.query("ALTER TABLE database_backup_jobs ADD INDEX backup_batch_targets(batch_key,kind,server_id,database_name,created_at)");}catch(error){if((error as any)?.code!=='ER_DUP_KEYNAME')throw error;}
+ })().catch((error:unknown)=>{schema=undefined;throw error;});
 }
 export const parse=<T=any>(value:unknown,fallback:T):T=>{try{return typeof value==='string'?JSON.parse(value):value as T??fallback;}catch{return fallback;}};
 async function setting(){
@@ -247,8 +250,8 @@ export function startDatabaseBackupWorker(){
 
 export async function restartFailedBackup(id:string,requestId:string,req:AuthenticatedRequest){
  await ensureBackupSchema();
- const [rows]:any=await db.query("SELECT * FROM database_backup_jobs WHERE id=? AND status='failed'",[id]);
+ const [rows]:any=await db.query("SELECT batch_key FROM database_backup_jobs WHERE id=? AND status='failed'",[id]);
  if(!rows[0])throw new BackupError(409,'يمكن إعادة محاولة النسخ المتعذّر فقط.');
- const previous=job(rows[0]);
- return requestBackups({requestId,scope:previous.kind==='central'?'central':'network',tenantId:previous.tenant_id,destinations:previous.destinations},req);
+ const {retryBackupBatch}=await import('./database-backup-batches.service');
+ return retryBackupBatch(rows[0].batch_key,requestId,req,id);
 }
