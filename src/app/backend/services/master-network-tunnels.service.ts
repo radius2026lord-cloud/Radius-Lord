@@ -3,9 +3,13 @@ import type {PoolConnection} from 'mysql2/promise';
 import {readGatewayOvpnSessions} from './network-ovpn.service';
 
 type Tunnel={id:number;environmentId:number;gatewayId:number;nasId:number;username:string;address:string;lastSeenAt:Date|null};
-type GatewaySnapshot={attemptedAt:string;readAt?:string;status:'ok'|'unavailable';sessions?:Record<string,{connected:boolean;lastSeenAt:string|null}>};
+type ObservedState='connected'|'disconnected'|'unknown';
+type ConnectionEvent={at:string;state:ObservedState;previousState:ObservedState|null;nasId:number;gatewayId:number;tunnelId:number;environmentId:number;durationSeconds:number|null;baseline:boolean};
+type SessionObservation={connected:boolean;lastSeenAt:string|null;since?:string};
+type GatewaySnapshot={attemptedAt:string;readAt?:string;status:'ok'|'unavailable';sessions?:Record<string,SessionObservation>};
 type NasInventory=Array<{id:number;name:string;enabled:boolean}>;
 const group='master_ovpn_health';
+const eventGroup='master_ovpn_events';
 const lockName='lord-master-ovpn-health';
 const sessionKey=(username:string,address:string)=>JSON.stringify([username,address]);
 function parse(value:unknown):GatewaySnapshot|null{
@@ -14,6 +18,10 @@ function parse(value:unknown):GatewaySnapshot|null{
 function tunnelTime(value:Date|string|null){
  const parsed=value?new Date(value):null;
  return parsed&&Number.isFinite(parsed.getTime())?parsed.toISOString():null;
+}
+
+function makeEvent(tunnel:Tunnel,at:string,state:ObservedState,previousState:ObservedState|null,durationSeconds:number|null,baseline:boolean):ConnectionEvent{
+ return {at,state,previousState,durationSeconds,baseline,nasId:Number(tunnel.nasId),gatewayId:Number(tunnel.gatewayId),tunnelId:Number(tunnel.id),environmentId:Number(tunnel.environmentId)};
 }
 
 export function startMasterNetworkTunnelsWorker(){
@@ -39,26 +47,56 @@ export function startMasterNetworkTunnelsWorker(){
    const previous=parse(rows[0].snapshot);
    const attemptedAt=new Date().toISOString();
    let snapshot:GatewaySnapshot;
+   let tracked:Tunnel[]=[];
+   const events:ConnectionEvent[]=[];
    try{
-    const [tunnels]=await connection.query(`SELECT t.tunnel_username username,t.tunnel_address address
+    const [tunnels]=await connection.query(`SELECT t.id,t.environment_id environmentId,t.tenant_nas_id nasId,t.ovpn_gateway_id gatewayId,t.tunnel_username username,t.tunnel_address address
      FROM nas_tunnels t JOIN tenant_environments e ON e.id=t.environment_id
      WHERE t.ovpn_gateway_id=? AND t.tenant_nas_id IS NOT NULL AND t.status NOT IN ('reserved','disabled','provisioning')
        AND e.status='ready' AND e.archived_at IS NULL`,[gatewayId]);
+    tracked=tunnels as Tunnel[];
     const active=await readGatewayOvpnSessions(connection,gatewayId);
     const activeKeys=new Set(active.filter(row=>row.service==='ovpn').map(row=>sessionKey(row.name,row.address)));
     const readAt=new Date().toISOString();
     const sessions:NonNullable<GatewaySnapshot['sessions']>={};
-    for(const tunnel of tunnels as Pick<Tunnel,'username'|'address'>[]){
+    for(const tunnel of tracked){
      const key=sessionKey(tunnel.username,tunnel.address),connected=activeKeys.has(key);
-     sessions[key]={connected,lastSeenAt:connected?readAt:previous?.sessions?.[key]?.lastSeenAt??null};
+     const old=previous?.sessions?.[key];
+     const previousTime=Date.parse(previous?.readAt??'');
+     const uninterrupted=previous?.status==='ok'&&Number.isFinite(previousTime)&&Date.parse(readAt)-previousTime<=180000;
+     if(old&&previous?.status==='ok'&&Number.isFinite(previousTime)&&!uninterrupted){
+      events.push(makeEvent(tunnel,new Date(previousTime+180000).toISOString(),'unknown',old.connected?'connected':'disconnected',null,false));
+     }
+     const changed=!old?.since||!uninterrupted||old.connected!==connected;
+     const since=changed?readAt:old?.since??previous?.readAt??readAt;
+     sessions[key]={connected,since,lastSeenAt:connected?readAt:old?.lastSeenAt??null};
+     if(changed){
+      const duration=old&&uninterrupted&&old.since?Math.max(0,Math.round((Date.parse(readAt)-Date.parse(old.since))/1000)):null;
+      events.push(makeEvent(tunnel,readAt,connected?'connected':'disconnected',old?.since&&uninterrupted?(old.connected?'connected':'disconnected'):'unknown',duration,!old?.since||!uninterrupted));
+     }
     }
     snapshot={status:'ok',attemptedAt,readAt,sessions};
    }catch(error){
     snapshot={...previous,attemptedAt,status:'unavailable'};
+    if(previous?.status==='ok'){
+     for(const tunnel of tracked){
+      const old=previous.sessions?.[sessionKey(tunnel.username,tunnel.address)];
+      if(old)events.push(makeEvent(tunnel,attemptedAt,'unknown',old.connected?'connected':'disconnected',null,false));
+     }
+    }
     console.error('[master-network-ovpn]',{gatewayId,code:(error as {code?:string})?.code||'UNAVAILABLE'});
    }
-   await connection.query(`INSERT INTO platform_settings(setting_group,setting_key,setting_value,value_type,is_public)
-    VALUES (?,?,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`,[group,'gateway_'+gatewayId,JSON.stringify(snapshot)]);
+   await connection.beginTransaction();
+   try{
+    for(const event of events){
+     const key='environment_'+event.environmentId+'_'+Date.parse(event.at)+'_'+event.tunnelId+'_'+event.state;
+     await connection.query(`INSERT INTO platform_settings(setting_group,setting_key,setting_value,value_type,is_public)
+      VALUES (?,?,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=setting_value`,[eventGroup,key,JSON.stringify(event)]);
+    }
+    await connection.query(`INSERT INTO platform_settings(setting_group,setting_key,setting_value,value_type,is_public)
+     VALUES (?,?,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`,[group,'gateway_'+gatewayId,JSON.stringify(snapshot)]);
+    await connection.commit();
+   }catch(error){await connection.rollback().catch(()=>{});throw error;}
   }catch(error){console.error('[master-network-ovpn]',{code:(error as {code?:string})?.code||'UNAVAILABLE'});}
   finally{
    if(connection){
@@ -72,10 +110,11 @@ export function startMasterNetworkTunnelsWorker(){
  return ()=>{stopped=true;clearTimeout(timer);};
 }
 
-export async function readMasterNetworkTunnels(environmentIds:number[]){
+export async function readMasterNetworkTunnels(environmentIds:number[],includeHistory=false){
  const byEnvironment=new Map<number,Tunnel[]>();
+ const history:ConnectionEvent[]=[];
  const gateways=new Map<number,{name:string;snapshot:GatewaySnapshot|null}>();
- if(!environmentIds.length)return {byEnvironment,gateways};
+ if(!environmentIds.length)return {byEnvironment,gateways,history};
  const [tunnels]=await db.query(`SELECT id,environment_id environmentId,ovpn_gateway_id gatewayId,tenant_nas_id nasId,
   tunnel_username username,tunnel_address address,last_seen_at lastSeenAt
   FROM nas_tunnels WHERE environment_id IN (?) AND tenant_nas_id IS NOT NULL AND status NOT IN ('reserved','disabled','provisioning') ORDER BY id`,[environmentIds]);
@@ -93,7 +132,16 @@ export async function readMasterNetworkTunnels(environmentIds:number[]){
    WHERE g.id IN (?)`,[group,[...gatewayIds]]);
   for(const row of rows)gateways.set(Number(row.id),{name:row.name||'CHR #'+row.id,snapshot:parse(row.snapshot)});
  }
- return {byEnvironment,gateways};
+ if(includeHistory&&environmentIds.length===1){
+  const [events]:any=await db.query(`SELECT setting_value FROM platform_settings WHERE setting_group=? AND setting_key LIKE ? ESCAPE '!' ORDER BY setting_key DESC LIMIT 200`,[eventGroup,'environment!_'+environmentIds[0]+'!_%']);
+  for(const row of events){
+   try{
+    const event=typeof row.setting_value==='string'?JSON.parse(row.setting_value):row.setting_value;
+    if(Number(event?.environmentId)===environmentIds[0]&&['connected','disconnected','unknown'].includes(event.state)&&Number.isFinite(Date.parse(event.at)))history.push(event);
+   }catch{}
+  }
+ }
+ return {byEnvironment,gateways,history};
 }
 
 export function describeMasterNetworkTunnels(inventory:Awaited<ReturnType<typeof readMasterNetworkTunnels>>,environmentId:number,nasInventory:NasInventory|undefined,details:boolean){
@@ -108,8 +156,8 @@ export function describeMasterNetworkTunnels(inventory:Awaited<ReturnType<typeof
   const observed=snapshot?.sessions?.[sessionKey(tunnel.username,tunnel.address)];
   const fresh=Boolean(snapshot?.readAt&&now-Date.parse(snapshot.readAt)<=3*60*1000);
   const state=snapshot?.status==='unavailable'?'unavailable':snapshot?.readAt&&!fresh?'stale':!observed?'pending':observed.connected?'connected':'disconnected';
-  return [{nasId,name:nas?.name||'NAS #'+nasId,gatewayId,gateway:gateway?.name||'CHR #'+gatewayId,
-   state,readAt:snapshot?.readAt??null,lastSeenAt:observed?.lastSeenAt??tunnelTime(tunnel.lastSeenAt)}];
+  return [{tunnelId:Number(tunnel.id),nasId,name:nas?.name||'NAS #'+nasId,gatewayId,gateway:gateway?.name||'CHR #'+gatewayId,
+   state,since:observed?.since??null,readAt:snapshot?.readAt??null,lastSeenAt:observed?.lastSeenAt??tunnelTime(tunnel.lastSeenAt)}];
  });
  const total=tunnels.length,connected=tunnels.filter(tunnel=>tunnel.state==='connected').length;
  const disconnected=tunnels.filter(tunnel=>tunnel.state==='disconnected').length;
@@ -117,5 +165,6 @@ export function describeMasterNetworkTunnels(inventory:Awaited<ReturnType<typeof
   tunnels.some(tunnel=>tunnel.state==='stale')?'stale':connected+disconnected<total?'pending':
   connected===total?'connected':connected?'partial':'disconnected';
  const readAt=tunnels.length&&tunnels.every(tunnel=>tunnel.readAt)?tunnels.map(tunnel=>tunnel.readAt!).sort()[0]:null;
- return {state,total,connected,disconnected,readAt,...(details?{tunnels}:{})};
+ const history=inventory.history.filter(event=>tunnels.some(tunnel=>tunnel.tunnelId===event.tunnelId)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
+ return {state,total,connected,disconnected,readAt,...(details?{tunnels,history}:{})};
 }

@@ -31,7 +31,7 @@ export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
    WHERE t.archived_at IS NULL AND e.id IS NOT NULL ${id!==undefined?'AND t.id=?':''} ORDER BY t.id DESC`,id!==undefined?[Number(id)]:[]);
   const [reminderSettings,tunnels]=await Promise.all([
    readSubscriptionReminderSettings(),
-   readMasterNetworkTunnels((items as any[]).map(item=>Number(item.environmentId))),
+   readMasterNetworkTunnels((items as any[]).map(item=>Number(item.environmentId)),id!==undefined),
   ]);
   return res.json({reminderSettings,items:(items as any[]).map(({metricsSnapshot,renewalRequestSnapshot,upgradeRequestSnapshot,planLimitsSnapshot,additionalNas,...item})=>{
    let snapshot:any=null;

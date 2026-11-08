@@ -1,9 +1,11 @@
 "use client";
 import {useRouter} from "next/navigation";
 import {useEffect,useMemo,useRef,useState} from "react";
-import {ArrowRight,Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink,KeyRound,Radio} from "lucide-react";
+import {ArrowRight,History,Network,RefreshCw,Filter,Database,Users,Activity,Clock3,CheckCircle2,AlertTriangle,Layers,ListFilter,ChevronDown,ArrowUpDown,Hash,Eye,X,UserRound,Server,Wifi,WifiOff,Router,CalendarClock,ShieldCheck,Power,Package,Rows3,Copy,ExternalLink,KeyRound,Radio} from "lucide-react";
 import {CollectionToolbar,CollectionGrid,CollectionCard,CollectionState,useCollectionDisplay} from "@/components/ui/collection-display";
 import {useClock24h} from "@/components/ui/project-clock-provider";
+import CircularProgress from "@/components/ui/circular-progress";
+import ProjectTooltip from "@/components/ui/project-tooltip";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 import {ProjectFilterGroup,ProjectFilterChoices} from "@/components/ui/project-filter-panel";
 import BulkSelectionBar from "@/components/ui/bulk-selection-bar";
@@ -13,8 +15,9 @@ import FloatingNotice from "@/components/ui/floating-notice";
 import {ProjectInfoCard,ProjectCardIcon,type InfoCardTone} from "@/components/ui/project-info-card";
 type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
 type TunnelState="connected"|"disconnected"|"partial"|"pending"|"unavailable"|"stale"|"unlinked";
-type Tunnel={nasId:number;name:string;gatewayId:number;gateway:string;state:TunnelState;readAt:string|null;lastSeenAt:string|null};
-type NetworkRow={ovpn?:{state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
+type ConnectionEvent={at:string;state:"connected"|"disconnected"|"unknown";previousState:"connected"|"disconnected"|"unknown"|null;durationSeconds:number|null;baseline:boolean;tunnelId:number;nasId:number;gatewayId:number};
+type Tunnel={since?:string|null;tunnelId:number;nasId:number;name:string;gatewayId:number;gateway:string;state:TunnelState;readAt:string|null;lastSeenAt:string|null};
+type NetworkRow={ovpn?:{state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;history?:ConnectionEvent[];tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
@@ -65,9 +68,8 @@ function networkState(item:NetworkRow,days:number,now:number){
  return {label:"بانتظار التجهيز",tone:"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-300/40 dark:bg-blue-500/10 dark:text-blue-200",Icon:Clock3};
 }
 function ConnectionRing({label,percent,tone,className=""}:{label:string;percent:number|null;tone:string;className?:string}){
- return <div className={`relative size-16 shrink-0 ${tone} ${className}`} role="img" aria-label={label+" · "+(percent===null?"القراءة غير متاحة":percent+"%")}>
- <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.15"/>{percent!==null&&percent>0&&<circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/>}</svg>
- <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">{percent===null?"—":percent+"%"}</span></div>;
+ const color=tone.includes("rose")?"danger":tone.includes("amber")?"warning":tone.includes("emerald")?"success":tone.includes("violet")?"pending":"info";
+ return <CircularProgress value={percent} label={label} caption="متصل" size={className?"md":"xs"} tone={color}/>;
 }
 
 function ConnectionChart({title,connected,total,Icon,tone,sessions}:{title:string;connected?:number;total?:number;Icon:typeof Users;tone:string;sessions?:number}){
@@ -336,9 +338,46 @@ function UsageBar({title,used,limit}:{title:string;used?:number;limit?:number}){
  </div>;
 }
 
+function observedDuration(seconds:number){
+ const minutes=Math.floor(Math.max(0,seconds)/60);
+ return minutes<1?"أقل من دقيقة":minutes<60?minutes+" دقيقة":Math.floor(minutes/60)+" ساعة"+(minutes%60?" و "+minutes%60+" دقيقة":"");
+}
+
+const observedLabels={connected:"متصل",disconnected:"منقطع",unknown:"تعذّر التحقق"};
+function TunnelTimeline({tunnel,events,now}:{tunnel:Tunnel;events:ConnectionEvent[];now:number}){
+ const start=now-86400000;
+ const ordered=events.filter(event=>event.tunnelId===tunnel.tunnelId&&Date.parse(event.at)<=now).sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
+ const marks:Array<{at:number;state:ConnectionEvent["state"]}>=[{at:start,state:"unknown"}];
+ for(const event of ordered){
+  const at=Date.parse(event.at);
+  if(at<=start)marks[0]={at:start,state:event.state};
+  else marks.push({at,state:event.state});
+ }
+ // A successful observation is evidence only until the monitoring freshness limit.
+ const readAt=Date.parse(tunnel.readAt??"");
+ if(Number.isFinite(readAt)&&readAt+180000<now){
+  marks.push({at:Math.max(start,readAt+180000),state:"unknown"});
+  marks.sort((a,b)=>a.at-b.at);
+ }
+ const segments=marks.map((mark,index)=>({...mark,end:marks[index+1]?.at??now})).filter(mark=>mark.end>mark.at);
+ return <div className="space-y-1.5">
+  <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10" dir="ltr" aria-label={"سجل اتصال "+tunnel.name+" خلال 24 ساعة"}>
+   {segments.map((segment,index)=><span key={index} className="block h-full min-w-0 shrink-0 [&>span]:h-full [&>span]:w-full" style={{width:((segment.end-segment.at)/86400000*100)+"%"}}>
+    <ProjectTooltip label={observedLabels[segment.state]+" · "+date(new Date(segment.at).toISOString())+" — "+date(new Date(segment.end).toISOString())}>
+     <span className={"block h-full w-full "+(segment.state==="connected"?"bg-emerald-500":segment.state==="disconnected"?"bg-rose-500":"bg-slate-300 dark:bg-slate-600")}/>
+    </ProjectTooltip>
+   </span>)}
+
+  </div>
+  <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400"><span>منذ 24 ساعة</span><span>الآن</span></div>
+ </div>;
+}
+
 function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:NetworkRow;days:number;now:number;error:string;refreshing:boolean;onRefresh:()=>void}){
  const [notice,setNotice]=useState({message:"",error:""});
  const [recoveryOpen,setRecoveryOpen]=useState(false);
+ const [historyNas,setHistoryNas]=useState("all");
+ const [historyLimit,setHistoryLimit]=useState(20);
  const expiry=expiryState(item,days,now);
  const ovpn=item.ovpn;
  const tunnelStatus=ovpn?.state??"pending";
@@ -347,6 +386,8 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  const connectionInk=tunnelStatus==="connected"?"text-emerald-600 dark:text-emerald-300":tunnelStatus==="disconnected"?"text-rose-600 dark:text-rose-300":tunnelDisplay.tone==="warning"?"text-amber-700 dark:text-amber-300":"text-sky-600 dark:text-sky-300";
  const ConnectionIcon=tunnelStatus==="connected"?CheckCircle2:tunnelStatus==="disconnected"?WifiOff:tunnelDisplay.tone==="warning"?AlertTriangle:Router;
  const tunnels=[...(ovpn?.tunnels??[])].sort((left,right)=>Number(left.state==="connected")-Number(right.state==="connected"));
+ const history=ovpn?.history??[];
+ const filteredHistory=history.filter(event=>historyNas==="all"||String(event.tunnelId)===historyNas);
  const affectedGateways=Array.from(new Set(tunnels.filter(tunnel=>tunnel.state==="disconnected").map(tunnel=>tunnel.gateway)));
 
  const environment=item.status!=="active"?"موقوفة":label(item.environmentStatus);
@@ -387,7 +428,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
   <ProjectInfoCard tone="info" className="flex flex-wrap items-start justify-between gap-4">
    <div className="min-w-0 space-y-2">
     <div className="flex flex-wrap items-center gap-2"><ProjectCardIcon icon={Network}/><h1 className="break-words text-xl font-bold">{item.name}</h1></div>
-    <p className="text-sm">{item.ownerName||"المالك غير محدد"} · شبكة <bdi>#{item.id}</bdi></p>
+    <div className="flex flex-wrap items-center gap-3 text-sm"><span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold ${connectionInk}`}><Hash className="size-4"/>{item.id}</span><span className="flex items-center gap-1.5"><UserRound className="size-4 text-violet-500"/>{item.ownerName||"المالك غير محدد"}</span></div>
     {item.licenseNumber&&<div className="flex flex-wrap items-center gap-2 text-xs">الرخصة <bdi className="break-all font-mono">{item.licenseNumber}</bdi><ProjectButton variant="ghost" aria-label="نسخ الرخصة" onClick={()=>void copy(item.licenseNumber,"تم نسخ رقم الرخصة.")}><Copy className="size-4"/></ProjectButton></div>}
    </div>
    <div className="flex flex-wrap items-center gap-2">
@@ -397,13 +438,17 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     <ProjectButton variant="ghost" disabled={refreshing} onClick={onRefresh}><RefreshCw className={`size-4 ${refreshing?"animate-spin":""}`}/>تحديث</ProjectButton>
    </div>
   </ProjectInfoCard>
-  <div aria-label="حالة الشبكة" className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(230px,1fr)]">
+  <nav aria-label="أقسام ملف الشبكة" className="flex flex-wrap gap-2">
+   {[{href:"#network-connection",label:"الاتصال",Icon:Router},{href:"#network-overview",label:"الحسابات",Icon:Users},{href:"#network-subscription",label:"الاشتراك",Icon:Package},{href:"#network-ovpn",label:"أجهزة NAS",Icon:Server},{href:"#network-history",label:"سجل الاتصال",Icon:History}].map(({href,label,Icon})=><a key={href} href={href} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs transition-colors hover:border-blue-300 hover:text-blue-600 dark:border-white/10 dark:bg-white/[.03] dark:hover:text-blue-300"><Icon className="size-4 text-blue-500"/>{label}</a>)}
+  </nav>
+  <div id="network-connection" aria-label="حالة الشبكة" className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(230px,1fr)]">
    <ProjectInfoCard tone={tunnelDisplay.tone} className="flex min-w-0 flex-wrap items-center gap-4 sm:flex-nowrap sm:gap-5">
     <ConnectionRing label="نسبة أجهزة NAS المتصلة" percent={connectionPercent} tone={connectionInk} className="sm:size-24"/>
     <div className="min-w-0 flex-1 space-y-2">
      <p className="flex items-center gap-2 text-xs"><ConnectionIcon className={`size-4 shrink-0 ${connectionInk}`}/>اتصال الشبكة عبر OpenVPN</p>
      <h2 className={`text-lg font-bold ${connectionInk}`}>{tunnelDisplay.label}</h2>
      {connectionPercent!==null&&ovpn&&<p className="text-sm"><bdi className="font-semibold">{ovpn.connected} / {ovpn.total}</bdi> أجهزة NAS متصلة</p>}
+     {ovpn&&hasTunnelReading(tunnelStatus)&&<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300">متصل {ovpn.connected}</span><span className="rounded-full bg-rose-500/10 px-2 py-1 text-rose-700 dark:text-rose-300">منقطع {ovpn.disconnected}</span></div>}
      {tunnelStatus==="partial"&&affectedGateways.length>0&&<p className="break-words text-xs">أجهزة متأثرة على خوادم الاتصال · {affectedGateways.join("، ")}</p>}
      {ovpn?.readAt&&<p className="text-xs">آخر فحص ناجح · {date(ovpn.readAt)}</p>}
      {tunnels.length>0&&<a href="#network-ovpn" className="inline-flex items-center gap-1 text-xs font-semibold underline underline-offset-4"><Router className="size-3.5"/>عرض تفاصيل أجهزة NAS</a>}
@@ -441,23 +486,51 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     <UsageBar title="أجهزة NAS" used={metrics?.totalNas} limit={limit?.nas}/>
    </ProjectInfoCard></section>
    <section><ProjectInfoCard tone="connections" className="space-y-4">
-    <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={ShieldCheck}/>صحة البيئة</h2>
+    <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={ShieldCheck}/>صحة البيئة</h2><p className="text-xs text-slate-500 dark:text-slate-400">آخر تقرير · {date(item.reportedAt)}</p>
     <div className="grid gap-2 sm:grid-cols-2">{[{name:"قاعدة البيانات",value:item.databaseStatus,icon:Database},{name:"FreeRADIUS",value:item.radiusStatus,icon:Radio}].map(service=>{const tone=service.value==="healthy"?"success":!service.value||service.value==="unknown"?"pending":"warning";return <ProjectInfoCard key={service.name} tone={tone} className="flex flex-wrap items-center justify-between gap-2 !p-3 text-sm"><span className="flex items-center gap-2"><ProjectCardIcon icon={service.icon} tone={tone}/>{service.name}</span><span className="font-semibold">{label(service.value)}</span></ProjectInfoCard>;})}</div>
     <dl className="grid grid-cols-2 gap-3">{healthSummary.slice(2).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl>
    </ProjectInfoCard></section>
   </div>
   <section id="network-ovpn" className="scroll-mt-4">
    <ProjectInfoCard className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2><span className="text-xs text-slate-500 dark:text-slate-400">سجل مرئي لآخر 24 ساعة</span></div>
+    <div className="flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-700 dark:text-emerald-300">● متصل</span><span className="text-rose-700 dark:text-rose-300">● منقطع</span><span className="text-slate-500 dark:text-slate-400">● غير مؤكد أو لم يُرصد</span></div>
     {!tunnels.length?<p className="text-sm">{ovpn?.state==="unlinked"?"لا توجد أجهزة NAS مرتبطة عبر OpenVPN.":"بانتظار بيانات أجهزة NAS."}</p>:
      <ul className="grid gap-3 sm:grid-cols-2">{tunnels.map(tunnel=><li key={tunnel.nasId+":"+tunnel.gatewayId}>
-      <ProjectInfoCard tone={tunnelLabels[tunnel.state].tone} className="space-y-2">
+      <ProjectInfoCard tone={tunnelLabels[tunnel.state].tone} className="min-w-0 space-y-3">
        <div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-words">{tunnel.name}</strong><span className="text-xs">{tunnel.state==="disconnected"?"غير متصل":tunnelLabels[tunnel.state].label}</span></div>
        <p className="flex items-center gap-2 text-xs"><Server className="size-4"/>خادم الاتصال · {tunnel.gateway}</p>
        <p className="flex items-center gap-2 text-xs"><Clock3 className="size-4"/>آخر ظهور متصل · {date(tunnel.lastSeenAt)}</p>
-       <p className="text-xs">آخر فحص ناجح · {date(tunnel.readAt)}</p>
+       <dl className="grid gap-2 border-t border-slate-200/70 pt-2 text-xs dark:border-white/10">
+        {hasTunnelReading(tunnel.state)&&tunnel.since&&<div className="flex flex-wrap justify-between gap-2"><dt>الحالة مرصودة منذ</dt><dd>{date(tunnel.since)}</dd></div>}
+        <div className="flex flex-wrap justify-between gap-2"><dt>آخر فحص ناجح</dt><dd>{date(tunnel.readAt)}</dd></div>
+       </dl>
+       <TunnelTimeline tunnel={tunnel} events={history} now={now}/>
       </ProjectInfoCard>
      </li>)}</ul>}
+   </ProjectInfoCard>
+  </section>
+  <section id="network-history" className="scroll-mt-4">
+   <ProjectInfoCard className="space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+     <div><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={History} tone="connections"/>سجل انقطاع الاتصال وعودته</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">توقيت اكتشاف الحالة حسب الفحص الدوري. المدد تقريبية، ويبدأ السجل من تفعيل المراقبة.</p></div>
+     <ProjectDropdown compact value={historyNas} onChange={value=>{setHistoryNas(value);setHistoryLimit(20);}} options={[{value:"all",label:"كل أجهزة NAS"},...tunnels.map(tunnel=>({value:String(tunnel.tunnelId),label:tunnel.name,icon:Router}))]}/>
+    </div>
+    <div className="flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-700 dark:text-emerald-300">● متصل</span><span className="text-rose-700 dark:text-rose-300">● منقطع</span><span className="text-slate-500 dark:text-slate-400">● غير مؤكد أو لم يُرصد</span></div>
+    {!filteredHistory.length?<p className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-white/[.03]">بانتظار أول رصد لحالة الاتصال.</p>:
+     <ol className="divide-y divide-slate-200 dark:divide-white/10">{filteredHistory.slice(0,historyLimit).map(event=>{
+      const tunnel=tunnels.find(tunnel=>tunnel.tunnelId===event.tunnelId);
+      const connected=event.state==="connected",unknown=event.state==="unknown";
+      const Icon=unknown?AlertTriangle:connected?CheckCircle2:WifiOff;
+      const title=unknown?"تعذّر التحقق من الاتصال":event.baseline?(connected?"رُصد اتصال الجهاز":"رُصد الجهاز غير متصل"):connected?"عودة الاتصال":"اكتشاف انقطاع";
+      return <li key={event.at+":"+event.tunnelId+":"+event.state} className="grid min-w-0 items-start gap-3 py-3 sm:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_minmax(180px,1fr)]">
+       <div className="flex min-w-0 items-start gap-2"><Icon className={`mt-0.5 size-4 shrink-0 ${unknown?"text-amber-600":connected?"text-emerald-600":"text-rose-600"}`}/><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{date(event.at)}</p></div></div>
+       <div className="min-w-0 text-xs"><p className="break-words font-semibold">{tunnel?.name||"NAS #"+event.nasId}</p><p className="mt-1 break-words text-slate-500 dark:text-slate-400">{tunnel?.gateway||"CHR #"+event.gatewayId}</p></div>
+       <p className="text-xs">{event.durationSeconds!==null?(event.previousState==="disconnected"?"مدة الانقطاع المرصود · ":"مدة الاتصال المرصود · ")+observedDuration(event.durationSeconds):unknown?"تحتاج الحالة إلى فحص ناجح جديد":"بدء رصد الحالة"}</p>
+      </li>;
+     })}</ol>}
+    {filteredHistory.length>historyLimit&&<ProjectButton variant="secondary" onClick={()=>setHistoryLimit(value=>value+20)}>عرض أحداث أقدم</ProjectButton>}
+    {history.length>=200&&<p className="text-xs text-slate-500 dark:text-slate-400">تُعرض أحدث 200 واقعة للشبكة.</p>}
    </ProjectInfoCard>
   </section>
  </section>;
