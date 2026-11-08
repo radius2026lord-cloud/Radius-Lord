@@ -10,6 +10,7 @@ import ProjectDropdown from "@/components/ui/project-dropdown";
 import ProjectDialog from "@/components/ui/project-dialog";
 import FloatingNotice from "@/components/ui/floating-notice";
 
+import BackupRestoreReview from "@/components/backup-restore-review";
 import BackupHealth from "@/components/backup-health";
 import BackupBatches,{emptyBackupFilters,type BackupFilters,type BackupBatch} from "@/components/backup-batches";
 
@@ -37,7 +38,6 @@ export default function DatabaseBackupsPage(){
  const [appliedFilters,setAppliedFilters]=useState<BackupFilters>({...emptyBackupFilters});
  useEffect(()=>{const timer=setTimeout(()=>setAppliedFilters(historyFilters),250);return()=>clearTimeout(timer);},[historyFilters]);
  const [restoreChoice,setRestoreChoice]=useState<{id:string;name:string;database_name:string}>();
- const restoreIds=useRef<Record<string,string>>({});
  const [retry,setRetry]=useState<{job:Job;destination:Destination}>();
  const initialized=useRef(false),requestId=useRef(""),polling=useRef(false),loadSequence=useRef(0);
  const load=useCallback(async(reset=false)=>{
@@ -140,7 +140,7 @@ export default function DatabaseBackupsPage(){
    {tab==="health"&&<BackupHealth api={archiveApi} revision={data.revision} onVerify={setRestoreChoice}/>}
    {tab==="history"&&<BackupBatches batches={data.batches} counts={data.counts} total={data.total} page={page} timezone={data.timezone} revision={data.revision} filters={historyFilters} servers={data.options.servers} networks={data.options.networks} loadDetails={detailRequest} onVerify={job=>setRestoreChoice(job)} archiveApi={archiveApi} onNotice={archiveNotice} onFilter={changeFilter} onPage={setPage} busy={busy} errorText={code=>code.startsWith("MYSQL_OPTION_")?"أداة MySQL رفضت الخيار: "+code.slice(13).toLowerCase().replaceAll("_","-"):errors[code]??(code==="CalledProcessError"?"تعذّر اتصال أداة MySQL بالمصدر. تحقق من بيانات الوصول وTLS على خادم النسخ.":"تعذّر تنفيذ النسخ. راجع اتصال الخادم وصلاحيات حساب النسخ.")} onRetryBatch={key=>void operation(async()=>{batchRetryIds.current[key]??=crypto.randomUUID();await request("/batches/"+encodeURIComponent(key)+"/retry",{requestId:batchRetryIds.current[key]});delete batchRetryIds.current[key];},"أُعيدت القواعد المتعذّرة داخل الحزمة نفسها.")} onRestart={job=>void operation(()=>request("/"+job.id+"/restart",{requestId:crypto.randomUUID()}),"أُضيفت محاولة داخل الحزمة الأصلية.")} onCheck={job=>void operation(()=>request("/"+job.id+"/check",{}),"تم تحديث حالة النسخة من الخادم.")} onRetry={(job,destination)=>setRetry({job,destination})} onDownload={job=>{const link=document.createElement("a");link.href=endpoint+"/"+job.id+"/download";link.download=job.filename??"";link.click();}}/>}
   </>}
-  {restoreChoice&&<ProjectDialog open hostingerStyle title="فحص استعادة معزول" busy={busy} onClose={()=>setRestoreChoice(undefined)} footer={<><ProjectButton variant="secondary" disabled={busy} onClick={()=>setRestoreChoice(undefined)}>رجوع</ProjectButton><ProjectButton disabled={busy} onClick={()=>void operation(async()=>{restoreIds.current[restoreChoice.id]??=crypto.randomUUID();await request("/"+restoreChoice.id+"/verify-restore",{requestId:restoreIds.current[restoreChoice.id],confirmed:true});delete restoreIds.current[restoreChoice.id];setRestoreChoice(undefined);},"أُضيف فحص الاستعادة المعزول إلى الطابور.")}><FlaskConical/>بدء الفحص</ProjectButton></>}><div className="space-y-4"><ProjectInfoCard tone="pending"><p className="flex items-center gap-2 font-medium"><ProjectCardIcon icon={Database}/>{restoreChoice.name}</p><bdi className="mt-2 block break-all text-xs">{restoreChoice.database_name}</bdi></ProjectInfoCard><p className="text-sm leading-7">ستُستورد النسخة إلى MySQL مؤقت مستقل على خادم النسخ، دون منافذ شبكة ومع تعطيل المهام المجدولة. تُفحص الجداول ثم تُحذف البيئة المؤقتة.</p><p className="text-xs text-slate-500">الفحص يدوي وقد يستغرق وقتًا ويحتاج مساحة إضافية. لا يستبدل قاعدة الشبكة العاملة.</p></div></ProjectDialog>}
+  {restoreChoice&&<BackupRestoreReview anchor={restoreChoice} api={archiveApi} revision={data?.revision??0} onNotice={archiveNotice} onClose={()=>setRestoreChoice(undefined)}/>}
   {retry&&<ProjectDialog open hostingerStyle title="إعادة رفع النسخة" onClose={()=>setRetry(undefined)} busy={busy} footer={<><ProjectButton variant="secondary" disabled={busy} onClick={()=>setRetry(undefined)}>رجوع</ProjectButton><ProjectButton disabled={busy} onClick={()=>void operation(async()=>{await request("/"+retry.job.id+"/retry",{destination:retry.destination});setRetry(undefined);},"أُضيفت محاولة الرفع إلى الطابور.")}>تأكيد إعادة الرفع</ProjectButton></>}><p className="text-sm">{retry.job.deliveries[retry.destination]?.status==="unknown"?"راجع محادثة تلجرام أولًا. قد يكون الملف وصل بالفعل، وإعادة المحاولة قد ترسل نسخة إضافية.":"ستُعاد محاولة رفع النسخة المحفوظة إلى الوجهة المحددة."}</p></ProjectDialog>}
  </div>;
 }
