@@ -1,3 +1,4 @@
+import {startDatabaseBackupWorker} from './services/database-backups.service';
 import {startMasterNetworkTunnelsWorker} from './services/master-network-tunnels.service';
 import {migrateManualEnvironment} from './services/manual-environment-migration.service';
 import {startMasterNetworkMetricsWorker} from './services/master-network-metrics.worker';
@@ -43,6 +44,7 @@ const startServer = (port: number) => {
   server.listen(port, () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
+    server.once('close',startDatabaseBackupWorker());
     const stopMasterMetrics=startMasterNetworkMetricsWorker();
     server.once('close',stopMasterMetrics);
     server.once('close',startMasterNetworkTunnelsWorker());

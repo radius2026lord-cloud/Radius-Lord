@@ -286,3 +286,30 @@ export async function readUbuntuReadiness(serverId:number){
  const script="import json,time,shutil,pathlib\ndef cpu():\n v=list(map(int,pathlib.Path('/proc/stat').read_text().splitlines()[0].split()[1:]));return sum(v[:8]),v[3]+v[4]\na=cpu();time.sleep(0.2);b=cpu();m={k:int(v.split()[0]) for k,v in (line.split(':',1) for line in pathlib.Path('/proc/meminfo').read_text().splitlines())};d=shutil.disk_usage('/');print(json.dumps({'cpu':round(100*(1-(b[1]-a[1])/max(1,b[0]-a[0])),1),'memory':round(100*(1-m.get('MemAvailable',m['MemFree'])/m['MemTotal']),1),'disk':round(100*d.used/d.total,1)}))\n";
  return JSON.parse(await managedSshExec(serverId,'python3 -',script));
 }
+
+// Backup commands are generated internally and use the same verified SSH identity.
+export async function hasBackupSsh(serverId:number){
+ const config=await savedConfig(serverId);
+ return Boolean(config?.fingerprint);
+}
+export async function openBackupDownload(serverId:number,script:string){
+ const config=await savedConfig(serverId);
+ if(!config)throw new Error('BACKUP_SSH_REQUIRED');
+ const client=new Client();
+ try{
+  await new Promise<void>((resolve,reject)=>{
+   client.once('ready',resolve);client.once('error',reject);
+   client.once('close',()=>reject(new Error('BACKUP_SSH_CLOSED')));
+   client.connect(options(config));
+  });
+  const stream=await new Promise<ClientChannel>((resolve,reject)=>{
+   client.exec('sudo -n python3 -u -',(error,channel)=>{if(error)reject(error);else resolve(channel);});
+  });
+  const timer=setTimeout(()=>client.destroy(),1800000);
+  stream.stderr.resume();
+  stream.end(script);
+  stream.once('close',(code:number)=>{clearTimeout(timer);if(code)stream.destroy(new Error('BACKUP_DOWNLOAD_FAILED'));client.end();});
+  stream.once('error',()=>{clearTimeout(timer);client.destroy();});
+  return {stream,close:()=>{clearTimeout(timer);client.destroy();}};
+ }catch(error){client.destroy();throw error;}
+}

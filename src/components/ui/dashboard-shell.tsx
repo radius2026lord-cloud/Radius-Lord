@@ -12,6 +12,7 @@ import { useOptionalAuth } from "@/components/auth/auth-provider";
 import CustomerOnboardingShell from "./customer-onboarding-shell";
 import {
   History,
+  HardDriveDownload,
   Tags,
   Layers,
   Activity,
@@ -98,6 +99,7 @@ const masterAdminGroups: NavGroup[] = [
   ]},
   { label: "النظام", icon: Database, items: [
     { label: "تحديثات النظام", href: "/Dashboard/system/updates", icon: PackagePlus },
+    { label: "النسخ الاحتياطي", href: "/Dashboard/system/backups", icon: HardDriveDownload },
     { label: "طرفية SSH", href: "/Dashboard/ssh-terminal", icon: TerminalSquare },
     { label: "قواعد البيانات", href: "/Dashboard/system/databases", icon: Database },
     { label: "حالة الخدمات", href: "/Dashboard/system/services", icon: Activity },

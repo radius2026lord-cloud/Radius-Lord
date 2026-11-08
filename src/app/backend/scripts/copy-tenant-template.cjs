@@ -7,3 +7,6 @@ cpSync(join(root,'tenant-schema','vendor'),join(root,'dist','tenant-schema','ven
 
 mkdirSync(join(root,'dist','migrations'),{recursive:true});
 cpSync(join(root,'migrations','20261106_manual_environment.sql'),join(root,'dist','migrations','20261106_manual_environment.sql'));
+
+mkdirSync(join(root,'dist','scripts'),{recursive:true});
+cpSync(join(root,'scripts','database-backup-agent.py'),join(root,'dist','scripts','database-backup-agent.py'));

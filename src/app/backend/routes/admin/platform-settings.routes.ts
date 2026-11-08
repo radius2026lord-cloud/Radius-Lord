@@ -1,3 +1,4 @@
+import databaseBackupsRoutes from './database-backups.routes';
 import {GitReleaseError,getGitReleases,getHostedGitReleases,inspectGitHosting,prepareGitRelease,sendGitRelease,refreshGitRelease} from '../../services/git-releases.service';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
 import type {AuthenticatedRequest} from '../../middleware/auth.middleware';
@@ -17,6 +18,7 @@ import { getMasterUiPreferences, saveMasterUiPreferences } from '../../controlle
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.use('/database-backups',databaseBackupsRoutes);
 function gitHandler(work:(req:AuthenticatedRequest)=>Promise<unknown>){
  return async(req:import('express').Request,res:import('express').Response)=>{
   res.set('Cache-Control','no-store');
