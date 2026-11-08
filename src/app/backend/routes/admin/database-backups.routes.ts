@@ -21,7 +21,7 @@ function action(work:(req:AuthenticatedRequest,res:Response)=>Promise<unknown>){
 async function audit(req:AuthenticatedRequest,operation:string,description:string,metadata?:unknown){
  await writeMasterAdminAuditLog(req,req.auth!.accountId,{actionCode:'UPDATE',entityTypeCode:'DATABASE_SERVER',description,metadata:{operation,details:metadata}});
 }
-router.get('/',action(req=>{const page=Number(req.query.page??1);if(!Number.isInteger(page)||page<1||page>10000)throw new BackupError(422,'رقم الصفحة غير صالح.');return listBackups(page);}));
+router.get('/',action(req=>{const page=Number(req.query.page??1);if(!Number.isInteger(page)||page<1||page>10000)throw new BackupError(422,'رقم الصفحة غير صالح.');return listBackups(page,{q:String(req.query.q??''),status:String(req.query.status??''),kind:String(req.query.kind??''),trigger:String(req.query.trigger??'')});}));
 router.put('/policy',action(async req=>{const policy=await saveBackupPolicy(req.body);await audit(req,'backup_policy','تعديل جدولة النسخ الاحتياطي وسياسة الاحتفاظ');return {policy};}));
 router.post('/run',action(req=>requestBackups(req.body,req)));
 router.post('/inspect',action(async req=>{

@@ -107,7 +107,12 @@ def run(identifier):
             defaults.write_text("[client]\n" + "\n".join(key + "=" + option(data[key]) for key in ("host", "port", "user", "password")) + "\nprotocol=tcp\n")
             defaults.chmod(0o600)
             ssl = ["--ssl-mode=VERIFY_IDENTITY", "--ssl-ca=/etc/ssl/certs/ca-certificates.crt"] if data["tls"] else ["--ssl-mode=DISABLED"]
-            engine = subprocess.check_output(["mysql", "--defaults-extra-file=" + str(defaults), *ssl, "--batch", "--skip-column-names", "-e", "SELECT @@server_uuid"], timeout=20, stderr=subprocess.DEVNULL).decode().strip()
+            try:
+                engine = subprocess.check_output(["mysql", "--defaults-extra-file=" + str(defaults), *ssl, "--batch", "--skip-column-names", "-e", "SELECT @@server_uuid"], timeout=20, stderr=subprocess.DEVNULL).decode().strip()
+            except subprocess.CalledProcessError:
+                raise RuntimeError("MYSQL_SOURCE_CHECK_FAILED") from None
+            except subprocess.TimeoutExpired:
+                raise RuntimeError("MYSQL_SOURCE_CHECK_TIMEOUT") from None
             if engine != data["serverUuid"]:
                 raise RuntimeError("BACKUP_ENGINE_MISMATCH")
             args = ["mysqldump", "--defaults-extra-file=" + str(defaults), *ssl, "--single-transaction", "--quick",

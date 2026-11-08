@@ -111,12 +111,22 @@ export async function requestBackups(input:any,req?:AuthenticatedRequest,schedul
 function job(row:any):BackupJob{
  return {...row,metadata:parse(row.metadata,{}),destinations:parse(row.destinations,[]),deliveries:parse(row.deliveries,{})};
 }
-export async function listBackups(page=1){
+export async function listBackups(page=1,filters:{q?:string;status?:string;kind?:string;trigger?:string}={}){
  await ensureBackupSchema();
  const [policy,options,cloud]=await Promise.all([backupPolicy(),backupOptions(),cloudPublic()]);
- const [rows]:any=await db.query("SELECT *,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%sZ') created_at,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%sZ') finished_at,DATE_FORMAT(removed_at,'%Y-%m-%dT%H:%i:%sZ') removed_at FROM database_backup_jobs ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?",[(page-1)*50]);
+ const clauses:string[]=[],params:unknown[]=[];
+ const query=String(filters.q??"").trim().slice(0,100);
+ if(query){clauses.push("(LOCATE(?,name)>0 OR LOCATE(?,database_name)>0 OR LOCATE(?,id)>0)");params.push(query,query,query);}
+ if(filters.status==="pending")clauses.push("status IN ('queued','running','waiting_remote')");
+ else if(filters.status==="attention")clauses.push("delivery_state='attention'");
+ else if(["succeeded","failed"].includes(filters.status??"")){clauses.push("status=?");params.push(filters.status);}
+ if(["central","tenant"].includes(filters.kind??"")){clauses.push("kind=?");params.push(filters.kind);}
+ if(["manual","scheduled"].includes(filters.trigger??"")){clauses.push("trigger_type=?");params.push(filters.trigger);}
+ const where=clauses.length?" WHERE "+clauses.join(" AND "):"";
+ const [totals]:any=await db.query("SELECT COUNT(*) total FROM database_backup_jobs"+where,params);
+ const [rows]:any=await db.query("SELECT *,DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%sZ') created_at,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%sZ') finished_at,DATE_FORMAT(removed_at,'%Y-%m-%dT%H:%i:%sZ') removed_at FROM database_backup_jobs"+where+" ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?",[...params,(page-1)*50]);
  const [counts]:any=await db.query("SELECT status,COUNT(*) count,SUM(delivery_state='attention') attention FROM database_backup_jobs GROUP BY status");
- return {policy,options,cloud,counts,items:rows.map((row:any)=>{
+ return {policy,options,cloud,counts,total:Number(totals[0].total),items:rows.map((row:any)=>{
   const value=job(row);
   const deliveries=Object.fromEntries(Object.entries(value.deliveries).map(([key,entry]:[string,any])=>{const {sessionEncrypted,...safe}=entry;return [key,safe];}));
   return {...value,deliveries};
