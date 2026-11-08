@@ -308,7 +308,7 @@ export async function openBackupDownload(serverId:number,script:string){
   const timer=setTimeout(()=>client.destroy(),1800000);
   stream.stderr.resume();
   stream.end(script);
-  stream.once('close',(code:number)=>{clearTimeout(timer);if(code)stream.destroy(new Error('BACKUP_DOWNLOAD_FAILED'));client.end();});
+  stream.once('close',(code:number)=>{clearTimeout(timer);if(code)stream.emit('error',new Error('BACKUP_DOWNLOAD_FAILED'));client.end();});
   stream.once('error',()=>{clearTimeout(timer);client.destroy();});
   return {stream,close:()=>{clearTimeout(timer);client.destroy();}};
  }catch(error){client.destroy();throw error;}
