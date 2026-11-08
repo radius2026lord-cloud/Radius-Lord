@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useState, type FormEvent} from "react";
+import GitReleasePanel from "@/components/git-release-panel";
 import {Database, History, PackagePlus, RefreshCw, Upload} from "lucide-react";
 import {useAuth} from "@/components/auth/auth-provider";
 import {CollectionState} from "@/components/ui/collection-display";
@@ -99,8 +100,10 @@ export default function SystemUpdatesPage() {
       </header>
       <ProjectInfoCard>
         <p className="font-semibold">الإصدار الحالي <bdi>{data?.currentVersion || "غير مسجّل"}</bdi></p>
-        <p className="mt-1 text-sm">الحزم المرفوعة تُحفظ بانتظار النشر.</p>
+        <p className="mt-1 text-sm">متابعة إصدارات التطبيق وقواعد الشبكات.</p>
       </ProjectInfoCard>
+      <GitReleasePanel/>
+      <details className="space-y-4"><summary className="cursor-pointer text-sm">الحزم الموقّعة والرفع اليدوي</summary><div className="space-y-4">
       <ProjectInfoCard tone="pending">
         <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Upload} tone="pending"/> رفع حزمة إصدار</h2>
         {!data?.uploadEnabled ? <p className="mt-2 text-sm">يتاح الرفع بعد ضبط مجلد الإصدارات ومفتاح التحقق على الاستضافة.</p> :
@@ -129,6 +132,7 @@ export default function SystemUpdatesPage() {
         </ul>
         {data && !data.releases.length && <p className="text-sm">لا توجد حزم مرفوعة.</p>}
       </ProjectInfoCard>
+      </div></details>
       <ProjectInfoCard tone="memory">
         <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Database} tone="memory"/> إصدارات قواعد الشبكات</h2>
         {data?.targetSchemaVersion && <p className="mt-1 text-sm">البنية المعتمدة <bdi>{data.targetSchemaVersion}</bdi></p>}

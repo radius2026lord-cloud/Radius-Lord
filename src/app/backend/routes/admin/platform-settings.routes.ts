@@ -1,3 +1,6 @@
+import {GitReleaseError,getGitReleases,getHostedGitReleases,inspectGitHosting,prepareGitRelease,sendGitRelease,refreshGitRelease} from '../../services/git-releases.service';
+import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
+import type {AuthenticatedRequest} from '../../middleware/auth.middleware';
 import {listStagedReleases, ReleaseUploadError, stageRelease} from '../../services/staged-releases.service';
 import {db} from '../../config/db';
 import {getServerReadiness,runServerReadiness,saveServerReadinessSchedule} from "../../controllers/server-readiness.controller";
@@ -14,6 +17,20 @@ import { getMasterUiPreferences, saveMasterUiPreferences } from '../../controlle
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+function gitHandler(work:(req:AuthenticatedRequest)=>Promise<unknown>){
+ return async(req:import('express').Request,res:import('express').Response)=>{
+  res.set('Cache-Control','no-store');
+  try{return res.json(await work(req as AuthenticatedRequest));}
+  catch(error){
+   return res.status(error instanceof GitReleaseError?error.status:503).json({message:error instanceof GitReleaseError?error.message:'تعذر إكمال عملية الإصدار. حدّث السجل ثم أعد المحاولة.'});
+  }
+ };
+}
+router.get('/system-updates/git',gitHandler(async()=>({...await getGitReleases(),hostedReleases:await getHostedGitReleases()})));
+router.post('/system-updates/git/inspect',requireAuthOrigin,gitHandler(()=>inspectGitHosting()));
+router.post('/system-updates/git/prepare',requireAuthOrigin,gitHandler(req=>prepareGitRelease(req.body,req.auth!.accountId)));
+router.post('/system-updates/git/:version/send',requireAuthOrigin,gitHandler(req=>sendGitRelease(String(req.params.version),req.body?.commit)));
+router.get('/system-updates/git/:version/status',gitHandler(req=>refreshGitRelease(String(req.params.version))));
 router.get('/system-updates', async (_req, res) => {
   try {
     const [networks] = await db.query(
