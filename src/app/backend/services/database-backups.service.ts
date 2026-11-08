@@ -1,8 +1,8 @@
+import {provisioningDatabaseOptions} from './database-server-connection.service';
 import {randomUUID} from 'crypto';
 import mysql from 'mysql2/promise';
 import {db} from '../config/db';
 import {env} from '../config/env';
-import {decryptProvisioningSecret} from './provisioning-secrets.service';
 import {hasBackupSsh} from './ssh-terminal.service';
 import {backupRemote} from './database-backup-remote.service';
 import {deliverBackup,cloudPublic,cloudDestinationsReady} from './database-backup-cloud.service';
@@ -165,8 +165,8 @@ async function credentials(value:BackupJob){
   const [matching]:any=await db.query("SELECT id FROM tenant_databases WHERE tenant_id=? AND database_server_id=? AND db_name=? AND status='active'",[value.tenant_id,value.server_id,value.database_name]);
   if(!matching.length)throw Error('BACKUP_TARGET_CHANGED');
  }
- const password=decryptProvisioningSecret(server.provisioning_password_encrypted);
- const connection=await mysql.createConnection({host:server.host,port:Number(server.port),user:server.provisioning_username,password,database:value.database_name,connectTimeout:10000,...(server.tls_required?{ssl:{rejectUnauthorized:true}}:{})});
+ const source=provisioningDatabaseOptions(server),password=String(source.password);
+ const connection=await mysql.createConnection({...source,database:value.database_name});
  try{
   const [uuid]:any=await connection.query('SELECT @@server_uuid id');
   if(value.kind==='central'){

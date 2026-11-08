@@ -82,6 +82,9 @@ def option(value):
 
 def mysql_failure(message):
     text = message.lower()
+    unsupported = re.search(r"""unknown (?:variable|option) ['"]?(?:--)?([a-z][a-z0-9_-]{0,60})""", text)
+    if unsupported:
+        return "MYSQL_OPTION_" + unsupported.group(1).replace("-", "_").upper()
     for clues, code in [
         (["1045", "1698", "access denied"], "MYSQL_BACKUP_ACCESS_DENIED"),
         (["1130", "not allowed to connect"], "MYSQL_BACKUP_HOST_DENIED"),

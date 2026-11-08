@@ -3,11 +3,9 @@ import {join} from 'path';
 import {runManagedRadiusScript,openBackupDownload} from './ssh-terminal.service';
 
 const agentPath='/var/lib/radius-lord/database-backups/agent.py';
-let agent:Promise<string>|undefined;
 async function script(action:'start'|'status'|'download'|'remove'|'inspect',id:string,configuration?:unknown){
  if(!/^[a-f0-9-]{36}$/.test(id))throw Error('BACKUP_ID');
- agent??=readFile(join(__dirname,'../scripts/database-backup-agent.py'),'utf8').catch(error=>{agent=undefined;throw error;});
- const source=Buffer.from(await agent).toString('base64');
+ const source=Buffer.from(await readFile(join(__dirname,'../scripts/database-backup-agent.py'),'utf8')).toString('base64');
  const payload=Buffer.from(JSON.stringify(configuration??{})).toString('base64');
  return `import base64,pathlib,subprocess,sys,os
 os.umask(0o077)
