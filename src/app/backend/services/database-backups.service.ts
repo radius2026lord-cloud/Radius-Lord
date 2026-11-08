@@ -190,6 +190,9 @@ async function processJob(value:BackupJob){
   if(result.status==='verified'&&result.verified===true&&Number.isSafeInteger(result.bytes)&&result.bytes>0&&/^[a-f0-9]{64}$/.test(result.sha256)){
    await db.query("UPDATE database_backup_jobs SET status='succeeded',metadata=?,finished_at=UTC_TIMESTAMP(6),last_error=NULL,next_attempt_at=UTC_TIMESTAMP(6) WHERE id=?",[JSON.stringify(result),value.id]);
   }else if(result.status==='failed')await db.query("UPDATE database_backup_jobs SET status='failed',last_error=?,finished_at=UTC_TIMESTAMP(6) WHERE id=?",[String(result.error??'BACKUP_FAILED').slice(0,160),value.id]);
+  else if(['queued','running','verifying'].includes(result.status)){
+   await db.query("UPDATE database_backup_jobs SET metadata=?,last_error=NULL WHERE id=?",[JSON.stringify({status:result.status,startedAt:result.startedAt}),value.id]);
+  }
  }catch(error){
   const code=String((error as any)?.code||(error as Error).message||'BACKUP_REMOTE_UNAVAILABLE');
   const terminal=value.attempts>=4||['BACKUP_TARGET_CHANGED','BACKUP_CENTRAL_SERVER_MISMATCH','DATABASE_SERVER_UNAVAILABLE'].includes(code);

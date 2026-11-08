@@ -1,17 +1,39 @@
 "use client";
 import {useState} from "react";
-import {Database,History,Filter,CheckCircle2,AlertTriangle,Clock3,Cloud,Send,CalendarClock,HardDriveDownload,Download,RefreshCw,ShieldCheck,Server,ChevronDown} from "lucide-react";
+import {Database,History,Filter,CheckCircle2,AlertTriangle,Clock3,Cloud,Send,CalendarClock,HardDriveDownload,Download,RefreshCw,ShieldCheck,Server,ChevronDown,PauseCircle} from "lucide-react";
 import {CollectionToolbar,CollectionState} from "@/components/ui/collection-display";
 import ProjectButton from "@/components/ui/project-button";
 import ProjectDropdown from "@/components/ui/project-dropdown";
 
-export type BackupJobView={destinations:("telegram"|"drive")[];id:string;name:string;kind:string;status:string;database_name:string;server_id:number;trigger_type:string;created_at:string;finished_at:string|null;removed_at:string|null;last_error:string|null;metadata:{bytes?:number;sha256?:string};deliveries:Partial<Record<"telegram"|"drive",{status:string;error?:string}>>};
+export type BackupJobView={destinations:("telegram"|"drive")[];id:string;name:string;kind:string;status:string;database_name:string;server_id:number;trigger_type:string;created_at:string;finished_at:string|null;removed_at:string|null;last_error:string|null;metadata:{status?:string;startedAt?:string;bytes?:number;sha256?:string};deliveries:Partial<Record<"telegram"|"drive",{status:string;error?:string}>>};
 const stateNames:Record<string,string>={queued:"بانتظار التنفيذ",running:"جارٍ النسخ",waiting_remote:"بانتظار الخادم",succeeded:"نسخة متحقّق منها",failed:"تعذّر النسخ",pending:"بانتظار الرفع",uploading:"جارٍ الرفع",unknown:"الوصول غير مؤكد"};
 const surface="rounded-[22px] border border-[#e3e3e6] bg-white dark:border-white/10 dark:bg-[#13263b]";
 function Ring({value,total,label,color}:{value:number;total:number;label:string;color:string}){
  const percent=total?Math.round(value/total*100):0;
  return <div className="relative grid size-16 shrink-0 place-items-center" role="img" aria-label={label+" "+value+" من "+total}>
  <svg viewBox="0 0 64 64" className="size-16 -rotate-90" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="none" stroke="currentColor" strokeWidth="5" className="text-slate-200 dark:text-slate-700"/><circle cx="32" cy="32" r="27" fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" pathLength="100" strokeDasharray={percent+" 100"}/></svg><span className="absolute text-xs font-medium tabular-nums">{value}/{total}</span></div>;
+}
+function BackupProgress({job}:{job:BackupJobView}){
+ const done=job.status==="succeeded",failed=job.status==="failed",waiting=job.status==="waiting_remote",queued=job.status==="queued";
+ const verifying=!done&&!failed&&!waiting&&job.metadata.status==="verifying";
+ const active=!done&&!failed&&!waiting&&!queued;
+ const phase=done?3:verifying?2:active?1:0;
+ const color=done?"#10b981":failed?"#ef4444":waiting?"#f59e0b":"#3b82f6";
+ const Icon=done?CheckCircle2:failed?AlertTriangle:waiting?PauseCircle:queued?Clock3:verifying?ShieldCheck:HardDriveDownload;
+ const title=done?"اكتمل النسخ والتحقق":failed?"توقفت المحاولة":waiting?"بانتظار الاتصال":queued?"بانتظار بدء النسخ":verifying?"جارٍ التحقق من النسخة":"جارٍ نسخ البيانات";
+ const steps=[{label:"البدء",Icon:Clock3},{label:"النسخ",Icon:Database},{label:"التحقق",Icon:ShieldCheck}];
+ return <div className="flex flex-wrap items-center gap-4 rounded-[18px] border border-slate-200 bg-slate-50/60 p-4 dark:border-white/10 dark:bg-white/[.025]" role="status" aria-label={title}>
+ <div className="relative grid size-24 shrink-0 place-items-center">
+ <svg viewBox="0 0 96 96" className="absolute size-24 -rotate-90" aria-hidden="true">
+ {steps.map((step,index)=><circle key={step.label} cx="48" cy="48" r="39" fill="none" stroke={done||index<phase?color:"currentColor"} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray="29 71" strokeDashoffset={-index*33.333} className={done||index<phase?"":"text-slate-200 dark:text-slate-700"}/>)}
+ </svg>
+ {active&&<svg viewBox="0 0 96 96" className="absolute size-24 animate-spin motion-reduce:animate-none" aria-hidden="true"><circle cx="48" cy="48" r="39" fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray="16 84"/></svg>}
+ <Icon className="size-8" style={{color}} aria-hidden="true"/>
+ </div>
+ <div className="min-w-0 flex-1"><p className="text-sm font-medium" style={{color}}>{title}</p>
+ <ol className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">{steps.map(({label,Icon:StepIcon},index)=><li key={label} aria-current={!done&&!failed&&!waiting&&index===phase?"step":undefined} className={"flex items-center gap-1.5 text-[11px] "+(done||index<phase?"text-emerald-600 dark:text-emerald-400":index===phase&&!failed&&!waiting?"text-blue-600 dark:text-blue-400":"text-slate-400")}><StepIcon className="size-3.5"/>{label}{(done||index<phase)&&<CheckCircle2 className="size-3"/>}</li>)}</ol>
+ {active&&<p className="mt-2 text-[10px] text-slate-500">تُحدّث المرحلة تلقائيًا من الخادم</p>}
+ </div></div>;
 }
 export default function BackupHistory({items,counts,page,total,query,status,kind,trigger,onFilter,onPage,busy,onCheck,onRestart,onRetry,onDownload,errorText}:{items:BackupJobView[];counts:{status:string;count:number;attention:number}[];page:number;total:number;query:string;status:string;kind:string;trigger:string;onFilter:(key:string,value:string)=>void;onPage:(page:number)=>void;busy:boolean;onCheck:(job:BackupJobView)=>void;onRestart:(job:BackupJobView)=>void;onRetry:(job:BackupJobView,destination:"telegram"|"drive")=>void;onDownload:(job:BackupJobView)=>void;errorText:(code:string)=>string}){
  const [view,setView]=useState<"row"|"grid">("row"),[filters,setFilters]=useState(false);
@@ -23,17 +45,18 @@ export default function BackupHistory({items,counts,page,total,query,status,kind
  {filters&&<div className={surface+" grid gap-4 p-4 sm:grid-cols-3"}><label className="space-y-2 text-xs"><span className="flex gap-2"><Database className="size-4 text-teal-500"/>نوع القاعدة</span><ProjectDropdown value={kind} onChange={v=>onFilter("kind",v)} options={[{value:"all",label:"جميع القواعد",icon:Database},{value:"central",label:"القاعدة المركزية",icon:ShieldCheck},{value:"tenant",label:"قواعد الشبكات",icon:Database}]}/></label><label className="space-y-2 text-xs"><span className="flex gap-2"><CalendarClock className="size-4 text-violet-500"/>طريقة الإنشاء</span><ProjectDropdown value={trigger} onChange={v=>onFilter("trigger",v)} options={[{value:"all",label:"جميع الطرق",icon:History},{value:"manual",label:"نسخ يدوي",icon:HardDriveDownload},{value:"scheduled",label:"نسخ دوري",icon:CalendarClock}]}/></label><div className="flex items-end"><ProjectButton variant="ghost" onClick={()=>onFilter("reset","")}>مسح التصفية</ProjectButton></div></div>}
  <div className={surface+" flex flex-wrap items-center justify-between gap-3 px-4 py-3"}><span className="flex items-center gap-2 text-sm"><History className="size-4 text-blue-500"/>النتائج <strong className="text-lg tabular-nums">{total}</strong></span><span className="text-xs text-slate-500">50 عنصرًا في الصفحة · الصفحة {page}</span></div>
  {items.length===0?<CollectionState>لا توجد نسخ مطابقة للبحث والتصفية.</CollectionState>:<div className={view==="grid"?"grid items-stretch gap-4 md:grid-cols-2 2xl:grid-cols-3":"space-y-3"}>{items.map(job=>{
- const ok=job.status==="succeeded",failed=job.status==="failed",color=ok?"#10b981":failed?"#ef4444":"#6366f1",Icon=ok?CheckCircle2:failed?AlertTriangle:Clock3;
+ const ok=job.status==="succeeded",failed=job.status==="failed",color=ok?"#10b981":failed?"#ef4444":"#6366f1";
  const delivered=job.destinations.filter(d=>job.deliveries[d]?.status==="succeeded").length;
  return <article key={job.id} className={surface+" min-w-0 overflow-hidden p-4 transition hover:border-blue-300 hover:shadow-sm"}>
  <div className={view==="row"?"grid gap-4 xl:grid-cols-[minmax(210px,1fr)_2fr]":"space-y-4"}>
  <section className={"min-w-0 "+(view==="row"?"xl:border-l xl:border-slate-200 xl:pl-4 dark:xl:border-white/10":"border-b border-slate-200 pb-4 dark:border-white/10")}>
  <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="flex min-w-0 items-center gap-2 font-semibold"><Database className="size-5 shrink-0 text-teal-500"/><span className="break-words">{job.name}</span></h3><span className="rounded-full border px-2 py-1 font-mono text-[10px]" style={{color,borderColor:color}} title={job.id}>#{job.id.slice(0,8)}</span></div>
- <p className="mt-3 flex items-center gap-2 text-xs" style={{color}}><Icon className="size-4"/>{stateNames[job.status]??"حالة غير معروفة"}</p>
+ 
  <p className="mt-3 break-all text-xs text-slate-500"><bdi>{job.database_name}</bdi></p>
  <p className="mt-2 flex gap-2 text-xs text-slate-500"><Server className="size-4 text-sky-500"/>{job.kind==="central"?"قاعدة مركزية":"قاعدة شبكة"} · الخادم #{job.server_id}</p>
  </section>
  <section className="min-w-0 space-y-3">
+ <BackupProgress job={job}/>
  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-white/10 dark:bg-white/[.025]"><p className="flex gap-2 text-[11px] text-slate-500"><CalendarClock className="size-4 text-violet-500"/>إنشاء النسخة · {job.trigger_type==="scheduled"?"دوري":"يدوي"}</p><time dateTime={job.created_at} className="mt-2 block text-xs tabular-nums">{new Date(job.created_at).toLocaleString("ar")}</time>{job.finished_at&&<p className="mt-2 text-[10px] text-slate-500">الانتهاء · {new Date(job.finished_at).toLocaleString("ar")}</p>}</div>
  <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-white/10 dark:bg-white/[.025]">{job.destinations.length?<Ring value={delivered} total={job.destinations.length} label="وجهات الرفع المكتملة" color="#0ea5e9"/>:<HardDriveDownload className="size-8 shrink-0 text-teal-500"/>}<div className="text-xs"><p className="flex gap-1"><Cloud className="size-4 text-sky-500"/>{job.destinations.length?"وجهات الرفع":"حفظ على الخادم"}</p><p className="mt-2 text-slate-500">{job.metadata.bytes===undefined?"الحجم غير متاح":(job.metadata.bytes/1024**2).toFixed(2)+" MiB"}</p></div></div></div>
  <div className="flex flex-wrap gap-2">{job.destinations.map(destination=>{const state=job.deliveries[destination]?.status??"pending",DeliveryIcon=destination==="telegram"?Send:Cloud;return <span key={destination} className={"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] "+(state==="succeeded"?"border-emerald-200 text-emerald-600 dark:border-emerald-500/30 dark:text-emerald-400":["failed","unknown"].includes(state)?"border-amber-200 text-amber-600 dark:border-amber-500/30 dark:text-amber-400":"border-slate-200 text-slate-500 dark:border-white/10")}><DeliveryIcon className="size-3.5"/>{destination==="telegram"?"تلجرام":"Google Drive"} · {state==="succeeded"?"تم الرفع":state==="failed"?"تعذّر الرفع":stateNames[state]??"بانتظار التحديث"}</span>})}</div>
