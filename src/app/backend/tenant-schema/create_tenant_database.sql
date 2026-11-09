@@ -1952,3 +1952,14 @@ CREATE PROCEDURE `rl_pppoe_import_workflow_v1` ()  BEGIN
  DO RELEASE_LOCK(lock_name); SET acquired=0;
 END$$
 DELIMITER ;
+
+-- Direct NAS: separate from OpenVPN tunnels; private credentials stay encrypted in nas_management_credentials.
+CREATE TABLE IF NOT EXISTS nas_direct_connections (
+ nas_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+ management_address VARCHAR(45) NOT NULL,
+ radius_address VARCHAR(45) NOT NULL,
+ api_source_address VARCHAR(45) NOT NULL,
+ configuration_snapshot JSON NOT NULL,
+ synced_at DATETIME(6) NOT NULL,
+ CONSTRAINT fk_nas_direct_lord FOREIGN KEY(nas_id) REFERENCES lord_nas(id)
+) ENGINE=InnoDB;

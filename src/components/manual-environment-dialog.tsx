@@ -1,4 +1,5 @@
 "use client";
+import NasDirectFields,{emptyDirectNas,validDirectNas} from './nas-direct-fields';
 import {useEffect,useRef,useState,type KeyboardEvent} from 'react';
 import {CalendarClock,CreditCard,Database,Globe,KeyRound,Mail,Network,Phone,Server,UserRound,Users} from 'lucide-react';
 import {arabCountries,defaultArabCountry} from '@/components/auth/auth-content';
@@ -14,6 +15,8 @@ const endpoint='/api/billing/admin/manual-environment';
 const empty={networkName:'',fullName:'',email:'',phone:'',password:'',planId:'',duration:'',maxPppoe:'',maxNas:''};
 
 export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=>void;onCreated:(orderId:number)=>void}){
+ const [connectionMode,setConnectionMode]=useState('ovpn'),[directNas,setDirectNas]=useState({...emptyDirectNas}),[apiPort,setApiPort]=useState('8728');
+ const linkValid=connectionMode==='ovpn'||validDirectNas(directNas)&&Number.isInteger(Number(apiPort))&&Number(apiPort)>0&&Number(apiPort)<=65535;
  const [form,setForm]=useState(empty),[plans,setPlans]=useState<Plan[]>([]);
  const [customerMode,setCustomerMode]=useState('new'),[planMode,setPlanMode]=useState('plan');
  const [busy,setBusy]=useState(false),[loadingPlans,setLoadingPlans]=useState(true),[error,setError]=useState(''),[planError,setPlanError]=useState(''),[revision,setRevision]=useState(0);
@@ -36,7 +39,7 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
   const fields=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('input:not([disabled]),button[aria-haspopup]:not([disabled])'));
   const next=fields[fields.indexOf(input)+1];
   if(next)next.focus();
-  else if(accountValid&&planValid)setReview(true);
+  else if(accountValid&&planValid&&linkValid)setReview(true);
  }
 
  const set=(key:keyof typeof empty,value:string)=>setForm(current=>({...current,[key]:value}));
@@ -56,12 +59,12 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
  const accountValid=Boolean(form.networkName.trim()&&emailValid&&!arabicWarning.email)&&
   (customerMode==='existing'||Boolean(form.fullName.trim()&&form.phone.length>0&&/^\+[0-9]{7,15}$/.test(internationalPhone)&&!arabicWarning.password&&form.password.length>=8&&new TextEncoder().encode(form.password).length<=72));
  async function submit(){
-  if(busy||!accountValid||!planValid)return;
+  if(busy||!accountValid||!planValid||!linkValid)return;
   if(!requestId.current)requestId.current=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
   setBusy(true);setError('');
   try{
    const response=await fetch(endpoint,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    ...form,phone:internationalPhone,country:country.name,customerMode,planMode,requestId:requestId.current,
+    ...form,nasLink:connectionMode==='direct'?{...directNas,mode:'direct',apiPort:Number(apiPort)}:{mode:'ovpn'},phone:internationalPhone,country:country.name,customerMode,planMode,requestId:requestId.current,
     duration:Number(form.duration),maxPppoe:Number(form.maxPppoe),maxNas:Number(form.maxNas),
    })});
    const data=await response.json();if(!response.ok)throw Error(data.message||'تعذر تسجيل طلب التجهيز.');
@@ -71,7 +74,7 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
  }
  return <ProjectDialog title={review?"مراجعة بيانات التوليد":"توليد بيئة جديدة"} description="اعتماد إداري لبيئة على الاستضافة المشتركة. يبدأ الاشتراك بعد اكتمال التجهيز." onClose={onClose} busy={busy} hostingerStyle footer={<>
   <ProjectButton variant="secondary" disabled={busy} onClick={()=>{if(review){setReview(false);setError('');}else onClose();}}>{review?"تعديل البيانات":"إلغاء"}</ProjectButton>
-  <ProjectButton disabled={busy||!accountValid||!planValid} onClick={()=>review?void submit():setReview(true)}><Server/>{busy?'جارٍ فحص الجاهزية وتسجيل الطلب…':review?'تأكيد وتوليد البيئة':'مراجعة البيانات'}</ProjectButton>
+  <ProjectButton disabled={busy||!accountValid||!planValid||!linkValid} onClick={()=>review?void submit():setReview(true)}><Server/>{busy?'جارٍ فحص الجاهزية وتسجيل الطلب…':review?'تأكيد وتوليد البيئة':'مراجعة البيانات'}</ProjectButton>
  </>}>
   <div className="space-y-4">
   {review?<div className="space-y-4">
@@ -98,6 +101,13 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
     </dl>
    </ProjectInfoCard>
    <ProjectInfoCard>
+    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Network}/>طريقة اتصال NAS</h2>
+    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+     <ReviewField label="الربط" icon={Network} value={connectionMode==='direct'?'مباشر · دون OVPN':'OVPN · تجهيز تلقائي'}/>
+     {connectionMode==='direct'&&<><ReviewField label="عنوان الإدارة" icon={Server} value={directNas.managementAddress}/><ReviewField label="مصدر NAS لدى RADIUS" icon={Network} value={directNas.radiusAddress||directNas.managementAddress}/><ReviewField label="مصدر API المسموح" icon={Globe} value={directNas.apiSourceAddress}/><ReviewField label="مستخدم API" icon={UserRound} value={directNas.apiUsername}/><ReviewField label="منفذ API" icon={KeyRound} value={apiPort}/></>}
+    </dl>
+   </ProjectInfoCard>
+   <ProjectInfoCard>
     <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Database}/>قاعدة بيانات الشبكة</h2>
     <p className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">سينشئ عامل التجهيز قاعدة مستقلة على الاستضافة المشتركة. يُحدَّد اسمها من رقم الشبكة بعد تسجيل الطلب، وتُحفظ حدود الخطة في رخصتها المحلية.</p>
    </ProjectInfoCard>
@@ -117,6 +127,14 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
       <p className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">الرقم الدولي مع نداء الدولة يصل إلى 15 رقمًا.</p>
       <label className="min-w-0 space-y-2 text-xs font-semibold sm:col-span-2"><span>كلمة مرور حساب العميل</span><ProjectInput required type="password" autoComplete="new-password" dir="ltr" minLength={8} maxLength={72} disabled={busy} value={form.password} onChange={e=>setLatinField('password',e.target.value)} aria-invalid={arabicWarning.password} aria-describedby={arabicWarning.password?'manual-password-script-warning':undefined}/>{arabicWarning.password&&<span id="manual-password-script-warning" role="status" className="block text-red-700 dark:text-red-300">الأحرف العربية غير مسموحة في كلمة المرور. بدّل لغة لوحة المفاتيح.</span>}<span className="block font-normal text-slate-600 dark:text-slate-300">ثمانية أحرف على الأقل. بيانات دخول مدير الشبكة تُنشأ بعد التجهيز.</span></label>
      </>}
+    </div>
+   </ProjectInfoCard>
+   <ProjectInfoCard>
+    <h2 className="flex items-center gap-2 text-sm font-semibold"><ProjectCardIcon icon={Network}/>ربط أجهزة الشبكة</h2>
+    <div className="mt-4 space-y-4">
+     <ProjectDropdown fieldStyle value={connectionMode} disabled={busy} onChange={setConnectionMode} icon={Network} options={[{value:'ovpn',label:'عبر OVPN · تجهيز تلقائي'},{value:'direct',label:'مباشر · IP محلي أو موجّه دون OVPN'}]}/>
+     <p className="text-xs leading-6 text-slate-600 dark:text-slate-300">طريقة الربط مستقلة عن نوع الخطة وموقع استضافة البوابة. تجهز البيئة أولًا ويبقى اتصال الجهاز بانتظار تطبيق السكربت.</p>
+     {connectionMode==='direct'&&<><NasDirectFields value={directNas} disabled={busy} onChange={(key,value)=>setDirectNas(current=>({...current,[key]:value}))}/><label className="block space-y-2 text-xs font-semibold"><span>منفذ API</span><ProjectInput required type="number" dir="ltr" min={1} max={65535} disabled={busy} value={apiPort} onChange={e=>setApiPort(e.target.value)}/></label></>}
     </div>
    </ProjectInfoCard>
    <ProjectInfoCard tone="pending">

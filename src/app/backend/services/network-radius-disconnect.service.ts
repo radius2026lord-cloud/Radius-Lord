@@ -2,7 +2,7 @@ import {lookup} from 'dns/promises';
 import {db} from '../config/db';
 import {readPrivateSetting} from './radius-provision.service';
 import {runManagedRadiusScript} from './ssh-terminal.service';
-import {checkNetworkNasApi} from './network-ovpn.service';
+import {checkNetworkNasApi,readNetworkOvpn} from './network-ovpn.service';
 
 type DisconnectResult={attempted:number;acknowledged:number;verified:boolean;transport:'api'|'radius'|'none';apiFailures?:number;nasId?:number};
 
@@ -31,7 +31,7 @@ export async function disconnectPppoeSessions(scope:any,app:any,usernameValue?:s
  // so an active RouterOS session is still discoverable by its live API table.
  const selectedRadiusNasId=Number(nasIdValue),hasSelectedNas=Number.isSafeInteger(selectedRadiusNasId)&&selectedRadiusNasId>0;
  const nasFilter=hasSelectedNas?' AND n.id=?':'';
- const [nasRows]:any=await app.query("SELECT DISTINCT l.id FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN nas_ovpn_connections c ON c.nas_id=l.id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' AND ms.is_enabled=1 WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0"+nasFilter+" ORDER BY l.id LIMIT 100",hasSelectedNas?[serviceKind,selectedRadiusNasId]:[serviceKind]);
+ const [nasRows]:any=await app.query("SELECT DISTINCT l.id FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN "+((await readNetworkOvpn(app))?.connectionMode==='direct'?'nas_direct_connections':'nas_ovpn_connections')+" c ON c.nas_id=l.id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' AND ms.is_enabled=1 WHERE l.archived_at IS NULL AND l.is_enabled=1 AND FIND_IN_SET(?,l.radius_services)>0"+nasFilter+" ORDER BY l.id LIMIT 100",hasSelectedNas?[serviceKind,selectedRadiusNasId]:[serviceKind]);
  const nasIds=Array.from(new Set([...nasRows.map((row:any)=>Number(row.id)),...(hasSelectedNas?[]:rows.map((row:any)=>Number(row.nasId)))] )).filter((id:number)=>Number.isSafeInteger(id)&&id>0);
  // Accounting is a discovery hint, not proof: verify the live session before removal.
  const lastSeen=new Map<number,number>();

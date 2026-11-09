@@ -1,3 +1,4 @@
+import {readEnvironmentNasMode} from './environment-nas-link.service';
 import {readInfrastructureReport} from './infrastructure-health.service';
 import { randomBytes } from 'crypto';
 import type { PoolConnection } from 'mysql2/promise';
@@ -154,7 +155,8 @@ export async function readEnvironmentSummary(query:(sql:string,params?:any[])=>P
  if(!summary.canRequest)return summary;
  const [types]:any=await query('SELECT code FROM deployment_types WHERE id=?',[order.deployment_type_id]);
  if(types[0]?.code!=='shared_cloud')return {...summary,canRequest:false,blockedReason:'مسار التوليد الحالي مخصص للكلاود المشتركة فقط.'};
- const report=await readInfrastructureReport();
+ const mode=summary.environmentId?await readEnvironmentNasMode({query},{environment_id:summary.environmentId,tenant_id:summary.tenantId,subscription_id:summary.subscriptionId}):'ovpn';
+ const report=await readInfrastructureReport(mode);
  if(!report?.ready)return {...summary,canRequest:false,blockedReason:'افحص صحة البنية التحتية وأكمل جميع الشروط؛ نتيجة الفحص يجب أن تكون سارية.'};
  return summary;
 }

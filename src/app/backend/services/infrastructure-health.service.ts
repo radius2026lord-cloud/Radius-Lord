@@ -1,3 +1,4 @@
+import type {NasLinkMode} from './environment-nas-link.service';
 import {createHash,randomBytes} from 'crypto';
 import mysql from 'mysql2/promise';
 import {lookup} from 'dns/promises';
@@ -15,12 +16,13 @@ export async function readInfrastructureSelection():Promise<InfrastructureSelect
  const [rows]:any=await db.query('SELECT setting_value FROM platform_settings WHERE setting_group=? AND setting_key=?',[group,'selection']);
  return rows[0]?JSON.parse(rows[0].setting_value):null;
 }
-async function snapshot(){
- const selection=await readInfrastructureSelection();
+async function snapshot(mode:NasLinkMode='ovpn'){
+ const savedSelection=await readInfrastructureSelection();
+ const selection=savedSelection?{...savedSelection,...(mode==='direct'?{gatewayId:0}:{})}:null;
  if(!selection)throw new InfrastructureNotReady();
  const [databases]:any=await db.query('SELECT * FROM database_servers WHERE id=? AND archived_at IS NULL',[selection.databaseServerId]);
  const [radiusRows]:any=await db.query("SELECT * FROM platform_settings WHERE id=? AND setting_group='free_radius'",[selection.radiusServerId]);
- const [gateways]:any=await db.query('SELECT * FROM ovpn_gateways WHERE id=?',[selection.gatewayId]);
+ const [gateways]:any=mode==='ovpn'?await db.query('SELECT * FROM ovpn_gateways WHERE id=?',[selection.gatewayId]):[[]];
  const [hosting]:any=await db.query("SELECT setting_value FROM platform_settings WHERE setting_group='local_hosting' AND setting_key='shared_cloud_connection'");
  let ssh:any=null;try{const [rows]:any=await db.query('SELECT * FROM server_ssh_connections WHERE database_server_id=?',[selection.radiusSshServerId]);ssh=rows[0];}catch(e){if((e as any)?.code!=='ER_NO_SUCH_TABLE')throw e;}
  const radius=radiusRows[0]?JSON.parse(radiusRows[0].setting_value):null;
@@ -31,11 +33,11 @@ async function snapshot(){
  const fingerprint=createHash('sha256').update(JSON.stringify({selection,database:databases[0],radius:radiusConfig,gateway:gatewayConfig,gatewaySecret:gateways[0]?.api_password_encrypted,hosting:hosting[0]?.setting_value,ssh})).digest('hex');
  return {selection,database:databases[0],radius,gateway,gatewaySecret:gateways[0]?.api_password_encrypted,ssh,fingerprint};
 }
-export async function readInfrastructureReport(){
- const [rows]:any=await db.query('SELECT setting_value FROM platform_settings WHERE setting_group=? AND setting_key=?',[group,'last_report']);
+export async function readInfrastructureReport(mode:NasLinkMode='ovpn'){
+ const [rows]:any=await db.query('SELECT setting_value FROM platform_settings WHERE setting_group=? AND setting_key=?',[group,mode==='direct'?'last_report_direct':'last_report']);
  if(!rows[0])return null;
  const report=JSON.parse(rows[0].setting_value);
- let current=false;try{current=(await snapshot()).fingerprint===report.fingerprint;}catch{}
+ let current=false;try{current=(await snapshot(mode)).fingerprint===report.fingerprint;}catch{}
  const schedule=await readInfrastructureSchedule();
  const validityMs=schedule.intervalMinutes*60000;
  const age=Date.now()-new Date(report.checkedAt).getTime();
@@ -72,8 +74,8 @@ async function checkDatabase(s:any,environmentId?:number){
   if(cleanupFailed)throw new Error('تعذر تنظيف موارد فحص MySQL؛ راجع الخادم قبل إعادة الفحص.');
  }
 }
-async function executeInfrastructureChecks(environmentId?:number){
- const s=await snapshot();
+async function executeInfrastructureChecks(environmentId?:number,mode:NasLinkMode='ovpn'){
+ const s=await snapshot(mode);
  const checks:Array<{key:string;label:string;status:'ready'|'failed'|'not_checked';message:string;checkedAt:string}>=[];
  async function check(key:string,label:string,operation:()=>Promise<string>){try{checks.push({key,label,status:'ready',message:await operation(),checkedAt:new Date().toISOString()});}catch(e){checks.push({key,label,status:'failed',message:e instanceof Error&&!('code' in e)&&!('level' in e)?e.message:'فشل الاتصال أو الصلاحيات؛ راجع إعداد الخدمة.',checkedAt:new Date().toISOString()});}}
  await check('central_database','قاعدة البيانات المركزية',async()=>{const [rows]:any=await db.query('SELECT DATABASE() name,1 connected');if(!rows[0]?.name)throw new Error('تعذر التحقق من القاعدة المركزية الثابتة.');return 'نجح الاتصال بالقاعدة المركزية المحفوظة؛ لا تُنشأ قاعدة مركزية جديدة.';});
@@ -91,7 +93,7 @@ async function executeInfrastructureChecks(environmentId?:number){
   if(health.overall!=='healthy')throw new Error('لم تنجح المصادقة والمحاسبة والتحقق من السجل في قاعدة الاختبار.');
   return 'نجحت المصادقة والمحاسبة والتحقق من سجل الاختبار في القاعدة المحددة.';
  });
- await check('ovpn','بوابة OpenVPN وإعداداتها وسعتها',async()=>{
+ if(mode==='ovpn')await check('ovpn','بوابة OpenVPN وإعداداتها وسعتها',async()=>{
   const g=s.gateway;if(!g?.enabled||g.provision_state!=='ready'||!s.gatewaySecret)throw new Error('أكمل تجهيز بوابة OpenVPN وتفعيلها أولًا.');
   const api=await RouterApi.connect({host:g.api_host,port:g.api_port,username:g.api_username,password:decryptProvisioningSecret(s.gatewaySecret),secure:g.api_tls});
   try{const options=validateProvision({...g,pool_mode:'existing',profile_mode:'existing',certificate_mode:'existing'});const inventory=await inspectRouter(api);const {server}=preflightInventory(inventory,options);
@@ -103,16 +105,16 @@ async function executeInfrastructureChecks(environmentId?:number){
    return 'نجح API والتحقق من الخدمة والشهادة وPPP Profile ونطاق العناوين؛ تجربة النفق تتم عند تجهيز الزبون.';
   }finally{api.close();}
  });
- const current=await snapshot();
+ const current=await snapshot(mode);
  const report={checkedAt:new Date().toISOString(),fingerprint:s.fingerprint,selection:s.selection,checks,ready:checks.every(c=>c.status==='ready')&&current.fingerprint===s.fingerprint};
- await db.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public) VALUES (?,? ,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",[group,'last_report',JSON.stringify(report)]);
+ await db.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public) VALUES (?,? ,?,'json',0) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",[group,mode==='direct'?'last_report_direct':'last_report',JSON.stringify(report)]);
  return report;
 }
-export async function requireInfrastructureReady(environmentId?:number){const report=await checkInfrastructure(environmentId);if(!report.ready)throw new InfrastructureNotReady();return report;}
+export async function requireInfrastructureReady(environmentId?:number,mode:NasLinkMode='ovpn'){const report=await checkInfrastructure(environmentId,mode);if(!report.ready)throw new InfrastructureNotReady();return report;}
 
-export async function checkInfrastructure(environmentId?:number){
+export async function checkInfrastructure(environmentId?:number,mode:NasLinkMode='ovpn'){
  const lock=await db.pool.getConnection();let acquired=false;
- try{const [rows]:any=await lock.query("SELECT GET_LOCK('radius-lord:infrastructure-health',0) acquired");acquired=Boolean(rows[0]?.acquired);if(!acquired)throw new InfrastructureNotReady();return await executeInfrastructureChecks(environmentId);}
+ try{const [rows]:any=await lock.query("SELECT GET_LOCK('radius-lord:infrastructure-health',0) acquired");acquired=Boolean(rows[0]?.acquired);if(!acquired)throw new InfrastructureNotReady();return await executeInfrastructureChecks(environmentId,mode);}
  finally{try{if(acquired)await lock.query("SELECT RELEASE_LOCK('radius-lord:infrastructure-health')");}finally{lock.release();}}
 }
 
@@ -132,6 +134,8 @@ export function startInfrastructureHealthWorker(){
    if(!await readInfrastructureSelection())return;
    const report=await readInfrastructureReport();
    if(!report||report.stale)await checkInfrastructure();
+   const [direct]:any=await db.query("SELECT 1 FROM platform_settings WHERE setting_group='environment_nas_link' AND JSON_UNQUOTE(JSON_EXTRACT(setting_value,'$.mode'))='direct' LIMIT 1");
+   if(direct[0]){const report=await readInfrastructureReport('direct');if(!report||report.stale)await checkInfrastructure(undefined,'direct');}
   }catch{console.warn('Infrastructure health unavailable; generation remains subject to fresh verification.');}
   finally{running=false;}
  }

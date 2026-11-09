@@ -1,3 +1,4 @@
+import {readEnvironmentNasMode} from '../services/environment-nas-link.service';
 import {requireInfrastructureReady,InfrastructureNotReady} from '../services/infrastructure-health.service';
 import type { Response } from 'express';
 import { db } from '../config/db';
@@ -25,7 +26,7 @@ export async function requestEnvironmentController(req: AuthenticatedRequest, re
     if(!initial.canRequest&&!initial.blockedReason?.startsWith('افحص صحة البنية التحتية'))throw new EnvironmentRequestError(409,initial.blockedReason||'حالة البيئة لا تسمح بطلب الإنشاء.');
     const [deployment]:any=await conn.query('SELECT code FROM deployment_types WHERE id=?',[order.deployment_type_id]);
     if(deployment[0]?.code!=='shared_cloud')throw new EnvironmentRequestError(409,'مسار التوليد الحالي مخصص للكلاود المشتركة فقط.');
-    await requireInfrastructureReady(initial.environmentId);
+    await requireInfrastructureReady(initial.environmentId,initial.environmentId?await readEnvironmentNasMode(conn,{environment_id:initial.environmentId,tenant_id:initial.tenantId,subscription_id:initial.subscriptionId}):'ovpn');
     initial=await readEnvironmentSummary((sql,params)=>conn!.query(sql,params),order);
     if (!initial.canRequest) throw new EnvironmentRequestError(409,initial.blockedReason || 'حالة البيئة لا تسمح بطلب الإنشاء.');
     const central=await ensureCentralSubscription(conn,req,order);

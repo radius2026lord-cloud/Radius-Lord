@@ -1,3 +1,4 @@
+import {validateNasLink,saveEnvironmentNasLink} from '../services/environment-nas-link.service';
 import {randomBytes} from 'crypto';
 import bcrypt from 'bcryptjs';
 import type {Response} from 'express';
@@ -39,7 +40,9 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
  try{
   const [previous]:any=await db.query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]);
   if(previous[0])return res.json({orderId:previous[0].id});
-  await requireInfrastructureReady();
+  let nasLink:ReturnType<typeof validateNasLink>;
+  try{nasLink=validateNasLink(body.nasLink);}catch{return res.status(400).json({message:'راجع طريقة الربط وعناوين IPv4 ومصدر API وبيانات دخوله (أحرف لاتينية فقط).'});}
+  await requireInfrastructureReady(undefined,nasLink.mode);
   try{
    await migrateManualEnvironment();
   }catch(error){
@@ -92,6 +95,7 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
   const order={id:result.insertId,customer_id:customerId,plan_id:planId,deployment_type_id:deployment[0].id,payment_purpose:'initial_subscription',duration_months_snapshot:duration,plan_limits_snapshot:limits,addons_snapshot:[],currency_code:currency};
   const central=await ensureCentralSubscription(conn,req,order);
   await conn.query('UPDATE tenants SET name=? WHERE id=?',[networkName,central.tenantId]);
+  await saveEnvironmentNasLink(conn,central,nasLink);
   const jobId=await enqueueInitialEnvironment(conn,central,order.id,req.auth!.accountId);
   await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:'اعتماد إداري لتجهيز بيئة دون تسجيل دفعة',metadata:{eventType:'manual_environment_requested',customerId,subscriptionId:central.subscriptionId,environmentId:central.environmentId,paymentOrderId:order.id,custom}},conn);
   await conn.commit();

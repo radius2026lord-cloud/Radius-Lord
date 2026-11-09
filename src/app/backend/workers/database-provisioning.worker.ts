@@ -1,3 +1,4 @@
+import {readEnvironmentNasLink} from '../services/environment-nas-link.service';
 import {provisioningDatabaseOptions} from '../services/database-server-connection.service';
 import {completeEnvironment} from '../services/environment-bootstrap.service';
 import {requireInfrastructureReady,InfrastructureNotReady} from '../services/infrastructure-health.service';
@@ -24,9 +25,10 @@ async function main(){const central=await db.pool.getConnection();let admin:mysq
  const [scope]:any=await central.query("SELECT e.*,dt.code deployment_code,s.status subscription_status,p.status payment_status FROM tenant_environments e JOIN deployment_types dt ON dt.id=e.deployment_type_id JOIN subscriptions s ON s.id=? AND s.tenant_id=e.tenant_id JOIN payment_orders p ON p.id=? AND p.subscription_id=s.id AND p.tenant_id=e.tenant_id WHERE e.id=? AND e.archived_at IS NULL",[job.subscription_id,job.payment_order_id,job.environment_id]);if(!scope[0]||scope[0].subscription_status!=='pending'||!['paid','completed','manual_authorized'].includes(scope[0].payment_status)||scope[0].status==='ready')throw new ProvisioningFailure('INVALID_PROVISIONING_SCOPE');
  await central.query("UPDATE environment_provisioning_jobs SET status='running',attempt_count=attempt_count+1,started_at=COALESCE(started_at,CURRENT_TIMESTAMP),error_code=NULL,error_message=NULL WHERE id=?",[job.id]);await central.query("UPDATE tenant_environments SET status='provisioning' WHERE id=?",[job.environment_id]);await audit('database_provisioning_started');
  if(scope[0].deployment_code!=='shared_cloud')throw new ProvisioningFailure('DEPLOYMENT_DRIVER_NOT_AVAILABLE');
+ const nasLink=await readEnvironmentNasLink(central,job);
  let infrastructure:Awaited<ReturnType<typeof requireInfrastructureReady>>;
  await step('infrastructure_preflight',async()=>{
-  infrastructure=await requireInfrastructureReady(job.environment_id);
+  infrastructure=await requireInfrastructureReady(job.environment_id,nasLink.mode);
   const reference=JSON.stringify(infrastructure.selection);
   const [saved]:any=await central.query("SELECT resource_reference FROM environment_provisioning_steps WHERE job_id=? AND step_code='infrastructure_preflight'",[job.id]);
   if(saved[0]?.resource_reference&&saved[0].resource_reference!==reference)throw new ProvisioningFailure('INFRASTRUCTURE_SELECTION_CHANGED');
