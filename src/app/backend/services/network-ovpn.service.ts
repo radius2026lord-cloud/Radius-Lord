@@ -1,5 +1,6 @@
+import {readExportedOvpnPem,verifyExportedOvpnCertificate} from './ovpn-certificate-export.service';
 import {validateNasLink} from './environment-nas-link.service';
-import {createHash,randomBytes,randomInt,X509Certificate,createPrivateKey,createPublicKey} from 'crypto';
+import {createHash,randomBytes,randomInt,X509Certificate} from 'crypto';
 import {lookup} from 'dns/promises';
 import {createConnection} from 'net';
 import type mysql from 'mysql2/promise';
@@ -154,21 +155,33 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  if(!cert.fingerprint)await api.command('/certificate/sign',{'.id':cert['.id'],name:username,ca:ca.name},[],45000);
  cert=(await api.command('/certificate/print',{'.proplist':'.id,name,fingerprint,private-key,key-usage,expired,revoked,common-name'},['?name='+username]))[0];
  if(!cert?.fingerprint||!yes(cert['private-key'])||yes(cert.expired)||revoked(cert.revoked))fail('OVPN_CLIENT_CERT_NOT_READY');
- const passphrase=randomBytes(24).toString('hex'),base=username+'_export',caBase=username+'_ca_export';
+ const exportPrefix='rl_ovpn_export_'+Number(scope.environment_id)+'_'+nasId+'_';
+ const passphrase=randomBytes(24).toString('hex'),base=exportPrefix+randomBytes(6).toString('hex'),caBase=base+'_ca';
  const names=[base+'.crt',base+'.key',caBase+'.crt'];
- const removeExports=async()=>{for(const name of names){const rows=await api.command('/file/print',{'.proplist':'.id,name'},['?name='+name]);for(const r of rows)await api.command('/file/remove',{'.id':r['.id']});}};
+ const legacyNames=new Set([username+'_export.crt',username+'_export.key',username+'_ca_export.crt']);
+ const exportPattern=new RegExp('^'+exportPrefix+'[a-f0-9]{12}(?:_ca)?\\.(?:crt|key)$');
+ const removeExports=async()=>{
+  // The gateway lock and checked central ownership fence this NAS namespace.
+  // Include orphaned exports from a process interrupted before its finally block.
+  const files=await api.command('/file/print',{'.proplist':'.id,name'});
+  for(const file of files)if(legacyNames.has(file.name)||exportPattern.test(file.name))await api.command('/file/remove',{'.id':file['.id']});
+ };
  // Export files are uniquely reserved to this managed tunnel; remove them after reading.
- await removeExports();let caPem='',certPem='',keyPem='';
+ await removeExports();let caPem='',certPem='',keyPem='',exportVerified=false;
  try{
  await api.command('/certificate/export-certificate',{'.id':ca['.id'],type:'pem','file-name':caBase});
  await api.command('/certificate/export-certificate',{'.id':cert['.id'],type:'pem','file-name':base,'export-passphrase':passphrase});
- const contents:string[]=[];for(const name of names){const rows=await api.command('/file/print',{'.proplist':'.id,name'},['?name='+name]);if(rows.length!==1)fail('OVPN_EXPORT_MISSING');const value=(await api.command('/file/get',{'.id':rows[0]['.id'],'value-name':'contents'}))[0]?.ret??'';if(value.length>4096||!value.includes('-----BEGIN '))fail('OVPN_EXPORT_INVALID');contents.push(value);}
- [certPem,keyPem,caPem]=contents;
- try{const authority=new X509Certificate(caPem),client=new X509Certificate(certPem),privateKey=createPrivateKey({key:keyPem,passphrase});
- const publicKey=createPublicKey(privateKey).export({type:'spki',format:'der'}),expected=client.publicKey.export({type:'spki',format:'der'});
- if(!client.verify(authority.publicKey)||!publicKey.equals(expected)||authority.fingerprint256.replace(/:/g,'').toLowerCase()!==ca.fingerprint.replace(/:/g,'').toLowerCase()||new Date(client.validFrom).getTime()>Date.now()||new Date(authority.validFrom).getTime()>Date.now()||new Date(client.validTo).getTime()<=Date.now()||new Date(authority.validTo).getTime()<=Date.now())fail('OVPN_CERTIFICATE_EXPORT_MISMATCH');
- }catch{fail('OVPN_CERTIFICATE_EXPORT_MISMATCH');}
- }finally{await removeExports();}
+ certPem=await readExportedOvpnPem(api,names[0],'certificate');
+ keyPem=await readExportedOvpnPem(api,names[1],'private-key');
+ caPem=await readExportedOvpnPem(api,names[2],'certificate');
+ verifyExportedOvpnCertificate({caPem,certPem,keyPem,passphrase,caFingerprint:String(ca.fingerprint||''),clientFingerprint:String(cert.fingerprint||'')});
+ exportVerified=true;
+ }finally{
+  try{await removeExports();}catch{
+   console.error('[ovpn-certificate-export]',{code:'OVPN_EXPORT_CLEANUP_FAILED'});
+   if(exportVerified)throw new Error('OVPN_EXPORT_CLEANUP_FAILED');
+  }
+ }
  const previousConfiguration=done[0]?(typeof done[0].configuration_snapshot==='string'?JSON.parse(done[0].configuration_snapshot):done[0].configuration_snapshot):{};
  const configuration={...previousConfiguration,radiusConfigured:previousConfiguration.radiusConfigured===true,...snapshot,certificateName:username,caFingerprint:ca.fingerprint,caCertificate:caPem,clientCertificate:certPem,keyPassphraseEncrypted:encryptProvisioningSecret(passphrase)};
  await app.beginTransaction();try{
