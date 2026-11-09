@@ -1,3 +1,5 @@
+import {reserveDirectNasEndpoint} from './nas-direct-endpoint.service';
+import {assertNasResourceScope,nasResourceTag,nasRelayTags} from './nas-resource-scope.service';
 import {ensureNasApiSourceNat,cleanupNasApiSourceNatTests,removeNasApiGatewayRules} from './nas-api-source-nat.service';
 import {readExportedOvpnPem,verifyExportedOvpnCertificate} from './ovpn-certificate-export.service';
 import {validateNasLink} from './environment-nas-link.service';
@@ -25,11 +27,13 @@ async function nextOvpnUsername(central:PoolConnection,api:RouterApi,nasId:numbe
  for(let number=1;number<=999999;number++)if(!usedNumbers.has(number))return 'lord_N'+nasId+'_'+number;
  fail('OVPN_USERNAME_POOL_EXHAUSTED');
 }
-const ovpnTunnelComment=(username:string,environmentId:number,nasId:number,slot:number|null)=>{
+const legacyOvpnTunnelComment=(username:string,environmentId:number,nasId:number,slot:number|null)=>{
  if(nasId>0&&/^lord_N[0-9]+_[0-9]{1,6}$/.test(username))return 'network_N'+nasId;
  if(/^lord_[0-9]{1,6}$/.test(username))return 'Radius Lord OVPN '+username;
  return slot?'Radius Lord env '+environmentId+' nas slot '+slot:'Radius Lord env '+environmentId+' nas '+nasId;
 };
+const ovpnTunnelComment=(username:string,environmentId:number,nasId:number,slot:number|null)=>nasId>0?nasResourceTag(environmentId,nasId):'Lord_Rdius-Cloud | ENV-'+environmentId+' | SLOT-'+slot;
+const ownsOvpnComment=(actual:string,username:string,environmentId:number,nasId:number,slot:number|null)=>actual===ovpnTunnelComment(username,environmentId,nasId,slot)||actual===legacyOvpnTunnelComment(username,environmentId,nasId,slot)||(nasId>0&&actual==='Lord_Rdius-Cloud | network_N'+nasId);
 const ipNumber=(s:string)=>s.split('.').reduce((n,v)=>n*256+Number(v),0);
 const isIpv4=(s:string)=>{const parts=s.split('.');return parts.length===4&&parts.every(part=>/^\d{1,3}$/.test(part)&&Number(part)>=0&&Number(part)<=255);};
 const isPrivateIpv4=(s:string)=>{if(!isIpv4(s))return false;const p=s.split('.').map(Number);return p[0]===10||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168);};
@@ -67,6 +71,7 @@ async function withGateway<T>(central:PoolConnection,id:number,operation:(api:Ro
  finally{api?.close();await central.query('SELECT RELEASE_LOCK(?)',[lockName]);}
 }
 export async function createNetworkNas(app:mysql.Connection,scope:any,managerId:number,snapshot:any,input:{name:string;requestId:string;vendor?:string;model?:string;radiusServices?:string[];location?:string;description?:string;enabled?:boolean;apiPort?:number;managementAddress?:string;radiusAddress?:string;apiSourceAddress?:string;apiUsername?:string;apiPassword?:string}){
+ assertNasResourceScope(snapshot,scope);
  const direct=snapshot.connectionMode==='direct'?validateNasLink({...input,mode:'direct'}):null;
  const name=String(input.name??'').trim(),vendor=String(input.vendor??'mikrotik'),apiUsername=direct?.mode==='direct'?direct.apiUsername:managedNasApiUsername,apiPassword=direct?.mode==='direct'?direct.apiPassword:managedNasApiPassword,apiPort=Number(input.apiPort??8728);
  const services=Array.isArray(input.radiusServices)?Array.from(new Set(input.radiusServices.filter(value=>value==='ppp'||value==='hotspot'))):['ppp'];
@@ -95,19 +100,20 @@ export async function createNetworkNas(app:mysql.Connection,scope:any,managerId:
  }catch(e){await app.rollback();throw e;}
 }
 export async function provisionNetworkNas(central:PoolConnection,app:mysql.Connection,scope:any,nasId:number,snapshot:any){
- if(snapshot.environmentId!==Number(scope.environment_id)||snapshot.tenantId!==Number(scope.tenant_id)||snapshot.subscriptionId!==Number(scope.subscription_id)||snapshot.deployment!=='shared_cloud')fail('NAS_SNAPSHOT_SCOPE');
+ assertNasResourceScope(snapshot,scope,nasId);
  const [locals]:any=await app.query('SELECT * FROM lord_nas WHERE id=? AND archived_at IS NULL',[nasId]);const local=locals[0];if(!local)fail('NAS_NOT_FOUND');
- if(snapshot.connectionMode==='direct'){const [direct]:any=await app.query('SELECT nas_id FROM nas_direct_connections WHERE nas_id=?',[nasId]);if(!direct[0])fail('NAS_CONNECTION_NOT_READY');return;}
+ if(snapshot.connectionMode==='direct'){const direct=await directNasRow(app,nasId);const config=typeof direct.configuration_snapshot==='string'?JSON.parse(direct.configuration_snapshot):direct.configuration_snapshot;assertNasResourceScope(config,scope,nasId);await reserveDirectNasEndpoint(central,scope,nasId,direct.management_address,Number(direct.port));return;}
  const [done]:any=await app.query('SELECT * FROM nas_ovpn_connections WHERE nas_id=?',[nasId]);
  if(done[0]){
   const healthy=await withGateway(central,snapshot.gatewayId,async api=>{
    const [bound]:any=await central.query('SELECT * FROM nas_tunnels WHERE id=? AND environment_id=? AND tenant_nas_id=? AND ovpn_gateway_id=?',[done[0].central_tunnel_id,scope.environment_id,nasId,snapshot.gatewayId]);const t=bound[0];if(!t||t.tunnel_address!==done[0].tunnel_address||t.tunnel_username!==done[0].tunnel_username)fail('NAS_CENTRAL_TUNNEL_MISMATCH');
-   const secrets=await api.command('/ppp/secret/print',{'.proplist':'name,comment,remote-address,profile,service,disabled'},['?name='+t.tunnel_username]);
+   const secrets=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,remote-address,profile,service,disabled'},['?name='+t.tunnel_username]);
    const marker=ovpnTunnelComment(t.tunnel_username,Number(scope.environment_id),nasId,t.reservation_slot);
-   if(secrets.length>1||secrets.some(secret=>secret.comment!==marker||secret['remote-address']!==t.tunnel_address||secret.profile!==snapshot.profile||secret.service!=='ovpn'||yes(secret.disabled)))fail('OVPN_SECRET_CONFLICT');
+   if(secrets.length>1||secrets.some(secret=>!ownsOvpnComment(secret.comment,t.tunnel_username,Number(scope.environment_id),nasId,t.reservation_slot)||secret['remote-address']!==t.tunnel_address||secret.profile!==snapshot.profile||secret.service!=='ovpn'||yes(secret.disabled)))fail('OVPN_SECRET_CONFLICT');
    const certs=await api.command('/certificate/print',{'.proplist':'name,common-name,fingerprint,expired,revoked'},['?name='+t.certificate_reference]);
    if(certs.length>1||certs.some(cert=>cert['common-name']!==t.certificate_reference||yes(cert.expired)||revoked(cert.revoked)))fail('OVPN_CLIENT_CERT_CONFLICT');
    if(certs[0]){const saved=typeof done[0].configuration_snapshot==='string'?JSON.parse(done[0].configuration_snapshot):done[0].configuration_snapshot;const expected=new X509Certificate(saved.clientCertificate).fingerprint256.replace(/:/g,'').toLowerCase();if(String(certs[0].fingerprint||'').replace(/:/g,'').toLowerCase()!==expected)fail('OVPN_CLIENT_CERT_CONFLICT');}
+   if(secrets[0]&&secrets[0].comment!==marker)await api.command('/ppp/secret/set',{'.id':secrets[0]['.id'],comment:marker});
    return secrets.length===1&&certs.length===1;
   });
   if(healthy)return;
@@ -127,7 +133,7 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  tunnel=available[0];const previousUsername=String(tunnel.tunnel_username),slot=Number(tunnel.reservation_slot||0),nextUsername=await nextOvpnUsername(central,api,nasId);
  if(!/^rl_env_[0-9]+_slot_[0-9]+$/.test(previousUsername)&&!/^lord_[0-9]{1,6}$/.test(previousUsername))fail('OVPN_RESERVED_TUNNEL_OWNERSHIP');
  const previousMarker=ovpnTunnelComment(previousUsername,Number(scope.environment_id),0,slot),previousSecrets=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address'},['?name='+previousUsername]);
- if(previousSecrets.some((item:any)=>item.comment!==previousMarker||item.service!=='ovpn'||item.profile!==o.ppp_profile||item['remote-address']!==tunnel.tunnel_address))fail('OVPN_RESERVED_TUNNEL_CONFLICT');
+ if(previousSecrets.some((item:any)=>!ownsOvpnComment(item.comment,previousUsername,Number(scope.environment_id),0,slot)||item.service!=='ovpn'||item.profile!==o.ppp_profile||item['remote-address']!==tunnel.tunnel_address))fail('OVPN_RESERVED_TUNNEL_CONFLICT');
  const activePrevious=await api.command('/ppp/active/print',{'.proplist':'.id,name'},['?name='+previousUsername]);if(activePrevious.length)fail('OVPN_RESERVED_TUNNEL_ACTIVE');
  const oldCertificates=certs.filter((item:any)=>item.name===previousUsername);if(oldCertificates.some((item:any)=>item['common-name']!==previousUsername||!item['key-usage']?.includes('tls-client')))fail('OVPN_RESERVED_CERT_CONFLICT');
  for(const item of previousSecrets)await api.command('/ppp/secret/remove',{'.id':item['.id']});for(const item of oldCertificates)await api.command('/certificate/remove',{'.id':item['.id']});
@@ -147,7 +153,8 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
  const username=String(tunnel.tunnel_username),marker=ovpnTunnelComment(username,Number(scope.environment_id),nasId,tunnel.reservation_slot?Number(tunnel.reservation_slot):null);
  if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username)fail('OVPN_TUNNEL_OWNERSHIP');
  const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);
- if(owned.some(r=>r.comment!==marker||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');
+ if(owned.some(r=>!ownsOvpnComment(r.comment,username,Number(scope.environment_id),nasId,tunnel.reservation_slot?Number(tunnel.reservation_slot):null)||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');
+ for(const secret of owned)if(secret.comment!==marker)await api.command('/ppp/secret/set',{'.id':secret['.id'],comment:marker});
  if(!owned.length)await api.command('/ppp/secret/add',{name:username,password:decryptProvisioningSecret(tunnel.tunnel_password_encrypted),service:'ovpn',profile:o.ppp_profile,'remote-address':tunnel.tunnel_address,'local-address':o.server_tunnel_address,comment:marker});
  let cert=certs.find(r=>r.name===username);
  if(cert&&(cert['common-name']!==username||!cert['key-usage']?.includes('tls-client')))fail('OVPN_CLIENT_CERT_CONFLICT');
@@ -196,6 +203,8 @@ export async function provisionNetworkNas(central:PoolConnection,app:mysql.Conne
 }
 
 export async function reserveNetworkNasCapacity(central:PoolConnection,scope:any,snapshot:any,capacity:number){
+ assertNasResourceScope(snapshot,scope);
+ if(snapshot.connectionMode==='direct')return 0;
  if(!Number.isSafeInteger(capacity)||capacity<0)fail('NAS_CAPACITY_INVALID');if(capacity===0)return 0;
  return withGateway(central,snapshot.gatewayId,async(api,g)=>{
   const o=validateProvision({...g,certificate_mode:'existing',profile_mode:'existing',pool_mode:'existing'}),inventory=await inspectRouter(api),current=preflightInventory(inventory,o);
@@ -215,7 +224,7 @@ export async function reserveNetworkNasCapacity(central:PoolConnection,scope:any
    }
    const username=String(tunnel.tunnel_username),marker=ovpnTunnelComment(username,Number(scope.environment_id),Number(tunnel.tenant_nas_id||0),slot);
    if(Number(tunnel.ovpn_gateway_id)!==snapshot.gatewayId||tunnel.certificate_reference!==username||!(/^lord_N[0-9]+_[0-9]{1,6}$/.test(username)||/^lord_[0-9]{1,6}$/.test(username)||/^rl_env_[0-9]+_slot_[0-9]+$/.test(username)))fail('OVPN_TUNNEL_OWNERSHIP');
-   const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);if(owned.some(r=>r.comment!==marker||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');if(!owned.length)await api.command('/ppp/secret/add',{name:username,password:decryptProvisioningSecret(tunnel.tunnel_password_encrypted),service:'ovpn',profile:o.ppp_profile,'remote-address':tunnel.tunnel_address,'local-address':o.server_tunnel_address,comment:marker});
+   const owned=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address,local-address'},['?name='+username]);if(owned.some(r=>!ownsOvpnComment(r.comment,username,Number(scope.environment_id),Number(tunnel.tenant_nas_id||0),slot)||r.profile!==o.ppp_profile||r['remote-address']!==tunnel.tunnel_address||r.service!=='ovpn'))fail('OVPN_SECRET_CONFLICT');for(const secret of owned)if(secret.comment!==marker)await api.command('/ppp/secret/set',{'.id':secret['.id'],comment:marker});if(!owned.length)await api.command('/ppp/secret/add',{name:username,password:decryptProvisioningSecret(tunnel.tunnel_password_encrypted),service:'ovpn',profile:o.ppp_profile,'remote-address':tunnel.tunnel_address,'local-address':o.server_tunnel_address,comment:marker});
    let cert=certs.find(r=>r.name===username);if(cert&&(cert['common-name']!==username||!cert['key-usage']?.includes('tls-client')))fail('OVPN_CLIENT_CERT_CONFLICT');if(!cert){await api.command('/certificate/add',{name:username,'common-name':username,'key-size':'2048','days-valid':'825','key-usage':'digital-signature,key-encipherment,tls-client'});cert=(await api.command('/certificate/print',{'.proplist':'.id,name'},['?name='+username]))[0];}if(!cert?.['.id'])fail('OVPN_CLIENT_CERT_REQUIRED');if(!cert.fingerprint)await api.command('/certificate/sign',{'.id':cert['.id'],name:username,ca:ca.name},[],45000);cert=(await api.command('/certificate/print',{'.proplist':'.id,name,fingerprint,private-key,key-usage,expired,revoked,common-name'},['?name='+username]))[0];if(!cert?.fingerprint||!yes(cert['private-key'])||yes(cert.expired)||revoked(cert.revoked))fail('OVPN_CLIENT_CERT_NOT_READY');
    await central.query("UPDATE nas_tunnels SET status='reserved' WHERE id=? AND tenant_nas_id IS NULL",[tunnel.id]);tunnel.status='reserved';count++;
   }
@@ -247,12 +256,14 @@ export async function setManagedNasRadiusSecret(app:mysql.Connection,nasId:numbe
  if(!result.affectedRows){const [rows]:any=await app.query('SELECT n.id FROM nas n JOIN lord_nas l ON l.radius_nas_id=n.id WHERE l.id=? AND l.archived_at IS NULL',[nasId]);if(!rows[0])fail('NAS_NOT_FOUND');}
 }
 export async function nasRadiusClients(app:mysql.Connection){
- const table=(await readNetworkOvpn(app))?.connectionMode==='direct'?'nas_direct_connections':'nas_ovpn_connections';
- const [rows]:any=await app.query('SELECT l.id,n.nasname address,n.secret FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN '+table+' c ON c.nas_id=l.id WHERE l.archived_at IS NULL AND l.is_enabled=1');return rows.map((r:any)=>({name:'network_N'+r.id,address:r.address,secret:r.secret}));
+ const snapshot=await readNetworkOvpn(app),table=snapshot?.connectionMode==='direct'?'nas_direct_connections':'nas_ovpn_connections';
+ const [rows]:any=await app.query('SELECT l.id,n.nasname address,n.secret,c.configuration_snapshot FROM lord_nas l JOIN nas n ON n.id=l.radius_nas_id JOIN '+table+' c ON c.nas_id=l.id WHERE l.archived_at IS NULL AND l.is_enabled=1');
+ return rows.map((row:any)=>{const config=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot;assertNasResourceScope(config,{tenant_id:snapshot?.tenantId,environment_id:snapshot?.environmentId,subscription_id:snapshot?.subscriptionId},Number(row.id));return {name:'network_N'+row.id,address:row.address,secret:row.secret};});
 }
 const ros=(s:string)=>'"'+s.replace(/\\/g,'\\\\').replace(/\$/g,'\\$').replace(/"/g,'\\"').replace(/\r/g,'\\r').replace(/\n/g,'\\n')+'"';
 export async function networkNasScript(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any){
- if((await readNetworkOvpn(app))?.connectionMode==='direct')return directNasScript(app,nasId);
+ const savedSnapshot=await readNetworkOvpn(app);assertNasResourceScope(savedSnapshot,scope,nasId);
+ if(savedSnapshot.connectionMode==='direct')return directNasScript(app,nasId,scope);
  await app.beginTransaction();let row:any,c:any,telemetryToken='',networkTimezone='Asia/Damascus';try{
  const [rows]:any=await app.query("SELECT c.*,n.secret,l.name,l.coa_port,l.radius_services,mc.username api_username,mc.password_encrypted api_password_encrypted,ms.port api_port,ms.is_enabled api_service_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id JOIN nas n ON n.id=l.radius_nas_id LEFT JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id LEFT JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL FOR UPDATE",[nasId]);row=rows[0];if(!row)fail('NAS_CONNECTION_NOT_READY');const [timezoneRows]:any=await app.query('SELECT timezone FROM network_settings WHERE id=1');networkTimezone=String(timezoneRows[0]?.timezone||'Asia/Damascus');const apiUsername=managedNasApiUsername,apiPassword=managedNasApiPassword,currentApiPassword=row.api_password_encrypted?decryptProvisioningSecret(row.api_password_encrypted):null;if(row.api_username!==apiUsername||currentApiPassword!==apiPassword){const encrypted=encryptProvisioningSecret(apiPassword),[saved]:any=await app.query('UPDATE nas_management_credentials SET username=?,password_encrypted=?,encryption_key_id=?,updated_by=? WHERE lord_nas_id=?',[apiUsername,encrypted,'gateway-key-v1',Number(scope.managerId),nasId]);if(!saved.affectedRows)await app.query('INSERT INTO nas_management_credentials (lord_nas_id,username,password_encrypted,encryption_key_id,updated_by) VALUES (?,?,?,?,?)',[nasId,apiUsername,encrypted,'gateway-key-v1',Number(scope.managerId)]);row.api_username=apiUsername;row.api_password_encrypted=encrypted;}if(!row.api_port){const apiPort=8728,[service]:any=await app.query("SELECT id FROM nas_management_services WHERE lord_nas_id=? AND service_type='api' ORDER BY id LIMIT 1",[nasId]);if(service[0])await app.query('UPDATE nas_management_services SET port=?,is_enabled=1 WHERE id=?',[apiPort,service[0].id]);else await app.query("INSERT INTO nas_management_services (lord_nas_id,service_type,name,host,port,protocol,is_enabled,description) VALUES (?,'api','MikroTik API',NULL,?,'tcp',1,'Lord_Radius managed RouterOS API service')",[nasId,apiPort]);row.api_port=apiPort;}else if(Number(row.api_service_enabled)!==1)await app.query("UPDATE nas_management_services SET is_enabled=1 WHERE lord_nas_id=? AND service_type='api'",[nasId]);c=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot;
  const [centralTunnels]:any=await central.query('SELECT t.*,g.settings_json FROM nas_tunnels t JOIN ovpn_gateways g ON g.id=t.ovpn_gateway_id WHERE t.id=? AND t.environment_id=? AND t.tenant_nas_id=?',[row.central_tunnel_id,scope.environment_id,nasId]);const centralTunnel=centralTunnels[0];if(!centralTunnel)fail('NAS_CENTRAL_TUNNEL_NOT_FOUND');const centralGateway=typeof centralTunnel.settings_json==='string'?JSON.parse(centralTunnel.settings_json):centralTunnel.settings_json;if(Number(centralTunnel.ovpn_gateway_id)!==Number(c.gatewayId)||centralGateway.ovpn_host!==row.server_host||Number(centralGateway.ovpn_port)!==Number(row.server_port)||centralGateway.server_tunnel_address!==c.serverAddress||centralTunnel.tunnel_address!==row.tunnel_address||centralTunnel.tunnel_username!==row.tunnel_username)fail('NAS_CENTRAL_TUNNEL_MISMATCH');row.tunnel_address=centralTunnel.tunnel_address;row.tunnel_username=centralTunnel.tunnel_username;row.tunnel_password_encrypted=centralTunnel.tunnel_password_encrypted;row.server_host=centralGateway.ovpn_host;row.server_port=Number(centralGateway.ovpn_port);row.api_tunnel_source_address=String(c.serverAddress||'');row.api_direct_source_address='';
@@ -261,9 +272,10 @@ export async function networkNasScript(central:PoolConnection,app:mysql.Connecti
  }catch(error){await app.rollback();throw error;}
  try{const directPath=await probeNasApiTcp(String(row.tunnel_address),Number(row.api_port));if(isPrivateIpv4(directPath.sourceAddress))row.api_direct_source_address=directPath.sourceAddress;}catch(error){const diagnostic=(error as Error&{diagnostics?:{sourceAddress?:string}}).diagnostics;if((error as Error).message==='NAS_API_TCP_REFUSED'&&diagnostic?.sourceAddress&&isPrivateIpv4(diagnostic.sourceAddress))row.api_direct_source_address=diagnostic.sourceAddress;}
  const coaPort=Number(row.coa_port),apiPort=Number(row.api_port),apiGatewaySource=String(row.api_tunnel_source_address??''),apiDirectSource=String(row.api_direct_source_address??'');if(!Number.isInteger(coaPort)||coaPort<1||coaPort>65535||!Number.isInteger(apiPort)||apiPort<1||apiPort>65535)fail('NAS_COA_PORT_INVALID');if(!isIpv4(apiGatewaySource)||apiDirectSource&&!isPrivateIpv4(apiDirectSource))fail('NAS_OVPN_SERVER_ADDRESS_INVALID');const apiSources=Array.from(new Set([apiGatewaySource,...(apiDirectSource?[apiDirectSource]:[])])),apiAllowedAddresses=apiSources.map((address:string)=>address+'/32').join(',');const radiusServices=String(row.radius_services||'ppp').split(',').filter((service:string)=>service==='ppp'||service==='hotspot');if(!radiusServices.length)fail('NAS_SERVICES_INVALID');
- const name=c.certificateName,nasComment='Lord_Rdius-Cloud | network_N'+nasId,telemetryUrl=new URL(`/api/network/${encodeURIComponent(scope.slug)}/nas/${nasId}/telemetry`,env.FRONTEND_URL).toString(),telemetryName='rl_nas_'+nasId+'_metrics',apiGroup='full',apiUsername=String(row.api_username),apiPassword=decryptProvisioningSecret(row.api_password_encrypted);
+ assertNasResourceScope(c,scope,nasId);
+ const name=c.certificateName,nasComment=nasResourceTag(Number(scope.environment_id),nasId),telemetryUrl=new URL(`/api/network/${encodeURIComponent(scope.slug)}/nas/${nasId}/telemetry`,env.FRONTEND_URL).toString(),telemetryName='rl_env_'+Number(scope.environment_id)+'_nas_'+nasId+'_metrics',apiGroup='full',apiUsername=String(row.api_username),apiPassword=decryptProvisioningSecret(row.api_password_encrypted);
  const tagClientCertificate=(id:string)=>[
-  ':local rlCertTag '+ros('Lord_Rdius-Cloud-'+name),
+  ':local rlCertTag '+ros(nasResourceTag(Number(scope.environment_id),nasId,'Client-Cert')),
   ':local rlCertNameIds [/certificate find where name=$rlCertTag]',
   ':if ([:len $rlCertNameIds] > 1) do={ :error "Managed certificate name is ambiguous" }',
   ':if ([:len $rlCertNameIds] = 1) do={ :if ([:pick $rlCertNameIds 0] != '+id+') do={ :error "Managed certificate name belongs to another certificate" } }',
@@ -283,20 +295,23 @@ export async function networkNasScript(central:PoolConnection,app:mysql.Connecti
   ':local payload ("{\\\"cpu\\\":" . $cpu . ",\\\"freeMemory\\\":" . $freeMemory . ",\\\"totalMemory\\\":" . $totalMemory . ",\\\"temperature\\\":" . $temperature . ",\\\"version\\\":\\\"" . $version . "\\\",\\\"board\\\":\\\"" . $board . "\\\",\\\"uptime\\\":\\\"" . $uptime . "\\\"}")',
   '/tool fetch url='+ros(telemetryUrl)+' http-method=post http-header-field='+ros('Content-Type: application/json,Authorization: Bearer '+telemetryToken)+' http-data=$payload output=none keep-result=no',
  ].join('\n');
- const telemetrySetup=['# Lord_Rdius-Cloud: replace the managed metrics job','/system scheduler remove [find where name='+ros(telemetryName)+' and (comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]','/system script remove [find where name='+ros(telemetryName)+' and (comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]','/system script add name='+ros(telemetryName)+' policy=read,write,test source='+ros(telemetrySource)+' comment="Lord_Rdius-Cloud"','/system scheduler add name='+ros(telemetryName)+' interval=5m start-time=startup on-event='+ros('/system script run '+telemetryName)+' policy=read,write,test comment="Lord_Rdius-Cloud"'];
+ const telemetrySetup=['# Lord_Rdius-Cloud: adopt a legacy metrics job only when its exact telemetry endpoint matches',
+ ':local legacyMetricIds [/system script find where name='+ros('rl_nas_'+nasId+'_metrics')+' and (comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]',
+ ':foreach oldId in=$legacyMetricIds do={ :local oldSource [:tostr [/system script get $oldId source]]; :if ([:typeof [:find $oldSource '+ros(telemetryUrl)+']] != "nil") do={ /system scheduler remove [find where name='+ros('rl_nas_'+nasId+'_metrics')+' and (comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]; /system script remove $oldId } }',
+ '# Lord_Rdius-Cloud: replace the managed metrics job','/system scheduler remove [find where name='+ros(telemetryName)+' and (comment=$rlScopeTag or comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]','/system script remove [find where name='+ros(telemetryName)+' and (comment=$rlScopeTag or comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]','/system script add name='+ros(telemetryName)+' policy=read,write,test source='+ros(telemetrySource)+' comment=$rlScopeTag','/system scheduler add name='+ros(telemetryName)+' interval=5m start-time=startup on-event='+ros('/system script run '+telemetryName)+' policy=read,write,test comment=$rlScopeTag'];
  if(!c.radiusConfigured)fail('NAS_RADIUS_NOT_READY');
- const coaComment=ros('Lord_Rdius-Cloud'),coaFirewall='/ip firewall filter add chain=input action=accept protocol=udp src-address='+ros(row.radius_server_address+'/32')+' dst-port='+coaPort+' in-interface=$ovpnName comment='+coaComment+' place-before=0',apiFirewalls=apiSources.map((address:string)=>'/ip firewall filter add chain=input action=accept protocol=tcp src-address='+ros(address+'/32')+' dst-port='+apiPort+' in-interface=$ovpnName comment='+coaComment+' place-before=0');
- const coaUpdate=['/ip firewall filter remove [find where comment="Lord_Radius"]','/ip firewall filter remove [find where comment='+coaComment+']',coaFirewall,...apiFirewalls];
- const apiSetup=['# Lord_Rdius-Cloud: bind the managed API account to RouterOS built-in full group','# Lord_Rdius-Cloud: create or update only the application-owned API user',':local apiUserIds [/user find where name='+ros(apiUsername)+']',':if ([:len $apiUserIds] > 1) do={ :error "Lord_Radius API user is ambiguous" }',':if ([:len $apiUserIds] = 0) do={ /user add name='+ros(apiUsername)+' group='+ros(apiGroup)+' password='+ros(apiPassword)+' comment="Lord_Rdius-Cloud" } else={ :local apiUserId [:pick $apiUserIds 0]; /user set $apiUserId group='+ros(apiGroup)+' password='+ros(apiPassword)+' comment="Lord_Rdius-Cloud" }','# Lord_Rdius-Cloud: enable API service on the selected port',':local apiServiceIds [/ip service find where name="api"]',':if ([:len $apiServiceIds] != 1) do={ :error "RouterOS API service is missing or ambiguous" }',':local apiServiceId [:pick $apiServiceIds 0]','/ip service set $apiServiceId disabled=no port='+apiPort+' address='+ros(apiAllowedAddresses)];
- const radiusSetup=['# Lord_Rdius-Cloud: replace only the application managed RADIUS client','/radius remove [find where (comment="Lord_Rdius-Cloud" or comment="Lord_Radius")]','/radius add service='+radiusServices.join(',')+' protocol=udp address='+ros(row.radius_server_address)+' src-address='+ros(row.tunnel_address)+' authentication-port='+Number(c.authPort)+' accounting-port='+Number(c.accountingPort)+' secret='+ros(row.secret)+' timeout=3s disabled=no comment="Lord_Rdius-Cloud"','# Lord_Rdius-Cloud: enable RADIUS incoming CoA','/radius incoming set accept=yes port='+coaPort,...(radiusServices.includes('ppp')?['# Lord_Rdius-Cloud: enable PPP RADIUS authentication and accounting','/ppp aaa set use-radius=yes accounting=yes interim-update=3m']:[]),...(radiusServices.includes('hotspot')?['# Lord_Rdius-Cloud: enable Hotspot RADIUS without changing login methods','/ip hotspot profile set [find] use-radius=yes radius-accounting=yes radius-interim-update=3m']:[])];
+ const coaComment=ros(nasComment),coaFirewall='/ip firewall filter add chain=input action=accept protocol=udp src-address='+ros(row.radius_server_address+'/32')+' dst-port='+coaPort+' in-interface=$ovpnName comment='+coaComment+' place-before=0',apiFirewalls=apiSources.map((address:string)=>'/ip firewall filter add chain=input action=accept protocol=tcp src-address='+ros(address+'/32')+' dst-port='+apiPort+' in-interface=$ovpnName comment='+coaComment+' place-before=0');
+ const coaUpdate=['/ip firewall filter remove [find where (comment="Lord_Radius" or comment="Lord_Rdius-Cloud") and in-interface=$ovpnName]','/ip firewall filter remove [find where comment='+coaComment+']',coaFirewall,...apiFirewalls];
+ const apiSetup=['# Lord_Rdius-Cloud: bind the managed API account to RouterOS built-in full group','# Lord_Rdius-Cloud: create or update only the application-owned API user',':local apiUserIds [/user find where name='+ros(apiUsername)+']',':if ([:len $apiUserIds] > 1) do={ :error "Lord_Radius API user is ambiguous" }',':if ([:len $apiUserIds] = 0) do={ /user add name='+ros(apiUsername)+' group='+ros(apiGroup)+' password='+ros(apiPassword)+' comment=$rlScopeTag } else={ :local apiUserId [:pick $apiUserIds 0]; :local owner [/user get $apiUserId comment]; :if ($owner != $rlScopeTag && $owner != "Lord_Rdius-Cloud" && $owner != "Lord_Radius") do={ :error "API username belongs to another account" }; /user set $apiUserId group='+ros(apiGroup)+' password='+ros(apiPassword)+' comment=$rlScopeTag }','# Lord_Rdius-Cloud: enable API service on the selected port',':local apiServiceIds [/ip service find where name="api"]',':if ([:len $apiServiceIds] != 1) do={ :error "RouterOS API service is missing or ambiguous" }',':local apiServiceId [:pick $apiServiceIds 0]','/ip service set $apiServiceId disabled=no port='+apiPort+' address='+ros(apiAllowedAddresses)];
+ const radiusSetup=['# Lord_Rdius-Cloud: replace only the application managed RADIUS client','/radius remove [find where (comment=$rlScopeTag or ((comment="Lord_Rdius-Cloud" or comment="Lord_Radius") and address='+ros(row.radius_server_address)+' and authentication-port='+Number(c.authPort)+' and accounting-port='+Number(c.accountingPort)+'))]','/radius add service='+radiusServices.join(',')+' protocol=udp address='+ros(row.radius_server_address)+' src-address='+ros(row.tunnel_address)+' authentication-port='+Number(c.authPort)+' accounting-port='+Number(c.accountingPort)+' secret='+ros(row.secret)+' timeout=3s disabled=no comment=$rlScopeTag','# Lord_Rdius-Cloud: enable RADIUS incoming CoA','/radius incoming set accept=yes port='+coaPort,...(radiusServices.includes('ppp')?['# Lord_Rdius-Cloud: enable PPP RADIUS authentication and accounting','/ppp aaa set use-radius=yes accounting=yes interim-update=3m']:[]),...(radiusServices.includes('hotspot')?['# Lord_Rdius-Cloud: enable Hotspot RADIUS without changing login methods','/ip hotspot profile set [find] use-radius=yes radius-accounting=yes radius-interim-update=3m']:[])];
  const routeSetup=[
   '# Lord_Rdius-Cloud: create or repair only this tunnel route',
-  ':local radiusRouteIds [/ip route find where (comment="Lord_Rdius-Cloud" or comment="Lord_Radius") and dst-address='+ros(row.radius_server_address+'/32')+']',
+  ':local radiusRouteIds [/ip route find where (comment=$rlScopeTag or ((comment="Lord_Rdius-Cloud" or comment="Lord_Radius") and gateway=$ovpnName)) and dst-address='+ros(row.radius_server_address+'/32')+']',
   ':if ([:len $radiusRouteIds] > 1) do={ :error "Lord_Radius route is ambiguous" }',
-  ':if ([:len $radiusRouteIds] = 1) do={ :local radiusRouteId [:pick $radiusRouteIds 0]; /ip route set $radiusRouteId gateway=$ovpnName disabled=no comment="Lord_Rdius-Cloud" } else={ /ip route add dst-address='+ros(row.radius_server_address+'/32')+' gateway=$ovpnName comment="Lord_Rdius-Cloud" }',
+  ':if ([:len $radiusRouteIds] = 1) do={ :local radiusRouteId [:pick $radiusRouteIds 0]; /ip route set $radiusRouteId gateway=$ovpnName disabled=no comment=$rlScopeTag } else={ /ip route add dst-address='+ros(row.radius_server_address+'/32')+' gateway=$ovpnName comment=$rlScopeTag }',
  ];
- const apiRouteSetup=['/ip route remove [find where (comment="Lord_Rdius-Cloud | API Route" or comment="Lord_Radius_API")]',...(apiDirectSource&&apiDirectSource!==apiGatewaySource&&apiDirectSource!==row.radius_server_address?['# Lord_Rdius-Cloud: direct-path replies use the detected private application source through OVPN','/ip route add dst-address='+ros(apiDirectSource+'/32')+' gateway=$ovpnName comment="Lord_Rdius-Cloud | API Route"']:[])];
- const lines=['# Lord_Rdius-Cloud: managed API, OpenVPN, RADIUS and monitoring. Import on RouterOS 6.43+ / 7.','# Keep this file private; it contains API, RADIUS and tunnel credentials.','/system clock set time-zone-name='+ros(networkTimezone)+' time-zone-autodetect=no',':local ovpnName '+ros(name),...apiSetup,...radiusSetup,...telemetrySetup,':local rlOvpnCipher "aes256-cbc"',':if ([:pick [/system resource get version] 0 2] = "6.") do={ :set rlOvpnCipher "aes256" }',':local managedOvpnIds [/interface ovpn-client find where comment='+ros(nasComment)+' and user='+ros(row.tunnel_username)+']',':if ([:len $managedOvpnIds] = 0) do={ :set managedOvpnIds [/interface ovpn-client find where comment='+ros('network_N'+nasId)+' and user='+ros(row.tunnel_username)+'] }',':if ([:len $managedOvpnIds] = 0) do={ :set managedOvpnIds [/interface ovpn-client find where (comment="Lord_Rdius-Cloud" or comment="Lord_Radius") and user='+ros(row.tunnel_username)+'] }',':if ([:len $managedOvpnIds] > 1) do={ :error "Lord_Radius OpenVPN client is ambiguous" }',':if ([:len $managedOvpnIds] = 1) do={',':local managedOvpnId [:pick $managedOvpnIds 0]',':local namedOvpnIds [/interface ovpn-client find where name=$ovpnName]',':if ([:len $namedOvpnIds] > 1) do={ :error "OpenVPN interface name is ambiguous" }',':if ([:len $namedOvpnIds] = 1) do={ :if ([:pick $namedOvpnIds 0] != $managedOvpnId) do={ :error "OpenVPN interface name is already in use" } }',':local existingCertIds [/certificate find where common-name='+ros(name)+' and private-key=yes]',':if ([:len $existingCertIds] != 1) do={ :error "Client certificate missing or ambiguous" }',':local existingClientCert [:pick $existingCertIds 0]',...tagClientCertificate('$existingClientCert'),':set existingClientCert [/certificate get $existingClientCert name]',':put "Lord_Radius: repairing the existing managed OpenVPN client."','/interface ovpn-client set $managedOvpnId name=$ovpnName connect-to='+ros(row.server_host)+' port='+row.server_port+' mode=ip protocol=tcp user='+ros(row.tunnel_username)+' password='+ros(decryptProvisioningSecret(row.tunnel_password_encrypted))+' profile=default certificate=$existingClientCert verify-server-certificate=yes tls-version=any auth=sha1 cipher=$rlOvpnCipher use-peer-dns=no add-default-route=no route-nopull=no disabled=no comment='+ros(nasComment),...routeSetup,...apiRouteSetup,...coaUpdate,'} else={',':if ([:len [/interface ovpn-client find where name=$ovpnName]] > 0) do={ :error "An unmanaged OpenVPN client already uses the Lord_Radius interface name" }'];
+ const apiRouteSetup=['/ip route remove [find where (comment=$rlApiRouteTag or ((comment="Lord_Rdius-Cloud | API Route" or comment="Lord_Radius_API") and gateway=$ovpnName))]',...(apiDirectSource&&apiDirectSource!==apiGatewaySource&&apiDirectSource!==row.radius_server_address?['# Lord_Rdius-Cloud: direct-path replies use the detected private application source through OVPN','/ip route add dst-address='+ros(apiDirectSource+'/32')+' gateway=$ovpnName comment=$rlApiRouteTag']:[])];
+ const lines=[':local rlScopeTag '+ros(nasComment),':local rlApiRouteTag '+ros(nasComment+' | API-Route'),'# Lord_Rdius-Cloud: managed API, OpenVPN, RADIUS and monitoring. Import on RouterOS 6.43+ / 7.','# Keep this file private; it contains API, RADIUS and tunnel credentials.','/system clock set time-zone-name='+ros(networkTimezone)+' time-zone-autodetect=no',':local ovpnName '+ros(name),...apiSetup,...radiusSetup,...telemetrySetup,':local rlOvpnCipher "aes256-cbc"',':if ([:pick [/system resource get version] 0 2] = "6.") do={ :set rlOvpnCipher "aes256" }',':local managedOvpnIds [/interface ovpn-client find where comment='+ros(nasComment)+' and user='+ros(row.tunnel_username)+']',':if ([:len $managedOvpnIds] = 0) do={ :set managedOvpnIds [/interface ovpn-client find where comment='+ros('Lord_Rdius-Cloud | network_N'+nasId)+' and user='+ros(row.tunnel_username)+'] }',':if ([:len $managedOvpnIds] = 0) do={ :set managedOvpnIds [/interface ovpn-client find where comment='+ros('network_N'+nasId)+' and user='+ros(row.tunnel_username)+'] }',':if ([:len $managedOvpnIds] = 0) do={ :set managedOvpnIds [/interface ovpn-client find where (comment=$rlScopeTag or comment="Lord_Rdius-Cloud" or comment="Lord_Radius") and user='+ros(row.tunnel_username)+'] }',':if ([:len $managedOvpnIds] > 1) do={ :error "Lord_Radius OpenVPN client is ambiguous" }',':if ([:len $managedOvpnIds] = 1) do={',':local managedOvpnId [:pick $managedOvpnIds 0]',':local namedOvpnIds [/interface ovpn-client find where name=$ovpnName]',':if ([:len $namedOvpnIds] > 1) do={ :error "OpenVPN interface name is ambiguous" }',':if ([:len $namedOvpnIds] = 1) do={ :if ([:pick $namedOvpnIds 0] != $managedOvpnId) do={ :error "OpenVPN interface name is already in use" } }',':local existingCertIds [/certificate find where common-name='+ros(name)+' and private-key=yes]',':if ([:len $existingCertIds] != 1) do={ :error "Client certificate missing or ambiguous" }',':local existingClientCert [:pick $existingCertIds 0]',...tagClientCertificate('$existingClientCert'),':set existingClientCert [/certificate get $existingClientCert name]',':put "Lord_Radius: repairing the existing managed OpenVPN client."','/interface ovpn-client set $managedOvpnId name=$ovpnName connect-to='+ros(row.server_host)+' port='+row.server_port+' mode=ip protocol=tcp user='+ros(row.tunnel_username)+' password='+ros(decryptProvisioningSecret(row.tunnel_password_encrypted))+' profile=default certificate=$existingClientCert verify-server-certificate=yes tls-version=any auth=sha1 cipher=$rlOvpnCipher use-peer-dns=no add-default-route=no route-nopull=no disabled=no comment='+ros(nasComment),...routeSetup,...apiRouteSetup,...coaUpdate,'} else={',':if ([:len [/interface ovpn-client find where name=$ovpnName]] > 0) do={ :error "An unmanaged OpenVPN client already uses the Lord_Radius interface name" }'];
  for(const [suffix,value] of [['ca',c.caCertificate],['client',c.clientCertificate],['key',decryptProvisioningSecret(row.client_private_key_encrypted)]]){const file=name+'_'+suffix;lines.push('# Lord_Rdius-Cloud: import managed OpenVPN certificate material','/file print file='+ros(file),':delay 1s','/file set [find where name='+ros(file+'.txt')+'] contents='+ros(value),'/certificate import file-name='+ros(file+'.txt')+' passphrase='+ros(suffix==='key'?decryptProvisioningSecret(c.keyPassphraseEncrypted):''),'/file remove [find where name='+ros(file+'.txt')+']');}
  lines.push('# Lord_Rdius-Cloud: trust the project CA and establish the managed OpenVPN tunnel','/certificate set [find where fingerprint='+ros(c.caFingerprint)+'] trusted=yes',':local newCertIds [/certificate find where common-name='+ros(name)+' and private-key=yes]',':if ([:len $newCertIds] != 1) do={ :error "Client certificate missing or ambiguous" }',':local newClientCert [:pick $newCertIds 0]',...tagClientCertificate('$newClientCert'),':set newClientCert [/certificate get $newClientCert name]','/interface ovpn-client add name=$ovpnName connect-to='+ros(row.server_host)+' port='+row.server_port+' mode=ip protocol=tcp user='+ros(row.tunnel_username)+' password='+ros(decryptProvisioningSecret(row.tunnel_password_encrypted))+' profile=default certificate=$newClientCert cipher=$rlOvpnCipher auth=sha1 verify-server-certificate=yes add-default-route=no use-peer-dns=no disabled=no comment='+ros(nasComment),...routeSetup,...apiRouteSetup,':put "Lord_Radius configuration imported. Check the OpenVPN interface and gateway routing."',...coaUpdate,'}');
  // One lexical scope is required when pasted into the RouterOS terminal.
@@ -387,7 +402,7 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
   let observedRadiusState:'responding'|'timeout'|'bad_reply'|undefined;
   for(const client of radius.clients){
    const key=radiusClientKey(client),old:any=oldByKey.get(key),previousState=String(stateMap[key]||'');
-   const details={nasName,radiusServer:client.address,service:client.service,authenticationPort:client.authenticationPort,counters:radiusCounters(client),disconnectIncoming:radius.incoming?{accept:radius.incoming.accept,port:radius.incoming.port,vrf:radius.incoming.vrf}:null};
+   const details={resourceTag:nasResourceTag(Number(config.environmentId),nasId),nasName,radiusServer:client.address,service:client.service,authenticationPort:client.authenticationPort,counters:radiusCounters(client),disconnectIncoming:radius.incoming?{accept:radius.incoming.accept,port:radius.incoming.port,vrf:radius.incoming.vrf}:null};
    if(!old){
     const initialState=client.status==='ok'?'baseline':client.disabled?'disabled':'monitor_unavailable';stateMap[key]=initialState;
     await recordNasActivity(app,nasId,'nas.radius.diagnostics',null,{...details,responseState:initialState,observedAt:radius.checkedAt});
@@ -597,7 +612,8 @@ async function removeActiveNasSessions(api:RouterApi,action:NasSessionAction){
  return {attempted:sessions.length,acknowledged,remaining:remaining.length};
 }
 export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string,sessionAction?:NasSessionAction){
- if((await readNetworkOvpn(app))?.connectionMode==='direct')return checkDirectNasApi(app,nasId,monitorUsername,sessionAction);
+ const snapshot=await readNetworkOvpn(app);assertNasResourceScope(snapshot,scope,nasId);
+ if(snapshot.connectionMode==='direct')return checkDirectNasApi(central,app,nasId,scope,monitorUsername,sessionAction);
  const [rows]:any=await app.query("SELECT c.*,l.name,l.is_enabled,COALESCE(NULLIF(ns.radius_server_address,''),NULLIF(c.radius_server_address,'')) AS ping_radius_server_address,ns.timezone network_timezone,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled FROM nas_ovpn_connections c JOIN lord_nas l ON l.id=c.nas_id LEFT JOIN network_settings ns ON ns.id=1 JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' WHERE c.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  const row=rows[0];if(!row)fail('NAS_API_NOT_CONFIGURED');if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
  const port=Number(row.port);if(!Number.isInteger(port)||port<1||port>65535)fail('NAS_API_PORT_INVALID');
@@ -608,25 +624,11 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
  const gatewaySettings=typeof tunnel.settings_json==='string'?JSON.parse(tunnel.settings_json):tunnel.settings_json;
  if(Number(tunnel.ovpn_gateway_id)!==Number(c.gatewayId)||gatewaySettings.server_tunnel_address!==c.serverAddress||tunnel.tunnel_address!==row.tunnel_address||tunnel.tunnel_username!==row.tunnel_username)fail('NAS_CENTRAL_TUNNEL_MISMATCH');
  if(!isIpv4(String(c.serverAddress||''))||!isIpv4(String(tunnel.tunnel_address||'')))fail('NAS_OVPN_SERVER_ADDRESS_INVALID');
- const marker=`Lord_Radius_API_Relay_${Number(scope.environment_id)}_${nasId}`;
+ const [marker,legacyRelayMarker]=nasRelayTags(Number(scope.environment_id),nasId);
  let managedSourceNat:Awaited<ReturnType<typeof ensureNasApiSourceNat>>|undefined;
- let directSessionActionStarted=false;
- let tcp:{sourceAddress:string;targetAddress:string;elapsedMs:number}|undefined,api:RouterApi|undefined,relayTargetPort=0,directFailure:unknown,stage='direct_probe',relaySourceAddress='',relayGatewayAddress='',relayOvpnInterface='';
+ let tcp:{sourceAddress:string;targetAddress:string;elapsedMs:number}|undefined,api:RouterApi|undefined,relayTargetPort=0,stage='gateway_api_connect',relaySourceAddress='',relayGatewayAddress='',relayOvpnInterface='';
  let relayRuleCounters:Array<{kind:string;comment:string;packets:string;bytes:string;chain?:string;action?:string;protocol?:string;srcAddress?:string;dstAddress?:string;dstPort?:string;toAddresses?:string;toPorts?:string;outInterface?:string}>=[];
  try{
-  if(!monitorUsername){
-  try{
-   const directTcp=await probeNasApiTcp(String(tunnel.tunnel_address),port);
-   if(isPrivateIpv4(directTcp.sourceAddress)){
-    api=await RouterApi.connect({host:String(tunnel.tunnel_address),port,username:String(row.username),password:decryptProvisioningSecret(row.password_encrypted),secure:false});
-    if(sessionAction){directSessionActionStarted=true;const removed=await removeActiveNasSessions(api,sessionAction);api.close();api=undefined;return {...removed,transport:'direct' as const};}
-    const timezoneSync=await syncNasTimezone(api,String(row.network_timezone||'Asia/Damascus'));const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.ping_radius_server_address);sample.timezoneSync=timezoneSync;api.close();api=undefined;
-    await saveNasApiSample(app,nasId,port,sample,'direct');
-    return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,timezoneSync:sample.timezoneSync,connection:{...directTcp,transport:'direct',login:'ok' as const}};
-   }
-   directFailure=new Error('NAS_API_DIRECT_SOURCE_UNSUPPORTED');
-  }catch(error){directFailure=error;api?.close();api=undefined;if(directSessionActionStarted)throw error;}
-  }
   stage='gateway_api_connect';
   const result=await withGateway(central,Number(tunnel.ovpn_gateway_id),async(gatewayApi,g)=>{
    stage='gateway_api_preflight';
@@ -647,10 +649,20 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    const natRules=await gatewayApi.command('/ip/firewall/nat/print',{'.proplist':'.id,protocol,dst-port,comment'});
    const services=await gatewayApi.command('/ip/service/print',{'.proplist':'name,port'});
    stage='verify_ovpn_tunnel';
-   if(!active.some((entry:any)=>entry.name===tunnel.tunnel_username&&entry.address===tunnel.tunnel_address&&entry.service==='ovpn'))fail('NAS_OVPN_TUNNEL_NOT_CONNECTED');
+   const addressSessions=active.filter((entry:any)=>entry.address===tunnel.tunnel_address);
+   const connected=addressSessions.length===1&&addressSessions[0].name===tunnel.tunnel_username&&addressSessions[0].service==='ovpn';
+   await app.query("UPDATE lord_nas l JOIN nas_ovpn_connections c ON c.nas_id=l.id SET l.activity_status=?,l.last_seen_at=IF(?,NOW(6),l.last_seen_at),c.configuration_snapshot=JSON_SET(c.configuration_snapshot,'$.linkLastCheck',CAST(? AS JSON)) WHERE l.id=?",[connected?'recent':'stale',connected,JSON.stringify({receivedAt:new Date().toISOString(),ok:true,connected,environmentId:Number(scope.environment_id),nasId,gatewayId:Number(tunnel.ovpn_gateway_id)}),nasId]);
+   if(!addressSessions.length)fail('NAS_OVPN_TUNNEL_NOT_CONNECTED');
+   if(!connected)fail('NAS_OVPN_ADDRESS_CONFLICT');
+   stage='verify_nas_tunnel_owner';
+   const secretRows=await gatewayApi.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address'},['?name='+tunnel.tunnel_username]);
+   if(secretRows.length!==1||!ownsOvpnComment(secretRows[0].comment,tunnel.tunnel_username,Number(scope.environment_id),nasId,tunnel.reservation_slot)||secretRows[0].service!=='ovpn'||secretRows[0].profile!==c.profile||secretRows[0]['remote-address']!==tunnel.tunnel_address)fail('NAS_CENTRAL_TUNNEL_MISMATCH');
+   const fullTag=nasResourceTag(Number(scope.environment_id),nasId);
+   if(secretRows[0].comment!==fullTag)await gatewayApi.command('/ppp/secret/set',{'.id':secretRows[0]['.id'],comment:fullTag});
+
    stage='identify_nas_ovpn_interface';
    const ovpnInterfaces=await gatewayApi.command('/interface/print',{'.proplist':'name,type'});
-   const matchingOvpnInterfaces=ovpnInterfaces.filter((item:any)=>item.type==='ovpn-in'&&String(item.name||'').includes(String(tunnel.tunnel_username)));
+   const matchingOvpnInterfaces=ovpnInterfaces.filter((item:any)=>item.type==='ovpn-in'&&String(item.name||'')==='<ovpn-'+String(tunnel.tunnel_username)+'>');
    const nasOvpnInterface=matchingOvpnInterfaces.length===1?String(matchingOvpnInterfaces[0].name):'';relayOvpnInterface=nasOvpnInterface;
    const occupied=new Set<number>();
    const addPorts=(raw:string)=>{for(const piece of String(raw||'').split(',')){const range=piece.trim().split('-').map(Number);if(range.length===1&&Number.isInteger(range[0]))occupied.add(range[0]);else if(range.length===2&&range.every(Number.isInteger)&&range[1]-range[0]<2048)for(let p=range[0];p<=range[1];p++)occupied.add(p);}};
@@ -665,7 +677,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
      // Read the menu without RouterOS query words; match our exact managed comment locally.
      // This avoids RouterOS/API-version-specific behavior for comment query filters.
      const found=await gatewayApi.command(path+'/print',{'.proplist':'.id,comment'});
-     for(const item of found.filter(row=>row.comment===marker+suffix))if(item['.id']){
+     for(const item of found.filter(row=>row.comment===marker+suffix||row.comment===legacyRelayMarker+suffix))if(item['.id']){
       stage='cleanup_'+kind+'_remove';
       await gatewayApi.command(path+'/remove',{'.id':item['.id']});
      }
@@ -676,7 +688,7 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     for(const [path,kind] of [['/ip/firewall/nat','nat'],['/ip/firewall/filter','filter']] as const){
      const properties=kind==='nat'?'.proplist=.id,comment,packets,bytes,chain,action,protocol,src-address,dst-address,dst-port,to-addresses,to-ports,out-interface':'.proplist=.id,comment,packets,bytes';
      const rows=await gatewayApi.command(path+'/print',{'.proplist':properties.replace('.proplist=','')});
-     for(const row of rows)if(typeof row.comment==='string'&&(row.comment.startsWith(marker)||row.comment===managedSourceNat?.marker)){
+     for(const row of rows)if(typeof row.comment==='string'&&(row.comment.startsWith(marker)||row.comment.startsWith(legacyRelayMarker)||row.comment===managedSourceNat?.marker)){
       const value=(key:string)=>row[key]===undefined||row[key]===null||row[key]===''?undefined:String(row[key]);
       counters.push({kind,comment:row.comment,packets:String(row.packets??'0'),bytes:String(row.bytes??'0'),...(kind==='nat'?{chain:value('chain'),action:value('action'),protocol:value('protocol'),srcAddress:value('src-address'),dstAddress:value('dst-address'),dstPort:value('dst-port'),toAddresses:value('to-addresses'),toPorts:value('to-ports'),outInterface:value('out-interface')}:{})});
      }
@@ -731,18 +743,18 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
     }
    }
   },true,sessionAction?5:0);
-  if(sessionAction)return {...result,apiPort:port,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
-  if(monitorUsername)return {apiPort:port,checkedAt:new Date().toISOString(),traffic:result.traffic,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
+  if(sessionAction)return {...result,apiPort:port,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay' as const,gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
+  if(monitorUsername)return {apiPort:port,checkedAt:new Date().toISOString(),traffic:result.traffic,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay' as const,gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
   const sample=result.sample;
   if(typeof sample==='undefined')throw new Error('NAS_API_INVALID_RESPONSE');
   await saveNasApiSample(app,nasId,port,sample,'ovpn_gateway_relay',result.gatewayId);
-  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,timezoneSync:sample.timezoneSync,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay',gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
+  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,timezoneSync:sample.timezoneSync,connection:{sourceAddress:result.sourceAddress,targetAddress:result.targetAddress,elapsedMs:result.elapsedMs,transport:'ovpn_gateway_relay' as const,gatewayId:result.gatewayId,relayPort:result.relayPort,login:'ok' as const}};
  }catch(error){
   const [current]:any=await app.query('SELECT configuration_snapshot FROM nas_ovpn_connections WHERE nas_id=?',[nasId]);
-  const raw=error instanceof Error?error.message:'NAS_API_UNKNOWN',osCode=String((error as NodeJS.ErrnoException)?.code||''),errorName=error instanceof Error?error.name:'UnknownError',code=raw.includes('حساب API لا يملك الصلاحيات')?'NAS_API_PERMISSION_DENIED':raw==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'NAS_API_LOGIN_FAILED':raw.startsWith('فشل الأمر /ppp/active/print:')?'NAS_PPP_ACTIVE_STATS_FAILED':/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'API_CONNECTION_FAILED',rawDiagnostics=tcp?{...tcp}:((error as Error&{diagnostics?:any}).diagnostics||{}),diagnostics={...rawDiagnostics,sourceAddress:relaySourceAddress||rawDiagnostics.sourceAddress,environmentId:Number(scope.environment_id),nasId,gatewayId:Number(tunnel.ovpn_gateway_id),managedSourceNat,targetPort:relayTargetPort||undefined,relayPort:relayTargetPort||undefined,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,transport:'ovpn_gateway_relay',stage,failureCode:code,errorName,...(raw.startsWith('فشل الأمر /ppp/active/print:')?{errorSummary:String((error as Error&{routerMessage?:string}).routerMessage||raw).slice(0,220)}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{}),directFailure:directFailure instanceof Error&&/^[A-Z][A-Z0-9_]{1,63}$/.test(directFailure.message)?directFailure.message:'DIRECT_PATH_FAILED',login:code==='NAS_API_LOGIN_FAILED'?'failed':stage==='read_nas_api_resources'?'authenticated':'not-tested'};
+  const raw=error instanceof Error?error.message:'NAS_API_UNKNOWN',osCode=String((error as NodeJS.ErrnoException)?.code||''),errorName=error instanceof Error?error.name:'UnknownError',code=raw.includes('حساب API لا يملك الصلاحيات')?'NAS_API_PERMISSION_DENIED':raw==='فشل تسجيل الدخول إلى API. تحقق من بيانات الدخول والصلاحيات.'?'NAS_API_LOGIN_FAILED':raw.startsWith('فشل الأمر /ppp/active/print:')?'NAS_PPP_ACTIVE_STATS_FAILED':/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'API_CONNECTION_FAILED',rawDiagnostics=tcp?{...tcp}:((error as Error&{diagnostics?:any}).diagnostics||{}),diagnostics={...rawDiagnostics,sourceAddress:relaySourceAddress||rawDiagnostics.sourceAddress,environmentId:Number(scope.environment_id),nasId,resourceTag:nasResourceTag(Number(scope.environment_id),nasId),gatewayId:Number(tunnel.ovpn_gateway_id),managedSourceNat,targetPort:relayTargetPort||undefined,relayPort:relayTargetPort||undefined,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,transport:'ovpn_gateway_relay',stage,failureCode:code,errorName,...(raw.startsWith('فشل الأمر /ppp/active/print:')?{errorSummary:String((error as Error&{routerMessage?:string}).routerMessage||raw).slice(0,220)}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{}),login:code==='NAS_API_LOGIN_FAILED'?'failed':stage==='read_nas_api_resources'?'authenticated':'not-tested'};
   const safeErrorSummary=error instanceof Error&&/^فشل الأمر \/ip\/firewall\/(?:nat|filter)\/(?:add|remove|print): [^\r\n]{1,180}$/.test(error.message)?error.message:undefined;
-  if(!monitorUsername&&!sessionAction)console.error('[nas-api-check]',{environmentId:Number(scope.environment_id),nasId,stage,code,errorName,managedSourceNat,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,...(safeErrorSummary?{errorSummary:safeErrorSummary}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{})});
-  if(!monitorUsername&&!sessionAction&&current[0]){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code,transport:'ovpn_gateway_relay',connection:diagnostics};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
+  if(!monitorUsername&&!sessionAction)console.error('[nas-api-check]',{environmentId:Number(scope.environment_id),nasId,resourceTag:nasResourceTag(Number(scope.environment_id),nasId),stage,code,errorName,managedSourceNat,gatewayAddress:relayGatewayAddress||undefined,nasTunnelAddress:String(tunnel.tunnel_address),relaySourceAddress:relaySourceAddress||undefined,relayOvpnInterface:relayOvpnInterface||undefined,relayRuleCounters:relayRuleCounters.length?relayRuleCounters:undefined,...(safeErrorSummary?{errorSummary:safeErrorSummary}:{}),...(/^[A-Z0-9_]{2,32}$/.test(osCode)?{osCode}:{})});
+  if(!monitorUsername&&!sessionAction&&current[0]&&code!=='OVPN_GATEWAY_BUSY'){const config=typeof current[0].configuration_snapshot==='string'?JSON.parse(current[0].configuration_snapshot):current[0].configuration_snapshot||{};config.apiLastCheck={receivedAt:new Date().toISOString(),ok:false,port,code,transport:'ovpn_gateway_relay',connection:diagnostics};await app.query('UPDATE nas_ovpn_connections SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);}
   const failure=new Error(code);(failure as Error&{diagnostics?:typeof diagnostics}).diagnostics=diagnostics;throw failure;
  }finally{api?.close();}
 }
@@ -761,7 +773,7 @@ export async function refreshNasLinks(central:PoolConnection,app:mysql.Connectio
     const [nasRows]:any=await app.query('SELECT name FROM lord_nas WHERE id=?',[t.tenant_nas_id]);const nasName=String(nasRows[0]?.name||'NAS #'+t.tenant_nas_id);
     await recordNasActivity(app,Number(t.tenant_nas_id),connected?'nas.tunnel.connected':'nas.tunnel.disconnected',
      {status:wasConnected?'connected':String(t.status||'unknown')},
-     {nasName,tunnelAddress:String(t.tunnel_address||''),status:nextStatus,observedAt:new Date().toISOString()});
+     {resourceTag:nasResourceTag(Number(scope.environment_id),Number(t.tenant_nas_id)),nasName,tunnelAddress:String(t.tunnel_address||''),status:nextStatus,observedAt:new Date().toISOString()});
    }
    await central.query("UPDATE nas_tunnels SET status=?,last_seen_at=IF(?,NOW(),last_seen_at) WHERE id=?",[nextStatus,connected,t.id]);
    await app.query("UPDATE lord_nas l JOIN nas_ovpn_connections c ON c.nas_id=l.id SET l.activity_status=?,l.last_seen_at=IF(?,NOW(6),l.last_seen_at),c.configuration_snapshot=JSON_SET(c.configuration_snapshot,'$.linkLastCheck',CAST(? AS JSON)) WHERE l.id=?",[connected?'recent':t.last_seen_at?'stale':'unknown',connected,JSON.stringify({receivedAt:new Date().toISOString(),ok:true,connected,environmentId:Number(scope.environment_id),nasId:Number(t.tenant_nas_id),gatewayId:Number(snapshot.gatewayId)}),t.tenant_nas_id]);
@@ -777,7 +789,7 @@ export async function removeNetworkTunnels(central:PoolConnection,environmentId:
  const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=?',[environmentId]);
  for(const t of rows){const name=String(t.tunnel_username),nasId=Number(t.tenant_nas_id||0),slot=Number(t.reservation_slot||0),reserved=!nasId&&name==='rl_env_'+environmentId+'_slot_'+slot,legacyReserved=!nasId&&slot>0&&/^lord_[0-9]{1,6}$/.test(name),newNas=nasId>0&&new RegExp('^lord_N'+nasId+'_[0-9]{1,6}$').test(name),legacyLord=nasId>0&&/^lord_[0-9]{1,6}$/.test(name),legacyEnv=nasId>0&&name==='rl_env_'+environmentId+'_nas_'+nasId,marker=reserved?'Radius Lord env '+environmentId+' nas slot '+slot:legacyReserved?'Radius Lord OVPN '+name:newNas?'network_N'+nasId:legacyLord?'Radius Lord OVPN '+name:'Radius Lord env '+environmentId+' nas '+nasId;if((!reserved&&!legacyReserved&&!newNas&&!legacyLord&&!legacyEnv)||t.certificate_reference!==name||(reserved||legacyReserved)&&slot<1||!(reserved||legacyReserved)&&!nasId)fail('OVPN_CLEANUP_OWNERSHIP');
  await withGateway(central,Number(t.ovpn_gateway_id),async(api)=>{
- const secrets=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment'},['?name='+name]);if(secrets.some(r=>r.comment!==marker))fail('OVPN_CLEANUP_SECRET_CONFLICT');
+ const secrets=await api.command('/ppp/secret/print',{'.proplist':'.id,name,comment'},['?name='+name]);if(secrets.some(r=>!ownsOvpnComment(r.comment,name,environmentId,nasId,slot)))fail('OVPN_CLEANUP_SECRET_CONFLICT');
  const certs=await api.command('/certificate/print',{'.proplist':'.id,name,common-name,key-usage'},['?name='+name]);if(certs.some(r=>r['common-name']!==name||!r['key-usage']?.includes('tls-client')))fail('OVPN_CLEANUP_CERT_CONFLICT');
  if(nasId>0)await removeNasApiGatewayRules(api,{environmentId,nasId,tunnelAddress:String(t.tunnel_address)});
  for(const r of secrets)await api.command('/ppp/secret/remove',{'.id':r['.id']});
@@ -789,6 +801,9 @@ export async function removeNetworkTunnels(central:PoolConnection,environmentId:
  // cleanup could allow its address to be reused while its old RADIUS client still exists.
  await central.query("UPDATE nas_tunnels SET status='disabled' WHERE id=?",[t.id]);
  }
+ // Endpoint fences outlive tunnel cleanup: a failed tenant DB deletion must not
+ // release a reachable endpoint to another customer. Retain these ownership tombstones.
+ await central.query("DELETE FROM platform_settings WHERE setting_group='nas_api_monitor' AND setting_key=?",['environment_'+environmentId]);
 }
 export async function radiusIpv4(host:string){return (await lookup(host,{family:4})).address;}
 
@@ -804,15 +819,16 @@ async function directNasRow(app:mysql.Connection,nasId:number){
  const [rows]:any=await app.query("SELECT d.*,l.name,l.radius_services,l.coa_port,l.is_enabled,n.secret,mc.username,mc.password_encrypted,ms.port,ms.is_enabled api_enabled,ns.timezone,ns.radius_server_address FROM nas_direct_connections d JOIN lord_nas l ON l.id=d.nas_id JOIN nas n ON n.id=l.radius_nas_id JOIN nas_management_credentials mc ON mc.lord_nas_id=l.id JOIN nas_management_services ms ON ms.lord_nas_id=l.id AND ms.service_type='api' LEFT JOIN network_settings ns ON ns.id=1 WHERE d.nas_id=? AND l.archived_at IS NULL ORDER BY ms.id LIMIT 1",[nasId]);
  if(!rows[0])fail('NAS_API_NOT_CONFIGURED');return rows[0];
 }
-export async function updateDirectNasSettings(app:mysql.Connection,nasId:number,input:any,managerId:number){
+export async function updateDirectNasSettings(app:mysql.Connection,nasId:number,input:any,managerId:number,central:any,scope:any){
  await app.beginTransaction();
  try{
   await app.query('SELECT id FROM platform_subscription WHERE id=1 FOR UPDATE');
-  const row=await directNasRow(app,nasId);
+  const row=await directNasRow(app,nasId);assertNasResourceScope(typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot,scope,nasId);
   const direct=validateNasLink({mode:'direct',managementAddress:input.managementAddress,radiusAddress:input.radiusAddress,apiSourceAddress:input.apiSourceAddress,apiUsername:input.apiUsername,apiPassword:input.apiPassword||decryptProvisioningSecret(row.password_encrypted),apiPort:input.apiPort??row.port});
   if(direct.mode!=='direct')throw new Error('NAS_LINK_MODE_INVALID');
   const [duplicates]:any=await app.query('SELECT n.id FROM nas n JOIN lord_nas l ON l.radius_nas_id=n.id WHERE n.nasname=? AND l.id<>?',[direct.radiusAddress,nasId]);
   if(duplicates.length)fail('NAS_DIRECT_ADDRESS_CONFLICT');
+  await reserveDirectNasEndpoint(central,scope,nasId,direct.managementAddress,direct.apiPort);
   await app.query('UPDATE nas n JOIN lord_nas l ON l.radius_nas_id=n.id SET n.nasname=?,l.management_host=?,l.coa_host=? WHERE l.id=?',[direct.radiusAddress,direct.managementAddress,direct.managementAddress,nasId]);
   await app.query('UPDATE nas_management_credentials SET username=?,password_encrypted=?,updated_by=? WHERE lord_nas_id=?',[direct.apiUsername,encryptProvisioningSecret(direct.apiPassword),managerId,nasId]);
   await app.query("UPDATE nas_management_services SET host=?,port=?,is_enabled=1 WHERE lord_nas_id=? AND service_type='api'",[direct.managementAddress,direct.apiPort,nasId]);
@@ -823,20 +839,21 @@ export async function updateDirectNasSettings(app:mysql.Connection,nasId:number,
   await app.commit();
  }catch(error){await app.rollback();throw error;}
 }
-async function directNasScript(app:mysql.Connection,nasId:number){
+async function directNasScript(app:mysql.Connection,nasId:number,scope:any){
  const row=await directNasRow(app,nasId),config=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot;
+ assertNasResourceScope(config,scope,nasId);
  const direct=validateNasLink({mode:'direct',managementAddress:row.management_address,radiusAddress:row.radius_address,apiSourceAddress:row.api_source_address,apiPort:row.port,apiUsername:row.username,apiPassword:decryptProvisioningSecret(row.password_encrypted)});
  if(direct.mode!=='direct')throw new Error('NAS_LINK_MODE_INVALID');
- const legacyOwner='Radius_Lord_Direct_N'+nasId,owner='Lord_Rdius-Cloud | Direct NAS '+nasId,source=direct.apiSourceAddress+'/32';
+ const legacyOwner='Radius_Lord_Direct_N'+nasId,previousOwner='Lord_Rdius-Cloud | Direct NAS '+nasId,owner=nasResourceTag(Number(scope.environment_id),nasId,'Direct'),source=direct.apiSourceAddress+'/32';
  const lines=[
  '# Private: RouterOS direct NAS configuration. No VPN, certificates, routes or NAT are created.',
  '# API source must be the backend address as seen by this NAS. Existing firewall restrictions still apply.',
  '/system clock set time-zone-name='+ros(String(row.timezone||'Asia/Damascus'))+' time-zone-autodetect=no',
  ':local ids [/user find where name='+ros(direct.apiUsername)+']',
  ':if ([:len $ids] > 1) do={ :error "API user is ambiguous" }',
- ':if ([:len $ids] = 1) do={ :if ([/user get [:pick $ids 0] comment] != '+ros(owner)+' && [/user get [:pick $ids 0] comment] != '+ros(legacyOwner)+') do={ :error "API username belongs to another account; select a dedicated username" }; /user set [:pick $ids 0] password='+ros(direct.apiPassword)+' address='+ros(source)+' group=full comment='+ros(owner)+' } else={ /user add name='+ros(direct.apiUsername)+' password='+ros(direct.apiPassword)+' address='+ros(source)+' group=full comment='+ros(owner)+' }',
+ ':if ([:len $ids] = 1) do={ :if ([/user get [:pick $ids 0] comment] != '+ros(owner)+' && [/user get [:pick $ids 0] comment] != '+ros(legacyOwner)+' && [/user get [:pick $ids 0] comment] != '+ros(previousOwner)+') do={ :error "API username belongs to another account; select a dedicated username" }; /user set [:pick $ids 0] password='+ros(direct.apiPassword)+' address='+ros(source)+' group=full comment='+ros(owner)+' } else={ /user add name='+ros(direct.apiUsername)+' password='+ros(direct.apiPassword)+' address='+ros(source)+' group=full comment='+ros(owner)+' }',
  '/ip service set [find where name="api"] disabled=no port='+direct.apiPort+' address='+ros(source),
- '/radius remove [find where comment='+ros(legacyOwner)+']','/radius remove [find where comment='+ros(owner)+']',
+ '/radius remove [find where comment='+ros(legacyOwner)+']','/radius remove [find where comment='+ros(previousOwner)+']','/radius remove [find where comment='+ros(owner)+']',
  '/radius add service='+String(row.radius_services||'ppp')+' address='+ros(config.radiusAddress)+(direct.radiusAddress===direct.managementAddress?' src-address='+ros(direct.managementAddress):'')+' authentication-port='+Number(config.authPort)+' accounting-port='+Number(config.accountingPort)+' secret='+ros(row.secret)+' timeout=3s comment='+ros(owner),
  '/radius incoming set accept=yes port='+Number(row.coa_port||3799),
  ];
@@ -848,8 +865,10 @@ async function directNasScript(app:mysql.Connection,nasId:number){
  // One lexical scope is required when pasted into the RouterOS terminal.
  return '{\r\n'+lines.join('\r\n')+'\r\n}\r\n';
 }
-async function checkDirectNasApi(app:mysql.Connection,nasId:number,monitorUsername?:string,sessionAction?:NasSessionAction){
+async function checkDirectNasApi(central:any,app:mysql.Connection,nasId:number,scope:any,monitorUsername?:string,sessionAction?:NasSessionAction){
  const row=await directNasRow(app,nasId),port=Number(row.port);
+ assertNasResourceScope(typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot,scope,nasId);
+ await reserveDirectNasEndpoint(central,scope,nasId,row.management_address,port);
  if(Number(row.is_enabled)!==1||Number(row.api_enabled)!==1)fail('NAS_API_DISABLED');
  let api:RouterApi|undefined;
  try{
@@ -861,7 +880,7 @@ async function checkDirectNasApi(app:mysql.Connection,nasId:number,monitorUserna
   const sample=await addRadiusServerPing(api,await readNasApiSample(api),row.radius_server_address);sample.timezoneSync=timezoneSync;
   await saveNasApiSample(app,nasId,port,sample,'direct');
   await app.query("UPDATE lord_nas SET activity_status='recent',last_seen_at=NOW(6) WHERE id=?",[nasId]);
-  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,timezoneSync,connection:{...tcp,transport:'direct',login:'ok' as const}};
+  return {apiPort:port,checkedAt:sample.receivedAt,metrics:sample,timezoneSync,connection:{...tcp,transport:'direct' as const,login:'ok' as const}};
  }catch(error){
   if(!monitorUsername&&!sessionAction){
    const config=typeof row.configuration_snapshot==='string'?JSON.parse(row.configuration_snapshot):row.configuration_snapshot;

@@ -1,10 +1,11 @@
+import {nasResourceTag} from './nas-resource-scope.service';
 import {db} from '../config/db';
 import type {PoolConnection} from 'mysql2/promise';
 import {readGatewayOvpnSessions} from './network-ovpn.service';
 
 type Tunnel={id:number;environmentId:number;gatewayId:number;nasId:number;username:string;address:string;lastSeenAt:Date|null};
 type ObservedState='connected'|'disconnected'|'unknown';
-type ConnectionEvent={at:string;state:ObservedState;previousState:ObservedState|null;nasId:number;gatewayId:number;tunnelId:number;environmentId:number;durationSeconds:number|null;baseline:boolean};
+type ConnectionEvent={resourceTag?:string;at:string;state:ObservedState;previousState:ObservedState|null;nasId:number;gatewayId:number;tunnelId:number;environmentId:number;durationSeconds:number|null;baseline:boolean};
 type SessionObservation={connected:boolean;lastSeenAt:string|null;since?:string};
 type GatewaySnapshot={attemptedAt:string;readAt?:string;status:'ok'|'unavailable';sessions?:Record<string,SessionObservation>};
 type NasInventory=Array<{id:number;name:string;enabled:boolean}>;
@@ -21,7 +22,7 @@ function tunnelTime(value:Date|string|null){
 }
 
 function makeEvent(tunnel:Tunnel,at:string,state:ObservedState,previousState:ObservedState|null,durationSeconds:number|null,baseline:boolean):ConnectionEvent{
- return {at,state,previousState,durationSeconds,baseline,nasId:Number(tunnel.nasId),gatewayId:Number(tunnel.gatewayId),tunnelId:Number(tunnel.id),environmentId:Number(tunnel.environmentId)};
+ return {resourceTag:nasResourceTag(Number(tunnel.environmentId),Number(tunnel.nasId)),at,state,previousState,durationSeconds,baseline,nasId:Number(tunnel.nasId),gatewayId:Number(tunnel.gatewayId),tunnelId:Number(tunnel.id),environmentId:Number(tunnel.environmentId)};
 }
 
 async function refreshGateway(connection:PoolConnection,gatewayId:number,previous:GatewaySnapshot|null){
@@ -183,6 +184,19 @@ export function describeMasterNetworkTunnels(inventory:Awaited<ReturnType<typeof
    attemptedAt:snapshot?.attemptedAt??null,readAt:snapshot?.readAt??null};
  });
  return {state,total,connected,disconnected,readAt,gateways,...(details?{tunnels,history}:{})};
+}
+
+// Client pages consume the same gateway observation as central administration.
+// No CHR request and no tenant write are performed by this read helper.
+export function storedNasOvpnObservation(inventory:Awaited<ReturnType<typeof readMasterNetworkTunnels>>,environmentId:number,nasId:number,tunnelId:number,address:string){
+ const tunnel=(inventory.byEnvironment.get(environmentId)||[]).find(item=>Number(item.nasId)===nasId&&Number(item.id)===tunnelId&&item.address===address);
+ if(!tunnel)return null;
+ const snapshot=inventory.gateways.get(Number(tunnel.gatewayId))?.snapshot;
+ if(!snapshot)return null;
+ const observed=snapshot.sessions?.[sessionKey(tunnel.username,tunnel.address)];
+ if(snapshot.status!=='ok')return {receivedAt:snapshot.attemptedAt,ok:false,connected:false,lastSeenAt:observed?.lastSeenAt||null};
+ if(!snapshot.readAt||!observed)return null;
+ return {receivedAt:snapshot.readAt,ok:true,connected:observed.connected,lastSeenAt:observed.lastSeenAt};
 }
 
 

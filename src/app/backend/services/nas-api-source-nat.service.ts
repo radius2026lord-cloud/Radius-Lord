@@ -1,3 +1,4 @@
+import {nasRelayTags,nasResourceTag} from './nas-resource-scope.service';
 import {isIP} from 'net';
 import type {RouterApi} from './routeros-api.service';
 
@@ -12,7 +13,7 @@ function validateScope(scope:Scope){
  if(!Number.isSafeInteger(scope.environmentId)||scope.environmentId<1||!Number.isSafeInteger(scope.nasId)||scope.nasId<1||isIP(scope.tunnelAddress)!==4)fail('NAS_API_SNAT_SCOPE_INVALID');
 }
 export function nasApiSourceNatMarker(scope:Pick<Scope,'environmentId'|'nasId'>){
- return `Lord_Rdius-Cloud | ENV-${scope.environmentId} | NAS-${scope.nasId} | API-SNAT`;
+ return nasResourceTag(scope.environmentId,scope.nasId,'API-SNAT');
 }
 const plain=(rule:Rule)=>rule.chain==='srcnat'&&rule.action==='src-nat'&&rule.protocol==='tcp'&&!on(rule.dynamic)&&
  !['to-ports','src-port','in-interface','out-interface','src-address-list','dst-address-list','connection-mark','routing-mark'].some(key=>Boolean(rule[key]));
@@ -77,7 +78,7 @@ export async function cleanupNasApiSourceNatTests(api:RouterApi,input:SourceNat)
 }
 
 export async function removeNasApiGatewayRules(api:RouterApi,scope:Scope){
- validateScope(scope);const marker=nasApiSourceNatMarker(scope),relay=`Lord_Radius_API_Relay_${scope.environmentId}_${scope.nasId}`;
+ validateScope(scope);const marker=nasApiSourceNatMarker(scope),relays=nasRelayTags(scope.environmentId,scope.nasId);
  const rules=await api.command('/ip/firewall/nat/print',{'.proplist':properties});
  const removals:Rule[]=[];
  for(const rule of rules){
@@ -85,13 +86,13 @@ export async function removeNasApiGatewayRules(api:RouterApi,scope:Scope){
    if(!plain(rule)||host(rule['dst-address'])!==scope.tunnelAddress)fail('NAS_API_SNAT_CLEANUP_CONFLICT');
    removals.push(rule);
   }else if(rule.comment==='TEMP_LR_API_SNAT_TEST'&&plain(rule)&&host(rule['dst-address'])===scope.tunnelAddress){removals.push(rule);}
-  else if(rule.comment===relay+'-src'||rule.comment===relay+'-dst'){
-   if(host(rule.comment===relay+'-dst'?rule['to-addresses']:rule['dst-address'])!==scope.tunnelAddress)fail('NAS_API_SNAT_CLEANUP_CONFLICT');
+  else if(relays.some(relay=>rule.comment===relay+'-src'||rule.comment===relay+'-dst')){
+   if(host(relays.some(relay=>rule.comment===relay+'-dst')?rule['to-addresses']:rule['dst-address'])!==scope.tunnelAddress)fail('NAS_API_SNAT_CLEANUP_CONFLICT');
    removals.push(rule);
   }
  }
  const filters=await api.command('/ip/firewall/filter/print',{'.proplist':'.id,comment,dst-address'});
- const relayFilters=filters.filter(rule=>rule.comment===relay+'-allow');
+ const relayFilters=filters.filter(rule=>relays.some(relay=>rule.comment===relay+'-allow'));
  if(relayFilters.some(rule=>host(rule['dst-address'])!==scope.tunnelAddress))fail('NAS_API_SNAT_CLEANUP_CONFLICT');
  for(const rule of relayFilters)await api.command('/ip/firewall/filter/remove',{'.id':rule['.id']});
  for(const rule of removals)await api.command('/ip/firewall/nat/remove',{'.id':rule['.id']});

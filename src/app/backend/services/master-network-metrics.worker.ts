@@ -1,3 +1,5 @@
+import {readNetworkOvpn} from './network-ovpn.service';
+import {readMasterNetworkTunnels,describeMasterNetworkTunnels} from './master-network-tunnels.service';
 import {db} from '../config/db';
 import {networkScope,withNetwork} from './network-runtime.service';
 import type {PoolConnection} from 'mysql2/promise';
@@ -51,9 +53,17 @@ export function startMasterNetworkMetricsWorker(){
       LEFT JOIN (SELECT username,COUNT(*) sessions FROM radacct WHERE acctstoptime IS NULL
        AND COALESCE(acctupdatetime,acctstarttime)>=UTC_TIMESTAMP()-INTERVAL 6 MINUTE GROUP BY username) live ON live.username=r.current_username
       WHERE h.archived_at IS NULL`,timeout:5000});
-     const [nas]:any=await app.query({sql:`SELECT id,name,is_enabled,
-      (is_enabled=1 AND activity_status='recent' AND last_seen_at>=UTC_TIMESTAMP()-INTERVAL 90 SECOND) connected
-      FROM lord_nas WHERE archived_at IS NULL`,timeout:5000});
+     const network=await readNetworkOvpn(app),direct=network?.connectionMode==='direct';
+     const [nas]:any=await app.query({sql:direct?`SELECT l.id,l.name,l.is_enabled,
+      (l.is_enabled=1 AND JSON_UNQUOTE(JSON_EXTRACT(c.configuration_snapshot,'$.apiLastCheck.ok'))='true'
+       AND JSON_UNQUOTE(JSON_EXTRACT(c.configuration_snapshot,'$.apiLastCheck.receivedAt'))>=?) connected
+      FROM lord_nas l LEFT JOIN nas_direct_connections c ON c.nas_id=l.id WHERE l.archived_at IS NULL`:
+      `SELECT id,name,is_enabled,0 connected FROM lord_nas WHERE archived_at IS NULL`,timeout:5000},direct?[new Date(Date.now()-6*60000).toISOString()]:[]);
+     if(!direct){
+      const inventory=await readMasterNetworkTunnels([Number(scope.environment_id)]);
+      const health=describeMasterNetworkTunnels(inventory,Number(scope.environment_id),nas.map((row:any)=>({id:Number(row.id),name:String(row.name),enabled:Number(row.is_enabled)===1})),true);
+      for(const row of nas)row.connected=Number(health.tunnels?.some(t=>t.nasId===Number(row.id)&&t.state==='connected'));
+     }
      const values={...customers[0],...hotspot[0],totalNas:nas.length,connectedNas:nas.filter((row:any)=>Number(row.connected)===1).length};
      for(const key of Object.keys(values))values[key]=Number(values[key]||0);
      return {metrics:{...values,disconnectedSubscribers:values.totalSubscribers-values.connectedSubscribers},

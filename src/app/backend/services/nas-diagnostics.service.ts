@@ -11,8 +11,8 @@ export function buildNasDiagnostics(row:any,config:any,snapshot:any,direct:boole
  const linkSignal=direct?signal('not_applicable','direct_connection',null,null,0):!enabled?signal('disabled','nas_disabled',link?.receivedAt,row.last_seen_at,90000):
   link?signal(link.ok===false?'unknown':link.connected?'ok':'failed',link.ok===false?'link_check_unavailable':link.connected?'link_connected':'link_disconnected',link.receivedAt,row.last_seen_at,90000):
   signal(row.activity_status==='recent'&&row.last_seen_at?'ok':'unknown','link_not_checked',row.activity_status==='recent'?row.last_seen_at:null,row.last_seen_at,90000);
- const apiSignal=!enabled||!apiEnabled?signal('disabled','api_disabled',api?.receivedAt,config.apiLastSuccessAt,180000):
-  signal(!api?'unknown':api.ok?'ok':'failed',!api?'api_not_checked':api.ok?'api_connected':String(api.code||'api_failed'),api?.receivedAt,config.apiLastSuccessAt||(api?.ok?api.receivedAt:null),180000);
+ const apiSignal=!enabled||!apiEnabled?signal('disabled','api_disabled',api?.receivedAt,config.apiLastSuccessAt,360000):
+  signal(!api?'unknown':api.ok?'ok':'failed',!api?'api_not_checked':api.ok?'api_connected':String(api.code||'api_failed'),api?.receivedAt,config.apiLastSuccessAt||(api?.ok?api.receivedAt:null),360000);
  const sample=config.telemetryLatest,clients=sample?.radiusClients?.clients;
  const own=Array.isArray(clients)?clients.filter((client:any)=>client.address===config.radiusAddress&&Number(client.authenticationPort)===Number(config.authPort)&&Number(client.accountingPort)===Number(config.accountingPort)):[];
  const evidence=config.radiusResponseHealth;
