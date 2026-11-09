@@ -384,6 +384,7 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
   const [nasRows]:any=await app.query('SELECT name FROM lord_nas WHERE id=?',[nasId]);const nasName=String(nasRows[0]?.name||'NAS #'+nasId);
   const oldByKey=new Map(previousClients.map((client:any)=>[radiusClientKey(client),client]));
   const stateMap=config.radiusDiagnosticStates&&typeof config.radiusDiagnosticStates==='object'?config.radiusDiagnosticStates:{};
+  let observedRadiusState:'responding'|'timeout'|'bad_reply'|undefined;
   for(const client of radius.clients){
    const key=radiusClientKey(client),old:any=oldByKey.get(key),previousState=String(stateMap[key]||'');
    const details={nasName,radiusServer:client.address,service:client.service,authenticationPort:client.authenticationPort,counters:radiusCounters(client),disconnectIncoming:radius.incoming?{accept:radius.incoming.accept,port:radius.incoming.port,vrf:radius.incoming.vrf}:null};
@@ -401,21 +402,27 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
     await recordNasActivity(app,nasId,'nas.radius.counters_reset',{counters:radiusCounters(old)}, {...details,responseState:'counter_reset',observedAt:radius.checkedAt});
     stateMap[key]='baseline';continue;
    }
-   const delta=(name:string)=>Number(client[name]??0)-Number(old[name]??0);
-   if(delta('badReplies')>0){
+   const increased=(name:string)=>client[name]!=null&&old[name]!=null&&Number.isFinite(Number(client[name]))&&Number.isFinite(Number(old[name]))&&Number(client[name])>Number(old[name]);
+   const ownRadius=client.address===config.radiusAddress&&Number(client.authenticationPort)===Number(config.authPort)&&Number(client.accountingPort)===Number(config.accountingPort);
+
+   if(increased('badReplies')){
+    if(ownRadius)observedRadiusState='bad_reply';
     if(previousState!=='bad_reply')await recordNasActivity(app,nasId,'nas.radius.bad_reply',{counters:radiusCounters(old)}, {...details,responseState:'bad_reply',observedAt:radius.checkedAt},'failed','RADIUS_BAD_REPLY');
     stateMap[key]='bad_reply';continue;
    }
-   if(delta('timeouts')>0){
+   if(increased('timeouts')){
+    if(ownRadius&&observedRadiusState!=='bad_reply')observedRadiusState='timeout';
     if(previousState!=='timeout')await recordNasActivity(app,nasId,'nas.radius.timeout',{counters:radiusCounters(old)}, {...details,responseState:'timeout',observedAt:radius.checkedAt},'failed','RADIUS_TIMEOUT');
     stateMap[key]='timeout';continue;
    }
-   const receivedResponse=delta('requests')>0&&(delta('accepts')>0||delta('rejects')>0);
+   const receivedResponse=increased('requests')&&(increased('accepts')||increased('rejects'));
+   if(receivedResponse&&ownRadius){config.radiusLastResponseAt=sample.receivedAt;if(!observedRadiusState)observedRadiusState='responding';}
    if(receivedResponse&&['timeout','bad_reply','monitor_unavailable'].includes(previousState)){
     await recordNasActivity(app,nasId,'nas.radius.response_restored',{responseState:previousState,counters:radiusCounters(old)}, {...details,responseState:'responding',observedAt:radius.checkedAt});
     stateMap[key]='responding';
    }else if(!previousState)stateMap[key]='baseline';
   }
+  if(observedRadiusState)config.radiusResponseHealth={state:observedRadiusState,receivedAt:sample.receivedAt};
   const incoming=radius.incoming;
   if(incoming){
    const oldIncoming=config.radiusDiagnosticIncoming;
@@ -428,7 +435,7 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
   }
   config.radiusDiagnosticStates=stateMap;
  }
- config.telemetrySamples=[...(Array.isArray(config.telemetrySamples)?config.telemetrySamples:[]),sample].slice(-36);config.telemetryLatest=sample;config.apiLastCheck={receivedAt:sample.receivedAt,ok:true,port,transport,...(sample.timezoneSync?{timezoneSync:sample.timezoneSync}:{}),...(gatewayId?{gatewayId}:{})};
+ config.telemetrySamples=[...(Array.isArray(config.telemetrySamples)?config.telemetrySamples:[]),sample].slice(-36);config.telemetryLatest=sample;config.apiLastSuccessAt=sample.receivedAt;config.apiLastCheck={receivedAt:sample.receivedAt,ok:true,port,transport,...(sample.timezoneSync?{timezoneSync:sample.timezoneSync}:{}),...(gatewayId?{gatewayId}:{})};
  await app.query('UPDATE '+table+' SET configuration_snapshot=? WHERE nas_id=?',[JSON.stringify(config),nasId]);
  if(sample.version)await app.query('UPDATE lord_nas SET routeros_version=? WHERE id=?',[sample.version,nasId]);
 }
@@ -740,8 +747,9 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
  }finally{api?.close();}
 }
 export async function refreshNasLinks(central:PoolConnection,app:mysql.Connection,scope:any,snapshot:any){
+ if(Number(snapshot.environmentId)!==Number(scope.environment_id)||Number(snapshot.tenantId)!==Number(scope.tenant_id)||Number(snapshot.subscriptionId)!==Number(scope.subscription_id))fail('NAS_SNAPSHOT_SCOPE');
  if(snapshot.connectionMode==='direct'){const [rows]:any=await app.query('SELECT nas_id FROM nas_direct_connections');return rows.length;}
- return withGateway(central,snapshot.gatewayId,async(api)=>{
+ try{return await withGateway(central,snapshot.gatewayId,async(api)=>{
   const active=await api.command('/ppp/active/print',{'.proplist':'name,address,service'});
   const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=? AND ovpn_gateway_id=?',[scope.environment_id,snapshot.gatewayId]);
   for(const t of rows){
@@ -756,10 +764,14 @@ export async function refreshNasLinks(central:PoolConnection,app:mysql.Connectio
      {nasName,tunnelAddress:String(t.tunnel_address||''),status:nextStatus,observedAt:new Date().toISOString()});
    }
    await central.query("UPDATE nas_tunnels SET status=?,last_seen_at=IF(?,NOW(),last_seen_at) WHERE id=?",[nextStatus,connected,t.id]);
-   await app.query('UPDATE lord_nas SET activity_status=?,last_seen_at=IF(?,NOW(6),last_seen_at) WHERE id=?',[connected?'recent':t.last_seen_at?'stale':'unknown',connected,t.tenant_nas_id]);
+   await app.query("UPDATE lord_nas l JOIN nas_ovpn_connections c ON c.nas_id=l.id SET l.activity_status=?,l.last_seen_at=IF(?,NOW(6),l.last_seen_at),c.configuration_snapshot=JSON_SET(c.configuration_snapshot,'$.linkLastCheck',CAST(? AS JSON)) WHERE l.id=?",[connected?'recent':t.last_seen_at?'stale':'unknown',connected,JSON.stringify({receivedAt:new Date().toISOString(),ok:true,connected,environmentId:Number(scope.environment_id),nasId:Number(t.tenant_nas_id),gatewayId:Number(snapshot.gatewayId)}),t.tenant_nas_id]);
   }
   return rows.length;
- });
+ });}catch(error){
+  const code=error instanceof Error&&/^[A-Z0-9_]+$/.test(error.message)?error.message:'OVPN_CHECK_UNAVAILABLE';
+  await app.query("UPDATE nas_ovpn_connections SET configuration_snapshot=JSON_SET(configuration_snapshot,'$.linkLastCheck',CAST(? AS JSON)) WHERE JSON_EXTRACT(configuration_snapshot,'$.environmentId')=?",[JSON.stringify({receivedAt:new Date().toISOString(),ok:false,code}),Number(scope.environment_id)]).catch(()=>{});
+  throw error;
+ }
 }
 export async function removeNetworkTunnels(central:PoolConnection,environmentId:number){
  const [rows]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=?',[environmentId]);
