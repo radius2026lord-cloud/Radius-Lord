@@ -31,6 +31,7 @@ if [[ ! -f "$repo/HEAD" ]]; then
   sudo -u "$deploy_user" git init --bare "$repo"
 fi
 install -m 750 -o "$deploy_user" -g "$deploy_user" "$source_dir/radius-deploy.py" "$repo/hooks/radius-deploy.py"
+install -m 640 -o "$deploy_user" -g "$deploy_user" "$source_dir/central-baseline.manifest.json" "$repo/hooks/central-baseline.manifest.json"
 for hook in pre-receive post-receive; do
   printf '#!/bin/sh\nexec python3 "%s/hooks/radius-deploy.py" %s\n' "$repo" "$hook" > "$repo/hooks/$hook"
   chmod 750 "$repo/hooks/$hook"

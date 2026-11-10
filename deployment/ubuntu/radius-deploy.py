@@ -104,7 +104,8 @@ def inspect():
     if cfg.get("requireBootstrapReceipt") and not (root / "current").exists():
         try:
             receipt = json.loads((root / "shared/central-import-receipt.json").read_text())
-            central_ready = receipt.get("centralTablesVerified") is True
+            reference = json.loads((REPO / "hooks/central-baseline.manifest.json").read_text())
+            central_ready = receipt.get("centralTablesVerified") is True and receipt.get("centralReferenceVersion") == reference.get("schemaVersion")
         except (OSError, ValueError):
             central_ready = False
         checks.append({"name":"استيراد القاعدة المركزية المعتمدة", "ok":central_ready})

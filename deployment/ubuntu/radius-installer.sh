@@ -15,6 +15,7 @@ Radius Lord Host Installer v4
   configure --profile FILE --secrets PRIVATE_JSON
   database-prepare --profile FILE --secrets PRIVATE_JSON
   database-import --profile FILE --secrets PRIVATE_JSON --dump CENTRAL.sql --sha256 HEX
+  database-verify --profile FILE --secrets PRIVATE_JSON
   apache --profile FILE          Initial HTTP proxy; never replaces existing vhost
   https --profile FILE --email EMAIL
   verify --profile FILE
@@ -80,7 +81,7 @@ GUARD
   node --version; npm --version
   ;;
  receiver) bash "$base/install-git-host.sh" radiusdeploy /srv/radius-lord ;;
- configure|database-prepare|database-import|apache|verify) exec python3 "$base/host-setup.py" "$action" "$@" ;;
+ configure|database-prepare|database-import|database-verify|apache|verify) exec python3 "$base/host-setup.py" "$action" "$@" ;;
  https)
   [[ $# == 4 && "$1" == --profile && "$3" == --email ]] || { echo 'https --profile FILE --email EMAIL'; exit 1; }
   domain="$(python3 - "$base" "$2" <<'PY'

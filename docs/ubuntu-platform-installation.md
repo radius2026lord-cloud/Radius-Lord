@@ -81,3 +81,9 @@ From the local site's **تحديثات النظام**, inspect the host, prepare
 ## Validation performed in this change
 
 Only static Bash/Python syntax and TypeScript diagnostics are checked. No installer phase, package installation, build, DNS probe, certificate request, SQL import, SSH command, browser or production deployment was executed. Host acceptance still requires access to the real VPS, reviewed secret/central/tenant migration inputs, and an external check of HTTPS, login, WebSocket, provisioning, backup/restore and two-network isolation.
+
+## Approved central reference added 2026-11-10
+
+The supplied central dump now has a data-free reference and required table/column/unique-index manifest; see `central-database-reference.md`. `database-import` verifies that inventory after import. `database-verify` verifies an already restored central database using read-only SQL and writes the matching receipt. It does not certify migrations or tenant databases. This replaces the initial seven-table-only verification described above. The raw uploaded dump remains private and is never bundled into releases.
+
+The hosting bootstrap target is the central database plus site/backend; new tenant databases remain generated automatically by the established tenant provisioning flow. No old tenant database is regenerated or removed during setup.

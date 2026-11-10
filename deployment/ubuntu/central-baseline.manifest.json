@@ -1,0 +1,1047 @@
+{
+  "schemaVersion": "central-20261110-reference-v1",
+  "purpose": "structure-reference-not-migration",
+  "referencePath": "src/app/backend/central-schema/20261110_reference.sql",
+  "referenceSha256": "1919e335eff89662476d87fedc48064b5f482461729ab1bcc4218f7688975a1c",
+  "checkedDimensions": [
+    "required_table_names",
+    "required_column_names",
+    "unique_index_names_and_column_order"
+  ],
+  "uncheckedDimensions": [
+    "column_types_defaults_collations",
+    "foreign_key_definitions",
+    "reference_seed_data",
+    "tenant_database_schema_compatibility"
+  ],
+  "tables": {
+    "audit_actions": {
+      "columns": [
+        "id",
+        "code",
+        "name_ar",
+        "name_en",
+        "description",
+        "is_active"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_audit_action_code": [
+          "code"
+        ]
+      }
+    },
+    "audit_entity_types": {
+      "columns": [
+        "id",
+        "code",
+        "name_ar",
+        "name_en",
+        "description",
+        "is_active"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_audit_entity_code": [
+          "code"
+        ]
+      }
+    },
+    "central_audit_logs": {
+      "columns": [
+        "id",
+        "admin_id",
+        "tenant_id",
+        "action_id",
+        "entity_type_id",
+        "entity_id",
+        "description",
+        "ip_address",
+        "user_agent",
+        "metadata",
+        "created_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "currencies": {
+      "columns": [
+        "id",
+        "code",
+        "name_ar",
+        "name_en",
+        "symbol",
+        "status",
+        "sort_order",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_currencies_code": [
+          "code"
+        ]
+      }
+    },
+    "customers": {
+      "columns": [
+        "id",
+        "full_name",
+        "email",
+        "username",
+        "phone",
+        "country",
+        "password_hash",
+        "status",
+        "last_login_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_customer_email": [
+          "email"
+        ],
+        "uq_customer_phone": [
+          "phone"
+        ],
+        "uq_customer_username": [
+          "username"
+        ]
+      }
+    },
+    "database_backup_jobs": {
+      "columns": [
+        "id",
+        "batch_key",
+        "request_key",
+        "server_id",
+        "database_name",
+        "name",
+        "tenant_id",
+        "kind",
+        "trigger_type",
+        "actor_id",
+        "status",
+        "metadata",
+        "destinations",
+        "deliveries",
+        "delivery_owner",
+        "delivery_state",
+        "attempts",
+        "last_error",
+        "created_at",
+        "finished_at",
+        "next_attempt_at",
+        "removed_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "request_key": [
+          "request_key"
+        ]
+      }
+    },
+    "database_backup_verifications": {
+      "columns": [
+        "id",
+        "request_id",
+        "backup_id",
+        "server_id",
+        "actor_id",
+        "status",
+        "result",
+        "attempts",
+        "created_at",
+        "started_at",
+        "finished_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "request_id": [
+          "request_id"
+        ]
+      }
+    },
+    "database_servers": {
+      "columns": [
+        "id",
+        "name",
+        "host",
+        "port",
+        "provisioning_username",
+        "provisioning_password_encrypted",
+        "accepts_new_environments",
+        "status",
+        "app_connection_budget",
+        "radius_connection_budget",
+        "tls_required",
+        "tls_ca_reference",
+        "archived_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_database_server_endpoint": [
+          "host",
+          "port"
+        ]
+      }
+    },
+    "deployment_types": {
+      "columns": [
+        "id",
+        "code",
+        "name_ar",
+        "name_en",
+        "description",
+        "status",
+        "sort_order",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_deployment_types_code": [
+          "code"
+        ]
+      }
+    },
+    "environment_component_versions": {
+      "columns": [
+        "environment_id",
+        "component",
+        "release_id",
+        "verified_at",
+        "installed_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "environment_id",
+          "component"
+        ]
+      }
+    },
+    "environment_notifications": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "environment_id",
+        "subscription_id",
+        "provisioning_job_id",
+        "recipient_phone",
+        "recipient_source",
+        "channel",
+        "idempotency_key",
+        "status",
+        "initial_username",
+        "initial_password_encrypted",
+        "credentials_expires_at",
+        "attempt_count",
+        "next_attempt_at",
+        "lock_token",
+        "locked_until",
+        "provider_message_id",
+        "sent_at",
+        "error_code",
+        "error_message",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_notification_idempotency": [
+          "idempotency_key"
+        ]
+      }
+    },
+    "environment_provisioning_jobs": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "environment_id",
+        "subscription_id",
+        "payment_order_id",
+        "requested_by_master_admin_id",
+        "idempotency_key",
+        "status",
+        "current_step",
+        "attempt_count",
+        "available_at",
+        "lock_token",
+        "locked_until",
+        "started_at",
+        "finished_at",
+        "error_code",
+        "error_message",
+        "active_environment_id",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_provision_idempotency": [
+          "idempotency_key"
+        ],
+        "uq_provision_id_network_environment": [
+          "id",
+          "tenant_id",
+          "environment_id",
+          "subscription_id"
+        ],
+        "uq_provision_active_environment": [
+          "active_environment_id"
+        ]
+      }
+    },
+    "environment_provisioning_steps": {
+      "columns": [
+        "id",
+        "job_id",
+        "step_code",
+        "status",
+        "attempt_count",
+        "resource_reference",
+        "started_at",
+        "finished_at",
+        "error_code",
+        "error_message",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_provision_step": [
+          "job_id",
+          "step_code"
+        ]
+      }
+    },
+    "environment_releases": {
+      "columns": [
+        "id",
+        "component",
+        "version",
+        "artifact_sha256",
+        "artifact_reference",
+        "minimum_compatible_version",
+        "rollout_policy",
+        "status",
+        "approved_by_master_admin_id",
+        "approved_at",
+        "created_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_release_component_version": [
+          "component",
+          "version"
+        ],
+        "uq_release_id_component": [
+          "id",
+          "component"
+        ]
+      }
+    },
+    "environment_upgrade_jobs": {
+      "columns": [
+        "id",
+        "environment_id",
+        "component",
+        "from_release_id",
+        "to_release_id",
+        "idempotency_key",
+        "requested_by_master_admin_id",
+        "status",
+        "backup_reference",
+        "compatibility_verified_at",
+        "health_verified_at",
+        "lock_token",
+        "locked_until",
+        "started_at",
+        "finished_at",
+        "error_code",
+        "error_message",
+        "active_environment_id",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_upgrade_request": [
+          "idempotency_key"
+        ],
+        "uq_upgrade_active_environment": [
+          "active_environment_id"
+        ]
+      }
+    },
+    "lord_nas": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "radius_nas_id",
+        "name",
+        "host",
+        "vendor",
+        "model",
+        "auth_port",
+        "acct_port",
+        "coa_port",
+        "location",
+        "description",
+        "status",
+        "connection_status",
+        "last_seen_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_lord_nas_tenant_host": [
+          "tenant_id",
+          "host"
+        ]
+      }
+    },
+    "lord_nas_api_credentials": {
+      "columns": [
+        "id",
+        "nas_id",
+        "enabled",
+        "api_host",
+        "api_port",
+        "use_ssl",
+        "username",
+        "password_encrypted",
+        "status",
+        "last_connected_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_nas_api_credentials": [
+          "nas_id"
+        ]
+      }
+    },
+    "lord_nas_endpoints": {
+      "columns": [
+        "id",
+        "nas_id",
+        "service_type",
+        "host",
+        "port",
+        "external_host",
+        "external_port",
+        "protocol",
+        "enabled",
+        "description",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "lord_nas_status_logs": {
+      "columns": [
+        "id",
+        "nas_id",
+        "status",
+        "response_time_ms",
+        "message",
+        "checked_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "master_admins": {
+      "columns": [
+        "id",
+        "full_name",
+        "username",
+        "email",
+        "phone",
+        "password_hash",
+        "status",
+        "last_login_at",
+        "last_login_ip",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_master_admin_username": [
+          "username"
+        ],
+        "uq_master_admin_email": [
+          "email"
+        ]
+      }
+    },
+    "nas_registry": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "name",
+        "nas_ip",
+        "nas_type",
+        "radius_secret",
+        "auth_port",
+        "acct_port",
+        "description",
+        "status",
+        "last_seen_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_tenant_nas_ip": [
+          "tenant_id",
+          "nas_ip"
+        ]
+      }
+    },
+    "nas_tunnels": {
+      "columns": [
+        "id",
+        "environment_id",
+        "ovpn_gateway_id",
+        "tenant_nas_id",
+        "reservation_slot",
+        "tunnel_username",
+        "tunnel_password_encrypted",
+        "tunnel_address",
+        "certificate_reference",
+        "status",
+        "last_seen_at",
+        "archived_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_tunnel_gateway_username": [
+          "ovpn_gateway_id",
+          "tunnel_username"
+        ],
+        "uq_tunnel_gateway_address": [
+          "ovpn_gateway_id",
+          "tunnel_address"
+        ],
+        "uq_tunnel_environment_nas": [
+          "environment_id",
+          "tenant_nas_id"
+        ],
+        "uq_tunnel_environment_slot": [
+          "environment_id",
+          "reservation_slot"
+        ]
+      }
+    },
+    "network_followup_alert_settings": {
+      "columns": [
+        "environment_id",
+        "expiry_days",
+        "quota_percent",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "environment_id"
+        ]
+      }
+    },
+    "ovpn_gateways": {
+      "columns": [
+        "id",
+        "settings_json",
+        "api_password_encrypted",
+        "created_at",
+        "updated_by_master_admin_id",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "payment_orders": {
+      "columns": [
+        "id",
+        "payment_code",
+        "customer_id",
+        "subscription_id",
+        "plan_id",
+        "deployment_type_id",
+        "payment_purpose",
+        "plan_name_snapshot",
+        "duration_months_snapshot",
+        "deployment_name_snapshot",
+        "base_price",
+        "addons_total",
+        "total_amount",
+        "currency_code",
+        "addons_snapshot",
+        "plan_limits_snapshot",
+        "payment_method",
+        "status",
+        "requested_at",
+        "paid_at",
+        "completed_at",
+        "cancelled_at",
+        "expires_at",
+        "confirmed_by_master_admin_id",
+        "admin_note",
+        "created_at",
+        "updated_at",
+        "tenant_id"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_payment_orders_code": [
+          "payment_code"
+        ],
+        "uq_payment_id_subscription_tenant": [
+          "id",
+          "subscription_id",
+          "tenant_id"
+        ]
+      }
+    },
+    "payment_order_events": {
+      "columns": [
+        "id",
+        "payment_order_id",
+        "event_type",
+        "from_status",
+        "to_status",
+        "master_admin_id",
+        "note",
+        "metadata",
+        "created_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "payment_plans": {
+      "columns": [
+        "id",
+        "name",
+        "duration_months",
+        "max_tenants",
+        "max_subscribers",
+        "max_nas",
+        "price",
+        "currency",
+        "currency_id",
+        "description",
+        "is_featured",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "plan_addons": {
+      "columns": [
+        "id",
+        "plan_id",
+        "deployment_type_id",
+        "code",
+        "name_ar",
+        "name_en",
+        "description",
+        "price",
+        "status",
+        "sort_order",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_plan_addon": [
+          "plan_id",
+          "deployment_type_id",
+          "code"
+        ]
+      }
+    },
+    "plan_deployment_options": {
+      "columns": [
+        "id",
+        "plan_id",
+        "deployment_type_id",
+        "price",
+        "is_default",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_plan_deployment": [
+          "plan_id",
+          "deployment_type_id"
+        ]
+      }
+    },
+    "platform_settings": {
+      "columns": [
+        "id",
+        "setting_group",
+        "setting_key",
+        "setting_value",
+        "value_type",
+        "is_public",
+        "updated_by_master_admin_id",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_platform_setting": [
+          "setting_group",
+          "setting_key"
+        ]
+      }
+    },
+    "schema_versions": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "version",
+        "status",
+        "applied_at",
+        "error_message",
+        "created_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "server_ssh_connections": {
+      "columns": [
+        "database_server_id",
+        "host",
+        "port",
+        "username",
+        "auth_method",
+        "secret_encrypted",
+        "passphrase_encrypted",
+        "host_fingerprint",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "database_server_id"
+        ]
+      }
+    },
+    "subscriptions": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "plan_id",
+        "starts_at",
+        "expires_at",
+        "status",
+        "auto_renew",
+        "created_at",
+        "updated_at",
+        "plan_limits_snapshot",
+        "duration_months_snapshot",
+        "deployment_type_id",
+        "activated_at",
+        "archived_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_subscription_id_tenant": [
+          "id",
+          "tenant_id"
+        ]
+      }
+    },
+    "subscription_addons": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "subscription_id",
+        "plan_addon_id",
+        "payment_order_id",
+        "addon_code_snapshot",
+        "addon_name_snapshot",
+        "quantity",
+        "nas_capacity_increment",
+        "unit_price_snapshot",
+        "currency_code_snapshot",
+        "status",
+        "activated_at",
+        "expires_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ]
+      }
+    },
+    "subscription_licenses": {
+      "columns": [
+        "id",
+        "subscription_id",
+        "tenant_id",
+        "license_key",
+        "status",
+        "activated_at",
+        "starts_at",
+        "expires_at",
+        "suspended_at",
+        "revoked_at",
+        "last_renewed_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_subscription_license_key": [
+          "license_key"
+        ],
+        "uq_license_network": [
+          "tenant_id"
+        ],
+        "uq_subscription_license_subscription": [
+          "subscription_id"
+        ]
+      }
+    },
+    "tenants": {
+      "columns": [
+        "id",
+        "license_number",
+        "name",
+        "slug",
+        "logo",
+        "status",
+        "created_at",
+        "updated_at",
+        "notes",
+        "customer_id",
+        "archived_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_tenant_license": [
+          "license_number"
+        ],
+        "uq_tenant_slug": [
+          "slug"
+        ]
+      }
+    },
+    "tenant_databases": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "db_host",
+        "db_port",
+        "db_name",
+        "db_username",
+        "db_password",
+        "status",
+        "schema_version",
+        "created_at",
+        "updated_at",
+        "database_server_id",
+        "app_password_encrypted",
+        "radius_username",
+        "radius_password_encrypted",
+        "credentials_state",
+        "app_pool_limit",
+        "radius_pool_limit"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_tenant_database_tenant": [
+          "tenant_id"
+        ],
+        "uq_tenant_database_name_host": [
+          "db_host",
+          "db_name"
+        ],
+        "uq_tenant_database_id_tenant": [
+          "id",
+          "tenant_id"
+        ]
+      }
+    },
+    "tenant_environments": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "tenant_database_id",
+        "deployment_type_id",
+        "system_url",
+        "status",
+        "ready_at",
+        "archived_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_environment_network": [
+          "tenant_id"
+        ],
+        "uq_environment_id_tenant": [
+          "id",
+          "tenant_id"
+        ],
+        "uq_environment_database": [
+          "tenant_database_id"
+        ]
+      }
+    },
+    "tenant_environment_status": {
+      "columns": [
+        "id",
+        "environment_id",
+        "last_seen_at",
+        "reported_at",
+        "radius_status",
+        "database_status",
+        "pppoe_accounts_count",
+        "online_users_count",
+        "active_sessions_count",
+        "nas_count",
+        "online_nas_count",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_environment_status": [
+          "environment_id"
+        ]
+      }
+    },
+    "tenant_managers": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "name",
+        "email",
+        "phone",
+        "password_hash",
+        "status",
+        "last_login_at",
+        "created_at",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "id"
+        ],
+        "uq_tenant_manager_tenant": [
+          "tenant_id"
+        ],
+        "uq_tenant_manager_email": [
+          "email"
+        ]
+      }
+    },
+    "user_ui_preferences": {
+      "columns": [
+        "owner_key",
+        "preferences_json",
+        "updated_at"
+      ],
+      "uniqueIndexes": {
+        "PRIMARY": [
+          "owner_key"
+        ]
+      }
+    }
+  }
+}

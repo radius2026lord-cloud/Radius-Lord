@@ -62,23 +62,41 @@ def db_prepare(data):
     sql+="CREATE USER '"+data['dbUser']+"'@'localhost' IDENTIFIED BY '"+esc(data['dbPassword'])+"';\n"
     sql+="GRANT ALL PRIVILEGES ON `"+data['dbName']+"`.* TO '"+data['dbUser']+"'@'localhost';\n"
     run(['mysql'],input=sql,text=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+def verify_central(data,user,dump_sha=None):
+    manifest=json.loads((pathlib.Path(__file__).parent/'central-baseline.manifest.json').read_text())
+    expected=manifest['tables']
+    with tempfile.TemporaryDirectory(prefix='radius-verify-') as temporary:
+        cnf=pathlib.Path(temporary)/'mysql.cnf';mysql_defaults(data,cnf)
+        args=['mysql','--defaults-extra-file='+str(cnf),'--batch','--raw','--skip-column-names',data['dbName']]
+        columns=subprocess.check_output(args+['-e',"SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() ORDER BY TABLE_NAME,ORDINAL_POSITION"],text=True,stderr=subprocess.DEVNULL)
+        actual={}
+        for line in columns.splitlines():
+            table,column=line.split('\t');actual.setdefault(table,set()).add(column)
+        indexes=subprocess.check_output(args+['-e',"SELECT TABLE_NAME,INDEX_NAME,COLUMN_NAME FROM information_schema.statistics WHERE table_schema=DATABASE() AND NON_UNIQUE=0 ORDER BY TABLE_NAME,INDEX_NAME,SEQ_IN_INDEX"],text=True,stderr=subprocess.DEVNULL)
+        unique={}
+        for line in indexes.splitlines():
+            table,name,column=line.split('\t');unique.setdefault((table,name),[]).append(column)
+        missing_tables=[table for table in expected if table not in actual]
+        missing_columns=[table+'.'+column for table,definition in expected.items() for column in definition['columns'] if column not in actual.get(table,set())]
+        bad_indexes=[table+'.'+name for table,definition in expected.items() for name,columns in definition['uniqueIndexes'].items() if unique.get((table,name))!=columns]
+        if missing_tables or missing_columns or bad_indexes:
+            raise ValueError('Central reference mismatch: '+json.dumps({'missingTables':missing_tables,'missingColumns':missing_columns,'differentUniqueIndexes':bad_indexes}))
+    receipt={'database':data['dbName'],'sha256':dump_sha,'centralTablesVerified':True,'centralReferenceVersion':manifest['schemaVersion'],'checkedDimensions':manifest['checkedDimensions'],'migrationsVerified':False,'tenantDatabasesVerified':False}
+    atomic(ROOT/'shared/central-import-receipt.json',json.dumps(receipt,indent=2),pwd.getpwnam(user))
+    print('Central reference verified: '+str(len(expected))+' tables. Tenant databases were not changed or certified.')
 def db_import(data,path,expected,user):
     source=pathlib.Path(path)
     digest=hashlib.sha256()
     with source.open('rb') as stream:
         for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
-    if not re.fullmatch('[a-f0-9]{64}',expected) or digest.hexdigest()!=expected: raise ValueError('Approved dump SHA256 does not match')
+    if not re.fullmatch('[a-f0-9]{64}',expected) or digest.hexdigest()!=expected:raise ValueError('Approved dump SHA256 does not match')
     with tempfile.TemporaryDirectory(prefix='radius-import-') as temporary:
         cnf=pathlib.Path(temporary)/'mysql.cnf';mysql_defaults(data,cnf)
         args=['mysql','--defaults-extra-file='+str(cnf),data['dbName']]
         count=subprocess.check_output(args+['-Nse',"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()"],text=True).strip()
-        if count!='0': raise ValueError('Import requires an empty target database; no existing application data will be replaced')
-        # The scoped account cannot write other databases, users or global grants.
+        if count!='0':raise ValueError('Import requires an empty target database; no existing application data will be replaced')
         with source.open('rb') as stream:run(args,stdin=stream,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        present=set(subprocess.check_output(args+['-Nse','SHOW TABLES'],text=True).split())
-        required={'platform_settings','tenants','subscriptions','database_servers','tenant_databases','tenant_environments','ovpn_gateways'}
-        if not required.issubset(present): raise ValueError('Imported dump lacks required central tables; do not activate the platform')
-        atomic(ROOT/'shared/central-import-receipt.json',json.dumps({'database':data['dbName'],'sha256':expected,'centralTablesVerified':True,'migrationsVerified':False},indent=2),pwd.getpwnam(user))
+    verify_central(data,user,expected)
 def configure(data,settings,user):
     shared=ROOT/'shared';owner=pwd.getpwnam(user)
     if any((shared/name).exists() for name in ('root.env','backend.env')): raise ValueError('Environment files exist. Review/edit them explicitly; setup will not replace secrets or URLs.')
@@ -121,16 +139,17 @@ def apache(settings):
         subprocess.run(['a2dissite','radius-lord'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         raise
 def main():
-    p=argparse.ArgumentParser();p.add_argument('action',choices=['plan','configure','database-prepare','database-import','apache','verify']);p.add_argument('--profile',required=True);p.add_argument('--secrets');p.add_argument('--user',default='radiusdeploy');p.add_argument('--dump');p.add_argument('--sha256');args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('action',choices=['plan','configure','database-prepare','database-import','database-verify','apache','verify']);p.add_argument('--profile',required=True);p.add_argument('--secrets');p.add_argument('--user',default='radiusdeploy');p.add_argument('--dump');p.add_argument('--sha256');args=p.parse_args()
     settings=profile(args.profile)
     if args.action=='plan':
         print(json.dumps({'root':str(ROOT),'hosting':settings['hosting'],'infrastructure':settings.get('infrastructure'), 'preserve':['Netplan','FreeRADIUS configuration','existing databases','encryption keys'],'needs':['system Node.js 24','approved central dump','private secrets file','backup hook','approved migration hook','DNS/HTTPS/CHR route verification']},ensure_ascii=False,indent=2));return
     if os.geteuid()!=0:raise ValueError('Run this setup phase as root')
-    if args.action in ('configure','database-prepare','database-import'):
+    if args.action in ('configure','database-prepare','database-import','database-verify'):
         if not args.secrets:raise ValueError('--secrets private JSON file is required')
         data=credentials(args.secrets)
         if args.action=='configure':configure(data,settings,args.user)
         elif args.action=='database-prepare':db_prepare(data)
+        elif args.action=='database-verify':verify_central(data,args.user)
         else:
             if not args.dump or not args.sha256:raise ValueError('--dump and --sha256 are required')
             db_import(data,args.dump,args.sha256,args.user)
