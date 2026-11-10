@@ -80,6 +80,7 @@ const masterAdminGroups: NavGroup[] = [
   ]},
   { label: "الشبكات والاشتراكات", icon: Radio, items: [
     { label: "الشبكات وحالتها", href: "/Dashboard/networks", icon: Radio },
+    { label: "صحة الشبكات", href: "/Dashboard/network-health", icon: ShieldCheck },
     { label: "طلبات الاشتراك والتجهيز", href: "/Dashboard/subscriptions", icon: CreditCard },
     { label: "تجهيز البيئة يدويًا", href: "/Dashboard/subscriptions/provisioning", icon: Server },
     { label: "عمليات الدفع", href: "/Dashboard/payments", icon: CircleDollarSign },
@@ -162,7 +163,7 @@ export default function DashboardShell({ children,network }: { children: React.R
   const accountType=network?'customer':auth?.accountType;
   const subscribersWorkspace=network?.tab==="subscribers";
   const homeWorkspace=Boolean(network?.tab==="overview"||accountType==="master_admin"&&actualPathname.toLowerCase()==="/dashboard");
-  const masterNetworkWorkspace=accountType==="master_admin"&&/^\/dashboard\/networks(?:\/|$)/i.test(actualPathname);
+  const masterNetworkWorkspace=accountType==="master_admin"&&/^\/dashboard\/(?:networks|network-health)(?:\/|$)/i.test(actualPathname);
   const continuousWorkspace=subscribersWorkspace||homeWorkspace||masterNetworkWorkspace;
   const pathname=network?(network.tab==='radius-settings'||network.tab==='settings'?`${network.basePath}?tab=settings&settingsTab=${network.settingsTab||(network.tab==='radius-settings'?'radius':'network')}`:network.tab==='templates'?`${network.basePath}?tab=templates&templateGroup=${network.templateGroup||'cards'}`:network.tab==='overview'?network.basePath:network.tab==='profiles'?`${network.basePath}?tab=profiles&profileTab=${network.profileTab||'list'}`:network.tab==='hotspot'?`${network.basePath}?tab=hotspot&hotspotTab=${network.hotspotTab||'packages'}`:network.tab==='subscribers'?`${network.basePath}?tab=subscribers${network.subscriberTab==='card-design'?'&subscriberTab=card-design':network.subscriberTab==='create'?'&subscriberTab=create':network.subscriberTab==='activity'?'&subscriberTab=activity':''}`:`${network.basePath}?tab=${network.tab}`):actualPathname;
   const networkHome:NavItem={label:'الصفحة الرئيسية',href:network?.basePath||'/Dashboard',icon:Home};

@@ -1,3 +1,4 @@
+import {listMasterNetworkHealth,requestMasterNetworkHealth} from '../../services/master-network-health.service';
 import {checkMasterNetworkConnections,NetworkCheckError} from '../../services/master-network-tunnels.service';
 import {manageNetworkAccess,RecoveryError} from '../../services/network-access-recovery.service';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
@@ -13,6 +14,15 @@ import { getCollectionReportController } from '../../controllers/payment-reports
 import { requestEnvironmentController } from '../../controllers/environment.controller';
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
+router.get('/admin/network-health',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
+ res.set('Cache-Control','no-store');try{return res.json(await listMasterNetworkHealth());}catch{return res.status(503).json({message:'تعذر تحميل صحة الشبكات.'});}
+});
+router.post('/admin/network-health/:environmentId/check',authenticate,requireAccountType('master_admin'),requireAuthOrigin,async(req,res)=>{
+ const raw=req.params.environmentId;if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw)))return res.status(400).json({message:'معرّف البيئة غير صالح.'});
+ try{await requestMasterNetworkHealth(Number(raw));return res.status(202).json({message:'أُدرج طلب التحديث. تظهر نتائج قاعدة البيانات وAPI تدريجيًا؛ فحص OVPN يتبع دورة CHR الدورية.'});}
+ catch(error){return res.status((error as Error)?.message==='NETWORK_HEALTH_NOT_READY'?409:503).json({message:'تعذر طلب الفحص؛ تأكد من جاهزية البيئة.'});}
+});
+
 router.get('/admin/manual-environment/plans',authenticate,requireAccountType('master_admin'),listManualEnvironmentPlans);
 router.post('/admin/manual-environment',authenticate,requireAccountType('master_admin'),createManualEnvironment);
 router.get('/admin/subscription-changes',authenticate,requireAccountType('master_admin'),async(_req,res)=>{

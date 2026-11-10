@@ -1,3 +1,4 @@
+import {startMasterNetworkHealthWorker} from './services/master-network-health.service';
 import {startNasApiMonitorWorker} from './services/nas-api-monitor.worker';
 import {startDatabaseBackupWorker} from './services/database-backups.service';
 import {startMasterNetworkTunnelsWorker} from './services/master-network-tunnels.service';
@@ -50,6 +51,7 @@ const startServer = (port: number) => {
     server.once('close',stopMasterMetrics);
     server.once('close',startMasterNetworkTunnelsWorker());
     server.once('close',startNasApiMonitorWorker());
+    server.once('close',startMasterNetworkHealthWorker());
     const stopArchive=startNetworkArchiveWorker();
     const stopProfileBoosts=startProfileSpeedBoostWorker();
     const stopPppoeLifecycle=startPppoeLifecycleWorker();
