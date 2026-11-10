@@ -1,3 +1,4 @@
+import {listMasterNetworkIncidents} from '../../services/master-network-incidents.service';
 import {listMasterNetworkHealth,requestMasterNetworkHealth} from '../../services/master-network-health.service';
 import {checkMasterNetworkConnections,NetworkCheckError} from '../../services/master-network-tunnels.service';
 import {manageNetworkAccess,RecoveryError} from '../../services/network-access-recovery.service';
@@ -14,6 +15,10 @@ import { getCollectionReportController } from '../../controllers/payment-reports
 import { requestEnvironmentController } from '../../controllers/environment.controller';
 import { listSubscriptionPaymentsController } from '../../controllers/subscription-payments.controller';
 const router=Router();
+router.get('/admin/network-incidents',authenticate,requireAccountType('master_admin'),async(req,res)=>{
+ res.set('Cache-Control','no-store');try{return res.json(await listMasterNetworkIncidents(req.query));}
+ catch(error){return res.status(error instanceof RangeError?400:503).json({message:error instanceof RangeError?'خيارات تصفية سجل الأعطال غير صالحة.':'تعذر تحميل سجل أعطال الشبكات.'});}
+});
 router.get('/admin/network-health',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
  res.set('Cache-Control','no-store');try{return res.json(await listMasterNetworkHealth());}catch{return res.status(503).json({message:'تعذر تحميل صحة الشبكات.'});}
 });
