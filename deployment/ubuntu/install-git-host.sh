@@ -6,11 +6,21 @@ deploy_root="${2:-/srv/radius-lord}"
 [[ "$EUID" -eq 0 ]] || { echo "Run as root."; exit 1; }
 [[ "$deploy_user" =~ ^[a-z_][a-z0-9_-]*$ ]] || exit 1
 [[ "$deploy_root" =~ ^/[a-zA-Z0-9_/-]+$ ]] || exit 1
+for unit in radius-lord-backend radius-lord-frontend radius-lord-deploy; do
+ [[ ! -e "/etc/systemd/system/$unit.service" ]] || { echo "Existing service $unit: review its configuration; receiver setup will not overwrite it."; exit 1; }
+done
+for existing in /etc/sudoers.d/radius-lord-deploy /etc/systemd/system/radius-lord-deploy.timer "$deploy_root/repository.git"; do
+ [[ ! -e "$existing" ]] || { echo 'Existing receiver configuration: review it before setup.'; exit 1; }
+done
 source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 command -v apt-get >/dev/null
 apt-get update
 apt-get install -y git python3 curl sudo
 command -v node >/dev/null && command -v npm >/dev/null || { echo "Install the project's supported Node.js and npm first."; exit 1; }
+[[ "$(node -p 'process.versions.node.split(".")[0]')" == 24 ]] || { echo "Node.js 24 is required by this host setup."; exit 1; }
+for executable in node npm; do
+ case "$(command -v "$executable")" in /usr/bin/*|/usr/local/bin/*) ;; *) echo "Use system-wide Node/npm, not a root/home-local installation."; exit 1;; esac
+done
 id "$deploy_user" >/dev/null 2>&1 || useradd --create-home --shell /bin/bash "$deploy_user"
 install -d -m 750 -o "$deploy_user" -g "$deploy_user" "$deploy_root"
 for directory in shared shared/hooks shared/uploads shared/backups releases queue status logs; do
@@ -31,7 +41,7 @@ if [[ ! -f "$deploy_root/host-config.json" ]]; then
 import json,pathlib,sys
 root=pathlib.Path(sys.argv[1])
 (root/"host-config.json").write_text(json.dumps({
- "root":str(root),"services":["radius-lord-backend.service","radius-lord-frontend.service"],
+ "root":str(root),"requireBootstrapReceipt":True,"services":["radius-lord-backend.service","radius-lord-frontend.service"],
  "backendHealth":"http://127.0.0.1:4001/release-health",
  "frontendHealth":"http://127.0.0.1:3000/login"
 },indent=2))
@@ -41,6 +51,8 @@ chown "$deploy_user:$deploy_user" "$deploy_root/host-config.json"
 chmod 600 "$deploy_root/host-config.json"
 npm_path="$(command -v npm)"
 for component in backend frontend; do
+  arguments=""
+  [[ "$component" != frontend ]] || arguments=" -- --hostname 127.0.0.1"
   working="$deploy_root/current"
   [[ "$component" != backend ]] || working="$working/src/app/backend"
   cat > "/etc/systemd/system/radius-lord-$component.service" <<UNIT
@@ -48,14 +60,17 @@ for component in backend frontend; do
 ConditionPathExists=$deploy_root/current
 Description=Radius Lord $component
 After=network-online.target
+Wants=network-online.target
 [Service]
 User=$deploy_user
 Group=$deploy_user
 WorkingDirectory=$working
 Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+UMask=0077
 EnvironmentFile=$deploy_root/shared/backend.env
 EnvironmentFile=-$deploy_root/shared/runtime.env
-ExecStart=$npm_path run start
+ExecStart=$npm_path run start$arguments
 Restart=on-failure
 RestartSec=5
 [Install]
@@ -74,8 +89,11 @@ cat > /etc/systemd/system/radius-lord-deploy.service <<UNIT
 [Unit]
 Description=Radius Lord deployment queue
 After=network-online.target
+Wants=network-online.target
 [Service]
 Type=oneshot
+UMask=0077
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 User=$deploy_user
 Group=$deploy_user
 ExecStart=/usr/bin/python3 $repo/hooks/radius-deploy.py worker

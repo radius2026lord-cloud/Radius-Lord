@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "source": "radius-lord-settings",
+  "containsSecrets": false,
+  "hosting": {
+    "access_mode": "domain",
+    "domain": "panel.example.com",
+    "public_ip": "203.0.113.10",
+    "local_ip": "192.168.1.10",
+    "public_https_port": 443,
+    "local_https_port": 443
+  },
+  "selection": {"databaseServerId": 1, "radiusServerId": 1, "gatewayId": 1},
+  "infrastructure": {}
+}

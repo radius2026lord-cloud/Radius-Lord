@@ -40,8 +40,8 @@ export async function saveLocalHostingSettings(req: AuthenticatedRequest, res: R
       return res.status(400).json({ message: 'أدخل عنوان IPv4 عامًا قابلاً للوصول من الإنترنت، وليس عنوانًا محليًا أو CGNAT.' });
   }
   const local = localIp.split('.').map(Number);
-  if (isIP(localIp) !== 4 || !(local[0] === 10 || (local[0] === 172 && local[1] >= 16 && local[1] <= 31) || (local[0] === 192 && local[1] === 168)))
-    return res.status(400).json({ message: 'أدخل عنوان IPv4 المحلي للمخدم ضمن الشبكة الداخلية.' });
+  if (isIP(localIp) !== 4 || !(local[0] === 10 || (local[0] === 172 && local[1] >= 16 && local[1] <= 31) || (local[0] === 192 && local[1] === 168) || (mode==='domain' && localIp===publicIp)))
+    return res.status(400).json({ message: 'أدخل عنوان المخدم الداخلي، أو عنوانه العام نفسه عند استضافة VPS مباشرة بدومين.' });
   const publicPort = Number(body.public_https_port ?? 443), localPort = Number(body.local_https_port ?? 443);
   if (![publicPort, localPort].every(port => Number.isInteger(port) && port >= 1 && port <= 65535))
     return res.status(400).json({ message: 'المنافذ يجب أن تكون أعدادًا صحيحة بين 1 و65535.' });

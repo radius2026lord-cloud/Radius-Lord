@@ -101,6 +101,13 @@ def inspect():
     checks = []
     for name in ("git", "node", "npm", "tar"):
         checks.append({"name": name, "ok": bool(shutil.which(name))})
+    if cfg.get("requireBootstrapReceipt") and not (root / "current").exists():
+        try:
+            receipt = json.loads((root / "shared/central-import-receipt.json").read_text())
+            central_ready = receipt.get("centralTablesVerified") is True
+        except (OSError, ValueError):
+            central_ready = False
+        checks.append({"name":"استيراد القاعدة المركزية المعتمدة", "ok":central_ready})
     checks.extend([
         {"name": "ملف إعدادات الواجهة", "ok": (root / "shared/root.env").is_file()},
         {"name": "ملف إعدادات الباك إند", "ok": (root / "shared/backend.env").is_file()},

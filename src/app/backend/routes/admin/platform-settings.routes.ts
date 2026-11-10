@@ -1,3 +1,4 @@
+import {readDeploymentProfile,exportDeploymentProfile,checkDeploymentHosting} from '../../services/deployment-profile.service';
 import databaseBackupsRoutes from './database-backups.routes';
 import {GitReleaseError,getGitReleases,getHostedGitReleases,inspectGitHosting,prepareGitRelease,sendGitRelease,refreshGitRelease} from '../../services/git-releases.service';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
@@ -18,6 +19,11 @@ import { getMasterUiPreferences, saveMasterUiPreferences } from '../../controlle
 import { authenticate, requireAccountType } from '../../middleware/auth.middleware';
 const router=Router();
 router.use(authenticate,requireAccountType('master_admin'));
+router.get('/deployment-profile',async(_req,res)=>{res.set('Cache-Control','no-store');try{return res.json(await readDeploymentProfile());}catch{return res.status(503).json({message:'تعذر قراءة إعدادات النشر المحفوظة.'});}});
+for(const operation of ['review','check'] as const)router.post('/deployment-profile/'+operation,requireAuthOrigin,async(req,res)=>{
+ res.set('Cache-Control','no-store');try{return res.json(operation==='review'?await exportDeploymentProfile(req.body):await checkDeploymentHosting(req.body));}
+ catch(error){return res.status(error instanceof RangeError?422:503).json({message:error instanceof RangeError?error.message:'تعذر مراجعة إعدادات النشر.'});}
+});
 router.use('/database-backups',databaseBackupsRoutes);
 function gitHandler(work:(req:AuthenticatedRequest)=>Promise<unknown>){
  return async(req:import('express').Request,res:import('express').Response)=>{

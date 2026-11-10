@@ -44,7 +44,7 @@ const startServer = (port: number) => {
     process.exitCode = 1;
   });
 
-  server.listen(port, () => {
+  server.listen(port, process.env.BIND_HOST || (process.env.NODE_ENV==='production'?'127.0.0.1':'0.0.0.0'), () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
     startDatabaseProvisioningWorker();
     server.once('close',startDatabaseBackupWorker());
