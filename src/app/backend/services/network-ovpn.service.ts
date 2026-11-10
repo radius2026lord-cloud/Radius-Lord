@@ -28,6 +28,8 @@ async function nextOvpnUsername(central:PoolConnection,api:RouterApi,nasId:numbe
  fail('OVPN_USERNAME_POOL_EXHAUSTED');
 }
 const legacyOvpnTunnelComment=(username:string,environmentId:number,nasId:number,slot:number|null)=>{
+ // Assigned legacy tunnels keep their NAS identity even when a capacity slot remains.
+ if(nasId>0&&username==='rl_env_'+environmentId+'_nas_'+nasId)return 'Radius Lord env '+environmentId+' nas '+nasId;
  if(nasId>0&&/^lord_N[0-9]+_[0-9]{1,6}$/.test(username))return 'network_N'+nasId;
  if(/^lord_[0-9]{1,6}$/.test(username))return 'Radius Lord OVPN '+username;
  return slot?'Radius Lord env '+environmentId+' nas slot '+slot:'Radius Lord env '+environmentId+' nas '+nasId;
@@ -656,7 +658,13 @@ export async function checkNetworkNasApi(central:PoolConnection,app:mysql.Connec
    if(!connected)fail('NAS_OVPN_ADDRESS_CONFLICT');
    stage='verify_nas_tunnel_owner';
    const secretRows=await gatewayApi.command('/ppp/secret/print',{'.proplist':'.id,name,comment,service,profile,remote-address'},['?name='+tunnel.tunnel_username]);
-   if(secretRows.length!==1||!ownsOvpnComment(secretRows[0].comment,tunnel.tunnel_username,Number(scope.environment_id),nasId,tunnel.reservation_slot)||secretRows[0].service!=='ovpn'||secretRows[0].profile!==c.profile||secretRows[0]['remote-address']!==tunnel.tunnel_address)fail('NAS_CENTRAL_TUNNEL_MISMATCH');
+   const secret=secretRows[0];
+   const mismatches=secretRows.length!==1?['secret_count']:[
+    ...(!ownsOvpnComment(secret.comment,tunnel.tunnel_username,Number(scope.environment_id),nasId,tunnel.reservation_slot)?['comment']:[]),
+    ...(secret.service!=='ovpn'?['service']:[]),...(secret.profile!==c.profile?['profile']:[]),
+    ...(secret['remote-address']!==tunnel.tunnel_address?['remote_address']:[])
+   ];
+   if(mismatches.length){console.warn('[nas-tunnel-owner]',{environmentId:Number(scope.environment_id),nasId,mismatches});fail('NAS_CENTRAL_TUNNEL_MISMATCH');}
    const fullTag=nasResourceTag(Number(scope.environment_id),nasId);
    if(secretRows[0].comment!==fullTag)await gatewayApi.command('/ppp/secret/set',{'.id':secretRows[0]['.id'],comment:fullTag});
 
