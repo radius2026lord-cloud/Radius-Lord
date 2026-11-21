@@ -220,6 +220,16 @@ def deploy(data):
         if previous_data and tuple(map(int, VERSION.fullmatch(version).groups())) <= tuple(map(int, VERSION.fullmatch(previous_data["version"]).groups())):
             raise RuntimeError("The version must be newer than the running version.")
         state["schemaChanges"] = sql_changes(data["commit"], previous_data.get("commit"))
+        # Explicit root approval is scoped to this exact first-release commit.
+        # This records an imported baseline, not successful tenant migrations.
+        approval = root / "shared/central-bootstrap-approval.json"
+        if not previous and approval.exists():
+            state["centralBootstrap"] = json.loads(command([
+                "python3", str(REPO / "hooks/bootstrap-central.py"),
+                "check", "--commit", data["commit"],
+            ], timeout=120))
+            state["baselineSqlFiles"] = state["schemaChanges"]
+            state["schemaChanges"] = []
         if state["schemaChanges"] and not os.access(root / "shared/hooks/migrate", os.X_OK):
             raise RuntimeError("A database migration hook is required.")
         if directory.exists():
@@ -284,6 +294,9 @@ def deploy(data):
                 raise RuntimeError("Tenant schema results differ from the target version.")
             state["tenantSchemaVersion"] = schema_version
             state["tenantSchemaFingerprint"] = fingerprint
+        if state.get("centralBootstrap"):
+            command(["python3", str(REPO / "hooks/bootstrap-central.py"),
+                     "check", "--commit", data["commit"]], timeout=120)
         stage("activate")
         activated = True
         if state.get("tenantSchemaVersion"):
@@ -292,7 +305,8 @@ def deploy(data):
         elif previous_data.get("tenantSchemaVersion"):
             data["tenantSchemaVersion"] = previous_data["tenantSchemaVersion"]
             data["tenantSchemaFingerprint"] = previous_data.get("tenantSchemaFingerprint")
-        atomic(directory / "release.json", {**data, "schemaChanges": state["schemaChanges"]})
+        atomic(directory / "release.json", {**data, "schemaChanges": state["schemaChanges"],
+            "centralBootstrap": state.get("centralBootstrap"), "baselineSqlFiles": state.get("baselineSqlFiles", [])})
         switch(root, directory)
         runtime(root, data)
         service("restart")
@@ -382,3 +396,4 @@ if __name__ == "__main__":
     except Exception as error:
         print(type(error).__name__ + ": " + str(error), file=sys.stderr)
         sys.exit(1)
+

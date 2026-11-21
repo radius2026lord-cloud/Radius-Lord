@@ -46,6 +46,10 @@ const startServer = (port: number) => {
 
   server.listen(port, process.env.BIND_HOST || (process.env.NODE_ENV==='production'?'127.0.0.1':'0.0.0.0'), () => {
     console.log(`🚀 Server running on http://localhost:${port}`);
+    if (process.env.RADIUS_BACKGROUND_WORKERS_ENABLED === '0') {
+      console.warn('Background workers are disabled for deployment preparation.');
+      return;
+    }
     startDatabaseProvisioningWorker();
     server.once('close',startDatabaseBackupWorker());
     const stopMasterMetrics=startMasterNetworkMetricsWorker();
@@ -75,3 +79,4 @@ void (process.env.RADIUS_MIGRATE_MANUAL_ENVIRONMENT_ON_START === '1'
     console.error('Central manual environment migration failed:', error.code || error.message);
     process.exit(1);
   });
+

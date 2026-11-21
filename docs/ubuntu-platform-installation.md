@@ -87,3 +87,43 @@ Only static Bash/Python syntax and TypeScript diagnostics are checked. No instal
 The supplied central dump now has a data-free reference and required table/column/unique-index manifest; see `central-database-reference.md`. `database-import` verifies that inventory after import. `database-verify` verifies an already restored central database using read-only SQL and writes the matching receipt. It does not certify migrations or tenant databases. This replaces the initial seven-table-only verification described above. The raw uploaded dump remains private and is never bundled into releases.
 
 The hosting bootstrap target is the central database plus site/backend; new tenant databases remain generated automatically by the established tenant provisioning flow. No old tenant database is regenerated or removed during setup.
+
+
+
+## First release after an approved central import
+
+An imported central-only host may explicitly adopt one exact release commit as
+its starting baseline. This is not a migration adapter and does not certify any
+tenant database. Existing central tenant records may still point at old hosts.
+
+Keep `RADIUS_BACKGROUND_WORKERS_ENABLED=0` in shared/backend.env and disable
+`RADIUS_MIGRATE_MANUAL_ENVIRONMENT_ON_START`. New configurations default to
+workers disabled; ordinary existing installations retain their previous behavior
+unless this flag is set to `0`. This gates workers started by server.ts, not manual
+API actions. Do not expose the application or request old-network actions before
+reviewing infrastructure endpoints. The application database connection remains enabled.
+
+On an existing receiver, stop the deployment timer while updating its helpers.
+Do not rerun receiver setup or replace environment files. Copy radius-deploy.py,
+bootstrap-central.py and central-baseline.manifest.json from the trusted updated
+checkout into repository.git/hooks using the same radiusdeploy ownership and
+permissions as the existing helpers. As root, approve the full commit intended
+for the first release:
+
+```bash
+python3 /srv/radius-lord/repository.git/hooks/bootstrap-central.py approve --commit FULL_40_HEX_COMMIT
+```
+
+The helper uses the existing private backup MySQL option file, queries only
+metadata, checks the central reference columns/unique indexes and checksum import
+receipt, and requires that no other application databases exist locally. It
+writes a root-owned approval tied to that commit, import checksum and reference
+fingerprint. The deployment worker repeats these checks at preflight and just
+before activation. SQL files in that exact initial snapshot are recorded as
+baselineSqlFiles, not replayed. The normal verified backup still runs.
+
+Restart the deployment timer only after approval and helper installation. Later
+SQL changes still require the real reviewed migration hook; the baseline approval
+cannot bypass migrations after a current release exists. Keep workers disabled
+until old network endpoints, pending jobs and new infrastructure settings have
+been reviewed. Starting a standalone worker separately is outside this server flag.

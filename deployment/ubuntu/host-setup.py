@@ -101,7 +101,7 @@ def configure(data,settings,user):
     shared=ROOT/'shared';owner=pwd.getpwnam(user)
     if any((shared/name).exists() for name in ('root.env','backend.env')): raise ValueError('Environment files exist. Review/edit them explicitly; setup will not replace secrets or URLs.')
     h=settings['hosting'];url='https://'+h['domain']+(':'+str(h['public_https_port']) if h['public_https_port']!=443 else '')
-    backend={'NODE_ENV':'production','PORT':'4001','BIND_HOST':'127.0.0.1','DB_HOST':data['dbHost'],'DB_PORT':str(data['dbPort']),'DB_NAME':data['dbName'],'DB_USER':data['dbUser'],'DB_PASS':data['dbPassword'],'JWT_SECRET':data['jwtSecret'],'GATEWAY_ENCRYPTION_KEY':data['gatewayEncryptionKey'],'FRONTEND_URL':url,'RADIUS_RELEASE_STAGING_DIR':str(shared/'staged-releases'),'RADIUS_HOST_RELEASE_ROOT':str(ROOT)}
+    backend={'RADIUS_BACKGROUND_WORKERS_ENABLED':'0','NODE_ENV':'production','PORT':'4001','BIND_HOST':'127.0.0.1','DB_HOST':data['dbHost'],'DB_PORT':str(data['dbPort']),'DB_NAME':data['dbName'],'DB_USER':data['dbUser'],'DB_PASS':data['dbPassword'],'JWT_SECRET':data['jwtSecret'],'GATEWAY_ENCRYPTION_KEY':data['gatewayEncryptionKey'],'FRONTEND_URL':url,'RADIUS_RELEASE_STAGING_DIR':str(shared/'staged-releases'),'RADIUS_HOST_RELEASE_ROOT':str(ROOT)}
     frontend={'NODE_ENV':'production','PORT':'3000','BACKEND_API_URL':'http://127.0.0.1:4001'}
     encoded=lambda values:'\n'.join(k+'='+env_quote(v) for k,v in values.items())+'\n'
     backend_text,frontend_text=encoded(backend),encoded(frontend)
@@ -161,3 +161,4 @@ if __name__=='__main__':
     except Exception as error:
         # Never print SQL, secret values, subprocess command arguments or traceback.
         print('Setup stopped: '+(str(error) if isinstance(error,ValueError) else type(error).__name__),file=sys.stderr);sys.exit(1)
+

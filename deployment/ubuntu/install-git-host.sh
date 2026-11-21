@@ -32,6 +32,7 @@ if [[ ! -f "$repo/HEAD" ]]; then
 fi
 install -m 750 -o "$deploy_user" -g "$deploy_user" "$source_dir/radius-deploy.py" "$repo/hooks/radius-deploy.py"
 install -m 640 -o "$deploy_user" -g "$deploy_user" "$source_dir/central-baseline.manifest.json" "$repo/hooks/central-baseline.manifest.json"
+install -m 750 -o "$deploy_user" -g "$deploy_user" "$source_dir/bootstrap-central.py" "$repo/hooks/bootstrap-central.py"
 for hook in pre-receive post-receive; do
   printf '#!/bin/sh\nexec python3 "%s/hooks/radius-deploy.py" %s\n' "$repo" "$hook" > "$repo/hooks/$hook"
   chmod 750 "$repo/hooks/$hook"
@@ -117,3 +118,4 @@ systemctl enable --now radius-lord-deploy.timer
 echo "Git receiver ready at $repo"
 echo "Configure SSH access for $deploy_user, shared/root.env, shared/backend.env and shared/hooks/backup."
 echo "Configure shared/hooks/migrate before a release that changes database structure."
+
