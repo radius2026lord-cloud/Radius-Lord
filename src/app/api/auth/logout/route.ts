@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   const origin=request.headers.get('origin');
-  if(request.headers.get('sec-fetch-site')==='cross-site'||(origin&&origin!==request.nextUrl.origin))return NextResponse.json({success:false,message:'مصدر الطلب غير مصرح.'},{status:403});
+  // Apache preserves the public Host, while Next's internal URL can use loopback.
+  // Production is HTTPS-only; do not trust arbitrary forwarded host/proto headers.
+  let sameOrigin = !origin;
+  if (origin) {
+    try {
+      const configuredOrigin = process.env.FRONTEND_URL;
+      const host = request.headers.get("host");
+      const protocol = process.env.NODE_ENV === "production" ? "https:" : request.nextUrl.protocol;
+      const expected = configuredOrigin
+        ? new URL(configuredOrigin).origin
+        : host ? new URL(`${protocol}//${host}`).origin : null;
+      sameOrigin = expected !== null && origin === expected;
+    } catch {
+      sameOrigin = false;
+    }
+  }
+  if(request.headers.get('sec-fetch-site')==='cross-site'||!sameOrigin)return NextResponse.json({success:false,message:'مصدر الطلب غير مصرح.'},{status:403,headers:{"Cache-Control":"no-store"}});
   // Notify the backend so SSH sessions in other tabs are closed as well.
   const backend=(process.env.BACKEND_API_URL||process.env.NEXT_PUBLIC_API_URL||"http://localhost:4001").replace(/\/$/,"");
   try {
