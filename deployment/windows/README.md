@@ -11,16 +11,26 @@ double-clicking it. Do not put private keys inside the repository.
    The default key is `%USERPROFILE%\.ssh\id_ed25519_radius_lord`.
    Existing keys are never overwritten.
 2. Use **تثبيت المفتاح على الخادم**. A console opens to authenticate as
-   `radiusdeploy` once using its current SSH password. Verify the host fingerprint
+   `root` once using its current SSH password. Verify the host fingerprint
    using your trusted server console if this host has not been trusted before.
    Only the public key is appended to authorized_keys. SSH host verification is
-   never disabled. This operation does not grant root privileges.
+   never disabled. The SSH session uses root. Receiver commands run as radiusdeploy to preserve repository and release ownership.
 3. Enable Windows **OpenSSH Authentication Agent** once using Services (run as
    administrator), set its startup type to Automatic and start it.
 4. Use **تحميل المفتاح في SSH Agent** and enter the key passphrase in the console.
    Subsequent SSH/push operations use BatchMode and never request a password in
    the background. If the agent no longer has the key, load it again.
 5. Use **فحص الاتصال** to display receiver readiness and the running version.
+
+Configure the production remote once in the project folder:
+
+```powershell
+git remote set-url production ssh://root@78.155.66.122:3001/srv/radius-lord/repository.git
+```
+
+The console runs Git upload/receive commands and the deployment helper through
+`sudo -n -u radiusdeploy` on the server. Application services keep their existing
+service account; no repository ownership changes or safe.directory bypass is needed.
 
 ## Releasing
 

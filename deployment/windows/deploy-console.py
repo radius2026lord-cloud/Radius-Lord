@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 BRANCH = 'work/subscriptions-customer-details'
 HOST = '78.155.66.122'
 PORT = '3001'
-USER = 'radiusdeploy'
+USER = 'root'
 REMOTE = f'ssh://{USER}@{HOST}:{PORT}/srv/radius-lord/repository.git'
 HELPER = '/srv/radius-lord/repository.git/hooks/radius-deploy.py'
 ORIGINS = {'https://github.com/radius2026lord-cloud/Radius-Lord.git', 'https://github.com/radius2026lord-cloud/Radius-Lord', 'git@github.com:radius2026lord-cloud/Radius-Lord.git'}
@@ -217,7 +217,7 @@ class Console:
         base64.b64decode(parts[1], validate=True)
         public = parts[0] + ' ' + parts[1] + ' Radius-Lord-local-deploy'
         command = "umask 077; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys && (grep -qxF '" + public + "' ~/.ssh/authorized_keys || printf '%s\\n' '" + public + "' >> ~/.ssh/authorized_keys)"
-        self.events.put(('log', 'ستفتح نافذة SSH لإدخال كلمة مرور radiusdeploy مرة واحدة. تحقق من البصمة عند أول اتصال.\n'))
+        self.events.put(('log', 'ستفتح نافذة SSH لإدخال كلمة مرور root مرة واحدة. تحقق من البصمة عند أول اتصال.\n'))
         self.run(['ssh', '-p', PORT, '-o', 'PubkeyAuthentication=no', f'{USER}@{HOST}', command], console=True, timeout=600)
 
     def add_agent(self, project, key, version, changes):
@@ -225,7 +225,7 @@ class Console:
         self.run(['ssh-add', key], console=True, timeout=600)
 
     def inspect_host(self, project, key, version, changes):
-        self.run([*self.ssh(key), 'python3 ' + HELPER + ' inspect'], stream=True)
+        self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' inspect'], stream=True)
 
     def pull(self, project, key, version, changes):
         project = self.repository(project)
@@ -257,7 +257,7 @@ class Console:
             raise RuntimeError('أدخل رقمًا مثل v1.0.4 ووصفًا من 1 إلى 4000 حرف')
         if self.run(['git', 'remote', 'get-url', '--push', 'production'], project) != REMOTE:
             raise RuntimeError('وجهة production لا تطابق الخادم المعتمد')
-        info = json.loads(self.run([*self.ssh(key), 'python3 ' + HELPER + ' inspect']))
+        info = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' inspect']))
         if not info.get('ready'):
             raise RuntimeError('فحص الخادم غير جاهز؛ راجع زر فحص الاتصال')
         current = info.get('currentVersion')
@@ -268,7 +268,7 @@ class Console:
         ssh_command = ' '.join(shlex.quote(arg.replace('\\', '/')) for arg in self.ssh(key)[:-1])
         # Git supplies its own host; keep key authentication and strict host verification.
         env = {**os.environ, 'GIT_SSH_COMMAND': ssh_command, 'GIT_SSH_VARIANT': 'ssh'}
-        existing = self.run(['git', 'ls-remote', '--tags', 'production', tag], project, env=env)
+        existing = self.run(['git', 'ls-remote', '--upload-pack=sudo -n -u radiusdeploy git-upload-pack', '--tags', 'production', tag], project, env=env)
         if existing:
             raise RuntimeError('الوسم موجود على الخادم؛ استخدم تحديث الحالة ولا تعِد نشره')
         local = self.run(['git', 'tag', '--list', 'radius-release/' + version], project)
@@ -285,7 +285,7 @@ class Console:
                 self.run(['git', 'tag', '-a', 'radius-release/' + version, '-F', file], project)
             finally:
                 os.unlink(file)
-        self.run(['git', 'push', 'production', tag], project, env=env, stream=True, timeout=1800)
+        self.run(['git', 'push', '--receive-pack=sudo -n -u radiusdeploy git-receive-pack', 'production', tag], project, env=env, stream=True, timeout=1800)
         self.events.put(('log', 'استلم الخادم الإصدار. الرفع لا يعني اكتمال النشر؛ استخدم تحديث حالة الإصدار.\n'))
         last = None
         failures = 0
@@ -293,7 +293,7 @@ class Console:
         terminal = {'succeeded', 'failed', 'failed_rolled_back', 'recovery_required'}
         while time.monotonic() < deadline:
             try:
-                data = json.loads(self.run([*self.ssh(key), 'python3 ' + HELPER + ' status ' + version]))
+                data = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' status ' + version]))
                 failures = 0
             except Exception:
                 failures += 1
@@ -318,7 +318,7 @@ class Console:
     def status(self, project, key, version, changes):
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
             raise RuntimeError('رقم الإصدار غير صالح')
-        text = self.run([*self.ssh(key), 'python3 ' + HELPER + ' status ' + version])
+        text = self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' status ' + version])
         data = json.loads(text)
         self.events.put(('log', json.dumps(data, ensure_ascii=False, indent=2) + '\n'))
         if data.get('status') not in {'not_received', 'queued'}:
