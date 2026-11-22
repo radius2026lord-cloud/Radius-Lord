@@ -45,81 +45,146 @@ class Console:
         self.available_databases = []
         self.reviewed = None
         self.reset_reviewed = None
+        self.action_containers = {}
+        self.service_states = {}
+        self.service_buttons = {}
+        self.service_time = 'لم يُفحص'
+        self.expanded_log = False
+        self.tooltip = None
         self.connected = tk.StringVar(value='⚪ لم يُفحص الاتصال')
         self.summary = tk.StringVar(value='الخادم: لم يُفحص')
         try:
             preferences = json.loads(PREFERENCES.read_text(encoding='utf-8'))
         except (OSError, ValueError):
             preferences = {}
-        root.title('Radius Lord — النشر المحلي')
-        root.geometry('1180x900')
-        root.minsize(820, 620)
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('TButton', padding=9)
-        style.configure('TLabel', font=('Segoe UI', 11))
-        outer = ttk.Frame(root, padding=18)
-        outer.pack(fill='both', expand=True)
-        ttk.Label(outer, text='Radius Lord | إدارة النشر المحلي', font=('Segoe UI', 19, 'bold')).pack(anchor='e')
-        ttk.Label(outer, text=f'Ubuntu {HOST}:{PORT} • {USER} • الفرع: {BRANCH}').pack(anchor='e', pady=7)
-        self.project = tk.StringVar(value=str(pathlib.Path(__file__).resolve().parents[2]))
-        self.key = tk.StringVar(value=str(pathlib.Path.home() / '.ssh/id_ed25519_radius_lord'))
-        self.project.set(preferences.get('project', self.project.get()))
-        self.key.set(preferences.get('key', self.key.get()))
-        self.version = tk.StringVar(value='v1.0.4')
-        self.version.set(preferences.get('version', self.version.get()))
+        root.title('Radius Lord — إدارة الخادم والنشر')
+        root.geometry('%dx%d' % (min(1260, root.winfo_screenwidth() - 60), max(700, min(940, root.winfo_screenheight() - 90))))
+        root.minsize(900, 700)
+        self.dark = bool(preferences.get('dark', True))
+        self.project = tk.StringVar(value=preferences.get('project', str(pathlib.Path(__file__).resolve().parents[2])))
+        self.key = tk.StringVar(value=preferences.get('key', str(pathlib.Path.home() / '.ssh/id_ed25519_radius_lord')))
+        self.version = tk.StringVar(value=preferences.get('version', 'v1.0.4'))
         self.changes = tk.StringVar(value='')
-        self.state = tk.StringVar(value='جاهز — افحص اتصال SSH ثم اجلب التحديثات وابنِ المشروع')
-        form = ttk.Frame(outer)
-        form.pack(fill='x', pady=9)
-        for row, (label, variable) in enumerate([('مجلد المشروع', self.project), ('مسار مفتاح SSH الخاص', self.key), ('رقم الإصدار', self.version), ('وصف التغييرات', self.changes)]):
-            ttk.Label(form, text=label).grid(row=row, column=2, sticky='e', padx=8, pady=5)
-            ttk.Entry(form, textvariable=variable, justify='right').grid(row=row, column=1, sticky='ew', pady=5)
-        form.columnconfigure(1, weight=1)
-        ttk.Button(form, text='اختيار', command=self.choose_project).grid(row=0, column=0, padx=5)
-        ttk.Button(form, text='اختيار', command=self.choose_key).grid(row=1, column=0, padx=5)
-        ttk.Label(outer, textvariable=self.connected).pack(anchor='e')
-        notebook = ttk.Notebook(outer)
-        notebook.pack(fill='x', pady=5)
-        deploy_tab = ttk.Frame(notebook, padding=6)
-        backup_tab = ttk.Frame(notebook, padding=6)
-        notebook.add(deploy_tab, text='النشر والاتصال')
-        notebook.add(backup_tab, text='نسخ البيئة واستعادتها')
-        maintenance_tab = ttk.Frame(notebook, padding=8)
-        notebook.add(maintenance_tab, text='تنظيف البيانات القديمة')
+        self.state = tk.StringVar(value='جاهز — افحص الاتصال ثم اختر العملية')
+        self.phase = tk.StringVar(value='جاهز')
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        outer = ttk.Frame(root, padding=14)
+        outer.pack(fill='both', expand=True)
+        header = ttk.Frame(outer)
+        header.pack(fill='x', pady=(0, 8))
+        ttk.Label(header, text='Radius Lord', style='Title.TLabel').pack(side='right')
+        ttk.Label(header, text=f'{USER}@{HOST}:{PORT}', style='Muted.TLabel').pack(side='right', padx=18)
+        ttk.Button(header, text='◐ المظهر', command=self.toggle_theme).pack(side='left', padx=4)
+        terminal_button = ttk.Button(header, text='▣ طرفية SSH', command=lambda: self.start(self.terminal))
+        terminal_button.pack(side='left', padx=4)
+        self.tasks.append(terminal_button)
+        check_button = ttk.Button(header, text='↻ فحص الخدمات', command=lambda: self.start(self.inspect_host))
+        check_button.pack(side='left', padx=4)
+        self.tasks.append(check_button)
+        connection = ttk.Frame(outer)
+        connection.pack(fill='x', pady=(0, 7))
+        ttk.Label(connection, textvariable=self.connected).pack(side='right')
+        ttk.Label(connection, textvariable=self.summary, style='Muted.TLabel').pack(side='left')
+        cards = ttk.Frame(outer)
+        cards.pack(fill='x', pady=(0, 10))
+        for index, (unit, label, icon) in enumerate([
+            ('radius-lord-backend', 'الباك إند', '⚙'), ('radius-lord-frontend', 'الفرونت إند', '▣'),
+            ('mysql', 'MySQL', '▤'), ('freeradius', 'FreeRADIUS', '◉')]):
+            cards.columnconfigure(index, weight=1, uniform='services')
+            button = tk.Button(cards, text=icon + '  ' + label + '\n● لم يُفحص', relief='flat', bd=0,
+                               font=('Segoe UI', 11, 'bold'), padx=10, pady=12,
+                               command=lambda name=unit: self.service_details(name))
+            button.grid(row=0, column=index, sticky='nsew', padx=5)
+            self.service_buttons[unit] = (button, label, icon)
+        # The upper workspace scrolls independently; the lower log always keeps space.
+        self.panes = tk.PanedWindow(outer, orient='vertical', sashwidth=8, bd=0, opaqueresize=True)
+        self.panes.pack(fill='both', expand=True)
+        self.workspace = ttk.Frame(self.panes)
+        self.panes.add(self.workspace, minsize=160, stretch='never')
+        canvas_frame = ttk.Frame(self.workspace)
+        canvas_frame.pack(fill='both', expand=True)
+        self.workspace_canvas = tk.Canvas(canvas_frame, highlightthickness=0, height=270)
+        workspace_scroll = ttk.Scrollbar(canvas_frame, orient='vertical', command=self.workspace_canvas.yview)
+        workspace_scroll.pack(side='right', fill='y')
+        self.workspace_canvas.pack(side='left', fill='both', expand=True)
+        self.workspace_canvas.configure(yscrollcommand=workspace_scroll.set)
+        content = ttk.Frame(self.workspace_canvas, padding=(3, 0, 6, 8))
+        window = self.workspace_canvas.create_window((0, 0), window=content, anchor='nw')
+        content.bind('<Configure>', lambda event: self.workspace_canvas.configure(scrollregion=self.workspace_canvas.bbox('all')))
+        self.workspace_canvas.bind('<Configure>', lambda event: self.workspace_canvas.itemconfigure(window, width=event.width))
+        self.settings_open = tk.BooleanVar(value=False)
+        ttk.Checkbutton(content, text='إعدادات الاتصال والمفتاح ▾', variable=self.settings_open, command=self.toggle_settings).pack(anchor='e', pady=4)
+        self.settings_frame = ttk.Frame(content, padding=6)
+        for row, (label, variable, chooser) in enumerate([
+            ('مجلد المشروع', self.project, self.choose_project), ('مسار مفتاح SSH الخاص', self.key, self.choose_key)]):
+            ttk.Label(self.settings_frame, text=label).grid(row=row, column=2, sticky='e', padx=8, pady=4)
+            ttk.Entry(self.settings_frame, textvariable=variable, justify='left').grid(row=row, column=1, sticky='ew', pady=4)
+            ttk.Button(self.settings_frame, text='اختيار', command=chooser).grid(row=row, column=0, padx=5)
+        self.settings_frame.columnconfigure(1, weight=1)
+        setup = ttk.Frame(self.settings_frame)
+        setup.grid(row=2, column=0, columnspan=3, sticky='ew')
+        self.button(setup, '🔑 إنشاء مفتاح محمي', self.create_key)
+        self.button(setup, '⬆ تثبيت المفتاح', self.install_key)
+        self.button(setup, '🔓 تحميل المفتاح في Agent', self.add_agent)
+        self.notebook = ttk.Notebook(content)
+        self.notebook.pack(fill='both', expand=True, pady=5)
+        deploy_tab = ttk.Frame(self.notebook, padding=10)
+        backup_tab = ttk.Frame(self.notebook, padding=10)
+        maintenance_tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(deploy_tab, text='  النشر  ')
+        self.notebook.add(backup_tab, text='  النسخ والاستعادة  ')
+        self.notebook.add(maintenance_tab, text='  الصيانة  ')
         self.maintenance_ui(maintenance_tab)
-        setup = ttk.LabelFrame(deploy_tab, text='تجهيز SSH مرة واحدة', padding=8)
-        setup.pack(fill='x', pady=7)
-        self.button(setup, 'إنشاء مفتاح محمي', self.create_key)
-        self.button(setup, 'تثبيت المفتاح على الخادم', self.install_key)
-        self.button(setup, 'تحميل المفتاح في SSH Agent', self.add_agent)
-        self.button(setup, 'فحص الاتصال', self.inspect_host)
+        form = ttk.Frame(deploy_tab)
+        form.pack(fill='x', pady=5)
+        for row, (label, variable) in enumerate([('رقم الإصدار', self.version), ('وصف التغييرات', self.changes)]):
+            ttk.Label(form, text=label).grid(row=row, column=1, sticky='e', padx=8, pady=4)
+            ttk.Entry(form, textvariable=variable, justify='right').grid(row=row, column=0, sticky='ew', pady=4)
+        form.columnconfigure(0, weight=1)
         actions = ttk.Frame(deploy_tab)
-        actions.pack(fill='x', pady=9)
-        self.button(actions, 'جلب تحديثات GitHub', self.pull)
-        self.button(actions, 'بناء وفحص المشروع', self.build)
-        self.button(actions, 'رفع الإصدار', self.publish)
-        self.button(actions, 'تحديث حالة الإصدار', self.status)
-        self.button(actions, '🖥 فتح طرفية SSH', self.terminal)
-        self.button(actions, '📋 سجل النشر الأخير', self.latest_log)
-        ttk.Label(deploy_tab, textvariable=self.summary, wraplength=1080).pack(anchor='e')
+        actions.pack(fill='x', pady=8)
+        self.button(actions, '↓ جلب تحديثات GitHub', self.pull)
+        self.button(actions, '⚙ بناء وفحص المشروع', self.build)
+        self.button(actions, '↑ رفع الإصدار', self.publish)
+        self.button(actions, '↻ حالة الإصدار', self.status)
+        self.button(actions, '☰ سجل النشر الأخير', self.latest_log)
+        ttk.Label(deploy_tab, text='الفرع: ' + BRANCH, style='Muted.TLabel').pack(anchor='e', pady=4)
         self.backup_ui(backup_tab)
-        toolbar = ttk.Frame(outer)
-        toolbar.pack(fill='x')
-        for title, command in [('نسخ المحدد', self.copy_selected), ('نسخ الكل', self.copy_all), ('حفظ السجل', self.save_log), ('مسح السجل', self.clear_log)]:
+        self.log_panel = ttk.Frame(self.panes, padding=(0, 6, 0, 0))
+        self.panes.add(self.log_panel, minsize=260, stretch='always')
+        toolbar = ttk.Frame(self.log_panel)
+        toolbar.pack(fill='x', pady=(0, 6))
+        ttk.Label(toolbar, text='سجل العمليات', style='Heading.TLabel').pack(side='right', padx=6)
+        self.expand_button = ttk.Button(toolbar, text='⛶ توسيع', command=self.toggle_log)
+        self.expand_button.pack(side='left', padx=3)
+        for title, command in [('نسخ المحدد', self.copy_selected), ('نسخ الكل', self.copy_all), ('حفظ', self.save_log), ('مسح', self.clear_log)]:
             ttk.Button(toolbar, text=title, command=command).pack(side='right', padx=3)
         self.follow = tk.BooleanVar(value=True)
-        ttk.Checkbutton(toolbar, text='متابعة السجل', variable=self.follow).pack(side='right')
-        ttk.Label(outer, textvariable=self.state, wraplength=950).pack(anchor='e', pady=7)
-        self.progress = ttk.Progressbar(outer, mode='indeterminate')
-        self.progress.pack(fill='x')
-        logs = ttk.Frame(outer)
-        logs.pack(fill='both', expand=True, pady=10)
-        self.log = tk.Text(logs, bg='#101b2c', fg='#d9e8ff', font=('Consolas', 10), wrap='word', state='disabled', exportselection=False)
+        ttk.Checkbutton(toolbar, text='متابعة', variable=self.follow).pack(side='right', padx=6)
+        phase_bar = ttk.Frame(self.log_panel)
+        phase_bar.pack(fill='x', pady=(0, 5))
+        self.phase_labels = {}
+        for title in ['فحص', 'بناء', 'رفع', 'تحقق']:
+            label = tk.Label(phase_bar, text=title, padx=16, pady=4, font=('Segoe UI', 10))
+            label.pack(side='right', padx=3)
+            self.phase_labels[title] = label
+        ttk.Label(phase_bar, textvariable=self.phase, style='Muted.TLabel').pack(side='left', padx=5)
+        logs = ttk.Frame(self.log_panel)
+        logs.pack(fill='both', expand=True)
+        self.log = tk.Text(logs, font=('Consolas', 11), wrap='word', state='disabled', exportselection=False,
+                           relief='flat', bd=0, padx=12, pady=10, height=20)
         scroll = ttk.Scrollbar(logs, command=self.log.yview)
         self.log.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right', fill='y')
         self.log.pack(fill='both', expand=True)
+        footer = ttk.Frame(outer)
+        footer.pack(fill='x', pady=(8, 0))
+        ttk.Label(footer, textvariable=self.state, wraplength=1050).pack(anchor='e')
+        self.progress = ttk.Progressbar(footer, mode='indeterminate')
+        self.progress.pack(fill='x', pady=(5, 0))
+        self.apply_theme()
+        root.after(200, lambda: self.panes.sash_place(0, 0, max(180, int(self.panes.winfo_height() * 0.38))))
         self.log.bind('<Control-c>', self.copy_selected)
         self.log.bind('<Control-C>', self.copy_selected)
         self.log.bind('<Control-a>', self.select_all)
@@ -134,9 +199,155 @@ class Console:
         root.protocol('WM_DELETE_WINDOW', self.close)
 
     def button(self, parent, label, action):
-        button = ttk.Button(parent, text=label, command=lambda: self.start(action))
-        button.pack(side='right', padx=3, pady=3)
+        if parent not in self.action_containers:
+            frame = ttk.Frame(parent)
+            frame.pack(fill='x', pady=3)
+            self.action_containers[parent] = (frame, [])
+        frame, buttons = self.action_containers[parent]
+        button = ttk.Button(frame, text=label, command=lambda: self.start(action))
+        index = len(buttons)
+        button.grid(row=index // 3, column=2 - index % 3, sticky='ew', padx=4, pady=4)
+        for column in range(3):
+            frame.columnconfigure(column, weight=1, uniform='actions')
+        buttons.append(button)
         self.tasks.append(button)
+        button.bind('<Enter>', lambda event: self.show_tooltip(button, 'انتظر اكتمال العملية الجارية' if self.busy else label))
+        button.bind('<Leave>', lambda event: self.hide_tooltip())
+
+    def show_tooltip(self, widget, text):
+        self.hide_tooltip()
+        self.tooltip = tk.Toplevel(self.root)
+        self.tooltip.wm_overrideredirect(True)
+        self.tooltip.geometry('+%d+%d' % (widget.winfo_rootx(), widget.winfo_rooty() + widget.winfo_height() + 4))
+        tk.Label(self.tooltip, text=text, bg='#24344c', fg='#ffffff', padx=9, pady=5, font=('Segoe UI', 10)).pack()
+
+    def hide_tooltip(self):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+
+    def toggle_settings(self):
+        if self.settings_open.get():
+            self.settings_frame.pack(fill='x', before=self.notebook, pady=4)
+        else:
+            self.settings_frame.pack_forget()
+
+    def toggle_log(self):
+        if not self.expanded_log:
+            self.previous_sash = self.panes.sash_coord(0)[1]
+            self.panes.forget(self.workspace)
+            self.expand_button.configure(text='↙ استعادة الحجم')
+        else:
+            self.panes.add(self.workspace, before=self.log_panel, minsize=160, stretch='never')
+            self.root.after_idle(lambda: self.panes.sash_place(0, 0, self.previous_sash))
+            self.expand_button.configure(text='⛶ توسيع')
+        self.expanded_log = not self.expanded_log
+
+    def toggle_theme(self):
+        self.dark = not self.dark
+        self.apply_theme()
+        self.save_preferences()
+
+    def apply_theme(self):
+        self.colors = ({'bg': '#111b2b', 'panel': '#1b2940', 'text': '#edf3ff', 'muted': '#a8bad5',
+                        'entry': '#111e32', 'border': '#30425f', 'accent': '#2563eb', 'log': '#0b1422'} if self.dark else
+                       {'bg': '#edf2f8', 'panel': '#ffffff', 'text': '#18345c', 'muted': '#5e7392',
+                        'entry': '#f6f9fd', 'border': '#c9d6e8', 'accent': '#1764e9', 'log': '#f9fbff'})
+        c = self.colors
+        self.root.configure(bg=c['bg'])
+        self.style.configure('.', background=c['bg'], foreground=c['text'], font=('Segoe UI', 10))
+        self.style.configure('TFrame', background=c['bg'])
+        self.style.configure('TLabel', background=c['bg'], foreground=c['text'])
+        self.style.configure('Title.TLabel', font=('Segoe UI', 20, 'bold'))
+        self.style.configure('Heading.TLabel', font=('Segoe UI', 12, 'bold'))
+        self.style.configure('Muted.TLabel', foreground=c['muted'])
+        self.style.configure('TButton', background=c['panel'], foreground=c['text'], bordercolor=c['border'], padding=(10, 8))
+        self.style.map('TButton', background=[('active', c['accent']), ('disabled', c['entry'])], foreground=[('active', '#ffffff'), ('disabled', c['muted'])])
+        for name in ['TEntry', 'TCombobox']:
+            self.style.configure(name, fieldbackground=c['entry'], foreground=c['text'], bordercolor=c['border'], padding=5)
+            self.style.map(name, fieldbackground=[('readonly', c['entry'])], foreground=[('readonly', c['text'])])
+        self.style.configure('TNotebook', background=c['bg'], borderwidth=0)
+        self.style.configure('TNotebook.Tab', background=c['panel'], foreground=c['muted'], padding=(18, 9))
+        self.style.map('TNotebook.Tab', background=[('selected', c['accent'])], foreground=[('selected', '#ffffff')])
+        self.style.configure('Treeview', background=c['panel'], fieldbackground=c['panel'], foreground=c['text'], rowheight=28)
+        self.style.configure('Treeview.Heading', background=c['entry'], foreground=c['text'], padding=6)
+        self.style.map('Treeview', background=[('selected', c['accent'])], foreground=[('selected', '#ffffff')])
+        self.style.configure('TCheckbutton', background=c['bg'], foreground=c['text'])
+        self.style.map('TCheckbutton', background=[('active', c['panel'])])
+        self.style.configure('Horizontal.TProgressbar', background=c['accent'], troughcolor=c['entry'])
+        self.panes.configure(bg=c['border'])
+        self.workspace_canvas.configure(bg=c['bg'])
+        self.db_list.configure(bg=c['entry'], fg=c['text'], selectbackground=c['accent'], selectforeground='#ffffff', relief='flat', highlightthickness=0)
+        self.log.configure(bg=c['log'], fg=c['text'], selectbackground=c['accent'], selectforeground='#ffffff', insertbackground=c['text'])
+        for tag, color in {'normal': c['text'], 'time': c['muted'], 'error': '#ff858f' if self.dark else '#b42338',
+                           'warning': '#f5c36e' if self.dark else '#895700', 'success': '#69d9b0' if self.dark else '#08784f'}.items():
+            self.log.tag_configure(tag, foreground=color)
+        self.render_services()
+        self.render_phase(self.phase.get())
+
+    def render_services(self):
+        c = self.colors
+        for unit, (button, title, icon) in self.service_buttons.items():
+            state = self.service_states.get(unit, 'unknown')
+            label, color = {'active': ('يعمل', '#61d9ac' if self.dark else '#08784f'),
+                            'inactive': ('متوقف', '#ff858f' if self.dark else '#b42338'),
+                            'failed': ('فشل', '#ff858f' if self.dark else '#b42338'),
+                            'checking': ('جارٍ الفحص', '#f5c36e' if self.dark else '#895700'),
+                            'unknown': ('لم يُفحص', c['muted'])}.get(state, (state, c['muted']))
+            button.configure(text=icon + '  ' + title + '\n● ' + label, bg=c['panel'], fg=color,
+                             activebackground=c['entry'], activeforeground=color, cursor='hand2')
+
+    def service_details(self, unit):
+        if unit not in self.service_buttons:
+            return
+        _, title, _ = self.service_buttons[unit]
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.configure(bg=self.colors['bg'])
+        dialog.transient(self.root)
+        body = ttk.Frame(dialog, padding=20)
+        body.pack(fill='both', expand=True)
+        ttk.Label(body, text=title, style='Heading.TLabel').pack(anchor='e', pady=5)
+        status = self.service_states.get(unit, 'لم يُفحص')
+        ttk.Label(body, text='الخدمة: ' + unit + '\nالحالة: ' + status + '\nآخر فحص: ' + self.service_time, justify='right').pack(anchor='e', pady=8)
+        ttk.Label(body, text='هذه حالة تشغيل الخدمة. فحص RADIUS الفعلي متاح من المنصة.', wraplength=400).pack(anchor='e', pady=5)
+        def restart():
+            if self.busy:
+                messagebox.showinfo('عملية جارية', 'انتظر اكتمال العملية الجارية', parent=dialog)
+                return
+            if messagebox.askyesno('إعادة تشغيل الخدمة', 'إعادة تشغيل ' + title + '؟ ستنقطع اتصالات الخدمة مؤقتًا.', parent=dialog):
+                dialog.destroy()
+                self.start(lambda project, key, version, changes: self.restart_service(unit, key))
+        ttk.Button(body, text='↻ إعادة تشغيل هذه الخدمة', command=restart).pack(fill='x', pady=8)
+        ttk.Button(body, text='إغلاق', command=dialog.destroy).pack(anchor='w')
+
+    def restart_service(self, unit, key):
+        if unit not in ('radius-lord-backend', 'radius-lord-frontend', 'mysql', 'freeradius'):
+            raise ValueError('Unknown service')
+        self.events.put(('log', 'إعادة تشغيل الخدمة: ' + unit + '\n'))
+        self.run([*self.ssh(key), 'systemctl restart ' + unit + '.service'], stream=True, timeout=180)
+        self.inspect_host('', key, '', '')
+
+    def render_phase(self, phase):
+        self.phase.set(phase)
+        for title, label in self.phase_labels.items():
+            label.configure(bg=self.colors['accent'] if title == phase else self.colors['panel'],
+                            fg='#ffffff' if title == phase else self.colors['muted'])
+
+    def append_log(self, value):
+        self.log.configure(state='normal')
+        self.log.insert('end', '[' + dt.datetime.now().strftime('%H:%M:%S') + '] ', 'time')
+        for line in value.splitlines(keepends=True):
+            lower = line.lower()
+            tag = ('error' if any(word in lower for word in ['error', 'failed', 'فشل', 'recovery_required']) else
+                   'warning' if any(word in lower for word in ['warn', 'تحذير', 'تعذر', '⚠']) else
+                   'success' if any(word in lower for word in ['success', 'succeeded', 'نجح', 'اكتملت']) else 'normal')
+            self.log.insert('end', line, tag)
+        if value and not value.endswith('\n'):
+            self.log.insert('end', '\n')
+        if self.follow.get() and not self.log.tag_ranges('sel'):
+            self.log.see('end')
+        self.log.configure(state='disabled')
 
     def choose_project(self):
         if not self.busy:
@@ -167,6 +378,9 @@ class Console:
             button.configure(state='disabled')
         self.progress.configure(mode='indeterminate')
         self.progress.start()
+        names = {self.inspect_host: 'فحص', self.build: 'بناء', self.publish: 'فحص', self.pull: 'جلب التحديثات', self.status: 'تحقق'}
+        self.render_phase(names.get(action, 'جارٍ التنفيذ'))
+        self.hide_tooltip()
         self.state.set('جارٍ تنفيذ العملية…')
         def work():
             try:
@@ -186,11 +400,12 @@ class Console:
             except queue.Empty:
                 break
             if kind == 'log':
-                self.log.configure(state='normal')
-                self.log.insert('end', value)
-                if self.follow.get() and not self.log.tag_ranges('sel'):
-                    self.log.see('end')
-                self.log.configure(state='disabled')
+                self.append_log(value)
+            elif kind == 'services':
+                self.service_states, self.service_time = value
+                self.render_services()
+            elif kind == 'phase':
+                self.render_phase(value)
             elif kind == 'transfer':
                 count, total = value
                 self.progress.stop()
@@ -213,6 +428,7 @@ class Console:
             else:
                 self.busy = False
                 self.progress.stop()
+                self.render_phase('جاهز' if not self.state.get().startswith('توقفت') else 'توقفت العملية')
                 for button in self.tasks:
                     button.configure(state='normal')
         self.root.after(100, self.drain)
@@ -300,15 +516,19 @@ class Console:
 
     def inspect_host(self, project, key, version, changes):
         self.events.put(('connected', '🟡 جارٍ فحص الاتصال'))
+        self.events.put(('services', ({name: 'checking' for name in ['radius-lord-backend', 'radius-lord-frontend', 'mysql', 'freeradius']}, 'جارٍ الفحص')))
         try:
             text = self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' inspect'])
             data = json.loads(text)
             self.events.put(('log', text + '\n'))
             command = "for unit in radius-lord-backend radius-lord-frontend mysql freeradius; do printf '%s: ' \"$unit\"; systemctl is-active \"$unit\" || true; done"
             services = self.run([*self.ssh(key), command])
-            self.events.put(('summary', 'الإصدار: ' + str(data.get('currentVersion')) + ' | ' + services.replace('\n', ' | ')))
+            states = dict(line.split(': ', 1) for line in services.splitlines() if ': ' in line)
+            self.events.put(('services', (states, dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))))
+            self.events.put(('summary', 'الإصدار الجاري: ' + str(data.get('currentVersion'))))
             self.events.put(('connected', '🟢 اتصال SSH ناجح — آخر فحص ' + dt.datetime.now().strftime('%H:%M:%S')))
         except Exception as error:
+            self.events.put(('services', ({}, 'تعذر الفحص')))
             self.events.put(('connected', '🔴 تعذر الاتصال: ' + str(error)))
             raise
 
@@ -372,8 +592,10 @@ class Console:
                 self.run(['git', 'tag', '-a', 'radius-release/' + version, '-F', file], project)
             finally:
                 os.unlink(file)
+        self.events.put(('phase', 'رفع'))
         self.run(['git', 'push', '--receive-pack=sudo -n -u radiusdeploy git-receive-pack', 'production', tag], project, env=env, stream=True, timeout=1800)
         self.events.put(('log', 'استلم الخادم الإصدار. الرفع لا يعني اكتمال النشر؛ استخدم تحديث حالة الإصدار.\n'))
+        self.events.put(('phase', 'تحقق'))
         last = None
         failures = 0
         deadline = time.monotonic() + 10800
@@ -391,6 +613,7 @@ class Console:
                 continue
             state = data.get('status')
             if state != last:
+                self.events.put(('phase', {'preflight': 'فحص', 'build': 'بناء', 'verify': 'تحقق'}.get(state, 'الخادم: ' + str(state))))
                 self.events.put(('log', 'DEPLOY: ' + str(state) + '\n'))
                 self.events.put(('state', 'مرحلة الخادم: ' + str(state)))
                 last = state
@@ -414,7 +637,7 @@ class Console:
     def save_preferences(self):
         PREFERENCES.parent.mkdir(parents=True, exist_ok=True)
         value = {'host': HOST, 'port': PORT, 'user': USER, 'project': self.project.get(),
-                 'key': self.key.get(), 'version': self.version.get()}
+                 'key': self.key.get(), 'version': self.version.get(), 'dark': self.dark}
         temporary = PREFERENCES.with_suffix('.tmp')
         temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
         os.replace(temporary, PREFERENCES)

@@ -136,3 +136,18 @@ Python syntax was checked in development. No Windows UI, live-server backup,
 scheduled job or destructive restore/reset was executed in development. Exercise
 backup + download + review first, and rehearse restoration on a disposable copy
 before relying on it for production disaster recovery.
+
+## Desktop layout
+
+- Compact header, four equal service cards, and separate deployment/backup/maintenance
+  tabs. Connection/key setup is collapsed until needed.
+- Cards display actual last-checked service state, checking or unknown; click for
+  details and last check time. Restart is separate and requires confirmation.
+  A failed SSH check clears cached card states to unknown.
+- The lower log has a draggable divider, expand/restore button, selectable text,
+  timestamped messages and semantic error/warning/success colors. The upper
+  workspace scrolls independently when a tab needs more space.
+- Light/dark appearance is saved locally. Action buttons wrap across rows; busy
+  controls explain that a running task must finish. Phase labels show actual
+  checks, build, push and observed server deployment stages.
+- Layout changes were syntax-checked, not visually exercised on Windows.
