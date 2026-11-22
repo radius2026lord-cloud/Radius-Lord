@@ -74,6 +74,11 @@ class Operations(legacy.Console):
         return super().rpc(action, key, request)
 
     def run(self, args, *values, **options):
+        program_name = pathlib.Path(args[0]).name.lower()
+        command = args[-1] if args else ''
+        if program_name in ('ssh', 'ssh.exe') and (command.endswith(' inspect') or command.startswith('python3 -c ')):
+            options.setdefault('timeout', 30)
+            options.setdefault('wait_on_timeout', False)
         if pathlib.Path(args[0]).name.lower() in ('git', 'git.exe') and 'push' in args:
             self.write_started = True
         try:
@@ -85,6 +90,36 @@ class Operations(legacy.Console):
                 error.diagnostic = diagnostic
                 self.events.put(('diagnostic', diagnostic))
                 raise RuntimeError(diagnostic['title'] + ' — ' + diagnostic['action']) from error
+            raise
+
+    def inspect_host(self, project, key, version, changes):
+        names = ['radius-lord-backend', 'radius-lord-frontend', 'mysql', 'freeradius']
+        self.events.put(('connected', '🟡 جارٍ فحص SSH والخدمات'))
+        self.events.put(('services', ({name: 'checking' for name in names}, 'جارٍ الفحص')))
+        self.events.put(('state', 'فحص SSH وعامل النشر والخدمات — مهلة النتيجة 30 ثانية'))
+        # One SSH connection, bounded subprocesses, no service changes.
+        code = """import subprocess,json
+r=subprocess.run(['sudo','-n','-u','radiusdeploy','python3','/srv/radius-lord/repository.git/hooks/radius-deploy.py','inspect'],capture_output=True,text=True,timeout=15)
+if r.returncode: raise RuntimeError('Receiver inspection failed: exit '+str(r.returncode))
+info=json.loads(r.stdout)
+states={}
+for name in ['radius-lord-backend','radius-lord-frontend','mysql','freeradius']:
+ try:
+  r=subprocess.run(['systemctl','is-active',name],capture_output=True,text=True,timeout=2)
+  states[name]=r.stdout.strip() or 'unknown'
+ except subprocess.TimeoutExpired: states[name]='unknown'
+print(json.dumps({'receiver':info,'services':states}))
+"""
+        try:
+            result = json.loads(self.run([*self.ssh(key), 'python3 -c ' + shlex.quote(code)], timeout=30, wait_on_timeout=False))
+            info = result['receiver']
+            self.events.put(('log', json.dumps(info, ensure_ascii=False) + '\n'))
+            self.events.put(('services', (result['services'], dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))))
+            self.events.put(('summary', 'الإصدار الجاري: ' + str(info.get('currentVersion'))))
+            self.events.put(('connected', '🟢 نجح اتصال SSH وفحص الخدمات'))
+        except Exception as error:
+            self.events.put(('services', ({}, 'تعذر الفحص')))
+            self.events.put(('connected', '🔴 تعذر الفحص: ' + str(error)))
             raise
 
     def transfer(self, key, local, remote, upload=False, install=False):
@@ -178,6 +213,7 @@ class Bridge(QObject):
         self.installed_for = None
         self.connected_for = None
         self.last_readiness = None
+        self.connection_ready = False
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.drain)
         self.timer.start(80)
@@ -191,11 +227,20 @@ class Bridge(QObject):
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
                           'version': self.core.version.get(), 'dark': self.core.dark})
         self.emit('history', self.history.rows())
+        self.emit('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
-            if self.history.pending():
-                self.emit('notice', 'توجد عمليات غير محسومة؛ سنفحص حالتها للقراءة فقط')
-                QTimer.singleShot(400, self.resume_startup)
+            self.emit('notice', 'جارٍ فحص الاتصال تلقائيًا قبل إتاحة العمليات')
+            QTimer.singleShot(200, self.connect_startup)
+
+    def connect_startup(self):
+        if not self.busy:
+            args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
+            def check():
+                self.inspect_setup(*args)
+                if self.history.pending():
+                    self.resume_pending()
+            self.start('inspect', check)
 
     def confirm(self, title, text):
         return QMessageBox.question(self.window, title, text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
@@ -235,6 +280,9 @@ class Bridge(QObject):
             if self.busy:
                 self.emit('error', 'انتظر اكتمال العملية الجارية')
                 return
+            local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings'}
+            if not self.connection_ready and action not in local_actions:
+                raise ValueError('نفّذ فحص الاتصال بنجاح أولًا لإتاحة العمليات')
             if action == 'resume-pending':
                 self.start(action, self.resume_pending)
                 return
@@ -244,6 +292,9 @@ class Bridge(QObject):
                         raise ValueError('Invalid field: ' + name)
                     if getattr(self.core, name).get() != data[name].strip():
                         self.last_readiness = None
+                        if name in ('project','key'):
+                            self.connection_ready = False
+                            self.emit('access', False)
                     getattr(self.core, name).set(data[name].strip())
             self.core.save_preferences()
             if action == 'setup-scan':
@@ -257,6 +308,8 @@ class Bridge(QObject):
                 if path:
                     getattr(self.core, 'project' if action == 'choose-project' else 'key').set(path)
                     self.core.validated = None
+                    self.connection_ready = False
+                    self.emit('access', False)
                     self.core.save_preferences()
                     self.ready()
                     self.start('setup-scan', self.scan_setup)
@@ -265,6 +318,8 @@ class Bridge(QObject):
                 self.emit('notice', 'تم حفظ إعدادات الاتصال')
                 self.start('setup-scan', self.scan_setup)
                 return
+            if not self.connection_ready and action not in local_actions:
+                raise ValueError('تغيّر إعداد الاتصال؛ أعد فحص الاتصال أولًا')
             args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
             actions = {'inspect': self.inspect_setup, 'terminal': self.core.terminal,
                        'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
@@ -311,20 +366,20 @@ class Bridge(QObject):
                  'agentLoaded': False, 'installed': False, 'connected': False}
         if public.is_file() and shutil.which('ssh-keygen'):
             result = subprocess.run(['ssh-keygen', '-lf', str(public)], capture_output=True,
-                                    creationflags=legacy.NO_WINDOW, timeout=15)
+                                    creationflags=legacy.NO_WINDOW, timeout=5)
             if result.returncode == 0:
                 fields = result.stdout.decode(errors='replace').split()
                 state['fingerprint'] = fields[1] if len(fields) > 1 else ''
-        if os.name == 'nt':
-            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
-                                     "(Get-Service -Name ssh-agent -ErrorAction SilentlyContinue).Status.ToString()"],
-                                    capture_output=True, creationflags=legacy.NO_WINDOW, timeout=15)
-            state['agentRunning'] = result.returncode == 0 and result.stdout.decode(errors='replace').strip() == 'Running'
         if shutil.which('ssh-add'):
-            result = subprocess.run(['ssh-add', '-l'], capture_output=True, creationflags=legacy.NO_WINDOW, timeout=15)
+            result = subprocess.run(['ssh-add', '-l'], capture_output=True, creationflags=legacy.NO_WINDOW, timeout=5)
             if result.returncode in (0, 1):
                 state['agentRunning'] = True
             state['agentLoaded'] = bool(state['fingerprint']) and result.returncode == 0 and state['fingerprint'] in result.stdout.decode(errors='replace').split()
+        if os.name == 'nt' and not state['agentRunning']:
+            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+                                     "(Get-Service -Name ssh-agent -ErrorAction SilentlyContinue).Status.ToString()"],
+                                    capture_output=True, creationflags=legacy.NO_WINDOW, timeout=5)
+            state['agentRunning'] = result.returncode == 0 and result.stdout.decode(errors='replace').strip() == 'Running'
         identity = (str(key.resolve()), state['fingerprint'])
         state['installed'] = bool(state['fingerprint']) and self.installed_for == identity
         state['connected'] = bool(state['fingerprint']) and self.connected_for == identity
@@ -382,6 +437,8 @@ class Bridge(QObject):
         self.scan_setup()
 
     def inspect_setup(self, *args):
+        self.core.events.put(('access', False))
+        self.core.events.put(('state', 'التحقق من مسار المفتاح وSSH Agent محليًا'))
         state = self.scan_setup()
         self.connected_for = None
         try:
@@ -390,6 +447,7 @@ class Bridge(QObject):
             if state['fingerprint']:
                 self.connected_for = identity
                 self.installed_for = identity
+            self.core.events.put(('access', True))
         finally:
             self.scan_setup()
 
@@ -473,6 +531,18 @@ class Bridge(QObject):
                 self.core.current_job_id = None
                 self.busy = False
                 self.emit('busy', {'active': False})
+            elif kind == 'access':
+                self.connection_ready = bool(value)
+                self.emit(kind, self.connection_ready)
+            elif kind == 'diagnostic':
+                self.connection_ready = False
+                self.emit('access', False)
+                self.emit(kind, value)
+            elif kind == 'connected':
+                if value.startswith('🔴'):
+                    self.connection_ready = False
+                    self.emit('access', False)
+                self.emit(kind, value)
             elif kind == 'readiness':
                 self.last_readiness = value
                 self.emit(kind, value)

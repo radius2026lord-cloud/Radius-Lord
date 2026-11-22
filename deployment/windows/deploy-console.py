@@ -452,7 +452,7 @@ class Console:
                     button.configure(state='normal')
         self.root.after(100, self.drain)
 
-    def run(self, args, cwd=None, timeout=60, stream=False, env=None, console=False):
+    def run(self, args, cwd=None, timeout=60, stream=False, env=None, console=False, wait_on_timeout=True):
         if console:
             process = self.console_process(args)
             self.process = process
@@ -482,6 +482,15 @@ class Console:
         try:
             code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            if not wait_on_timeout:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                reader.join(timeout=3)
+                raise TimeoutError('انتهت مهلة انتظار نتيجة الفحص؛ يمكنك إعادة الفحص. لم تُكرّر أي عملية كتابة')
             # Avoid orphan Git/build processes; never repeat an uncertain push.
             self.events.put(('state', 'العملية تجاوزت الوقت المتوقع؛ ننتظر انتهاءها دون تكرارها'))
             code = process.wait()

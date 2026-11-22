@@ -270,3 +270,20 @@ A failed receipt does not imply an atomic rollback, particularly for restore.
 Older helpers/operations without a receipt remain unknown and require review.
 Uploads without a completed local hash check remain unknown even if a file exists.
 The visible duration is the desktop attempt duration, not a claimed remote runtime.
+
+### Automatic connection check and bounded inspection
+
+The modern shell checks SSH and service state once at startup, before enabling
+project/server operations. Connection setup, retry inspection, local history and
+log controls remain available. A successful inspection unlocks operations; a
+connection failure or changed connection paths locks them again. The Python bridge
+also enforces this gate. Pending remote operations are inspected only after the
+startup connection succeeds, and can still be checked manually later.
+
+Service inspection uses one SSH session with a 30-second client result deadline,
+a 15-second receiver inspection and bounded service-state reads. Local Agent/key
+checks have their own short deadlines. The operation footer displays elapsed time
+and the current phase. Read-only checks now terminate their local waiting process
+on timeout and return controls, instead of waiting indefinitely after the deadline.
+These bounded reads do not restart services or retry writes. Builds, publishing,
+backups and restore retain their existing handling of uncertain writes.
