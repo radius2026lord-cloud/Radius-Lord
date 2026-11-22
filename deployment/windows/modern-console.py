@@ -22,6 +22,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from deployment_checks import diagnose, HOST_PROBE
 from operation_history import History, WRITE_ACTIONS, redact
+from bounded_process import capture_readonly
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('radius_legacy_console', HERE / 'deploy-console.py')
@@ -71,6 +72,16 @@ class Operations(legacy.Console):
         if self.current_job_id and action in ('create', 'restore', 'delete', 'schedule', 'reset-apply'):
             request['operationId'] = self.current_job_id
             self.write_started = True
+        if action in ('list','operation-status'):
+            result = capture_readonly([*self.ssh(key), 'python3 ' + legacy.BACKUP_HELPER + ' ' + action],
+                                      timeout=25, input_bytes=json.dumps(request).encode('utf-8'), creationflags=legacy.NO_WINDOW)
+            if result.returncode:
+                output = result.stderr.decode('utf-8', errors='replace')
+                diagnostic = diagnose(output, result.returncode if result.returncode == 255 else None)
+                if diagnostic:
+                    self.events.put(('diagnostic', diagnostic))
+                raise RuntimeError(output or 'تعذر قراءة حالة الخادم')
+            return json.loads(result.stdout)
         return super().rpc(action, key, request)
 
     def run(self, args, *values, **options):
@@ -82,6 +93,16 @@ class Operations(legacy.Console):
         if pathlib.Path(args[0]).name.lower() in ('git', 'git.exe') and 'push' in args:
             self.write_started = True
         try:
+            if options.get('wait_on_timeout') is False:
+                result = capture_readonly(args, options.get('timeout',30), cwd=options.get('cwd'),
+                                          env=options.get('env'), creationflags=legacy.NO_WINDOW)
+                output = result.stdout.decode('utf-8', errors='replace')
+                error = result.stderr.decode('utf-8', errors='replace')
+                if options.get('stream') or result.returncode:
+                    self.events.put(('log', output + error))
+                if result.returncode:
+                    raise legacy.CommandFailure(args[0], result.returncode, output + error)
+                return output.strip()
             return super().run(args, *values, **options)
         except legacy.CommandFailure as error:
             program = pathlib.Path(error.program).name.lower()
@@ -97,6 +118,7 @@ class Operations(legacy.Console):
         self.events.put(('connected', '🟡 جارٍ فحص SSH والخدمات'))
         self.events.put(('services', ({name: 'checking' for name in names}, 'جارٍ الفحص')))
         self.events.put(('state', 'فحص SSH وعامل النشر والخدمات — مهلة النتيجة 30 ثانية'))
+        self.events.put(('log', 'بدء أمر SSH لفحص الخادم؛ الحد الأقصى للانتظار 30 ثانية.\n'))
         # One SSH connection, bounded subprocesses, no service changes.
         code = """import subprocess,json
 r=subprocess.run(['sudo','-n','-u','radiusdeploy','python3','/srv/radius-lord/repository.git/hooks/radius-deploy.py','inspect'],capture_output=True,text=True,timeout=15)
@@ -205,6 +227,7 @@ class Bridge(QObject):
         self.core = Operations()
         self.history = History(legacy.PREFERENCES.parent / 'history')
         self.startup_checked = False
+        self.followup_after_connect = True
         self.busy = False
         self.review = None
         self.reset_review = None
@@ -236,11 +259,7 @@ class Bridge(QObject):
     def connect_startup(self):
         if not self.busy:
             args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
-            def check():
-                self.inspect_setup(*args)
-                if self.history.pending():
-                    self.resume_pending()
-            self.start('inspect', check)
+            self.start('inspect', lambda: self.inspect_setup(*args))
 
     def confirm(self, title, text):
         return QMessageBox.question(self.window, title, text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
@@ -365,20 +384,20 @@ class Bridge(QObject):
                  'publicExists': public.is_file(), 'fingerprint': '', 'agentRunning': False,
                  'agentLoaded': False, 'installed': False, 'connected': False}
         if public.is_file() and shutil.which('ssh-keygen'):
-            result = subprocess.run(['ssh-keygen', '-lf', str(public)], capture_output=True,
+            result = capture_readonly(['ssh-keygen', '-lf', str(public)],
                                     creationflags=legacy.NO_WINDOW, timeout=5)
             if result.returncode == 0:
                 fields = result.stdout.decode(errors='replace').split()
                 state['fingerprint'] = fields[1] if len(fields) > 1 else ''
         if shutil.which('ssh-add'):
-            result = subprocess.run(['ssh-add', '-l'], capture_output=True, creationflags=legacy.NO_WINDOW, timeout=5)
+            result = capture_readonly(['ssh-add', '-l'], creationflags=legacy.NO_WINDOW, timeout=5)
             if result.returncode in (0, 1):
                 state['agentRunning'] = True
             state['agentLoaded'] = bool(state['fingerprint']) and result.returncode == 0 and state['fingerprint'] in result.stdout.decode(errors='replace').split()
         if os.name == 'nt' and not state['agentRunning']:
-            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+            result = capture_readonly(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
                                      "(Get-Service -Name ssh-agent -ErrorAction SilentlyContinue).Status.ToString()"],
-                                    capture_output=True, creationflags=legacy.NO_WINDOW, timeout=5)
+                                    creationflags=legacy.NO_WINDOW, timeout=5)
             state['agentRunning'] = result.returncode == 0 and result.stdout.decode(errors='replace').strip() == 'Running'
         identity = (str(key.resolve()), state['fingerprint'])
         state['installed'] = bool(state['fingerprint']) and self.installed_for == identity
@@ -438,10 +457,12 @@ class Bridge(QObject):
 
     def inspect_setup(self, *args):
         self.core.events.put(('access', False))
+        self.core.events.put(('log', 'بدء فحص إعداد المفتاح وSSH Agent محليًا (مهلة كل أداة 5 ثوانٍ).\n'))
         self.core.events.put(('state', 'التحقق من مسار المفتاح وSSH Agent محليًا'))
         state = self.scan_setup()
         self.connected_for = None
         try:
+            self.core.events.put(('log', 'اكتمل الفحص المحلي؛ بدء فحص SSH والخدمات بمهلة 30 ثانية.\n'))
             self.core.inspect_host(*args)
             identity = (str(pathlib.Path(self.core.key.get()).resolve()), state['fingerprint'])
             if state['fingerprint']:
@@ -449,7 +470,11 @@ class Bridge(QObject):
                 self.installed_for = identity
             self.core.events.put(('access', True))
         finally:
-            self.scan_setup()
+            identity = (str(pathlib.Path(self.core.key.get()).resolve()), state.get('fingerprint',''))
+            state['connected'] = bool(state.get('fingerprint')) and self.connected_for == identity
+            state['installed'] = bool(state.get('fingerprint')) and self.installed_for == identity
+            self.setup_state = state
+            self.core.events.put(('setup', state))
 
     def resume_startup(self):
         if not self.busy:
@@ -458,6 +483,8 @@ class Bridge(QObject):
     def resume_pending(self):
         key = self.core.key.get()
         for row in self.history.pending():
+            self.core.events.put(('state', 'قراءة حالة العملية السابقة: ' + row['action']))
+            self.core.events.put(('log', 'متابعة للقراءة فقط: ' + row['action'] + ' / ' + row['id'] + '\n'))
             try:
                 if row['action'] == 'publish':
                     version = row['version']
@@ -485,6 +512,7 @@ class Bridge(QObject):
                 self.history.finish(row['id'], 'unknown', 'تعذر تأكيد النتيجة؛ يلزم الفحص لاحقًا')
                 self.history.append(row['id'], str(error))
                 self.core.events.put(('log', 'تعذر استكمال فحص العملية ' + row['id'] + ': ' + str(error) + '\n'))
+                break
         self.core.events.put(('history', self.history.rows()))
 
     def start(self, label, function, backup_id=None):
@@ -531,6 +559,10 @@ class Bridge(QObject):
                 self.core.current_job_id = None
                 self.busy = False
                 self.emit('busy', {'active': False})
+                if self.connection_ready and self.followup_after_connect:
+                    self.followup_after_connect = False
+                    if self.history.pending():
+                        QTimer.singleShot(300, self.resume_startup)
             elif kind == 'access':
                 self.connection_ready = bool(value)
                 self.emit(kind, self.connection_ready)

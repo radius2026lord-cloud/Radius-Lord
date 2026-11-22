@@ -287,3 +287,17 @@ and the current phase. Read-only checks now terminate their local waiting proces
 on timeout and return controls, instead of waiting indefinitely after the deadline.
 These bounded reads do not restart services or retry writes. Builds, publishing,
 backups and restore retain their existing handling of uncertain writes.
+
+
+### Inspection output deadline correction
+
+Read-only SSH and local Agent checks now use file-backed stdout/stderr with a
+single bounded wait. They do not join a pipe-reader thread after the child exits;
+that previous join could outlive the process deadline. Local stdin is DEVNULL
+(or a temporary JSON input file for read-only RPC), so checks never inherit a
+console input wait. Inspection phase messages are written to the visible log.
+Backup list/operation-status reads also have bounded waits. Startup first finishes
+the connection check and then follows pending operations as a separately named
+job; a failed follow-up stops the batch rather than repeating network waits.
+Production writes and interactive SSH sessions keep their existing semantics.
+This was syntax-checked; the Windows symptom has not been reproduced locally.
