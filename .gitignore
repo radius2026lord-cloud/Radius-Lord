@@ -50,3 +50,7 @@ next-dev.log
 next-dev.log
 
 **/node_modules/
+
+# Generated Python cache from local deployment tools
+__pycache__/
+*.py[cod]
