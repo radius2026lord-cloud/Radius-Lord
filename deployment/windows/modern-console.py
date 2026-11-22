@@ -6,12 +6,14 @@ import json
 import os
 import pathlib
 import queue
+import subprocess
+import shutil
 import sys
 import threading
 import uuid
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot
-from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox
+from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QToolTip
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -77,6 +79,9 @@ class Bridge(QObject):
         self.review = None
         self.reset_review = None
         self.backups = {}
+        self.setup_state = {}
+        self.installed_for = None
+        self.connected_for = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.drain)
         self.timer.start(80)
@@ -125,6 +130,12 @@ class Bridge(QObject):
                         raise ValueError('Invalid field: ' + name)
                     getattr(self.core, name).set(data[name].strip())
             self.core.save_preferences()
+            if action == 'setup-scan':
+                self.start(action, self.scan_setup)
+                return
+            if action == 'setup-agent-service':
+                self.start(action, self.start_agent_service)
+                return
             if action in ('choose-project', 'choose-key'):
                 path = QFileDialog.getExistingDirectory(self.window, 'مجلد المشروع', self.core.project.get()) if action == 'choose-project' else QFileDialog.getOpenFileName(self.window, 'مفتاح SSH الخاص', str(pathlib.Path.home() / '.ssh'))[0]
                 if path:
@@ -132,16 +143,18 @@ class Bridge(QObject):
                     self.core.validated = None
                     self.core.save_preferences()
                     self.ready()
+                    self.start('setup-scan', self.scan_setup)
                 return
             if action == 'save-settings':
                 self.emit('notice', 'تم حفظ إعدادات الاتصال')
+                self.start('setup-scan', self.scan_setup)
                 return
             args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
-            actions = {'inspect': self.core.inspect_host, 'terminal': self.core.terminal,
+            actions = {'inspect': self.inspect_setup, 'terminal': self.core.terminal,
                        'pull': self.core.pull, 'build': self.core.build, 'publish': self.core.publish,
                        'status': self.core.status, 'latest-log': self.core.latest_log,
-                       'create-key': self.core.create_key, 'install-key': self.core.install_key,
-                       'agent': self.core.add_agent, 'backup-install': self.core.install_backup,
+                       'create-key': self.create_setup_key, 'install-key': self.install_setup_key,
+                       'agent': self.load_setup_agent, 'backup-install': self.core.install_backup,
                        'backup-list': self.core.list_backups}
             if action in actions:
                 if action == 'publish' and not self.confirm('نشر الإصدار', 'نشر ' + self.core.version.get() + ' على ' + legacy.HOST + '؟ سيأخذ الخادم نسخة احتياطية ويبني الإصدار ويعيد تشغيل التطبيق.'):
@@ -161,6 +174,98 @@ class Bridge(QObject):
             raise ValueError('Unknown action')
         except Exception as error:
             self.emit('error', str(error))
+
+    def scan_setup(self):
+        key = pathlib.Path(self.core.key.get())
+        public = pathlib.Path(str(key) + '.pub')
+        project = pathlib.Path(self.core.project.get())
+        state = {'paths': project.is_dir() and (project / 'package.json').is_file(),
+                 'keyExists': key.is_file() and not str(key).endswith('.pub'),
+                 'publicExists': public.is_file(), 'fingerprint': '', 'agentRunning': False,
+                 'agentLoaded': False, 'installed': False, 'connected': False}
+        if public.is_file() and shutil.which('ssh-keygen'):
+            result = subprocess.run(['ssh-keygen', '-lf', str(public)], capture_output=True,
+                                    creationflags=legacy.NO_WINDOW, timeout=15)
+            if result.returncode == 0:
+                fields = result.stdout.decode(errors='replace').split()
+                state['fingerprint'] = fields[1] if len(fields) > 1 else ''
+        if os.name == 'nt':
+            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+                                     "(Get-Service -Name ssh-agent -ErrorAction SilentlyContinue).Status.ToString()"],
+                                    capture_output=True, creationflags=legacy.NO_WINDOW, timeout=15)
+            state['agentRunning'] = result.returncode == 0 and result.stdout.decode(errors='replace').strip() == 'Running'
+        if shutil.which('ssh-add'):
+            result = subprocess.run(['ssh-add', '-l'], capture_output=True, creationflags=legacy.NO_WINDOW, timeout=15)
+            if result.returncode in (0, 1):
+                state['agentRunning'] = True
+            state['agentLoaded'] = bool(state['fingerprint']) and result.returncode == 0 and state['fingerprint'] in result.stdout.decode(errors='replace').split()
+        identity = (str(key.resolve()), state['fingerprint'])
+        state['installed'] = bool(state['fingerprint']) and self.installed_for == identity
+        state['connected'] = bool(state['fingerprint']) and self.connected_for == identity
+        self.setup_state = state
+        self.core.events.put(('setup', state))
+        return state
+
+    def create_setup_key(self, *args):
+        state = self.scan_setup()
+        if not state['paths']:
+            raise ValueError('الخطوة 1: اختر مجلد المشروع أولًا ثم افحص الإعدادات')
+        if state['keyExists']:
+            self.core.events.put(('notice', 'المفتاح موجود؛ سنستخدمه دون إنشاء مفتاح جديد'))
+            return
+        self.core.create_key(*args)
+        self.scan_setup()
+
+    def start_agent_service(self):
+        if os.name != 'nt':
+            raise ValueError('تشغيل خدمة SSH Agent بهذه الطريقة مخصص لـ Windows')
+        state = self.scan_setup()
+        if not state['keyExists']:
+            raise ValueError('أنشئ أو اختر المفتاح أولًا')
+        if state['agentRunning']:
+            self.core.events.put(('notice', 'خدمة SSH Agent تعمل بالفعل'))
+            return
+        self.core.events.put(('log', 'ستظهر مطالبة Windows بصلاحية المسؤول لتشغيل خدمة SSH Agent.\n'))
+        script = "$p = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile -Command Set-Service -Name ssh-agent -StartupType Automatic; Start-Service -Name ssh-agent'; exit $p.ExitCode"
+        self.core.run(['powershell.exe', '-NoProfile', '-Command', script], stream=True, timeout=180)
+        if not self.scan_setup()['agentRunning']:
+            raise RuntimeError('لم تعمل خدمة SSH Agent؛ تحقق من قبول مطالبة مسؤول Windows')
+
+    def load_setup_agent(self, *args):
+        state = self.scan_setup()
+        if not state['keyExists'] or not state['publicExists']:
+            raise ValueError('الخطوة 2: اختر زوج المفتاح الخاص والعام أولًا')
+        if state['agentLoaded']:
+            self.core.events.put(('notice', 'المفتاح الصحيح محمّل بالفعل في SSH Agent'))
+            return
+        if not state['agentRunning']:
+            raise ValueError('شغّل خدمة SSH Agent من الخطوة 3 أولًا')
+        self.core.add_agent(*args)
+        if not self.scan_setup()['agentLoaded']:
+            raise RuntimeError('المفتاح المحدد لم يُحمّل في Agent؛ راجع نافذة عبارة المرور')
+
+    def install_setup_key(self, *args):
+        state = self.scan_setup()
+        if not state['agentLoaded']:
+            raise ValueError('أكمل تحميل المفتاح في الخطوة 3 أولًا')
+        if state['installed'] or state['connected']:
+            self.core.events.put(('notice', 'تم التحقق من تثبيت هذا المفتاح في هذه الجلسة'))
+            return
+        self.core.install_key(*args)
+        self.installed_for = (str(pathlib.Path(self.core.key.get()).resolve()), state['fingerprint'])
+        self.scan_setup()
+
+    def inspect_setup(self, *args):
+        state = self.scan_setup()
+        self.connected_for = None
+        try:
+            self.core.inspect_host(*args)
+            identity = (str(pathlib.Path(self.core.key.get()).resolve()), state['fingerprint'])
+            if state['fingerprint']:
+                self.connected_for = identity
+                self.installed_for = identity
+        finally:
+            self.scan_setup()
 
     def start(self, label, function):
         self.busy = True
@@ -270,6 +375,14 @@ class Bridge(QObject):
         self.start(action, lambda: self.core.backup_operation(operation, key, request))
 
 
+class NoNativeTooltips(QObject):
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.ToolTip:
+            QToolTip.hideText()
+            return True
+        return False
+
+
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -302,6 +415,8 @@ class Window(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    tooltip_filter = NoNativeTooltips(app)
+    app.installEventFilter(tooltip_filter)
     window = Window()
     window.show()
     sys.exit(app.exec())

@@ -193,3 +193,24 @@ not create a Tk window in modern mode. The old interface can be opened using
 Validation: Python AST and JavaScript syntax checks passed. The Qt interface has
 not been launched on Windows in the development environment, and no production
 backup, restore, reset or release was executed for this UI conversion.
+
+
+### Guided connection setup
+
+The modern connection dialog now has five ordered stages: paths, existing/new
+key, Windows Agent service + matching loaded fingerprint, public-key installation,
+and real SSH/service verification. **فحص الإعدادات** reads local state without
+changing the server. Existing keys are detected and never replaced. Agent checks
+match the selected public-key fingerprint rather than accepting any loaded key.
+Completed/inapplicable actions are disabled. Previously installed keys can go
+straight to the final connection check; a successful check confirms installation.
+No setup state is fabricated from saved preferences.
+
+**تشغيل الخدمة** requests Windows UAC only when clicked, to set ssh-agent Automatic
+and start it; service state is rechecked afterward. **تحميل المفتاح** is a separate
+interactive passphrase step. Fingerprints and service state are not passwords.
+The final check can fail due to the network even when local setup is complete;
+inspect the log before changing credentials or generating another key.
+
+Native Qt/browser title tooltips are suppressed. Arabic CSS hints replace them,
+so stray native "Close" labels are not shown over the interface.
