@@ -465,6 +465,20 @@ def reset(request, apply=False):
     return {'status': 'succeeded', 'beforeBackup': before['id'], 'result': output}
 
 
+def process_token(pid):
+    try:
+        # Linux process start ticks prevent a reused PID from appearing as this job.
+        return pathlib.Path('/proc/' + str(pid) + '/stat').read_text().rsplit(')', 1)[1].split()[19]
+    except (OSError, IndexError):
+        return None
+
+
+def operation_path(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{32}', value):
+        raise ValueError('Invalid operation identifier')
+    return VAULT / 'operations' / (value + '.json')
+
+
 def main():
     if os.geteuid() != 0:
         raise RuntimeError('Run as root')
@@ -498,48 +512,77 @@ def main():
                     part.unlink(missing_ok=True)
         return
     request = {} if action == 'scheduled' else json.load(sys.stdin)
+    if action == 'operation-status':
+        path = operation_path(request.get('operationId'))
+        result = json.loads(path.read_text()) if path.exists() else {'status': 'not_recorded', 'note': 'No matching receipt; do not infer success or repeat the write automatically.'}
+        if result.get('status') == 'running' and (not result.get('processToken') or process_token(result.get('pid')) != result.get('processToken')):
+            result['status'] = 'interrupted'
+            result['note'] = 'The recorded process is no longer running; inspect the environment before retrying.'
+        print(json.dumps(result, ensure_ascii=False))
+        return
     with locked():
-        if RECOVERY.exists() and action in ('scheduled', 'reset-apply'):
-            raise RuntimeError('Maintenance recovery is required; inspect the restore receipt')
-        if action == 'list':
-            result = {'backups': listing(), 'databases': databases(), 'keyConfigured': KEY.is_file(),
-                      'policy': json.loads(POLICY.read_text()) if POLICY.exists() else {'enabled': False},
-                      'maintenanceRecovery': json.loads(RECOVERY.read_text()) if RECOVERY.exists() else None,
-                      'restoreReceipts': [json.loads(p.read_text()) for p in VAULT.glob('restore-*.json')]}
-        elif action == 'key':
-            secret = request.get('passphrase', '')
-            if len(secret) < 16 or '\n' in secret or '\r' in secret:
-                raise ValueError('Use a passphrase of at least 16 characters')
-            fd = os.open(KEY, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-            with os.fdopen(fd, 'w') as data:
-                data.write(secret + '\n')
-            result = {'configured': True}
-        elif action in ('create', 'scheduled'):
-            if action == 'scheduled' and not json.loads(POLICY.read_text()).get('enabled'):
-                return
-            result = create({'kind': 'full', 'scheduled': True} if action == 'scheduled' else request)
-            if action == 'scheduled':
-                prune()
-        elif action in ('review', 'verify'):
-            result = review(request)
-            meta = VAULT / (identifier(request['id']) + '.json')
-            row = json.loads(meta.read_text())
-            row.update(verified=True, kind=result['kind'], release=result['release'], databases=result['databases'])
-            atomic(meta, row)
-        elif action in ('reset-plan', 'reset-apply'):
-            result = reset(request, apply=action == 'reset-apply')
-        elif action == 'restore':
-            result = restore(request)
-        elif action == 'delete':
-            if RECOVERY.exists() and json.loads(RECOVERY.read_text()).get('beforeBackup') == request.get('id'):
-                raise ValueError('Cannot delete the active recovery backup')
-            get_archive(request['id']).unlink()
-            (VAULT / (request['id'] + '.json')).unlink(missing_ok=True)
-            result = {'deleted': request['id']}
-        elif action == 'schedule':
-            result = schedule(request)
+        receipt_path = None
+        operation = None
+        if action in ('create', 'restore', 'delete', 'schedule', 'reset-apply') and request.get('operationId'):
+            receipt_path = operation_path(request['operationId'])
+            if receipt_path.exists():
+                raise ValueError('Operation identifier already recorded; read its status instead of replaying it')
+            operation = {'id': request['operationId'], 'action': action, 'status': 'running',
+                         'pid': os.getpid(), 'processToken': process_token(os.getpid()),
+                         'startedAt': dt.datetime.now(dt.timezone.utc).isoformat()}
+            atomic(receipt_path, operation)
+        try:
+            if RECOVERY.exists() and action in ('scheduled', 'reset-apply'):
+                raise RuntimeError('Maintenance recovery is required; inspect the restore receipt')
+            if action == 'list':
+                result = {'backups': listing(), 'databases': databases(), 'keyConfigured': KEY.is_file(),
+                          'policy': json.loads(POLICY.read_text()) if POLICY.exists() else {'enabled': False},
+                          'maintenanceRecovery': json.loads(RECOVERY.read_text()) if RECOVERY.exists() else None,
+                          'restoreReceipts': [json.loads(p.read_text()) for p in VAULT.glob('restore-*.json')]}
+            elif action == 'key':
+                secret = request.get('passphrase', '')
+                if len(secret) < 16 or '\n' in secret or '\r' in secret:
+                    raise ValueError('Use a passphrase of at least 16 characters')
+                fd = os.open(KEY, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                with os.fdopen(fd, 'w') as data:
+                    data.write(secret + '\n')
+                result = {'configured': True}
+            elif action in ('create', 'scheduled'):
+                if action == 'scheduled' and not json.loads(POLICY.read_text()).get('enabled'):
+                    return
+                result = create({'kind': 'full', 'scheduled': True} if action == 'scheduled' else request)
+                if action == 'scheduled':
+                    prune()
+            elif action in ('review', 'verify'):
+                result = review(request)
+                meta = VAULT / (identifier(request['id']) + '.json')
+                row = json.loads(meta.read_text())
+                row.update(verified=True, kind=result['kind'], release=result['release'], databases=result['databases'])
+                atomic(meta, row)
+            elif action in ('reset-plan', 'reset-apply'):
+                result = reset(request, apply=action == 'reset-apply')
+            elif action == 'restore':
+                result = restore(request)
+            elif action == 'delete':
+                if RECOVERY.exists() and json.loads(RECOVERY.read_text()).get('beforeBackup') == request.get('id'):
+                    raise ValueError('Cannot delete the active recovery backup')
+                get_archive(request['id']).unlink()
+                (VAULT / (request['id'] + '.json')).unlink(missing_ok=True)
+                result = {'deleted': request['id']}
+            elif action == 'schedule':
+                result = schedule(request)
+            else:
+                raise ValueError('Unknown operation')
+        except BaseException:
+            if receipt_path:
+                operation.update(status='failed', endedAt=dt.datetime.now(dt.timezone.utc).isoformat(),
+                                 note='The operation raised an error. Review its recovery receipt and environment; no rollback is implied.')
+                atomic(receipt_path, operation)
+            raise
         else:
-            raise ValueError('Unknown operation')
+            if receipt_path:
+                operation.update(status='succeeded', endedAt=dt.datetime.now(dt.timezone.utc).isoformat(), result=result)
+                atomic(receipt_path, operation)
     print(json.dumps(result, ensure_ascii=False))
 
 

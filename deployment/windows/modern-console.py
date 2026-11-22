@@ -21,6 +21,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngi
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from deployment_checks import diagnose, HOST_PROBE
+from operation_history import History, WRITE_ACTIONS, redact
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('radius_legacy_console', HERE / 'deploy-console.py')
@@ -37,6 +38,14 @@ class Value:
         self.value = value
 
 
+class TrackedQueue(queue.Queue):
+    def __init__(self, owner):
+        super().__init__()
+        self.owner = owner
+    def put(self, item, *args, **kwargs):
+        return super().put((*item, self.owner.current_job_id), *args, **kwargs)
+
+
 class Operations(legacy.Console):
     """No Tk window: inherit only the established SSH/Git/backup operations."""
     def __init__(self):
@@ -49,13 +58,24 @@ class Operations(legacy.Console):
         self.version = Value(prefs.get('version', 'v1.0.4'))
         self.changes = Value('')
         self.dark = prefs.get('dark', True)
-        self.events = queue.Queue()
+        self.current_job_id = None
+        self.events = TrackedQueue(self)
         self.validated = None
         self.process = None
         self.terminal_process = None
+        self.write_started = False
 
+
+    def rpc(self, action, key, data=None):
+        request = dict(data or {})
+        if self.current_job_id and action in ('create', 'restore', 'delete', 'schedule', 'reset-apply'):
+            request['operationId'] = self.current_job_id
+            self.write_started = True
+        return super().rpc(action, key, request)
 
     def run(self, args, *values, **options):
+        if pathlib.Path(args[0]).name.lower() in ('git', 'git.exe') and 'push' in args:
+            self.write_started = True
         try:
             return super().run(args, *values, **options)
         except legacy.CommandFailure as error:
@@ -66,6 +86,11 @@ class Operations(legacy.Console):
                 self.events.put(('diagnostic', diagnostic))
                 raise RuntimeError(diagnostic['title'] + ' — ' + diagnostic['action']) from error
             raise
+
+    def transfer(self, key, local, remote, upload=False, install=False):
+        if upload:
+            self.write_started = True
+        return super().transfer(key, local, remote, upload=upload, install=install)
 
     def readiness(self, project, key, version, changes):
         result = {'ready': False, 'checks': [], 'targetVersion': version, 'targetCommit': None,
@@ -143,6 +168,8 @@ class Bridge(QObject):
         super().__init__(window)
         self.window = window
         self.core = Operations()
+        self.history = History(legacy.PREFERENCES.parent / 'history')
+        self.startup_checked = False
         self.busy = False
         self.review = None
         self.reset_review = None
@@ -163,6 +190,12 @@ class Bridge(QObject):
         self.emit('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
                           'version': self.core.version.get(), 'dark': self.core.dark})
+        self.emit('history', self.history.rows())
+        if not self.startup_checked:
+            self.startup_checked = True
+            if self.history.pending():
+                self.emit('notice', 'توجد عمليات غير محسومة؛ سنفحص حالتها للقراءة فقط')
+                QTimer.singleShot(400, self.resume_startup)
 
     def confirm(self, title, text):
         return QMessageBox.question(self.window, title, text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
@@ -190,8 +223,20 @@ class Bridge(QObject):
                 self.core.dark = data.get('dark') is True
                 self.core.save_preferences()
                 return
+            if action == 'history-list':
+                self.emit('history', self.history.rows())
+                return
+            if action == 'history-log':
+                identifier = data.get('id')
+                if not self.history.get(identifier):
+                    raise ValueError('العملية غير موجودة')
+                self.emit('history-log', {'id': identifier, 'text': self.history.log(identifier)})
+                return
             if self.busy:
                 self.emit('error', 'انتظر اكتمال العملية الجارية')
+                return
+            if action == 'resume-pending':
+                self.start(action, self.resume_pending)
                 return
             for name in ('project', 'key', 'version', 'changes'):
                 if name in data:
@@ -348,31 +393,84 @@ class Bridge(QObject):
         finally:
             self.scan_setup()
 
-    def start(self, label, function):
+    def resume_startup(self):
+        if not self.busy:
+            self.start('resume-pending', self.resume_pending)
+
+    def resume_pending(self):
+        key = self.core.key.get()
+        for row in self.history.pending():
+            try:
+                if row['action'] == 'publish':
+                    version = row['version']
+                    if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
+                        raise ValueError('رقم الإصدار المسجل غير صالح')
+                    # Direct status-file read only. The receiver status command can enqueue a missing release.
+                    code = "import json,pathlib; p=pathlib.Path('/srv/radius-lord/status') / " + repr(version + '.json') + "; print(p.read_text() if p.exists() else json.dumps({'status':'not_recorded'}))"
+                    result = json.loads(self.core.run([*self.core.ssh(key), 'python3 -c ' + shlex.quote(code)]))
+                    remote = result.get('status')
+                    status = 'succeeded' if remote == 'succeeded' else 'failed' if remote in ('failed', 'failed_rolled_back', 'recovery_required') else 'pending' if remote in ('queued', 'preflight', 'build', 'backup', 'migrate', 'activate', 'verify') else 'unknown'
+                    note = 'حالة الإصدار على الخادم: ' + str(remote)
+                elif row['action'] == 'backup-upload' and row.get('backup_id'):
+                    result = self.core.rpc('list', key)
+                    match = next((r for r in result['backups'] if r['id'] == row['backup_id']), None)
+                    status, note = ('unknown', 'الملف موجود؛ فحص النقل المحلي لم يُحسم، افحص النسخة قبل استخدامها') if match else ('unknown', 'لم يُعثر على سجل النسخة المرفوعة؛ لا نفترض نجاح النقل')
+                else:
+                    result = self.core.rpc('operation-status', key, {'operationId': row['id']})
+                    remote = result.get('status')
+                    status = 'succeeded' if remote == 'succeeded' else 'failed' if remote == 'failed' else 'pending' if remote == 'running' else 'unknown'
+                    note = 'سجل عملية الخادم: ' + str(remote) + '. ' + str(result.get('note', ''))
+                self.history.finish(row['id'], status, note)
+                self.history.append(row['id'], note)
+                self.core.events.put(('log', row['action'] + ': ' + note + '\n'))
+            except Exception as error:
+                self.history.finish(row['id'], 'unknown', 'تعذر تأكيد النتيجة؛ يلزم الفحص لاحقًا')
+                self.history.append(row['id'], str(error))
+                self.core.events.put(('log', 'تعذر استكمال فحص العملية ' + row['id'] + ': ' + str(error) + '\n'))
+        self.core.events.put(('history', self.history.rows()))
+
+    def start(self, label, function, backup_id=None):
+        identifier = self.history.begin(label, self.core.version.get(), backup_id)
         self.busy = True
+        self.core.current_job_id = identifier
+        self.core.write_started = False
+        self.emit('history', self.history.rows())
         self.emit('busy', {'active': True, 'action': label})
         def work():
             try:
                 function()
+                self.history.finish(identifier, 'succeeded', 'اكتمل الإجراء في الأداة')
                 message = 'راجع نتيجة الجاهزية، ثم اضغط رفع الإصدار عندما تكون جاهزًا' if label == 'readiness' else 'اكتملت العملية'
                 self.core.events.put(('notice', message))
             except Exception as error:
+                self.history.finish(identifier, 'unknown' if label in WRITE_ACTIONS and self.core.write_started else 'failed', str(error))
                 diagnostic = diagnose(str(error))
                 if diagnostic:
                     self.core.events.put(('diagnostic', diagnostic))
                 self.core.events.put(('log', 'ERROR: ' + str(error) + '\n'))
                 self.core.events.put(('error', str(error)))
             finally:
+                try:
+                    self.core.events.put(('history', self.history.rows()))
+                except Exception:
+                    self.core.events.put(('error', 'تعذر تحديث سجل العمليات المحلي'))
                 self.core.events.put(('done', None))
         threading.Thread(target=work, daemon=True).start()
 
     def drain(self):
         for _ in range(150):
             try:
-                kind, value = self.core.events.get_nowait()
+                kind, value, identifier = self.core.events.get_nowait()
             except queue.Empty:
                 return
+            if kind == 'log':
+                value = redact(value)
+                try:
+                    self.history.append(identifier, value)
+                except Exception:
+                    self.emit('error', 'تعذر حفظ جزء من السجل المحلي؛ تحقق من مساحة القرص')
             if kind == 'done':
+                self.core.current_job_id = None
                 self.busy = False
                 self.emit('busy', {'active': False})
             elif kind == 'readiness':
@@ -427,7 +525,7 @@ class Bridge(QObject):
             if not path:
                 return
             backup_id = 'b-' + dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:12]
-            self.start(action, lambda: (self.core.transfer(key, path, backup_id, upload=True), self.core.list_backups('', key, '', '')))
+            self.start(action, lambda: (self.core.transfer(key, path, backup_id, upload=True), self.core.list_backups('', key, '', '')), backup_id=backup_id)
             return
         elif operation == 'schedule':
             request = {'enabled': data.get('enabled') is True, 'hour': int(data.get('hour', 2)),
@@ -460,7 +558,7 @@ class Bridge(QObject):
                     request['passphrase'] = phrase
         else:
             raise ValueError('Unknown backup action')
-        self.start(action, lambda: self.core.backup_operation(operation, key, request))
+        self.start(action, lambda: self.core.backup_operation(operation, key, request), backup_id=request.get('id'))
 
 
 class NoNativeTooltips(QObject):

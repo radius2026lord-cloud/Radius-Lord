@@ -241,3 +241,32 @@ first so the user can review the card before confirming the actual release.
 
 Validation remains static Python/JavaScript syntax checks; no Windows/live SSH,
 backup or deployment operation was run as part of this update.
+
+### Durable operation history and read-only follow-up
+
+The **العمليات** tab stores new desktop operation metadata and redacted log text
+under `%LOCALAPPDATA%\RadiusLord\history\operations.sqlite3`. It records the action,
+start time, local-attempt duration, outcome, release/backup identifier and log.
+Passwords, passphrases and action argument dictionaries are not stored. Recognized
+secret assignments, DSNs and private-key blocks are redacted from captured logs;
+this is pattern-based redaction, not a guarantee about arbitrary tool output.
+Previous operations from before this update cannot be reconstructed automatically.
+
+An interrupted session is marked unknown. The next startup offers/displays these
+records and attempts one read-only follow-up; **فحص العمليات غير المحسومة** can
+repeat the status read later. It never replays Git push, restore, backup or delete.
+Release follow-up reads the exact version status file directly: it deliberately
+does not call the receiver's status function, which may enqueue a missing release.
+Missing evidence stays unknown; it is not treated as success or permission to retry.
+
+Refresh the server helper once using **تجهيز إدارة النسخ** after updating this
+version. New backup/create/restore/delete/schedule/reset writes carry an operation
+ID. The helper writes root-only receipts with running/succeeded/failed status,
+process identity and result under the backup vault's `operations/` directory.
+Status reads do not acquire the deployment lock and can observe an ongoing job.
+PID start ticks distinguish the recorded process from a reused PID; interrupted
+processes remain unresolved. Existing operation IDs cannot replay a write.
+A failed receipt does not imply an atomic rollback, particularly for restore.
+Older helpers/operations without a receipt remain unknown and require review.
+Uploads without a completed local hash check remain unknown even if a file exists.
+The visible duration is the desktop attempt duration, not a claimed remote runtime.
