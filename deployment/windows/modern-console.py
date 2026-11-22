@@ -6,6 +6,8 @@ import json
 import os
 import pathlib
 import queue
+import re
+import shlex
 import subprocess
 import shutil
 import sys
@@ -17,6 +19,8 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor
 from PySide6.QtWebEngineWidgets import QWebEngineView
+
+from deployment_checks import diagnose, HOST_PROBE
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('radius_legacy_console', HERE / 'deploy-console.py')
@@ -51,6 +55,70 @@ class Operations(legacy.Console):
         self.terminal_process = None
 
 
+    def run(self, args, *values, **options):
+        try:
+            return super().run(args, *values, **options)
+        except legacy.CommandFailure as error:
+            program = pathlib.Path(error.program).name.lower()
+            diagnostic = diagnose(error.output, error.code if program in ('ssh', 'ssh.exe') else None)
+            if diagnostic and (program in ('ssh', 'ssh.exe') or 'ssh' in error.output.lower()):
+                error.diagnostic = diagnostic
+                self.events.put(('diagnostic', diagnostic))
+                raise RuntimeError(diagnostic['title'] + ' — ' + diagnostic['action']) from error
+            raise
+
+    def readiness(self, project, key, version, changes):
+        result = {'ready': False, 'checks': [], 'targetVersion': version, 'targetCommit': None,
+                  'currentVersion': None, 'currentCommit': None, 'host': None}
+        def check(name, ok, detail=''):
+            result['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
+        try:
+            project = self.repository(project)
+            commit = self.run(['git', 'rev-parse', 'HEAD'], project)
+            result['targetCommit'] = commit
+            check('المستودع والفرع ونظافة الملفات', True)
+            check('نجاح بناء هذا التعديل', self.validated == (project, commit), 'يجب بناء الباك إند والفرونت إند في جلسة الأداة الحالية')
+            remote = self.run(['git', 'remote', 'get-url', '--push', 'production'], project)
+            check('وجهة النشر المعتمدة', remote == legacy.REMOTE)
+        except Exception as error:
+            commit = None
+            check('المشروع المحلي', False, str(error))
+        valid_version = bool(re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version))
+        check('رقم الإصدار ووصف التغييرات', valid_version and 0 < len(changes) <= 4000, 'مثل v1.0.4 مع وصف للتغيير')
+        try:
+            info = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + legacy.HELPER + ' inspect']))
+            result.update(currentVersion=info.get('currentVersion'), currentCommit=info.get('currentCommit'))
+            for item in info.get('checks', []):
+                check(item['name'], item['ok'])
+            check('عامل النشر جاهز', info.get('ready') is True)
+            host = json.loads(self.run([*self.ssh(key), 'python3 -c ' + shlex.quote(HOST_PROBE)], timeout=30))
+            result['host'] = host
+            self.events.put(('connected', '🟢 نجح اتصال SSH أثناء فحص الجاهزية'))
+            check('المساحة الحرة', host['freeBytes'] >= 2 * 1024**3, '%.1f GiB متاحة' % (host['freeBytes'] / 1024**3))
+            check('لا توجد عملية نشر جارية', not host['deploymentBusy'])
+            check('لا توجد استعادة تحتاج معالجة', not host['recoveryRequired'])
+            check('إعداد النسخ قبل النشر', host['backupHook'] and host['backupCredentials'], 'تهيئة العامل فقط؛ النسخة الجديدة تؤخذ وتُفحص أثناء النشر')
+            if valid_version and info.get('currentVersion'):
+                current = info['currentVersion']
+                try:
+                    newer = tuple(map(int, version[1:].split('.'))) > tuple(map(int, current[1:].split('.')))
+                except (ValueError, AttributeError):
+                    newer = False
+                check('الإصدار الجديد أحدث من الجاري', newer)
+            if commit:
+                previous = info.get('currentCommit')
+                paths = self.run(['git', 'diff', '--name-only', previous, commit], project).splitlines() if previous else self.run(['git', 'ls-tree', '-r', '--name-only', commit], project).splitlines()
+                sql = [path for path in paths if path.endswith('.sql') or '/migrations/' in path]
+                check('متطلبات ترحيل قواعد البيانات', not sql or info.get('migrationReady') is True,
+                      'لا توجد تغييرات SQL' if not sql else 'تغييرات SQL: %d؛ يجب أن يراجعها عامل الترحيل المعتمد' % len(sql))
+        except Exception as error:
+            check('الاتصال وفحوص الخادم', False, str(error))
+        result['ready'] = bool(result['checks']) and all(item['ok'] for item in result['checks'])
+        result['checkedAt'] = dt.datetime.now().isoformat(timespec='seconds')
+        self.events.put(('readiness', result))
+        return result
+
+
 class LocalRequests(QWebEngineUrlRequestInterceptor):
     def interceptRequest(self, info):
         url = info.requestUrl()
@@ -82,6 +150,7 @@ class Bridge(QObject):
         self.setup_state = {}
         self.installed_for = None
         self.connected_for = None
+        self.last_readiness = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.drain)
         self.timer.start(80)
@@ -128,6 +197,8 @@ class Bridge(QObject):
                 if name in data:
                     if not isinstance(data[name], str) or len(data[name]) > 4096:
                         raise ValueError('Invalid field: ' + name)
+                    if getattr(self.core, name).get() != data[name].strip():
+                        self.last_readiness = None
                     getattr(self.core, name).set(data[name].strip())
             self.core.save_preferences()
             if action == 'setup-scan':
@@ -151,12 +222,15 @@ class Bridge(QObject):
                 return
             args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
             actions = {'inspect': self.inspect_setup, 'terminal': self.core.terminal,
-                       'pull': self.core.pull, 'build': self.core.build, 'publish': self.core.publish,
+                       'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
                        'status': self.core.status, 'latest-log': self.core.latest_log,
                        'create-key': self.create_setup_key, 'install-key': self.install_setup_key,
                        'agent': self.load_setup_agent, 'backup-install': self.core.install_backup,
                        'backup-list': self.core.list_backups}
             if action in actions:
+                if action == 'publish' and (not self.last_readiness or not self.last_readiness.get('ready') or self.last_readiness.get('targetVersion') != args[2]):
+                    self.start('readiness', lambda: self.core.readiness(*args))
+                    return
                 if action == 'publish' and not self.confirm('نشر الإصدار', 'نشر ' + self.core.version.get() + ' على ' + legacy.HOST + '؟ سيأخذ الخادم نسخة احتياطية ويبني الإصدار ويعيد تشغيل التطبيق.'):
                     return
                 self.start(action, lambda: actions[action](*args))
@@ -174,6 +248,13 @@ class Bridge(QObject):
             raise ValueError('Unknown action')
         except Exception as error:
             self.emit('error', str(error))
+
+    def publish_checked(self, *args):
+        # Re-run immediately before the existing immutable-tag publish flow.
+        result = self.core.readiness(*args)
+        if not result['ready']:
+            raise RuntimeError('فحص الجاهزية منع النشر؛ راجع البنود غير المكتملة')
+        self.core.publish(*args)
 
     def scan_setup(self):
         key = pathlib.Path(self.core.key.get())
@@ -273,8 +354,12 @@ class Bridge(QObject):
         def work():
             try:
                 function()
-                self.core.events.put(('notice', 'اكتملت العملية'))
+                message = 'راجع نتيجة الجاهزية، ثم اضغط رفع الإصدار عندما تكون جاهزًا' if label == 'readiness' else 'اكتملت العملية'
+                self.core.events.put(('notice', message))
             except Exception as error:
+                diagnostic = diagnose(str(error))
+                if diagnostic:
+                    self.core.events.put(('diagnostic', diagnostic))
                 self.core.events.put(('log', 'ERROR: ' + str(error) + '\n'))
                 self.core.events.put(('error', str(error)))
             finally:
@@ -290,6 +375,9 @@ class Bridge(QObject):
             if kind == 'done':
                 self.busy = False
                 self.emit('busy', {'active': False})
+            elif kind == 'readiness':
+                self.last_readiness = value
+                self.emit(kind, value)
             elif kind == 'backups':
                 self.backups = {row['id']: row for row in value['backups']}
                 self.emit(kind, value)

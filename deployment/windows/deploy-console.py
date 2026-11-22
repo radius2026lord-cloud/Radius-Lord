@@ -32,6 +32,14 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_CONSOLE = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
 
 
+class CommandFailure(RuntimeError):
+    def __init__(self, program, code, output):
+        super().__init__('فشل الأمر: ' + program + ' (exit ' + str(code) + ')')
+        self.program = program
+        self.code = code
+        self.output = output
+
+
 class Console:
     def __init__(self, root):
         self.root = root
@@ -484,7 +492,7 @@ class Console:
         if code and not stream:
             self.events.put(('log', text + '\n'))
         if code:
-            raise RuntimeError('فشل الأمر: ' + args[0] + ' (exit ' + str(code) + ')')
+            raise CommandFailure(args[0], code, text)
         return text.strip()
 
     def repository(self, project):

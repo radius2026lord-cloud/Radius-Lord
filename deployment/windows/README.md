@@ -214,3 +214,30 @@ inspect the log before changing credentials or generating another key.
 
 Native Qt/browser title tooltips are suppressed. Arabic CSS hints replace them,
 so stray native "Close" labels are not shown over the interface.
+
+
+### Connection diagnosis and pre-publish readiness
+
+SSH command failures now retain their captured output for classification. The
+modern interface distinguishes TCP timeout/refusal, missing route, DNS failure,
+untrusted/changed host identity, key-file/Agent problems, authentication rejection,
+and interrupted negotiation. Unrecognized SSH exit 255 remains explicitly
+unclassified. The raw failure stays in the local operation log; the diagnostic
+banner shows a targeted next action. It never deletes known_hosts or replaces a
+key automatically. Interactive terminal failures still require reading that
+terminal because they are not captured by the background SSH runner.
+
+**فحص الجاهزية** reads the canonical local repo/branch/worktree, exact built commit,
+production destination, release version/description, remote receiver checks,
+free disk space, deployment lock/recovery state and backup-hook configuration.
+It compares local SQL changes to the current server commit and requires the
+existing migration adapter when relevant. It displays current/target revisions
+and the latest available backup verification record. This historical record does
+not certify restore readiness; the release worker must still create and verify
+its mandatory new backup. The check itself does not create a backup or restart
+services. Readiness is re-run immediately before pushing a release tag. If no
+successful review has been shown, clicking publish performs the readiness check
+first so the user can review the card before confirming the actual release.
+
+Validation remains static Python/JavaScript syntax checks; no Windows/live SSH,
+backup or deployment operation was run as part of this update.
