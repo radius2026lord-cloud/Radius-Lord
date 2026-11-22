@@ -17,7 +17,7 @@ import datetime as dt
 import hashlib
 import uuid
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk, font as tkfont
 
 BRANCH = 'work/subscriptions-customer-details'
 HOST = '78.155.66.122'
@@ -67,6 +67,8 @@ class Console:
         self.changes = tk.StringVar(value='')
         self.state = tk.StringVar(value='جاهز — افحص الاتصال ثم اختر العملية')
         self.phase = tk.StringVar(value='جاهز')
+        available_fonts = set(tkfont.families(root))
+        self.ui_font = next((name for name in ['LBC', 'LBC Regular', 'Segoe UI'] if name in available_fonts), 'Arial')
         self.style = ttk.Style()
         self.style.theme_use('clam')
         outer = ttk.Frame(root, padding=14)
@@ -93,29 +95,27 @@ class Console:
             ('mysql', 'MySQL', '▤'), ('freeradius', 'FreeRADIUS', '◉')]):
             cards.columnconfigure(index, weight=1, uniform='services')
             button = tk.Button(cards, text=icon + '  ' + label + '\n● لم يُفحص', relief='flat', bd=0,
-                               font=('Segoe UI', 11, 'bold'), padx=10, pady=12,
+                               font=(self.ui_font, 10, 'bold'), padx=10, pady=8,
                                command=lambda name=unit: self.service_details(name))
             button.grid(row=0, column=index, sticky='nsew', padx=5)
             self.service_buttons[unit] = (button, label, icon)
-        # The upper workspace scrolls independently; the lower log always keeps space.
-        self.panes = tk.PanedWindow(outer, orient='vertical', sashwidth=8, bd=0, opaqueresize=True)
+        # Controls use natural height; no scrolling canvas hides actions.
+        self.panes = tk.PanedWindow(outer, orient='vertical', sashwidth=6, bd=0, opaqueresize=True)
         self.panes.pack(fill='both', expand=True)
         self.workspace = ttk.Frame(self.panes)
-        self.panes.add(self.workspace, minsize=160, stretch='never')
-        canvas_frame = ttk.Frame(self.workspace)
-        canvas_frame.pack(fill='both', expand=True)
-        self.workspace_canvas = tk.Canvas(canvas_frame, highlightthickness=0, height=270)
-        workspace_scroll = ttk.Scrollbar(canvas_frame, orient='vertical', command=self.workspace_canvas.yview)
-        workspace_scroll.pack(side='right', fill='y')
-        self.workspace_canvas.pack(side='left', fill='both', expand=True)
-        self.workspace_canvas.configure(yscrollcommand=workspace_scroll.set)
-        content = ttk.Frame(self.workspace_canvas, padding=(3, 0, 6, 8))
-        window = self.workspace_canvas.create_window((0, 0), window=content, anchor='nw')
-        content.bind('<Configure>', lambda event: self.workspace_canvas.configure(scrollregion=self.workspace_canvas.bbox('all')))
-        self.workspace_canvas.bind('<Configure>', lambda event: self.workspace_canvas.itemconfigure(window, width=event.width))
-        self.settings_open = tk.BooleanVar(value=False)
-        ttk.Checkbutton(content, text='إعدادات الاتصال والمفتاح ▾', variable=self.settings_open, command=self.toggle_settings).pack(anchor='e', pady=4)
-        self.settings_frame = ttk.Frame(content, padding=6)
+        self.panes.add(self.workspace, minsize=180, stretch='never')
+        content = ttk.Frame(self.workspace, padding=(0, 0, 0, 5))
+        content.pack(fill='both', expand=True)
+        settings_button = ttk.Button(header, text='⚙ إعدادات الاتصال', command=self.toggle_settings)
+        settings_button.pack(side='left', padx=4)
+        self.settings_window = tk.Toplevel(root)
+        self.settings_window.title('Radius Lord — إعدادات الاتصال')
+        self.settings_window.geometry('850x240')
+        self.settings_window.transient(root)
+        self.settings_window.protocol('WM_DELETE_WINDOW', self.settings_window.withdraw)
+        self.settings_window.withdraw()
+        self.settings_frame = ttk.Frame(self.settings_window, padding=18)
+        self.settings_frame.pack(fill='both', expand=True)
         for row, (label, variable, chooser) in enumerate([
             ('مجلد المشروع', self.project, self.choose_project), ('مسار مفتاح SSH الخاص', self.key, self.choose_key)]):
             ttk.Label(self.settings_frame, text=label).grid(row=row, column=2, sticky='e', padx=8, pady=4)
@@ -152,7 +152,7 @@ class Console:
         ttk.Label(deploy_tab, text='الفرع: ' + BRANCH, style='Muted.TLabel').pack(anchor='e', pady=4)
         self.backup_ui(backup_tab)
         self.log_panel = ttk.Frame(self.panes, padding=(0, 6, 0, 0))
-        self.panes.add(self.log_panel, minsize=260, stretch='always')
+        self.panes.add(self.log_panel, minsize=160, stretch='always')
         toolbar = ttk.Frame(self.log_panel)
         toolbar.pack(fill='x', pady=(0, 6))
         ttk.Label(toolbar, text='سجل العمليات', style='Heading.TLabel').pack(side='right', padx=6)
@@ -166,7 +166,7 @@ class Console:
         phase_bar.pack(fill='x', pady=(0, 5))
         self.phase_labels = {}
         for title in ['فحص', 'بناء', 'رفع', 'تحقق']:
-            label = tk.Label(phase_bar, text=title, padx=16, pady=4, font=('Segoe UI', 10))
+            label = tk.Label(phase_bar, text=title, padx=16, pady=4, font=(self.ui_font, 10))
             label.pack(side='right', padx=3)
             self.phase_labels[title] = label
         ttk.Label(phase_bar, textvariable=self.phase, style='Muted.TLabel').pack(side='left', padx=5)
@@ -184,7 +184,8 @@ class Console:
         self.progress = ttk.Progressbar(footer, mode='indeterminate')
         self.progress.pack(fill='x', pady=(5, 0))
         self.apply_theme()
-        root.after(200, lambda: self.panes.sash_place(0, 0, max(180, int(self.panes.winfo_height() * 0.38))))
+        self.notebook.bind('<<NotebookTabChanged>>', lambda event: self.root.after_idle(self.fit_workspace))
+        root.after(200, self.fit_workspace)
         self.log.bind('<Control-c>', self.copy_selected)
         self.log.bind('<Control-C>', self.copy_selected)
         self.log.bind('<Control-a>', self.select_all)
@@ -219,7 +220,7 @@ class Console:
         self.tooltip = tk.Toplevel(self.root)
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.geometry('+%d+%d' % (widget.winfo_rootx(), widget.winfo_rooty() + widget.winfo_height() + 4))
-        tk.Label(self.tooltip, text=text, bg='#24344c', fg='#ffffff', padx=9, pady=5, font=('Segoe UI', 10)).pack()
+        tk.Label(self.tooltip, text=text, bg='#24344c', fg='#ffffff', padx=9, pady=5, font=(self.ui_font, 10)).pack()
 
     def hide_tooltip(self):
         if self.tooltip:
@@ -227,10 +228,19 @@ class Console:
             self.tooltip = None
 
     def toggle_settings(self):
-        if self.settings_open.get():
-            self.settings_frame.pack(fill='x', before=self.notebook, pady=4)
-        else:
-            self.settings_frame.pack_forget()
+        self.settings_window.deiconify()
+        self.settings_window.lift()
+        self.settings_window.focus_set()
+
+    def fit_workspace(self):
+        if self.expanded_log:
+            return
+        selected = self.root.nametowidget(self.notebook.select())
+        self.notebook.configure(height=selected.winfo_reqheight())
+        self.root.update_idletasks()
+        height = selected.winfo_reqheight() + 52
+        self.panes.paneconfigure(self.workspace, minsize=height)
+        self.panes.sash_place(0, 0, height)
 
     def toggle_log(self):
         if not self.expanded_log:
@@ -239,7 +249,7 @@ class Console:
             self.expand_button.configure(text='↙ استعادة الحجم')
         else:
             self.panes.add(self.workspace, before=self.log_panel, minsize=160, stretch='never')
-            self.root.after_idle(lambda: self.panes.sash_place(0, 0, self.previous_sash))
+            self.root.after_idle(self.fit_workspace)
             self.expand_button.configure(text='⛶ توسيع')
         self.expanded_log = not self.expanded_log
 
@@ -255,28 +265,29 @@ class Console:
                         'entry': '#f6f9fd', 'border': '#c9d6e8', 'accent': '#1764e9', 'log': '#f9fbff'})
         c = self.colors
         self.root.configure(bg=c['bg'])
-        self.style.configure('.', background=c['bg'], foreground=c['text'], font=('Segoe UI', 10))
+        self.style.configure('.', background=c['bg'], foreground=c['text'], font=(self.ui_font, 10))
         self.style.configure('TFrame', background=c['bg'])
         self.style.configure('TLabel', background=c['bg'], foreground=c['text'])
-        self.style.configure('Title.TLabel', font=('Segoe UI', 20, 'bold'))
-        self.style.configure('Heading.TLabel', font=('Segoe UI', 12, 'bold'))
+        self.style.configure('Title.TLabel', font=(self.ui_font, 20, 'bold'))
+        self.style.configure('Heading.TLabel', font=(self.ui_font, 12, 'bold'))
         self.style.configure('Muted.TLabel', foreground=c['muted'])
-        self.style.configure('TButton', background=c['panel'], foreground=c['text'], bordercolor=c['border'], padding=(10, 8))
+        self.style.configure('TButton', background=c['panel'], foreground=c['text'], bordercolor=c['border'], borderwidth=0, relief='flat', padding=(12, 7))
         self.style.map('TButton', background=[('active', c['accent']), ('disabled', c['entry'])], foreground=[('active', '#ffffff'), ('disabled', c['muted'])])
         for name in ['TEntry', 'TCombobox']:
             self.style.configure(name, fieldbackground=c['entry'], foreground=c['text'], bordercolor=c['border'], padding=5)
             self.style.map(name, fieldbackground=[('readonly', c['entry'])], foreground=[('readonly', c['text'])])
         self.style.configure('TNotebook', background=c['bg'], borderwidth=0)
-        self.style.configure('TNotebook.Tab', background=c['panel'], foreground=c['muted'], padding=(18, 9))
+        self.style.configure('TNotebook.Tab', background=c['panel'], foreground=c['muted'], borderwidth=0, padding=(22, 8))
         self.style.map('TNotebook.Tab', background=[('selected', c['accent'])], foreground=[('selected', '#ffffff')])
-        self.style.configure('Treeview', background=c['panel'], fieldbackground=c['panel'], foreground=c['text'], rowheight=28)
+        self.style.configure('Treeview', background=c['panel'], fieldbackground=c['panel'], foreground=c['text'], rowheight=25, borderwidth=0)
         self.style.configure('Treeview.Heading', background=c['entry'], foreground=c['text'], padding=6)
         self.style.map('Treeview', background=[('selected', c['accent'])], foreground=[('selected', '#ffffff')])
         self.style.configure('TCheckbutton', background=c['bg'], foreground=c['text'])
         self.style.map('TCheckbutton', background=[('active', c['panel'])])
         self.style.configure('Horizontal.TProgressbar', background=c['accent'], troughcolor=c['entry'])
         self.panes.configure(bg=c['border'])
-        self.workspace_canvas.configure(bg=c['bg'])
+        self.settings_window.configure(bg=c['bg'])
+        self.database_window.configure(bg=c['bg'])
         self.db_list.configure(bg=c['entry'], fg=c['text'], selectbackground=c['accent'], selectforeground='#ffffff', relief='flat', highlightthickness=0)
         self.log.configure(bg=c['log'], fg=c['text'], selectbackground=c['accent'], selectforeground='#ffffff', insertbackground=c['text'])
         for tag, color in {'normal': c['text'], 'time': c['muted'], 'error': '#ff858f' if self.dark else '#b42338',
@@ -693,33 +704,51 @@ class Console:
     def backup_ui(self, parent):
         row = ttk.Frame(parent)
         row.pack(fill='x')
-        self.backup_kind = tk.StringVar(value='full')
+        self.backup_kind = tk.StringVar(value='كاملة')
         ttk.Label(row, text='نوع النسخة:').pack(side='right')
-        ttk.Combobox(row, textvariable=self.backup_kind, values=['full', 'project', 'databases'], state='readonly', width=12).pack(side='right', padx=5)
-        ttk.Label(row, text='full: كاملة | project: المشروع | databases: القواعد').pack(side='right')
-        self.button(row, '🔧 تجهيز إدارة النسخ', self.install_backup)
-        self.button(row, '🔐 ضبط تشفير النسخ', self.configure_key)
-        self.button(row, '🔄 تحديث القائمة', self.list_backups)
-        self.db_list = tk.Listbox(parent, selectmode='multiple', height=3, exportselection=False)
-        self.db_list.pack(fill='x', pady=3)
-        ttk.Label(parent, text='اختر القواعد من القائمة؛ لا تحديد = جميع القواعد المحلية المدعومة. النسخ يتوقف بالخدمات مؤقتًا.').pack(anchor='e')
-        tree_frame = ttk.Frame(parent)
-        tree_frame.pack(fill='x', pady=4)
-        self.backup_tree = ttk.Treeview(tree_frame, columns=('kind', 'date', 'size', 'version', 'verified'), show='tree headings', height=4)
+        ttk.Combobox(row, textvariable=self.backup_kind, values=['كاملة', 'المشروع فقط', 'قواعد البيانات فقط'], state='readonly', width=20).pack(side='right', padx=5)
+        ttk.Button(row, text='▤ اختيار قواعد البيانات', command=self.show_databases).pack(side='right', padx=5)
+        ttk.Label(row, text='تُشفّر النسخة قبل حفظها', style='Muted.TLabel').pack(side='left')
+        setup_actions = ttk.Frame(parent)
+        setup_actions.pack(fill='x', pady=3)
+        self.button(setup_actions, '🔧 تجهيز إدارة النسخ', self.install_backup)
+        self.button(setup_actions, '🔐 ضبط تشفير النسخ', self.configure_key)
+        self.button(setup_actions, '🔄 تحديث القائمة', self.list_backups)
+        self.database_window = tk.Toplevel(self.root)
+        self.database_window.title('اختيار قواعد البيانات')
+        self.database_window.geometry('600x360')
+        self.database_window.transient(self.root)
+        self.database_window.protocol('WM_DELETE_WINDOW', self.database_window.withdraw)
+        ttk.Label(self.database_window, text='لا تحديد = جميع القواعد المحلية المدعومة', padding=10).pack(anchor='e')
+        self.db_list = tk.Listbox(self.database_window, selectmode='multiple', height=9, exportselection=False)
+        self.db_list.pack(fill='both', expand=True, padx=12, pady=8)
+        ttk.Button(self.database_window, text='اعتماد الاختيار', command=self.database_window.withdraw).pack(pady=8)
+        self.database_window.withdraw()
+        body = ttk.Frame(parent)
+        body.pack(fill='x', pady=4)
+        body.columnconfigure(0, weight=3)
+        body.columnconfigure(1, weight=2)
+        tree_frame = ttk.Frame(body)
+        tree_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        self.backup_tree = ttk.Treeview(tree_frame, columns=('kind', 'date', 'size', 'version', 'verified'), show='tree headings', height=3)
         self.backup_tree.heading('#0', text='معرّف النسخة')
         for column, title in [('kind', 'النوع'), ('date', 'التاريخ UTC'), ('size', 'الحجم MiB'), ('version', 'الإصدار'), ('verified', 'السلامة')]:
             self.backup_tree.heading(column, text=title)
-            self.backup_tree.column(column, width=110)
-        self.backup_tree.column('#0', width=280)
+            self.backup_tree.column(column, width=70, minwidth=45)
+        self.backup_tree.column('#0', width=170, minwidth=100)
         backup_scroll = ttk.Scrollbar(tree_frame, orient='vertical', command=self.backup_tree.yview)
         self.backup_tree.configure(yscrollcommand=backup_scroll.set)
         backup_scroll.pack(side='right', fill='y')
         self.backup_tree.pack(side='left', fill='both', expand=True)
-        actions = ttk.Frame(parent)
-        actions.pack(fill='x')
+        actions = ttk.Frame(body)
+        actions.grid(row=0, column=1, sticky='new')
         for label, action in [('➕ إنشاء نسخة', self.create_backup), ('⬇ تنزيل', self.download_backup), ('⬆ رفع نسخة', self.upload_backup),
                               ('🔎 فحص ومراجعة', self.review_backup), ('↩ استعادة', self.restore_backup), ('🗑 حذف', self.delete_backup), ('🕒 الجدولة', self.configure_schedule)]:
             self.button(actions, label, action)
+
+    def show_databases(self):
+        self.database_window.deiconify()
+        self.database_window.lift()
 
     def backup_request(self, action, **data):
         if self.busy:
@@ -926,7 +955,8 @@ class Console:
             if not self.available_databases:
                 messagebox.showinfo('النسخ', 'جهّز إدارة النسخ وحدّث القائمة أولًا')
                 return
-            data = {'kind': self.backup_kind.get()}
+            kind = {'كاملة': 'full', 'المشروع فقط': 'project', 'قواعد البيانات فقط': 'databases'}[self.backup_kind.get()]
+            data = {'kind': kind}
             selection = [self.db_list.get(i) for i in self.db_list.curselection()]
             names = selection or self.available_databases
             detail = 'النوع: ' + data['kind'] + '\n'
