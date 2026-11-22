@@ -160,3 +160,36 @@ selection open in separate windows. Backup actions sit next to the backup table,
 so actions remain visible rather than below a scrolling form. Scrollbars remain
 only for long data history and the operation log. Flat buttons, lighter framing
 and the LBC font (when installed, otherwise Segoe UI) follow the project palette.
+
+## Modern desktop interface (Qt WebEngine)
+
+`Radius-Lord-Deploy.cmd` now opens the local HTML/CSS interface in a PySide6
+Qt WebEngine window. First launch creates an isolated Python environment under
+`%LOCALAPPDATA%\RadiusLord\desktop-python` and installs `PySide6>=6.8,<7` from
+PyPI. Python 3.10+ and internet access for the first dependency download are
+required. No Node build is needed for this interface. Later launches reuse it.
+
+The interface lives in `deployment/windows/web/`. It uses local inline SVG icons,
+RTL layout, soft cards, semantic service states, light/dark colors and a large
+selectable operation log. It uses LBC if installed, otherwise Windows fonts.
+No remote fonts, CDN, HTTP server or public port is used. Qt WebChannel exposes
+only the named desktop operations. Requests to remote URLs and navigation outside
+the local interface are blocked. Log and database contents are inserted as text,
+not executable HTML. Password/passphrase entry uses Qt password dialogs and does
+not pass through JavaScript or saved preferences.
+
+The Qt shell shares the existing SSH/Git/backup Python methods; it does not replace
+the receiver or change production files merely by opening the UI. Key setup and
+SSH sessions still open a real terminal. Publish, restore, delete, schedule,
+restart and central-reset confirmations remain enforced in Python.
+
+Use **فحص الخدمات** for actual status, or the backup refresh button after installing
+the backup helper. No health state is invented for display. The desktop still
+requires Git, Node/npm and Windows OpenSSH for the corresponding operations.
+The underlying operation module imports Python's standard Tkinter library but does
+not create a Tk window in modern mode. The old interface can be opened using
+`Radius-Lord-Legacy.cmd` during this transition.
+
+Validation: Python AST and JavaScript syntax checks passed. The Qt interface has
+not been launched on Windows in the development environment, and no production
+backup, restore, reset or release was executed for this UI conversion.
