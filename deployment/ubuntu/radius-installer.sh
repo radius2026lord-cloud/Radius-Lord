@@ -33,7 +33,7 @@ case "$action" in
  packages)
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y ca-certificates curl xz-utils git python3 sudo openssl gzip tar build-essential apache2 certbot python3-certbot-apache mysql-server freeradius freeradius-mysql freeradius-utils
+  apt-get install -y ca-certificates curl xz-utils git python3 sudo openssl gnupg gzip tar build-essential apache2 certbot python3-certbot-apache mysql-server freeradius freeradius-mysql freeradius-utils
   a2enmod proxy proxy_http proxy_wstunnel headers ssl
   apache2ctl configtest
   echo 'Packages prepared. Existing RADIUS/Netplan/database configuration was not rewritten.'
