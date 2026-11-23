@@ -256,7 +256,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-5'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-6'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -319,6 +319,7 @@ class Bridge(QObject):
                 threading.Thread(target=read_log, daemon=True).start()
                 return
             if self.busy:
+                self.send_event('log', 'لم يبدأ الأمر '+action+': انتظر اكتمال العملية الجارية\n')
                 self.send_event('error', 'انتظر اكتمال العملية الجارية')
                 return
             local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings'}
@@ -698,7 +699,9 @@ class Bridge(QObject):
                 if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
                     raise ValueError('Invalid database selection')
                 request['databases'] = names
+            self.send_event('log', 'بانتظار تأكيد إنشاء النسخة في نافذة التأكيد\n')
             if not self.confirm('إنشاء نسخة مشفّرة', 'النوع: ' + request['kind'] + '\nالقواعد: ' + (', '.join(names) if names else 'جميع القواعد المحلية المدعومة') + '\nتتوقف خدمات المشروع وFreeRADIUS مؤقتًا أثناء النسخ. متابعة؟'):
+                self.send_event('log', 'أُلغي إنشاء النسخة قبل التنفيذ\n')
                 return
         elif operation == 'upload':
             path, _ = QFileDialog.getOpenFileName(self.window, 'رفع نسخة مشفّرة', '', 'Environment backup (*.tar.gpg)')
@@ -771,7 +774,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-5')
+        url.setQuery('revision=review-6')
         self.view.load(url)
 
     def closeEvent(self, event):
