@@ -301,3 +301,36 @@ the connection check and then follows pending operations as a separately named
 job; a failed follow-up stops the batch rather than repeating network waits.
 Production writes and interactive SSH sessions keep their existing semantics.
 This was syntax-checked; the Windows symptom has not been reproduced locally.
+
+### General review: Qt bridge, total inspection deadline and log persistence
+
+The bridge signal is now `message`, not `event`, so it does not shadow Qt's
+`QObject.event` handler. The dispatch helper is `send_event` and the queue drain
+is an explicit Qt slot. The WebEngine profile is off-the-record with no HTTP
+cache, and the local asset URLs are revisioned. The startup log prints
+`review-3`, making a stale running copy distinguishable from the updated tool.
+
+A main-loop watchdog ends the *whole* inspection wait after 55 seconds. It
+cancels read-only subprocess waits, keeps server operations locked, restores the
+retry button and allows closing normally. Jobs have per-thread identifiers;
+late events from an abandoned inspection cannot unlock operations or overwrite a
+new inspection. This watchdog never cancels publish/restore/other write jobs.
+
+Captured logs are persisted by a batching background SQLite writer using WAL.
+The UI event drain no longer opens and commits a transaction per log line.
+Historical log reads also run outside the Qt event loop. Closing flushes queued
+logs for a bounded interval.
+
+Runtime regression checks:
+
+```text
+python -m unittest discover -s deployment/windows/tests -v
+node deployment/windows/tests/frontend_flow.cjs
+```
+
+The Python checks cover output capture, timeout/cancellation, inherited output
+handles, batched redacted history, bridge completion and stale-event rejection.
+The JavaScript check runs actual handlers against HTML IDs using a DOM stub.
+Both passed in Linux. Qt objects are stubbed in the Python bridge test; this is
+not a Windows/real-Qt integration test. The environment did not have a runnable
+Chromium binary or PySide6, so no claim of real browser/Qt UI coverage is made.

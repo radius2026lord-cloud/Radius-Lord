@@ -6,9 +6,12 @@ Use only for checks, never to time out a potentially mutating server action.
 import pathlib
 import subprocess
 import tempfile
+import time
 
 
-def capture_readonly(args, timeout, *, cwd=None, env=None, creationflags=0, input_bytes=None):
+def capture_readonly(args, timeout, *, cwd=None, env=None, creationflags=0, input_bytes=None, cancel_event=None):
+    if cancel_event and cancel_event.is_set():
+        raise TimeoutError('أُلغي انتظار الفحص')
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors, tempfile.TemporaryFile() as data:
         if input_bytes is not None:
             data.write(input_bytes)
@@ -17,7 +20,14 @@ def capture_readonly(args, timeout, *, cwd=None, env=None, creationflags=0, inpu
                                    stdin=data if input_bytes is not None else subprocess.DEVNULL,
                                    stdout=output, stderr=errors)
         try:
-            process.wait(timeout=timeout)
+            deadline = time.monotonic() + timeout
+            while process.poll() is None:
+                if (cancel_event and cancel_event.is_set()) or time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(args, timeout)
+                try:
+                    process.wait(timeout=min(0.1, max(0.01, deadline-time.monotonic())))
+                except subprocess.TimeoutExpired:
+                    pass
         except subprocess.TimeoutExpired:
             process.kill()
             try:

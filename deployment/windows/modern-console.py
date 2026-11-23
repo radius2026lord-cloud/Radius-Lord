@@ -12,12 +12,13 @@ import subprocess
 import shutil
 import sys
 import threading
+import time
 import uuid
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent
 from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QToolTip
 from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from deployment_checks import diagnose, HOST_PROBE
@@ -44,7 +45,8 @@ class TrackedQueue(queue.Queue):
         super().__init__()
         self.owner = owner
     def put(self, item, *args, **kwargs):
-        return super().put((*item, self.owner.current_job_id), *args, **kwargs)
+        identifier = getattr(self.owner.worker_context, 'identifier', self.owner.current_job_id)
+        return super().put((*item, identifier), *args, **kwargs)
 
 
 class Operations(legacy.Console):
@@ -60,6 +62,7 @@ class Operations(legacy.Console):
         self.changes = Value('')
         self.dark = prefs.get('dark', True)
         self.current_job_id = None
+        self.worker_context = threading.local()
         self.events = TrackedQueue(self)
         self.validated = None
         self.process = None
@@ -74,7 +77,7 @@ class Operations(legacy.Console):
             self.write_started = True
         if action in ('list','operation-status'):
             result = capture_readonly([*self.ssh(key), 'python3 ' + legacy.BACKUP_HELPER + ' ' + action],
-                                      timeout=25, input_bytes=json.dumps(request).encode('utf-8'), creationflags=legacy.NO_WINDOW)
+                                      timeout=25, input_bytes=json.dumps(request).encode('utf-8'), creationflags=legacy.NO_WINDOW, cancel_event=getattr(self.worker_context, 'cancel', None))
             if result.returncode:
                 output = result.stderr.decode('utf-8', errors='replace')
                 diagnostic = diagnose(output, result.returncode if result.returncode == 255 else None)
@@ -95,7 +98,7 @@ class Operations(legacy.Console):
         try:
             if options.get('wait_on_timeout') is False:
                 result = capture_readonly(args, options.get('timeout',30), cwd=options.get('cwd'),
-                                          env=options.get('env'), creationflags=legacy.NO_WINDOW)
+                                          env=options.get('env'), creationflags=legacy.NO_WINDOW, cancel_event=getattr(self.worker_context, 'cancel', None))
                 output = result.stdout.decode('utf-8', errors='replace')
                 error = result.stderr.decode('utf-8', errors='replace')
                 if options.get('stream') or result.returncode:
@@ -219,7 +222,7 @@ class LocalPage(QWebEnginePage):
 
 
 class Bridge(QObject):
-    event = Signal(str)
+    message = Signal(str)
 
     def __init__(self, window):
         super().__init__(window)
@@ -237,23 +240,26 @@ class Bridge(QObject):
         self.connected_for = None
         self.last_readiness = None
         self.connection_ready = False
+        self.active_job_id = None
+        self.active_cancel = None
+        self.inspection_deadline = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.drain)
         self.timer.start(80)
 
-    def emit(self, kind, value):
-        self.event.emit(json.dumps({'kind': kind, 'value': value}, ensure_ascii=False))
+    def send_event(self, kind, value):
+        self.message.emit(json.dumps({'kind': kind, 'value': value}, ensure_ascii=False))
 
     @Slot()
     def ready(self):
-        self.emit('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
+        self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark})
-        self.emit('history', self.history.rows())
-        self.emit('access', self.connection_ready)
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-3'})
+        self.send_event('history', self.history.rows())
+        self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
-            self.emit('notice', 'جارٍ فحص الاتصال تلقائيًا قبل إتاحة العمليات')
+            self.send_event('notice', 'جارٍ فحص الاتصال تلقائيًا قبل إتاحة العمليات')
             QTimer.singleShot(200, self.connect_startup)
 
     def connect_startup(self):
@@ -276,7 +282,7 @@ class Bridge(QObject):
                 raise ValueError('Invalid request')
             if action == 'copy':
                 QApplication.clipboard().setText(str(data.get('text', '')))
-                self.emit('notice', 'تم النسخ')
+                self.send_event('notice', 'تم النسخ')
                 return
             if action == 'save-log':
                 path, _ = QFileDialog.getSaveFileName(self.window, 'حفظ السجل', 'radius-lord.log', 'Log (*.log)')
@@ -288,16 +294,21 @@ class Bridge(QObject):
                 self.core.save_preferences()
                 return
             if action == 'history-list':
-                self.emit('history', self.history.rows())
+                self.send_event('history', self.history.rows())
                 return
             if action == 'history-log':
                 identifier = data.get('id')
                 if not self.history.get(identifier):
                     raise ValueError('العملية غير موجودة')
-                self.emit('history-log', {'id': identifier, 'text': self.history.log(identifier)})
+                def read_log():
+                    try:
+                        self.core.events.put(('history-log', {'id': identifier, 'text': self.history.log(identifier)}))
+                    except Exception as error:
+                        self.core.events.put(('error', str(error)))
+                threading.Thread(target=read_log, daemon=True).start()
                 return
             if self.busy:
-                self.emit('error', 'انتظر اكتمال العملية الجارية')
+                self.send_event('error', 'انتظر اكتمال العملية الجارية')
                 return
             local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings'}
             if not self.connection_ready and action not in local_actions:
@@ -313,7 +324,7 @@ class Bridge(QObject):
                         self.last_readiness = None
                         if name in ('project','key'):
                             self.connection_ready = False
-                            self.emit('access', False)
+                            self.send_event('access', False)
                     getattr(self.core, name).set(data[name].strip())
             self.core.save_preferences()
             if action == 'setup-scan':
@@ -328,13 +339,13 @@ class Bridge(QObject):
                     getattr(self.core, 'project' if action == 'choose-project' else 'key').set(path)
                     self.core.validated = None
                     self.connection_ready = False
-                    self.emit('access', False)
+                    self.send_event('access', False)
                     self.core.save_preferences()
                     self.ready()
                     self.start('setup-scan', self.scan_setup)
                 return
             if action == 'save-settings':
-                self.emit('notice', 'تم حفظ إعدادات الاتصال')
+                self.send_event('notice', 'تم حفظ إعدادات الاتصال')
                 self.start('setup-scan', self.scan_setup)
                 return
             if not self.connection_ready and action not in local_actions:
@@ -366,7 +377,7 @@ class Bridge(QObject):
                 return
             raise ValueError('Unknown action')
         except Exception as error:
-            self.emit('error', str(error))
+            self.send_event('error', str(error))
 
     def publish_checked(self, *args):
         # Re-run immediately before the existing immutable-tag publish flow.
@@ -519,12 +530,20 @@ class Bridge(QObject):
         identifier = self.history.begin(label, self.core.version.get(), backup_id)
         self.busy = True
         self.core.current_job_id = identifier
+        self.active_job_id = identifier
+        self.active_cancel = threading.Event()
+        cancel = self.active_cancel
+        self.inspection_deadline = time.monotonic() + 55 if label == 'inspect' else None
         self.core.write_started = False
-        self.emit('history', self.history.rows())
-        self.emit('busy', {'active': True, 'action': label})
+        self.send_event('history', self.history.rows())
+        self.send_event('busy', {'active': True, 'action': label})
         def work():
+            self.core.worker_context.identifier = identifier
+            self.core.worker_context.cancel = cancel
             try:
                 function()
+                if cancel.is_set():
+                    raise TimeoutError('تجاوز الفحص مدته الكلية')
                 self.history.finish(identifier, 'succeeded', 'اكتمل الإجراء في الأداة')
                 message = 'راجع نتيجة الجاهزية، ثم اضغط رفع الإصدار عندما تكون جاهزًا' if label == 'readiness' else 'اكتملت العملية'
                 self.core.events.put(('notice', message))
@@ -543,52 +562,81 @@ class Bridge(QObject):
                 self.core.events.put(('done', None))
         threading.Thread(target=work, daemon=True).start()
 
+    def check_inspection_deadline(self):
+        if not self.inspection_deadline or time.monotonic() < self.inspection_deadline:
+            return
+        identifier = self.active_job_id
+        self.inspection_deadline = None
+        self.active_cancel.set()
+        self.active_job_id = None
+        self.core.current_job_id = None
+        self.busy = False
+        self.connection_ready = False
+        self.send_event('access', False)
+        self.send_event('services', ({}, 'انتهت مهلة الفحص'))
+        self.send_event('connected', '🔴 انتهت المهلة الكلية للفحص؛ يمكنك المحاولة مجددًا')
+        self.send_event('busy', {'active': False})
+        self.send_event('error', 'توقف انتظار الفحص بعد 55 ثانية؛ لم تُكرّر أي عملية على الخادم')
+        def record_timeout():
+            try:
+                self.history.finish(identifier, 'failed', 'تجاوز الفحص مهلة 55 ثانية')
+                self.core.events.put(('history', self.history.rows()))
+            except Exception:
+                pass
+        threading.Thread(target=record_timeout, daemon=True).start()
+
+    @Slot()
     def drain(self):
+        self.check_inspection_deadline()
         for _ in range(150):
             try:
                 kind, value, identifier = self.core.events.get_nowait()
             except queue.Empty:
                 return
+            if identifier and identifier != self.active_job_id:
+                continue
             if kind == 'log':
                 value = redact(value)
                 try:
                     self.history.append(identifier, value)
                 except Exception:
-                    self.emit('error', 'تعذر حفظ جزء من السجل المحلي؛ تحقق من مساحة القرص')
+                    self.send_event('error', 'تعذر حفظ جزء من السجل المحلي؛ تحقق من مساحة القرص')
             if kind == 'done':
+                self.inspection_deadline = None
+                self.active_job_id = None
                 self.core.current_job_id = None
                 self.busy = False
-                self.emit('busy', {'active': False})
+                self.send_event('busy', {'active': False})
                 if self.connection_ready and self.followup_after_connect:
                     self.followup_after_connect = False
                     if self.history.pending():
                         QTimer.singleShot(300, self.resume_startup)
             elif kind == 'access':
                 self.connection_ready = bool(value)
-                self.emit(kind, self.connection_ready)
+                self.send_event(kind, self.connection_ready)
             elif kind == 'diagnostic':
                 self.connection_ready = False
-                self.emit('access', False)
-                self.emit(kind, value)
+                self.send_event('access', False)
+                self.send_event(kind, value)
             elif kind == 'connected':
                 if value.startswith('🔴'):
                     self.connection_ready = False
-                    self.emit('access', False)
-                self.emit(kind, value)
+                    self.send_event('access', False)
+                self.send_event(kind, value)
             elif kind == 'readiness':
                 self.last_readiness = value
-                self.emit(kind, value)
+                self.send_event(kind, value)
             elif kind == 'backups':
                 self.backups = {row['id']: row for row in value['backups']}
-                self.emit(kind, value)
+                self.send_event(kind, value)
             elif kind == 'review':
                 self.review = value
-                self.emit(kind, value)
+                self.send_event(kind, value)
             elif kind == 'reset-review':
                 self.reset_review = value
-                self.emit(kind, value)
+                self.send_event(kind, value)
             else:
-                self.emit(kind, value)
+                self.send_event(kind, value)
 
     def backup(self, action, data):
         key = self.core.key.get()
@@ -679,7 +727,9 @@ class Window(QMainWindow):
         self.setMinimumSize(1000, 720)
         self.view = QWebEngineView(self)
         self.setCentralWidget(self.view)
-        self.page = LocalPage(self.view)
+        self.profile = QWebEngineProfile(self)
+        self.profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
+        self.page = LocalPage(self.profile, self.view)
         self.view.setPage(self.page)
         self.interceptor = LocalRequests(self.page)
         self.page.profile().setUrlRequestInterceptor(self.interceptor)
@@ -690,7 +740,9 @@ class Window(QMainWindow):
         self.channel = QWebChannel(self.page)
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
-        self.view.load(QUrl.fromLocalFile(str(HERE / 'web/index.html')))
+        url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
+        url.setQuery('revision=review-3')
+        self.view.load(url)
 
     def closeEvent(self, event):
         if self.bridge.busy:
@@ -698,6 +750,10 @@ class Window(QMainWindow):
             event.ignore()
         else:
             self.bridge.core.save_preferences()
+            try:
+                self.bridge.history.flush(timeout=2)
+            except Exception:
+                pass
             event.accept()
 
 
