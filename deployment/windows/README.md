@@ -366,3 +366,9 @@ resends the connection-access state. Tests now exercise actual settings/service
 click handlers, overlay open/close and dispatch of pull/build/backup-list actions.
 Six Python regressions and the UI DOM-stub test pass; native Windows/Qt UI behavior
 has not been directly reproduced.
+
+### Interaction and completion review (review-7)
+
+WebChannel dispatch returns before native confirmation dialogs open, and reserves the request to prevent duplicate modal submissions. History reads and startup follow-up run off the UI thread. Finishing a job releases the controls without querying SQLite in the UI callback. Background events are no longer attributed to an unrelated foreground job. Unchanged settings are not written on every click. Long operations report that they are still waiting every 15 seconds; this is a local waiting indicator, not a claim of remote progress. A successful backup action is kept successful if only the subsequent list refresh fails. Command output reader joins are bounded after child exit.
+
+No deployment, database reset, backup creation, or service restart is performed by this source review. Real Windows/Qt interaction remains to be verified on Windows.

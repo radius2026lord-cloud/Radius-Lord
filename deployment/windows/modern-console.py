@@ -45,7 +45,7 @@ class TrackedQueue(queue.Queue):
         super().__init__()
         self.owner = owner
     def put(self, item, *args, **kwargs):
-        identifier = getattr(self.owner.worker_context, 'identifier', self.owner.current_job_id)
+        identifier = getattr(self.owner.worker_context, 'identifier', None)
         return super().put((*item, identifier), *args, **kwargs)
 
 
@@ -243,6 +243,9 @@ class Bridge(QObject):
         self.active_job_id = None
         self.active_cancel = None
         self.inspection_deadline = None
+        self.request_pending = False
+        self.last_progress_at = None
+        self.active_label = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.drain)
         self.timer.start(80)
@@ -256,7 +259,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-6'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-7'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -285,6 +288,20 @@ class Bridge(QObject):
 
     @Slot(str, str)
     def request(self, action, raw):
+        # Return to WebChannel before native dialogs enter a nested event loop.
+        # Reserve dispatch immediately so rapid clicks cannot open two dialogs.
+        if self.request_pending:
+            self.send_event('log', 'يوجد طلب قيد المعالجة؛ أغلق نافذة التأكيد الحالية أولًا\n')
+            return
+        self.request_pending = True
+        def dispatch():
+            try:
+                self.handle_request(action, raw)
+            finally:
+                self.request_pending = False
+        QTimer.singleShot(0, dispatch)
+
+    def handle_request(self, action, raw):
         try:
             data = json.loads(raw or '{}')
             if not isinstance(data, dict):
@@ -305,14 +322,14 @@ class Bridge(QObject):
                 self.core.save_preferences()
                 return
             if action == 'history-list':
-                self.send_event('history', self.history.rows())
+                self.refresh_history()
                 return
             if action == 'history-log':
                 identifier = data.get('id')
-                if not self.history.get(identifier):
-                    raise ValueError('العملية غير موجودة')
                 def read_log():
                     try:
+                        if not self.history.get(identifier):
+                            raise ValueError('العملية غير موجودة')
                         self.core.events.put(('history-log', {'id': identifier, 'text': self.history.log(identifier)}))
                     except Exception as error:
                         self.core.events.put(('error', str(error)))
@@ -328,17 +345,19 @@ class Bridge(QObject):
             if action == 'resume-pending':
                 self.start(action, self.resume_pending)
                 return
+            settings_changed = False
             for name in ('project', 'key', 'version', 'changes'):
                 if name in data:
                     if not isinstance(data[name], str) or len(data[name]) > 4096:
                         raise ValueError('Invalid field: ' + name)
                     if getattr(self.core, name).get() != data[name].strip():
+                        settings_changed = True
                         self.last_readiness = None
                         if name in ('project','key'):
                             self.connection_ready = False
                             self.send_event('access', False)
                     getattr(self.core, name).set(data[name].strip())
-            if action != 'inspect':
+            if settings_changed or action == 'save-settings':
                 self.core.save_preferences()
             if action == 'setup-scan':
                 self.start(action, self.scan_setup)
@@ -505,7 +524,12 @@ class Bridge(QObject):
         if not self.busy:
             reader = Operations()
             reader.key.set(self.core.key.get())
-            threading.Thread(target=lambda: self.resume_pending(reader), daemon=True).start()
+            def followup():
+                try:
+                    self.resume_pending(reader)
+                except Exception as error:
+                    self.core.events.put(('log', 'تعذرت متابعة السجل السابق: ' + str(error) + '\n'))
+            threading.Thread(target=followup, daemon=True).start()
 
     def resume_pending(self, reader=None):
         reader = reader or self.core
@@ -553,6 +577,8 @@ class Bridge(QObject):
         self.active_cancel = threading.Event()
         cancel = self.active_cancel
         self.inspection_deadline = time.monotonic() + 55 if label == 'inspect' else None
+        self.last_progress_at = time.monotonic()
+        self.active_label = label
         self.core.write_started = False
         self.send_event('busy', {'active': True, 'action': label})
         self.send_event('log', 'بدأت العملية: ' + label + '\n')
@@ -618,6 +644,9 @@ class Bridge(QObject):
     @Slot()
     def drain(self):
         self.check_inspection_deadline()
+        if self.busy and self.last_progress_at and time.monotonic() - self.last_progress_at >= 15:
+            self.last_progress_at = time.monotonic()
+            self.send_event('log', 'ما زالت العملية قيد الانتظار: ' + str(self.active_label) + '؛ لم تُكرر الأداة الطلب.\n')
         for _ in range(150):
             try:
                 kind, value, identifier = self.core.events.get_nowait()
@@ -626,6 +655,7 @@ class Bridge(QObject):
             if identifier and identifier != self.active_job_id:
                 continue
             if kind == 'log':
+                self.last_progress_at = time.monotonic()
                 value = redact(value)
                 try:
                     self.history.append(identifier, value)
@@ -640,8 +670,7 @@ class Bridge(QObject):
                 self.send_event('access', self.connection_ready)
                 if self.connection_ready and self.followup_after_connect:
                     self.followup_after_connect = False
-                    if self.history.pending():
-                        QTimer.singleShot(300, self.resume_startup)
+                    QTimer.singleShot(300, self.resume_startup)
             elif kind == 'access':
                 self.connection_ready = bool(value)
                 self.send_event(kind, self.connection_ready)
@@ -774,7 +803,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-6')
+        url.setQuery('revision=review-7')
         self.view.load(url)
 
     def closeEvent(self, event):

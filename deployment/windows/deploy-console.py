@@ -470,7 +470,11 @@ class Console:
         process = subprocess.Popen([executable, *args[1:]], cwd=cwd, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, env=env, creationflags=NO_WINDOW)
         self.process = process
+        worker_context = getattr(self, 'worker_context', None)
+        operation_id = getattr(worker_context, 'identifier', None)
         def read_output():
+            if worker_context is not None:
+                worker_context.identifier = operation_id
             for raw in iter(process.stdout.readline, b''):
                 line = raw.decode('utf-8', errors='replace')
                 chunks.append(line)
@@ -496,7 +500,9 @@ class Console:
             code = process.wait()
         finally:
             self.process = None
-        reader.join()
+        reader.join(timeout=3)
+        if reader.is_alive():
+            self.events.put(('log', 'انتهى الأمر؛ بعض قنوات الإخراج لم تُغلق بعد.\n'))
         text = ''.join(chunks)
         if code and not stream:
             self.events.put(('log', text + '\n'))
@@ -833,7 +839,12 @@ class Console:
             self.events.put(('reset-review', result))
         if action == 'review':
             self.events.put(('review', result))
-        self.events.put(('backups', self.rpc('list', key)))
+        # A completed server operation must not become 'failed/unknown' solely
+        # because the subsequent read-only refresh lost its connection.
+        try:
+            self.events.put(('backups', self.rpc('list', key)))
+        except Exception as error:
+            self.events.put(('log', 'اكتمل الإجراء، لكن تعذر تحديث قائمة النسخ: ' + str(error) + '\n'))
 
     def create_backup(self, *args):
         raise RuntimeError('استخدم زر إنشاء النسخة من الواجهة')
