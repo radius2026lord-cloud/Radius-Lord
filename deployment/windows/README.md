@@ -334,3 +334,20 @@ The JavaScript check runs actual handlers against HTML IDs using a DOM stub.
 Both passed in Linux. Qt objects are stubbed in the Python bridge test; this is
 not a Windows/real-Qt integration test. The environment did not have a runnable
 Chromium binary or PySide6, so no claim of real browser/Qt UI coverage is made.
+
+### Startup correction (review-4)
+
+Initialization no longer reads the local history DB before scheduling inspection.
+The renderer requests inspection via the normal guarded request slot immediately
+after receiving init; startup errors are therefore reported through that same
+visible path. History loading is asynchronous. Job identifiers and busy status are
+created before DB access, and the inspection worker can continue when local
+history is unavailable. Writes still require durable tracking. No preference file
+write is required to start inspection. JavaScript message-handler exceptions are
+caught and shown in the visible log rather than hiding later state updates.
+
+The log now identifies `review-4` and reports renderer request, bridge acceptance,
+job start, local checks and SSH start. Regression checks include automatic renderer
+inspection and a failed local history DB: inspection still starts and finishes,
+while a restore is blocked. All six Python tests and the UI handler check passed;
+real Windows/Qt execution remains outside the development environment.

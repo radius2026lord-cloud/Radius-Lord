@@ -75,8 +75,8 @@ class History:
         if self.log_error:
             raise RuntimeError('تعذر حفظ جزء من السجل المحلي: ' + self.log_error)
 
-    def begin(self, action, version='', backup_id=None):
-        identifier = uuid.uuid4().hex
+    def begin(self, action, version='', backup_id=None, identifier=None):
+        identifier = identifier or uuid.uuid4().hex
         with self.connect() as db:
             db.execute('INSERT INTO operations(id,action,started,status,version,backup_id) VALUES (?,?,?,?,?,?)',
                        (identifier, action, time.time(), 'running', version, backup_id))

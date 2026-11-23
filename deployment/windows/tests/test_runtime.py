@@ -110,6 +110,34 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotIn('example-private-value', text)
             self.assertEqual(text.count('[REDACTED]'), 500)
 
+    def test_broken_local_history_cannot_block_readonly_startup(self):
+        module = load_bridge()
+        with tempfile.TemporaryDirectory() as temp:
+            module.legacy.PREFERENCES = pathlib.Path(temp) / 'preferences.json'
+            bridge = module.Bridge(None)
+            bridge.followup_after_connect = False
+            def broken(*args, **kwargs):
+                raise RuntimeError('unavailable local history')
+            bridge.history.rows = broken
+            bridge.history.begin = broken
+            bridge.ready()  # init/access must be delivered even with a bad history DB.
+            called = threading.Event()
+            bridge.start('inspect', called.set)
+            deadline = time.monotonic()+2
+            while bridge.busy and time.monotonic()<deadline:
+                bridge.drain()
+                time.sleep(.01)
+            self.assertTrue(called.is_set())
+            self.assertFalse(bridge.busy)
+            self.assertTrue(any(v['kind']=='init' for v in bridge.message.values))
+            mutated = threading.Event()
+            bridge.start('backup-restore', mutated.set)
+            while bridge.busy and time.monotonic()<deadline:
+                bridge.drain()
+                time.sleep(.01)
+            self.assertFalse(mutated.is_set())  # A write still requires durable tracking.
+            bridge.history.flush()
+
     def test_bridge_success_failure_timeout_and_stale_events(self):
         module = load_bridge()
         with tempfile.TemporaryDirectory() as temp:

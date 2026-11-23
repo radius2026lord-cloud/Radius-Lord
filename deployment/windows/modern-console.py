@@ -252,20 +252,29 @@ class Bridge(QObject):
 
     @Slot()
     def ready(self):
+        # Deliver init independently of local database access. The frontend then
+        # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-3'})
-        self.send_event('history', self.history.rows())
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-4'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
-            self.send_event('notice', 'جارٍ فحص الاتصال تلقائيًا قبل إتاحة العمليات')
-            QTimer.singleShot(200, self.connect_startup)
+            self.send_event('log', 'المحرك المحلي متصل؛ تهيئة فحص الاتصال التلقائي.\n')
+            self.refresh_history()
+
+    def refresh_history(self):
+        def read():
+            try:
+                self.core.events.put(('history', self.history.rows()))
+            except Exception as error:
+                self.core.events.put(('log', 'تعذر تحميل سجل العمليات المحلي: ' + type(error).__name__ + '\n'))
+        threading.Thread(target=read, daemon=True).start()
 
     def connect_startup(self):
+        # Retained for compatibility with older desktop callbacks.
         if not self.busy:
-            args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
-            self.start('inspect', lambda: self.inspect_setup(*args))
+            self.request('inspect', '{}')
 
     def confirm(self, title, text):
         return QMessageBox.question(self.window, title, text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
@@ -280,6 +289,8 @@ class Bridge(QObject):
             data = json.loads(raw or '{}')
             if not isinstance(data, dict):
                 raise ValueError('Invalid request')
+            if action == 'inspect':
+                self.send_event('log', 'استلم المحرك طلب فحص الاتصال.\n')
             if action == 'copy':
                 QApplication.clipboard().setText(str(data.get('text', '')))
                 self.send_event('notice', 'تم النسخ')
@@ -326,7 +337,8 @@ class Bridge(QObject):
                             self.connection_ready = False
                             self.send_event('access', False)
                     getattr(self.core, name).set(data[name].strip())
-            self.core.save_preferences()
+            if action != 'inspect':
+                self.core.save_preferences()
             if action == 'setup-scan':
                 self.start(action, self.scan_setup)
                 return
@@ -527,7 +539,7 @@ class Bridge(QObject):
         self.core.events.put(('history', self.history.rows()))
 
     def start(self, label, function, backup_id=None):
-        identifier = self.history.begin(label, self.core.version.get(), backup_id)
+        identifier = uuid.uuid4().hex
         self.busy = True
         self.core.current_job_id = identifier
         self.active_job_id = identifier
@@ -535,20 +547,31 @@ class Bridge(QObject):
         cancel = self.active_cancel
         self.inspection_deadline = time.monotonic() + 55 if label == 'inspect' else None
         self.core.write_started = False
-        self.send_event('history', self.history.rows())
         self.send_event('busy', {'active': True, 'action': label})
+        self.send_event('log', 'بدأت العملية: ' + label + '\n')
+        def save_result(status, note):
+            try:
+                self.history.finish(identifier, status, note)
+            except Exception as error:
+                self.core.events.put(('log', 'تعذر حفظ نتيجة العملية محليًا: ' + type(error).__name__ + '\n'))
         def work():
             self.core.worker_context.identifier = identifier
             self.core.worker_context.cancel = cancel
             try:
+                try:
+                    self.history.begin(label, self.core.version.get(), backup_id, identifier=identifier)
+                except Exception as error:
+                    if label in WRITE_ACTIONS:
+                        raise RuntimeError('تعذر تسجيل عملية الكتابة محليًا؛ تحقق من السجل قبل التنفيذ') from error
+                    self.core.events.put(('log', 'تعذر بدء سجل محلي؛ يستمر الفحص للقراءة فقط: ' + type(error).__name__ + '\n'))
                 function()
                 if cancel.is_set():
                     raise TimeoutError('تجاوز الفحص مدته الكلية')
-                self.history.finish(identifier, 'succeeded', 'اكتمل الإجراء في الأداة')
+                save_result('succeeded', 'اكتمل الإجراء في الأداة')
                 message = 'راجع نتيجة الجاهزية، ثم اضغط رفع الإصدار عندما تكون جاهزًا' if label == 'readiness' else 'اكتملت العملية'
                 self.core.events.put(('notice', message))
             except Exception as error:
-                self.history.finish(identifier, 'unknown' if label in WRITE_ACTIONS and self.core.write_started else 'failed', str(error))
+                save_result('unknown' if label in WRITE_ACTIONS and self.core.write_started else 'failed', str(error))
                 diagnostic = diagnose(str(error))
                 if diagnostic:
                     self.core.events.put(('diagnostic', diagnostic))
@@ -558,7 +581,7 @@ class Bridge(QObject):
                 try:
                     self.core.events.put(('history', self.history.rows()))
                 except Exception:
-                    self.core.events.put(('error', 'تعذر تحديث سجل العمليات المحلي'))
+                    self.core.events.put(('log', 'تعذر تحديث سجل العمليات المحلي\n'))
                 self.core.events.put(('done', None))
         threading.Thread(target=work, daemon=True).start()
 
@@ -741,7 +764,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-3')
+        url.setQuery('revision=review-4')
         self.view.load(url)
 
     def closeEvent(self, event):
