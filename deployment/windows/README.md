@@ -351,3 +351,18 @@ job start, local checks and SSH start. Regression checks include automatic rende
 inspection and a failed local history DB: inspection still starts and finishes,
 while a restore is blocked. All six Python tests and the UI handler check passed;
 real Windows/Qt execution remains outside the development environment.
+
+### Interaction review (review-5)
+
+Settings and service details now use explicit in-page overlays instead of native
+HTML dialog top-layer/inert state. Backdrop click and Escape close the overlay.
+Global JavaScript click/runtime failures are surfaced in the local log. The
+Python bridge acknowledges received commands and logs rejected actions so a
+failed dispatch is distinguishable from a service-state failure.
+
+Post-connect follow-up uses a separate read-only operations object in the
+background and does not set the foreground busy gate. Foreground completion
+resends the connection-access state. Tests now exercise actual settings/service
+click handlers, overlay open/close and dispatch of pull/build/backup-list actions.
+Six Python regressions and the UI DOM-stub test pass; native Windows/Qt UI behavior
+has not been directly reproduced.

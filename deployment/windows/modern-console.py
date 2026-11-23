@@ -256,7 +256,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-4'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-5'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -289,8 +289,8 @@ class Bridge(QObject):
             data = json.loads(raw or '{}')
             if not isinstance(data, dict):
                 raise ValueError('Invalid request')
-            if action == 'inspect':
-                self.send_event('log', 'استلم المحرك طلب فحص الاتصال.\n')
+            if action not in ('copy','theme','save-log','history-list','history-log'):
+                self.send_event('log', 'استلم المحرك الأمر: ' + action + '\n')
             if action == 'copy':
                 QApplication.clipboard().setText(str(data.get('text', '')))
                 self.send_event('notice', 'تم النسخ')
@@ -389,6 +389,7 @@ class Bridge(QObject):
                 return
             raise ValueError('Unknown action')
         except Exception as error:
+            self.send_event('log', 'تعذر تنفيذ الأمر ' + action + ': ' + str(error) + '\n')
             self.send_event('error', str(error))
 
     def publish_checked(self, *args):
@@ -501,12 +502,17 @@ class Bridge(QObject):
 
     def resume_startup(self):
         if not self.busy:
-            self.start('resume-pending', self.resume_pending)
+            reader = Operations()
+            reader.key.set(self.core.key.get())
+            threading.Thread(target=lambda: self.resume_pending(reader), daemon=True).start()
 
-    def resume_pending(self):
-        key = self.core.key.get()
+    def resume_pending(self, reader=None):
+        reader = reader or self.core
+        background = reader is not self.core
+        key = reader.key.get()
         for row in self.history.pending():
-            self.core.events.put(('state', 'قراءة حالة العملية السابقة: ' + row['action']))
+            if not background:
+                self.core.events.put(('state', 'قراءة حالة العملية السابقة: ' + row['action']))
             self.core.events.put(('log', 'متابعة للقراءة فقط: ' + row['action'] + ' / ' + row['id'] + '\n'))
             try:
                 if row['action'] == 'publish':
@@ -515,16 +521,16 @@ class Bridge(QObject):
                         raise ValueError('رقم الإصدار المسجل غير صالح')
                     # Direct status-file read only. The receiver status command can enqueue a missing release.
                     code = "import json,pathlib; p=pathlib.Path('/srv/radius-lord/status') / " + repr(version + '.json') + "; print(p.read_text() if p.exists() else json.dumps({'status':'not_recorded'}))"
-                    result = json.loads(self.core.run([*self.core.ssh(key), 'python3 -c ' + shlex.quote(code)]))
+                    result = json.loads(reader.run([*reader.ssh(key), 'python3 -c ' + shlex.quote(code)]))
                     remote = result.get('status')
                     status = 'succeeded' if remote == 'succeeded' else 'failed' if remote in ('failed', 'failed_rolled_back', 'recovery_required') else 'pending' if remote in ('queued', 'preflight', 'build', 'backup', 'migrate', 'activate', 'verify') else 'unknown'
                     note = 'حالة الإصدار على الخادم: ' + str(remote)
                 elif row['action'] == 'backup-upload' and row.get('backup_id'):
-                    result = self.core.rpc('list', key)
+                    result = reader.rpc('list', key)
                     match = next((r for r in result['backups'] if r['id'] == row['backup_id']), None)
                     status, note = ('unknown', 'الملف موجود؛ فحص النقل المحلي لم يُحسم، افحص النسخة قبل استخدامها') if match else ('unknown', 'لم يُعثر على سجل النسخة المرفوعة؛ لا نفترض نجاح النقل')
                 else:
-                    result = self.core.rpc('operation-status', key, {'operationId': row['id']})
+                    result = reader.rpc('operation-status', key, {'operationId': row['id']})
                     remote = result.get('status')
                     status = 'succeeded' if remote == 'succeeded' else 'failed' if remote == 'failed' else 'pending' if remote == 'running' else 'unknown'
                     note = 'سجل عملية الخادم: ' + str(remote) + '. ' + str(result.get('note', ''))
@@ -630,6 +636,7 @@ class Bridge(QObject):
                 self.core.current_job_id = None
                 self.busy = False
                 self.send_event('busy', {'active': False})
+                self.send_event('access', self.connection_ready)
                 if self.connection_ready and self.followup_after_connect:
                     self.followup_after_connect = False
                     if self.history.pending():
@@ -764,7 +771,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-4')
+        url.setQuery('revision=review-5')
         self.view.load(url)
 
     def closeEvent(self, event):
