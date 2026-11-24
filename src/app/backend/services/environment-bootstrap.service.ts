@@ -1,3 +1,4 @@
+import {resolveNasRadiusAddress,repairNasRadiusAddress} from './nas-radius-address.service';
 import {readEnvironmentNasLink,directNasSchema} from './environment-nas-link.service';
 import {randomBytes} from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -10,7 +11,7 @@ import {encryptProvisioningSecret,decryptProvisioningSecret,provisioningKey} fro
 import {readPrivateSetting,savePrivateSetting,applyRadiusDatabase,radiusDatabaseHost,grantRadiusAccounts,radiusAccountHosts,verifyRadiusDatabase} from './radius-provision.service';
 import {validLimits} from './subscription-environment.service';
 import {licenseSignature,validateLocalLicense} from './network-runtime.service';
-import {saveNetworkOvpn,createNetworkNas,provisionNetworkNas,reserveNetworkNasCapacity,nasRadiusClients,markNasRadiusConfigured,purchasedNasCapacity,radiusIpv4} from './network-ovpn.service';
+import {saveNetworkOvpn,createNetworkNas,provisionNetworkNas,reserveNetworkNasCapacity,nasRadiusClients,markNasRadiusConfigured,purchasedNasCapacity,readNetworkOvpn} from './network-ovpn.service';
 import {syncRadiusOvpnRoutes} from './radius-ovpn-routes.service';
 import {readHostingPreflight} from './hosting-preflight.service';
 type Step=(code:string,operation:()=>Promise<void>,alwaysRun?:boolean)=>Promise<void>;
@@ -61,7 +62,7 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  await step('network_ovpn',async()=>{
   if(nasLink.mode==='direct'){
    const limits=validLimits(scope.plan_limits_snapshot)!;
-   const snapshot={version:1,connectionMode:'direct',tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:0,radiusServerId:Number(selection.radiusServerId),radiusAddress:await radiusIpv4(radiusConfig.host),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
+   const snapshot={version:1,connectionMode:'direct',tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:0,radiusServerId:Number(selection.radiusServerId),radiusAddress:await resolveNasRadiusAddress(radiusConfig),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
    await admin.query(directNasSchema);await saveNetworkOvpn(admin,app,snapshot);
    const [principal]:any=await app.query("SELECT id FROM managers WHERE manager_type='principal' AND archived_at IS NULL");if(!principal[0])fail('NETWORK_PRINCIPAL_REQUIRED');
    const nasId=await createNetworkNas(app,scope,Number(principal[0].id),snapshot,{...nasLink,name:'الخادم الأول',requestId:'initial_nas_v1'});
@@ -69,7 +70,8 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
   }
   const [gateways]:any=await central.query('SELECT settings_json FROM ovpn_gateways WHERE id=?',[selection.gatewayId]);if(!gateways[0])fail('OVPN_GATEWAY_REQUIRED');const g=typeof gateways[0].settings_json==='string'?JSON.parse(gateways[0].settings_json):gateways[0].settings_json;
   const limits=validLimits(scope.plan_limits_snapshot)!;
-  const snapshot={version:1,tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:Number(selection.gatewayId),radiusServerId:Number(selection.radiusServerId),host:g.ovpn_host,port:Number(g.ovpn_port),protocol:'tcp',profile:g.ppp_profile,cidr:g.tunnel_cidr,serverAddress:g.server_tunnel_address,serverCertificate:g.certificate_name,radiusAddress:await radiusIpv4(radiusConfig.host),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
+  const snapshot={version:1,tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:Number(selection.gatewayId),radiusServerId:Number(selection.radiusServerId),host:g.ovpn_host,port:Number(g.ovpn_port),protocol:'tcp',profile:g.ppp_profile,cidr:g.tunnel_cidr,serverAddress:g.server_tunnel_address,serverCertificate:g.certificate_name,radiusAddress:await resolveNasRadiusAddress(radiusConfig,g),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
+  const existingTransport=await readNetworkOvpn(app);if(existingTransport)await repairNasRadiusAddress(central,app,scope,existingTransport);
   await saveNetworkOvpn(admin,app,snapshot);
   const [principal]:any=await app.query("SELECT id FROM managers WHERE manager_type='principal' AND archived_at IS NULL");if(!principal[0])fail('NETWORK_PRINCIPAL_REQUIRED');
   const nasId=await createNetworkNas(app,scope,Number(principal[0].id),snapshot,{name:'الخادم الأول',requestId:'initial_nas_v1'});

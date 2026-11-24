@@ -1,8 +1,9 @@
+import {isLicenseNasName} from './nas-resource-identity.service';
 import {nasRelayTags,nasResourceTag} from './nas-resource-scope.service';
 import {isIP} from 'net';
 import type {RouterApi} from './routeros-api.service';
 
-type Scope={environmentId:number;nasId:number;tunnelAddress:string};
+type Scope={environmentId:number;nasId:number;tunnelAddress:string;resourceName?:string};
 type SourceNat=Scope&{sourceAddress:string;gatewayTunnelAddress:string;apiPort:number};
 type Rule=Record<string,string>;
 const properties='.id,comment,chain,action,protocol,src-address,dst-address,dst-port,to-addresses,to-ports,src-port,disabled,invalid,dynamic,in-interface,out-interface,src-address-list,dst-address-list,connection-mark,routing-mark';
@@ -10,10 +11,11 @@ const on=(value:string|undefined)=>value==='yes'||value==='true';
 const host=(value:string|undefined)=>String(value||'').replace(/\/32$/,'');
 const fail=(code:string):never=>{throw new Error(code);};
 function validateScope(scope:Scope){
+ if(scope.resourceName&&!isLicenseNasName(scope.resourceName))fail('NAS_API_SNAT_SCOPE_INVALID');
  if(!Number.isSafeInteger(scope.environmentId)||scope.environmentId<1||!Number.isSafeInteger(scope.nasId)||scope.nasId<1||isIP(scope.tunnelAddress)!==4)fail('NAS_API_SNAT_SCOPE_INVALID');
 }
-export function nasApiSourceNatMarker(scope:Pick<Scope,'environmentId'|'nasId'>){
- return nasResourceTag(scope.environmentId,scope.nasId,'API-SNAT');
+export function nasApiSourceNatMarker(scope:Pick<Scope,'environmentId'|'nasId'|'resourceName'>){
+ return scope.resourceName?scope.resourceName+' | API-SNAT':nasResourceTag(scope.environmentId,scope.nasId,'API-SNAT');
 }
 const plain=(rule:Rule)=>rule.chain==='srcnat'&&rule.action==='src-nat'&&rule.protocol==='tcp'&&!on(rule.dynamic)&&
  !['to-ports','src-port','in-interface','out-interface','src-address-list','dst-address-list','connection-mark','routing-mark'].some(key=>Boolean(rule[key]));
@@ -25,7 +27,7 @@ function same(rule:Rule,input:SourceNat){
 // ahead of each other on every poll when a CHR serves many networks.
 function canPrecede(rule:Rule,input:SourceNat){
  if(rule.chain!=='srcnat'||on(rule.disabled))return true;
- const ours=/^Lord_Rdius-Cloud \| ENV-[1-9][0-9]* \| NAS-[1-9][0-9]* \| API-SNAT$/.test(rule.comment||'');
+ const ours=/^rl-[A-Za-z0-9][A-Za-z0-9_-]{0,49}-nas-[1-9][0-9]* \| API-SNAT$/.test(rule.comment||'')||/^Lord_Rdius-Cloud \| ENV-[1-9][0-9]* \| NAS-[1-9][0-9]* \| API-SNAT$/.test(rule.comment||'');
  if(!ours||!plain(rule)||isIP(host(rule['src-address']))!==4||isIP(host(rule['dst-address']))!==4||!Number.isInteger(Number(rule['dst-port'])))return false;
  return host(rule['src-address'])!==input.sourceAddress||host(rule['dst-address'])!==input.tunnelAddress||Number(rule['dst-port'])!==input.apiPort;
 }
@@ -36,9 +38,9 @@ export async function ensureNasApiSourceNat(api:RouterApi,input:SourceNat){
  validateScope(input);
  if([input.sourceAddress,input.gatewayTunnelAddress].some(address=>isIP(address)!==4||address==='0.0.0.0')||
   !Number.isInteger(input.apiPort)||input.apiPort<1||input.apiPort>65535)fail('NAS_API_SNAT_SCOPE_INVALID');
- const marker=nasApiSourceNatMarker(input),testMarker=marker+'-TEST';
+ const marker=nasApiSourceNatMarker(input),legacyMarker=nasResourceTag(input.environmentId,input.nasId,'API-SNAT'),testMarker=marker+'-TEST';
  const read=()=>api.command('/ip/firewall/nat/print',{'.proplist':properties});
- let rules=await read(),owned=rules.filter(rule=>rule.comment===marker);
+ let rules=await read(),owned=rules.filter(rule=>rule.comment===marker||rule.comment===legacyMarker);
  if(owned.length>1)fail('NAS_API_SNAT_AMBIGUOUS');
  let selected=owned[0],changed=false,adopted=false;
  const matchesTest=(rule:Rule)=>(rule.comment===testMarker||rule.comment==='TEMP_LR_API_SNAT_TEST')&&same(rule,input);
@@ -51,13 +53,13 @@ export async function ensureNasApiSourceNat(api:RouterApi,input:SourceNat){
  const desired={chain:'srcnat',action:'src-nat',protocol:'tcp','src-address':input.sourceAddress+'/32',
   'dst-address':input.tunnelAddress+'/32','dst-port':String(input.apiPort),'to-addresses':input.gatewayTunnelAddress,disabled:'no',comment:marker};
  if(selected){
-  if(adopted||!same(selected,input)){await api.command('/ip/firewall/nat/set',{'.id':selected['.id'],...desired});changed=true;}
+  if(adopted||selected.comment!==marker||!same(selected,input)){await api.command('/ip/firewall/nat/set',{'.id':selected['.id'],...desired});changed=true;}
  }else{
   const first=rules.find(rule=>!canPrecede(rule,input));
   await api.command('/ip/firewall/nat/add',{...desired,...(first?.['.id']?{'place-before':first['.id']}:{})});changed=true;
  }
  if(changed)rules=await read();
- owned=rules.filter(rule=>rule.comment===marker);
+ owned=rules.filter(rule=>rule.comment===marker||rule.comment===legacyMarker);
  if(owned.length!==1||!same(owned[0],input))fail('NAS_API_SNAT_VERIFY_FAILED');
  const id=owned[0]['.id'],index=rules.findIndex(rule=>rule['.id']===id);
  const blocking=rules.slice(0,index).find(rule=>!canPrecede(rule,input));
@@ -72,17 +74,17 @@ export async function ensureNasApiSourceNat(api:RouterApi,input:SourceNat){
 // Remove only matching manual test rules after the managed path has actually
 // completed an API operation, so an unsuccessful migration keeps its fallback.
 export async function cleanupNasApiSourceNatTests(api:RouterApi,input:SourceNat){
- validateScope(input);const marker=nasApiSourceNatMarker(input);
+ validateScope(input);const marker=nasApiSourceNatMarker(input),legacyMarker=nasResourceTag(input.environmentId,input.nasId,'API-SNAT');
  const rules=await api.command('/ip/firewall/nat/print',{'.proplist':properties});
- for(const rule of rules)if((rule.comment===marker+'-TEST'||rule.comment==='TEMP_LR_API_SNAT_TEST')&&same(rule,input))await api.command('/ip/firewall/nat/remove',{'.id':rule['.id']});
+ for(const rule of rules)if((rule.comment===marker+'-TEST'||rule.comment===legacyMarker+'-TEST'||rule.comment==='TEMP_LR_API_SNAT_TEST')&&same(rule,input))await api.command('/ip/firewall/nat/remove',{'.id':rule['.id']});
 }
 
 export async function removeNasApiGatewayRules(api:RouterApi,scope:Scope){
- validateScope(scope);const marker=nasApiSourceNatMarker(scope),relays=nasRelayTags(scope.environmentId,scope.nasId);
+ validateScope(scope);const marker=nasApiSourceNatMarker(scope),legacyMarker=nasResourceTag(scope.environmentId,scope.nasId,'API-SNAT'),relays=nasRelayTags(scope.environmentId,scope.nasId,scope.resourceName);
  const rules=await api.command('/ip/firewall/nat/print',{'.proplist':properties});
  const removals:Rule[]=[];
  for(const rule of rules){
-  if(rule.comment===marker||rule.comment===marker+'-TEST'){
+  if([marker,marker+'-TEST',legacyMarker,legacyMarker+'-TEST'].includes(rule.comment)){
    if(!plain(rule)||host(rule['dst-address'])!==scope.tunnelAddress)fail('NAS_API_SNAT_CLEANUP_CONFLICT');
    removals.push(rule);
   }else if(rule.comment==='TEMP_LR_API_SNAT_TEST'&&plain(rule)&&host(rule['dst-address'])===scope.tunnelAddress){removals.push(rule);}

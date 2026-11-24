@@ -57,7 +57,7 @@ export function startNasApiMonitorWorker(){
       await app.query(`UPDATE ${table} SET configuration_snapshot=JSON_SET(configuration_snapshot,'$.monitorLastAttemptAt',?) WHERE nas_id=?`,[attemptedAt,nasId]);
       try{await checkNetworkNasApi(central!,app,nasId,scope);}
       catch(error){
-       if((error as Error)?.message==='OVPN_GATEWAY_BUSY'){
+       if(['OVPN_GATEWAY_BUSY','NAS_API_BUSY'].includes((error as Error)?.message)){
         nextDelay=30000;
         await app.query(`UPDATE ${table} SET configuration_snapshot=JSON_SET(configuration_snapshot,'$.monitorLastAttemptAt',?) WHERE nas_id=?`,[new Date(Date.now()-intervalMs+30000).toISOString(),nasId]);
        }

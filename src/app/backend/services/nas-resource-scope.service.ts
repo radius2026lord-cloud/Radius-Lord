@@ -1,3 +1,4 @@
+import {isLicenseNasName} from './nas-resource-identity.service';
 export type NasResourceScope={tenant_id:number;environment_id:number;subscription_id:number};
 const positive=(value:unknown)=>Number.isSafeInteger(Number(value))&&Number(value)>0;
 export function assertNasResourceScope(snapshot:any,scope:NasResourceScope,nasId?:number){
@@ -10,6 +11,7 @@ export function nasResourceTag(environmentId:number,nasId:number,suffix=''){
  if(!positive(environmentId)||!positive(nasId))throw new Error('NAS_SNAPSHOT_SCOPE');
  return `Lord_Rdius-Cloud | ENV-${Number(environmentId)} | NAS-${Number(nasId)}`+(suffix?' | '+suffix:'');
 }
-export function nasRelayTags(environmentId:number,nasId:number){
- return [nasResourceTag(environmentId,nasId,'API-Relay'),`Lord_Radius_API_Relay_${Number(environmentId)}_${Number(nasId)}`];
+export function nasRelayTags(environmentId:number,nasId:number,resourceName?:string){
+ if(resourceName&&!isLicenseNasName(resourceName))throw new Error('NAS_SNAPSHOT_SCOPE');
+ return [...(resourceName?[resourceName+' | API-Relay']:[]),nasResourceTag(environmentId,nasId,'API-Relay'),`Lord_Radius_API_Relay_${Number(environmentId)}_${Number(nasId)}`];
 }
