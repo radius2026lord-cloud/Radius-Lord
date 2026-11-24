@@ -2,7 +2,7 @@ import {readPppoePlanCapacity,requirePppoePlanCapacity} from './network-plan-cap
 import {randomInt} from 'crypto';
 import {withNetwork} from './network-runtime.service';
 import {managerAccess} from './network-manager-access.service';
-import {encryptProvisioningSecret,provisioningKey} from './provisioning-secrets.service';
+import {decryptProvisioningSecret,encryptProvisioningSecret,provisioningKey} from './provisioning-secrets.service';
 import {createPppoeLine} from './network-pppoe-lines.service';
 
 const MAX_ROWS=5000;
@@ -58,6 +58,7 @@ function safeRowFailure(error:any){
  if(message==='PPPOE_PLAN_LIMIT_REACHED')return 'plan_capacity_reached';
  if(message==='PPPOE_LINE_USERNAME_TAKEN')return 'username_duplicate';
  if(message==='PPPOE_IMPORT_PHONE_DUPLICATE')return 'phone_duplicate';
+ if(message==='PPPOE_PLAN_LIMIT_REACHED')return 'plan_capacity';
  if(message==='PPPOE_ACCOUNTING_INTERVAL_REQUIRED')return 'accounting_interval_required';
  if(error?.code==='ER_CHECK_CONSTRAINT_VIOLATED'&&message.includes('chk_ppp_subscription_times'))return 'expiry_constraint';
  if(error?.code==='ER_CHECK_CONSTRAINT_VIOLATED')return 'database_constraint';
@@ -106,7 +107,7 @@ async function authorize(app:any,scope:any){
  return access;
 }
 async function loadProfiles(app:any){
- const [rows]:any=await app.query(`SELECT v.id package_version_id,p.name,v.version_no,v.radius_group_name,
+ const [rows]:any=await app.query(`SELECT v.id package_version_id,p.id package_id,p.name,v.version_no,v.radius_group_name,
   JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.download_bps')) download_bps,
   JSON_UNQUOTE(JSON_EXTRACT(v.service_snapshot,'$.upload_bps')) upload_bps
   FROM pppoe_packages p JOIN pppoe_package_versions v ON v.package_id=p.id
@@ -159,15 +160,37 @@ export async function readPppoeImportReview(scope:any){
     JOIN pppoe_import_batches b ON b.id=r.batch_id
     JOIN customer_category_manager_assignments a ON a.category_id=b.category_id AND a.manager_id=?
     WHERE r.resolved_at IS NULL`,[scope.managerId]);
-  return {items:rows.map((row:any)=>({...row,id:Number(row.id),batch_id:Number(row.batch_id),source_row_number:Number(row.source_row_number)})),pendingRows:Number(summary[0]?.pending_rows||0),pendingBatches:Number(summary[0]?.pending_batches||0),limit:200};
+  const [batches]:any=await app.query(`SELECT b.id,b.source_name,COUNT(*) pending_rows
+    FROM pppoe_import_review_rows r JOIN pppoe_import_batches b ON b.id=r.batch_id
+    JOIN customer_category_manager_assignments a ON a.category_id=b.category_id AND a.manager_id=?
+    WHERE r.resolved_at IS NULL GROUP BY b.id,b.source_name ORDER BY b.id`,[scope.managerId]);
+  return {batches:batches.map((b:any)=>({id:Number(b.id),sourceName:b.source_name,pendingRows:Number(b.pending_rows)})),items:rows.map((row:any)=>({...row,id:Number(row.id),batch_id:Number(row.batch_id),source_row_number:Number(row.source_row_number)})),pendingRows:Number(summary[0]?.pending_rows||0),pendingBatches:Number(summary[0]?.pending_batches||0),limit:200};
  });
+}
+
+async function requireImportAccounting(app:any){
+ const [settings]:any=await app.query('SELECT radius_interim_update_seconds FROM network_settings WHERE id=1');
+ const seconds=Number(settings[0]?.radius_interim_update_seconds);
+ if(!Number.isSafeInteger(seconds)||seconds<60)throw new Error('PPPOE_ACCOUNTING_INTERVAL_REQUIRED');
+}
+
+async function createImportedRow(app:any,scope:any,access:any,batchId:number,categoryId:number,item:any,data:any){
+ let stage='customer.create';
+ try{
+    const managerId=ownerId(access);let customer:any=null;
+    for(let attempt=0;attempt<8;attempt++){const code=paymentCode();try{[customer]=await app.query("INSERT INTO customers(manager_id,status,first_name,last_name,phone,notes,payment_code,created_by_manager_id) VALUES(?,'active',?,?,?,?,?,?)",[managerId,data.firstName,data.lastName,data.phone||null,data.notes||null,code,scope.managerId]);break;}catch(error:any){if(error?.code==='ER_DUP_ENTRY'&&String(error?.message||'').includes('uq_customer_phone'))throw new Error('PPPOE_IMPORT_PHONE_DUPLICATE');if(error?.code!=='ER_DUP_ENTRY'||attempt===7)throw error;}}
+    const customerId=Number(customer.insertId);stage='category.membership.create';await app.query('INSERT INTO customer_category_memberships(customer_id,category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?,?)',[customerId,categoryId,managerId,scope.managerId]);
+    stage='pppoe_line.create';const line=await createPppoeLine(scope,{customerId,packageVersionId:item.packageVersionId,username:data.username,password:data.password,expiresAtOverride:data.expiry||'',address:'',lineName:''},app,{importedExpiry:true,includeIdentityId:true,onStage:(lineStage:string)=>{stage=`pppoe_line.${lineStage}`;}});
+    stage='import.activity_log.create';await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.import.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role}),line.item.id,customerId,line.item.radius_identity_id,JSON.stringify({batchId,rowNumber:item.rowNumber,username:data.username,categoryId,packageVersionId:item.packageVersionId})]);
+
+ }catch(error:any){error.pppoeStage=stage;throw error;}
 }
 
 export async function commitPppoeImport(scope:any,input:any){
  return withNetwork(scope,async app=>{
   // Fail before creating any customers if duplicate/rejected rows cannot be safely encrypted.
   provisioningKey();
-  const access=await authorize(app,scope);await requirePppNas(app);const rows=Array.isArray(input.rows)?input.rows:[];if(!rows.length||rows.length>MAX_ROWS)throw new Error('PPPOE_IMPORT_ROW_LIMIT');
+  const access=await authorize(app,scope);await requirePppNas(app);await requireImportAccounting(app);const rows=Array.isArray(input.rows)?input.rows:[];if(!rows.length||rows.length>MAX_ROWS)throw new Error('PPPOE_IMPORT_ROW_LIMIT');
   const categoryId=Number(input.categoryId);if(!Number.isSafeInteger(categoryId)||categoryId<1)throw new Error('PPPOE_IMPORT_CATEGORY_REQUIRED');
   const [categories]:any=await app.query('SELECT c.id FROM customer_categories c JOIN customer_category_manager_assignments a ON a.category_id=c.id WHERE c.id=? AND c.archived_at IS NULL AND a.manager_id=? LIMIT 1',[categoryId,scope.managerId]);if(!categories.length)throw new Error('PPPOE_IMPORT_CATEGORY_INVALID');
   const profiles=await loadProfiles(app),profileMap=input.profileMap&&typeof input.profileMap==='object'?input.profileMap:{};const allowed=new Set(profiles.map((item:any)=>String(item.package_version_id)));for(const value of Object.values(profileMap))if(value&&!allowed.has(String(value)))throw new Error('PPPOE_IMPORT_PROFILE_INVALID');
@@ -176,15 +199,11 @@ export async function commitPppoeImport(scope:any,input:any){
   await app.beginTransaction();try{const requested=items.filter(item=>item.kind==='ready'&&item.packageVersionId).length;if(requested)await requirePppoePlanCapacity(app,scope,requested);const [batch]:any=await app.query("INSERT INTO pppoe_import_batches(created_by,category_id,source_name,total_rows,imported_rows,duplicate_rows,rejected_rows,status) VALUES(?,?,?, ?,0,0,0,'processing')",[scope.managerId,categoryId,text(input.sourceName,255)||null,items.length]);batchId=Number(batch.insertId);await app.commit();}catch(error){await app.rollback();throw error;}
   for(const item of items){
    const data=dataByRow.get(item.rowNumber);if(!data)throw new Error('PPPOE_IMPORT_ROW_MAPPING_FAILED');
-   if(item.kind!=='ready'||!item.packageVersionId){queue.push({rowNumber:item.rowNumber,reason:item.reasons[0]||'profile_unmapped',username:/^[a-z0-9_.@-]{1,64}$/.test(data.username)?data.username:null,raw:data});continue;}
+   if(item.kind!=='ready'||!item.packageVersionId){queue.push({rowNumber:item.rowNumber,reason:item.reasons[0]||'profile_unmapped',username:/^[a-z0-9_.@-]{1,64}$/.test(data.username)?data.username:null,raw:{...data,packageVersionId:item.packageVersionId}});continue;}
    await app.beginTransaction();let stage='customer.create';try{
-    const managerId=ownerId(access);let customer:any=null;
-    for(let attempt=0;attempt<8;attempt++){const code=paymentCode();try{[customer]=await app.query("INSERT INTO customers(manager_id,status,first_name,last_name,phone,notes,payment_code,created_by_manager_id) VALUES(?,'active',?,?,?,?,?,?)",[managerId,data.firstName,data.lastName,data.phone||null,data.notes||null,code,scope.managerId]);break;}catch(error:any){if(error?.code==='ER_DUP_ENTRY'&&String(error?.message||'').includes('uq_customer_phone'))throw new Error('PPPOE_IMPORT_PHONE_DUPLICATE');if(error?.code!=='ER_DUP_ENTRY'||attempt===7)throw error;}}
-    const customerId=Number(customer.insertId);stage='category.membership.create';await app.query('INSERT INTO customer_category_memberships(customer_id,category_id,manager_id,assigned_by_manager_id) VALUES(?,?,?,?)',[customerId,categoryId,managerId,scope.managerId]);
-    stage='pppoe_line.create';const line=await createPppoeLine(scope,{customerId,packageVersionId:item.packageVersionId,username:data.username,password:data.password,expiresAtOverride:data.expiry||'',address:'',lineName:''},app,{importedExpiry:true,includeIdentityId:true,onStage:(lineStage:string)=>{stage=`pppoe_line.${lineStage}`;}});
-    stage='import.activity_log.create';await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,customer_id,account_id,after_data,result) VALUES(?,?,'manager','pppoe.import.create','pppoe_account',?,?,?,?, 'success')",[scope.managerId,JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role}),line.item.id,customerId,line.item.radius_identity_id,JSON.stringify({batchId,rowNumber:item.rowNumber,username:data.username,categoryId,packageVersionId:item.packageVersionId})]);
+    await createImportedRow(app,scope,access,batchId,categoryId,item,data);
     await app.query('UPDATE pppoe_import_batches SET imported_rows=imported_rows+1 WHERE id=?',[batchId]);await app.commit();imported.push(item.rowNumber);
-   }catch(error:any){await app.rollback();const code=safeRowFailure(error);logSafeRowFailure(batchId,item.rowNumber,error,code,stage);queue.push({rowNumber:item.rowNumber,reason:code,username:data.username||null,raw:data});}
+   }catch(error:any){await app.rollback();const code=safeRowFailure(error);logSafeRowFailure(batchId,item.rowNumber,error,code,stage);queue.push({rowNumber:item.rowNumber,reason:code,username:data.username||null,raw:{...data,packageVersionId:item.packageVersionId}});}
   }
   for(const record of queue){await app.query('INSERT INTO pppoe_import_review_rows(batch_id,source_row_number,username,reason_code,encrypted_payload) VALUES(?,?,?,?,?)',[batchId,record.rowNumber,record.username,record.reason,encryptProvisioningSecret(JSON.stringify(record.raw))]);}
   const duplicates=queue.filter(row=>row.reason.includes('duplicate')).length,rejected=queue.length-duplicates,status=queue.length?'completed_with_issues':'completed';
@@ -194,5 +213,71 @@ export async function commitPppoeImport(scope:any,input:any){
    await app.commit();
   }catch(error){await app.rollback();throw error;}
   return {success:true,batchId,total:items.length,imported:imported.length,duplicates,rejected,queued:queue.length};
+ });
+}
+
+// Each chunk is bounded, each row commits creation and resolution together.
+// Retrying a disconnected request reads only rows still unresolved.
+export async function retryPppoeImport(scope:any,input:any){
+ const batchId=Number(input.batchId),afterId=Number(input.afterId??0);
+ if(!Number.isSafeInteger(batchId)||batchId<1||!Number.isSafeInteger(afterId)||afterId<0)throw new Error('PPPOE_IMPORT_BATCH_INVALID');
+ return withNetwork(scope,async app=>{
+  provisioningKey();const access=await authorize(app,scope);await requirePppNas(app);
+  const [batches]:any=await app.query(`SELECT b.category_id FROM pppoe_import_batches b
+   JOIN customer_categories c ON c.id=b.category_id AND c.archived_at IS NULL
+   JOIN customer_category_manager_assignments a ON a.category_id=b.category_id AND a.manager_id=? WHERE b.id=?`,[scope.managerId,batchId]);
+  if(!batches.length)throw new Error('PPPOE_IMPORT_BATCH_INVALID');
+  await requireImportAccounting(app);
+  const [db]:any=await app.query('SELECT DATABASE() db');const lock='pppoe-retry:'+String(db[0].db);
+  const [locked]:any=await app.query('SELECT GET_LOCK(?,0) acquired',[lock]);
+  if(Number(locked[0]?.acquired)!==1)throw new Error('PPPOE_IMPORT_RETRY_BUSY');
+  let imported=0,duplicates=0,failed=0,cursor=afterId;
+  try{
+   const profiles=await loadProfiles(app);
+   const [rows]:any=await app.query('SELECT id FROM pppoe_import_review_rows WHERE batch_id=? AND resolved_at IS NULL AND id>? ORDER BY id LIMIT 25',[batchId,afterId]);
+   for(const entry of rows){
+    cursor=Number(entry.id);await app.beginTransaction();
+    try{
+     const [current]:any=await app.query('SELECT * FROM pppoe_import_review_rows WHERE id=? AND batch_id=? AND resolved_at IS NULL FOR UPDATE',[entry.id,batchId]);
+     if(!current.length){await app.commit();continue;}
+     const row=current[0];let raw:any;
+     try{raw=JSON.parse(decryptProvisioningSecret(row.encrypted_payload));if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error();}
+     catch{throw new Error('PPPOE_IMPORT_PAYLOAD_INVALID');}
+     const source={...raw,rowNumber:Number(row.source_row_number),expiresAt:raw.expiry??raw.expiresAt};
+     // Older batches stored normalized rows but omitted the selected package ID.
+     // Recover only an unambiguous current package match; never guess across packages.
+     const speed=normalizedSpeed(raw.profile),latest=new Map<string,any>();
+     for(const profile of profiles){const key=String(profile.package_id);if(!latest.has(key))latest.set(key,profile);}
+     let candidates=[...latest.values()].filter(profile=>String(profile.name)===String(raw.profile));
+     if(!candidates.length)candidates=[...latest.values()].filter(profile=>normalizedSpeed(`${Number(profile.download_bps)/1e6}M/${Number(profile.upload_bps)/1e6}M`)===speed&&speed);
+     const saved=profiles.find((profile:any)=>Number(profile.package_version_id)===Number(raw.packageVersionId));
+     const version=saved|| (candidates.length===1?candidates[0]:null);
+     const map=version?{[String(raw.profile)]:Number(version.package_version_id)}:{};
+     const [item]=await inspectRows(app,[source],map),data=rowIdentity(source,Number(row.source_row_number)-2);
+     const [exists]:any=await app.query(`SELECT p.id FROM pppoe_accounts p JOIN radius_identities i ON i.id=p.radius_identity_id WHERE i.current_username=? LIMIT 1`,[data.username]);
+     if(exists.length){
+      await app.query("UPDATE pppoe_import_review_rows SET reason_code='username_duplicate',resolved_at=NOW(6),resolved_by=? WHERE id=?",[scope.managerId,row.id]);
+     }else{
+      if(!item||item.kind!=='ready'||!item.packageVersionId){
+       await app.query('UPDATE pppoe_import_review_rows SET reason_code=? WHERE id=?',[item?.reasons[0]||'profile_unmapped',row.id]);failed++;await app.commit();continue;
+      }
+      await requirePppoePlanCapacity(app,scope,1);
+      await createImportedRow(app,scope,access,batchId,Number(batches[0].category_id),item,data);
+      await app.query('UPDATE pppoe_import_review_rows SET resolved_at=NOW(6),resolved_by=? WHERE id=?',[scope.managerId,row.id]);
+      await app.query('UPDATE pppoe_import_batches SET imported_rows=imported_rows+1 WHERE id=?',[batchId]);
+     }
+     await app.commit();if(exists.length)duplicates++;else imported++;
+    }catch(error:any){
+     await app.rollback();failed++;
+     const reason=error?.message==='PPPOE_IMPORT_PAYLOAD_INVALID'?'payload_unreadable':safeRowFailure(error);
+     logSafeRowFailure(batchId,cursor,error,reason,'retry');
+     await app.query('UPDATE pppoe_import_review_rows SET reason_code=? WHERE id=? AND resolved_at IS NULL',[reason,cursor]);
+    }
+   }
+   const [remaining]:any=await app.query('SELECT COUNT(*) pending,SUM(id>?) later FROM pppoe_import_review_rows WHERE batch_id=? AND resolved_at IS NULL',[cursor,batchId]);
+   await app.query(`UPDATE pppoe_import_batches SET status=?,duplicate_rows=(SELECT COUNT(*) FROM pppoe_import_review_rows WHERE batch_id=? AND resolved_at IS NULL AND reason_code LIKE '%duplicate%'),rejected_rows=(SELECT COUNT(*) FROM pppoe_import_review_rows WHERE batch_id=? AND resolved_at IS NULL AND reason_code NOT LIKE '%duplicate%') WHERE id=?`,[Number(remaining[0].pending)?'completed_with_issues':'completed',batchId,batchId,batchId]);
+   await app.query("INSERT INTO activity_log(actor_manager_id,actor_snapshot,actor_kind,action_code,target_type,target_id,after_data,result) VALUES(?,?,'manager','pppoe.import.commit','pppoe_import_batch',?,?,'success')",[scope.managerId,JSON.stringify({id:scope.managerId,full_name:access.manager.full_name,role:access.role}),batchId,JSON.stringify({retry:true,afterId,cursor,imported,duplicates,failed})]);
+   return {success:true,batchId,imported,duplicates,failed,processed:rows.length,afterId:cursor,hasMore:Number(remaining[0].later)>0,pending:Number(remaining[0].pending)};
+  }finally{await app.query('SELECT RELEASE_LOCK(?)',[lock]);}
  });
 }
