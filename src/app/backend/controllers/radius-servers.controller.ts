@@ -1,3 +1,4 @@
+import {radiusNasAddress,verifyRadiusNasAddress,radiusNasSshServer,readRadiusNasAddresses,radiusNasAddressMessages} from '../services/nas-radius-address.service';
 import {bootstrapRadiusTest} from '../services/radius-provision.service';
 import {discoverInstalledRadius} from '../services/ssh-terminal.service';
 import { randomUUID } from 'crypto';
@@ -35,7 +36,8 @@ export async function saveRadiusServer(req: AuthenticatedRequest, res: Response)
   let connection;
   try {
     const serverId = req.params.id ? id(req) : null;
-    const old = serverId ? JSON.parse((await row(serverId)).setting_value) : {};
+    const previousRow=serverId?await row(serverId):null;
+    const old=previousRow?JSON.parse(previousRow.setting_value):{};
     const b = req.body ?? {}, name = String(b.name ?? '').trim(), host = String(b.host ?? '').trim();
     if (!name || name.length>100 || (!isIP(host) && !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(host))) throw new Error('INVALID_CONFIG');
     // This first health client uses IPv4 UDP.
@@ -65,8 +67,12 @@ export async function saveRadiusServer(req: AuthenticatedRequest, res: Response)
     const probeDatabasePasswordEncrypted=hasProbe?(probeDatabasePassword?encryptProvisioningSecret(probeDatabasePassword):sameProbe?old.probeDatabasePasswordEncrypted:null):null;
     if(hasProbe&&!probeDatabasePasswordEncrypted)throw new Error('PROBE_CONFIG');
     if(hasProbe){const [used]:any=await db.query('SELECT id FROM tenant_databases WHERE db_name=? LIMIT 1',[probeDatabaseName]);if(used[0])throw new Error('PROBE_CONFIG');}
-    const config = { bootstrapDatabaseServerId:old.bootstrapDatabaseServerId??null,sshServerId:old.sshServerId??null,discovery:old.discovery??null, name, host, authPort, accountingPort, testUsername, tenantDatabaseId, secretEncrypted, testPasswordEncrypted, probeDatabaseHost,probeDatabaseName,probeDatabaseUsername,probeDatabasePort,probeDatabaseTls,probeDatabasePasswordEncrypted,lastHealth: null };
+    const nasAddress=String(b.nasAddress??old.nasAddress??'').trim();
+    let sshServerId=old.sshServerId??null;
+    if(nasAddress){radiusNasAddress(nasAddress);sshServerId=await radiusNasSshServer(host,sshServerId);await verifyRadiusNasAddress({nasAddress,sshServerId});}
+    const config = { nasAddress,bootstrapDatabaseServerId:old.bootstrapDatabaseServerId??null,sshServerId,discovery:old.discovery??null, name, host, authPort, accountingPort, testUsername, tenantDatabaseId, secretEncrypted, testPasswordEncrypted, probeDatabaseHost,probeDatabaseName,probeDatabaseUsername,probeDatabasePort,probeDatabaseTls,probeDatabasePasswordEncrypted,lastHealth: null };
     connection = await db.pool.getConnection(); await connection.beginTransaction();
+    if(serverId){const [current]:any=await connection.query('SELECT setting_value FROM platform_settings WHERE id=? AND setting_group=? FOR UPDATE',[serverId,group]);if(!current[0]||current[0].setting_value!==previousRow.setting_value)throw new Error('RADIUS_CONFIG_CHANGED');}
     let savedId = serverId;
     if (serverId) await connection.query('UPDATE platform_settings SET setting_value=?,is_public=0,updated_by_master_admin_id=? WHERE id=? AND setting_group=?',[JSON.stringify(config),req.auth!.accountId,serverId,group]);
     else { const [result]:any=await connection.query("INSERT INTO platform_settings (setting_group,setting_key,setting_value,value_type,is_public,updated_by_master_admin_id) VALUES (?,?,?,'json',0,?)",[group,'server_'+randomUUID(),JSON.stringify(config),req.auth!.accountId]); savedId=result.insertId; }
@@ -75,8 +81,8 @@ export async function saveRadiusServer(req: AuthenticatedRequest, res: Response)
     await connection.commit(); return res.json({server:safe({id:savedId,setting_value:JSON.stringify(config)})});
   } catch (error) {
     if(connection)await connection.rollback();
-    const messages:Record<string,string>={PROBE_CONFIG:'أكمل بيانات قاعدة اختبار مستقلة باسم يبدأ بـ rl_infrastructure_، ولا تستخدم قاعدة زبون.',SECRET_REQUIRED:'أدخل Shared Secret؛ تغيير المخدم يحتاج السر الخاص به.',DATABASE_NOT_READY:'قاعدة الاختبار غير جاهزة.',INVALID_CONFIG:'راجع اسم المخدم وعنوان IPv4 أو الدومين والمنافذ وبيانات الاختبار.',INVALID_ID:'رقم المخدم غير صالح.',NOT_FOUND:'المخدم غير موجود.'};
-    return res.status(400).json({message:messages[(error as Error).message] || 'تعذر حفظ المخدم؛ تحقق من مفتاح تشفير الاتصالات وإعدادات القاعدة.'});
+    const messages:Record<string,string>={...radiusNasAddressMessages,RADIUS_CONFIG_CHANGED:'تغيرت إعدادات المخدم أثناء التحقق؛ أعد فتحه ثم احفظ التعديلات.',PROBE_CONFIG:'أكمل بيانات قاعدة اختبار مستقلة باسم يبدأ بـ rl_infrastructure_، ولا تستخدم قاعدة زبون.',SECRET_REQUIRED:'أدخل Shared Secret؛ تغيير المخدم يحتاج السر الخاص به.',DATABASE_NOT_READY:'قاعدة الاختبار غير جاهزة.',INVALID_CONFIG:'راجع اسم المخدم وعنوان IPv4 أو الدومين والمنافذ وبيانات الاختبار.',INVALID_ID:'رقم المخدم غير صالح.',NOT_FOUND:'المخدم غير موجود.'};
+    const code=(error as Error).message;return res.status(code==='RADIUS_CONFIG_CHANGED'?409:400).json({message:messages[code] || 'تعذر حفظ المخدم؛ تحقق من مفتاح تشفير الاتصالات وإعدادات القاعدة.',...(radiusNasAddressMessages[code]?{field:'nasAddress'}:{})});
   } finally {connection?.release();}
 }
 export async function radiusServerHealth(req: AuthenticatedRequest, res: Response) {
@@ -87,11 +93,12 @@ export async function radiusServerHealth(req: AuthenticatedRequest, res: Respons
     active.add(serverId); ownsProbe=true; lastChecks.set(serverId,Date.now());
     const saved=await row(serverId), c=JSON.parse(saved.setting_value);
     if(!c.testUsername||!c.testPasswordEncrypted) return res.status(409).json({message:'أدخل حساب اختبار صالحًا ومخصصًا للصحة في إعداد المخدم أولًا.'});
+    if(c.nasAddress)await verifyRadiusNasAddress(c);
     const health=await checkRadiusHealth(c);
     await db.query('UPDATE platform_settings SET setting_value=? WHERE id=? AND setting_group=? AND BINARY setting_value=BINARY ?',[JSON.stringify({...c,lastHealth:health}),serverId,group,saved.setting_value]);
     await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:serverId,description:'فحص مصادقة ومحاسبة مخدم FreeRADIUS',metadata:{result:health.overall,authentication:health.authentication,accounting:health.accounting,database:health.database}});
     return res.json({health});
-  } catch {return res.status(400).json({message:'تعذر تنفيذ فحص FreeRADIUS أو حفظ نتيجته.'});}
+  } catch(error) {return res.status(400).json({message:radiusNasAddressMessages[(error as Error).message]||'تعذر تنفيذ فحص FreeRADIUS أو حفظ نتيجته.'});}
   finally {if(ownsProbe&&serverId)active.delete(serverId);}
 }
 
@@ -133,8 +140,28 @@ export async function addDiscoveredRadiusServer(req:AuthenticatedRequest,res:Res
 
 export async function setupRadiusServer(req:AuthenticatedRequest,res:Response){
  try{const serverId=id(req),databaseServerId=Number(req.body?.databaseServerId);if(!Number.isSafeInteger(databaseServerId)||databaseServerId<1)return res.status(400).json({message:'اختر خادم قاعدة اختبار RADIUS.'});
+ const config=JSON.parse((await row(serverId)).setting_value);if(config.nasAddress)await verifyRadiusNasAddress(config);
  const health=await bootstrapRadiusTest(serverId,databaseServerId);
  await writeAuditLog(req,{actionCode:'UPDATE',entityTypeCode:'PLATFORM_SETTINGS',entityId:serverId,description:'تجهيز ربط FreeRADIUS وقاعدة الاختبار والتحقق الفعلي',metadata:{databaseServerId,result:health.overall}});
  return res.json({health,message:'نجح ربط FreeRADIUS والمصادقة والمحاسبة على قاعدة اختبار مستقلة.'});
- }catch(e){const code=typeof (e as any)?.code==='string'?(e as any).code:e instanceof Error?e.message:'RADIUS_SETUP_FAILED';const stages:Record<string,string>={load_configuration:'تحميل إعدادات الربط',database_connection:'الاتصال بخادم MySQL',database_ownership:'فحص ملكية قاعدة الاختبار',create_database:'إنشاء قاعدة الاختبار',select_database:'اختيار قاعدة الاختبار',create_schema:'إنشاء جداول الاختبار',radius_accounts:'تجهيز حسابات MySQL لخدمة RADIUS',probe_account:'تجهيز حساب فحص الباك إند',test_user:'تجهيز مستخدم الاختبار',apply_radius:'تطبيق إعداد FreeRADIUS',verify_radius:'التحقق من المصادقة والمحاسبة'};const stage=String((e as any)?.setupStage??'');const safeCode=/^[A-Z0-9_]+$/.test(code)?code:'RADIUS_SETUP_FAILED';const reason=safeCode==='ER_DBACCESS_DENIED_ERROR'?'حساب تجهيز MySQL لا يملك صلاحية القاعدة المطلوبة.':safeCode==='ER_SPECIFIC_ACCESS_DENIED_ERROR'?'حساب تجهيز MySQL يفتقد صلاحية إدارية مطلوبة.':'راجع إعدادات هذه الخطوة ورمز الخطأ.';res.status(409).json({message:`فشل ${stages[stage]??'تجهيز RADIUS'}: ${reason}`,stage:stages[stage]?stage:undefined,code:safeCode});}
+ }catch(e){const code=typeof (e as any)?.code==='string'?(e as any).code:e instanceof Error?e.message:'RADIUS_SETUP_FAILED';const stages:Record<string,string>={load_configuration:'تحميل إعدادات الربط',database_connection:'الاتصال بخادم MySQL',database_ownership:'فحص ملكية قاعدة الاختبار',create_database:'إنشاء قاعدة الاختبار',select_database:'اختيار قاعدة الاختبار',create_schema:'إنشاء جداول الاختبار',radius_accounts:'تجهيز حسابات MySQL لخدمة RADIUS',probe_account:'تجهيز حساب فحص الباك إند',test_user:'تجهيز مستخدم الاختبار',apply_radius:'تطبيق إعداد FreeRADIUS',verify_radius:'التحقق من المصادقة والمحاسبة'};const stage=String((e as any)?.setupStage??'');const safeCode=/^[A-Z0-9_]+$/.test(code)?code:'RADIUS_SETUP_FAILED';const reason=radiusNasAddressMessages[safeCode]??(safeCode==='ER_DBACCESS_DENIED_ERROR'?'حساب تجهيز MySQL لا يملك صلاحية القاعدة المطلوبة.':safeCode==='ER_SPECIFIC_ACCESS_DENIED_ERROR'?'حساب تجهيز MySQL يفتقد صلاحية إدارية مطلوبة.':'راجع إعدادات هذه الخطوة ورمز الخطأ.');res.status(409).json({message:`فشل ${stages[stage]??'تجهيز RADIUS'}: ${reason}`,stage:stages[stage]?stage:undefined,code:safeCode});}
+}
+
+
+const addressDiscoveryActive=new Set<number>();
+export async function discoverRadiusNasAddresses(req:AuthenticatedRequest,res:Response){
+ let sshServerId:number|undefined,owned=false;
+ res.setHeader('Cache-Control','no-store');
+ try{
+  const serverId=req.body?.serverId==null?null:Number(req.body.serverId);
+  if(serverId!==null&&(!Number.isSafeInteger(serverId)||serverId<1))throw new Error('INVALID_ID');
+  const config=serverId?JSON.parse((await row(serverId)).setting_value):{};
+  const host=String(req.body?.host??config.host??'').trim();
+  if(!host||host.length>253||isIP(host)===6)throw new Error('RADIUS_SSH_REQUIRED');
+  sshServerId=await radiusNasSshServer(host,config.sshServerId);
+  if(addressDiscoveryActive.has(sshServerId)||addressDiscoveryActive.size>=4)return res.status(429).json({message:'انتظر اكتمال اكتشاف العناوين الحالي.'});
+  addressDiscoveryActive.add(sshServerId);owned=true;
+  return res.json({addresses:await readRadiusNasAddresses(sshServerId)});
+ }catch(error){return res.status(400).json({message:radiusNasAddressMessages[(error as Error).message]||'تعذر اكتشاف عناوين خادم FreeRADIUS.'});}
+ finally{if(owned&&sshServerId)addressDiscoveryActive.delete(sshServerId);}
 }

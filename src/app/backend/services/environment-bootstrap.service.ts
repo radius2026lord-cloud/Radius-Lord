@@ -60,9 +60,12 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  if(server.tls_required)fail('RADIUS_AUTOMATION_REQUIRES_LOCAL_MYSQL_WITHOUT_TLS');
  const nasLink=await readEnvironmentNasLink(central,job);
  await step('network_ovpn',async()=>{
+  let existingTransport=await readNetworkOvpn(app);
+  if(existingTransport)existingTransport=await repairNasRadiusAddress(central,app,scope,existingTransport);
+  // Central address edits configure new environments; valid existing snapshots stay pinned.
   if(nasLink.mode==='direct'){
    const limits=validLimits(scope.plan_limits_snapshot)!;
-   const snapshot={version:1,connectionMode:'direct',tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:0,radiusServerId:Number(selection.radiusServerId),radiusAddress:await resolveNasRadiusAddress(radiusConfig),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
+   const snapshot={version:1,connectionMode:'direct',tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:0,radiusServerId:Number(selection.radiusServerId),radiusAddress:existingTransport?.radiusAddress??await resolveNasRadiusAddress(radiusConfig),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
    await admin.query(directNasSchema);await saveNetworkOvpn(admin,app,snapshot);
    const [principal]:any=await app.query("SELECT id FROM managers WHERE manager_type='principal' AND archived_at IS NULL");if(!principal[0])fail('NETWORK_PRINCIPAL_REQUIRED');
    const nasId=await createNetworkNas(app,scope,Number(principal[0].id),snapshot,{...nasLink,name:'الخادم الأول',requestId:'initial_nas_v1'});
@@ -70,8 +73,7 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
   }
   const [gateways]:any=await central.query('SELECT settings_json FROM ovpn_gateways WHERE id=?',[selection.gatewayId]);if(!gateways[0])fail('OVPN_GATEWAY_REQUIRED');const g=typeof gateways[0].settings_json==='string'?JSON.parse(gateways[0].settings_json):gateways[0].settings_json;
   const limits=validLimits(scope.plan_limits_snapshot)!;
-  const snapshot={version:1,tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:Number(selection.gatewayId),radiusServerId:Number(selection.radiusServerId),host:g.ovpn_host,port:Number(g.ovpn_port),protocol:'tcp',profile:g.ppp_profile,cidr:g.tunnel_cidr,serverAddress:g.server_tunnel_address,serverCertificate:g.certificate_name,radiusAddress:await resolveNasRadiusAddress(radiusConfig,g),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
-  const existingTransport=await readNetworkOvpn(app);if(existingTransport)await repairNasRadiusAddress(central,app,scope,existingTransport);
+  const snapshot={version:1,tenantId:Number(scope.tenant_id),subscriptionId:Number(scope.subscription_id),environmentId:Number(job.environment_id),deployment:scope.deployment_code,gatewayId:Number(selection.gatewayId),radiusServerId:Number(selection.radiusServerId),host:g.ovpn_host,port:Number(g.ovpn_port),protocol:'tcp',profile:g.ppp_profile,cidr:g.tunnel_cidr,serverAddress:g.server_tunnel_address,serverCertificate:g.certificate_name,radiusAddress:existingTransport?.radiusAddress??await resolveNasRadiusAddress(radiusConfig,g),authPort:state.authPort,accountingPort:state.accountingPort,maxNas:limits.maxNas,additionalNas:scope.additionalNas};
   await saveNetworkOvpn(admin,app,snapshot);
   const [principal]:any=await app.query("SELECT id FROM managers WHERE manager_type='principal' AND archived_at IS NULL");if(!principal[0])fail('NETWORK_PRINCIPAL_REQUIRED');
   const nasId=await createNetworkNas(app,scope,Number(principal[0].id),snapshot,{name:'الخادم الأول',requestId:'initial_nas_v1'});
@@ -150,4 +152,5 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  }catch(e){await central.rollback();throw e;}
  return {url};
 }
+
 

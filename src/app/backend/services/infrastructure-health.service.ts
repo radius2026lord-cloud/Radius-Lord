@@ -1,3 +1,4 @@
+import {verifyRadiusNasAddress,radiusNasAddressMessages} from './nas-radius-address.service';
 import type {NasLinkMode} from './environment-nas-link.service';
 import {createHash,randomBytes} from 'crypto';
 import mysql from 'mysql2/promise';
@@ -86,7 +87,7 @@ async function executeInfrastructureChecks(environmentId?:number,mode:NasLinkMod
   return 'نجحت استجابة الواجهة والخلفية على عنوان الاستضافة المحفوظ.';
  });
  await check('database','MySQL والصلاحيات والسعة',async()=>{await checkDatabase(s.database,environmentId);return 'نجح إنشاء قاعدة وحساب مؤقتين والقراءة والكتابة والتنظيف وفحص السعة.';});
- await check('radius_service','خدمة FreeRADIUS وإعداداتها',async()=>{if(!s.ssh)throw new Error('اختر اتصال SSH المحفوظ لمخدم FreeRADIUS.');const [sshAddresses,radiusAddresses]=await Promise.all([lookup(s.ssh.host,{all:true}),lookup(s.radius?.host??'',{all:true})]);if(!sshAddresses.some(a=>radiusAddresses.some(b=>a.address===b.address)))throw new Error('اتصال SSH المختار لا يشير إلى عنوان مخدم FreeRADIUS المحدد.');await inspectInstalledRadius(s.selection.radiusSshServerId);return 'الخدمة مثبتة وقيد التشغيل، ونجح فحص إعداداتها عبر SSH.';});
+ await check('radius_service','خدمة FreeRADIUS وإعداداتها',async()=>{if(!s.ssh)throw new Error('اختر اتصال SSH المحفوظ لمخدم FreeRADIUS.');const [sshAddresses,radiusAddresses]=await Promise.all([lookup(s.ssh.host,{all:true}),lookup(s.radius?.host??'',{all:true})]);if(!sshAddresses.some(a=>radiusAddresses.some(b=>a.address===b.address)))throw new Error('اتصال SSH المختار لا يشير إلى عنوان مخدم FreeRADIUS المحدد.');await inspectInstalledRadius(s.selection.radiusSshServerId);if(s.radius?.nasAddress){try{await verifyRadiusNasAddress({...s.radius,sshServerId:s.selection.radiusSshServerId});}catch(error){throw new Error(radiusNasAddressMessages[(error as Error).message]||'تعذر التحقق من عنوان وصول NAS إلى RADIUS.');}}return s.radius?.nasAddress?'الخدمة تعمل، ونجح فحص إعداداتها وعنوان وصول NAS على الخادم عبر SSH.':'الخدمة مثبتة وقيد التشغيل، ونجح فحص إعداداتها عبر SSH.';});
  await check('radius','مصادقة ومحاسبة FreeRADIUS',async()=>{
   if(!s.radius?.testUsername||!s.radius?.testPasswordEncrypted||!s.radius?.probeDatabasePasswordEncrypted)throw new Error('حدد حسابًا وقاعدة اختبار مستقلة لـ FreeRADIUS أولًا، من إعداد مخدم RADIUS.');
   const health=await checkRadiusHealth(s.radius);
@@ -142,3 +143,4 @@ export function startInfrastructureHealthWorker(){
  healthTimer=setInterval(()=>void tick(),15000);healthTimer.unref();void tick();
  return ()=>{clearInterval(healthTimer);healthTimer=undefined;};
 }
+
