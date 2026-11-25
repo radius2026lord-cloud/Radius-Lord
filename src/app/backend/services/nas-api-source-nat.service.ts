@@ -1,3 +1,4 @@
+import {removeNasRadiusNoNat} from './nas-radius-no-nat.service';
 import {isLicenseNasName} from './nas-resource-identity.service';
 import {nasRelayTags,nasResourceTag} from './nas-resource-scope.service';
 import {isIP} from 'net';
@@ -26,7 +27,7 @@ function same(rule:Rule,input:SourceNat){
 // Managed host rules for other endpoints are disjoint. Do not keep moving them
 // ahead of each other on every poll when a CHR serves many networks.
 function canPrecede(rule:Rule,input:SourceNat){
- if(rule.chain!=='srcnat'||on(rule.disabled))return true;
+ if(rule.chain!=='srcnat'||on(rule.disabled)||rule.protocol==='udp')return true;
  const ours=/^rl-[A-Za-z0-9][A-Za-z0-9_-]{0,49}-nas-[1-9][0-9]* \| API-SNAT$/.test(rule.comment||'')||/^Lord_Rdius-Cloud \| ENV-[1-9][0-9]* \| NAS-[1-9][0-9]* \| API-SNAT$/.test(rule.comment||'');
  if(!ours||!plain(rule)||isIP(host(rule['src-address']))!==4||isIP(host(rule['dst-address']))!==4||!Number.isInteger(Number(rule['dst-port'])))return false;
  return host(rule['src-address'])!==input.sourceAddress||host(rule['dst-address'])!==input.tunnelAddress||Number(rule['dst-port'])!==input.apiPort;
@@ -80,7 +81,7 @@ export async function cleanupNasApiSourceNatTests(api:RouterApi,input:SourceNat)
 }
 
 export async function removeNasApiGatewayRules(api:RouterApi,scope:Scope){
- validateScope(scope);const marker=nasApiSourceNatMarker(scope),legacyMarker=nasResourceTag(scope.environmentId,scope.nasId,'API-SNAT'),relays=nasRelayTags(scope.environmentId,scope.nasId,scope.resourceName);
+ validateScope(scope);await removeNasRadiusNoNat(api,scope);const marker=nasApiSourceNatMarker(scope),legacyMarker=nasResourceTag(scope.environmentId,scope.nasId,'API-SNAT'),relays=nasRelayTags(scope.environmentId,scope.nasId,scope.resourceName);
  const rules=await api.command('/ip/firewall/nat/print',{'.proplist':properties});
  const removals:Rule[]=[];
  for(const rule of rules){
