@@ -1,23 +1,25 @@
 "use client";
 
 import {useState} from "react";
-import {ArrowLeft, CheckCircle2, FolderPlus, Layers, Settings2} from "lucide-react";
+import {ArrowLeft, CheckCircle2, FolderPlus, Clock, Layers, Settings2} from "lucide-react";
 import NetworkCategories from "@/components/network-categories";
+import NetworkRadiusSettings from "@/components/network-radius-settings";
+import {ACCOUNTING_SETUP_STEP,NETWORK_SETUP_COMPLETE,NETWORK_SETUP_STEPS,isNetworkSetupStep,type NetworkSetupStep} from "@/app/backend/shared/network-quick-setup";
 import NetworkProfiles from "@/components/network-profiles";
 import NetworkSettings from "@/components/network-settings";
 import FloatingNotice from "@/components/ui/floating-notice";
 import ProjectButton from "@/components/ui/project-button";
 import {ProjectCardIcon, ProjectInfoCard} from "@/components/ui/project-info-card";
 
-type Step = 1 | 2 | 3 | 4;
 const stages = {
   1: {title: "إعدادات الشبكة", description: "راجع بيانات الشبكة واحفظها قبل المتابعة.", icon: Settings2},
+  [ACCOUNTING_SETUP_STEP]: {title: "محاسبة RADIUS", description: "اعتمد 180 ثانية أو حدّد فترة تحديث المحاسبة لشبكتك.", icon: Clock},
   2: {title: "إضافة أول تصنيف", description: "أضف تصنيفًا واحدًا على الأقل لتنظيم المشتركين.", icon: FolderPlus},
   3: {title: "بروفايلات الخدمة", description: "أضف بروفايل PPPoE الآن أو تخطَّ هذه الخطوة وأضفه لاحقًا.", icon: Layers},
 };
 
 export default function NetworkQuickSetup({endpoint,initialStep,networkName,onComplete}:{
-  endpoint:string;initialStep:Step;networkName:string;onComplete:()=>void;
+  endpoint:string;initialStep:NetworkSetupStep;networkName:string;onComplete:()=>void;
 }){
   const [step,setStep]=useState(initialStep);
   const [busy,setBusy]=useState(false);
@@ -36,8 +38,8 @@ export default function NetworkQuickSetup({endpoint,initialStep,networkName,onCo
       });
       const data=await response.json();
       if(!response.ok)throw new Error(data.message);
-      if(data.quickSetupStep===5){onComplete();return;}
-      if(![2,3,4].includes(data.quickSetupStep)||data.quickSetupStep<=step)throw new Error("تعذر استكمال الإعداد.");
+      if(data.quickSetupStep===NETWORK_SETUP_COMPLETE){onComplete();return;}
+      if(!isNetworkSetupStep(data.quickSetupStep)||NETWORK_SETUP_STEPS.indexOf(data.quickSetupStep)<=NETWORK_SETUP_STEPS.indexOf(step))throw new Error("تعذر استكمال الإعداد.");
       setStep(data.quickSetupStep);
       window.scrollTo({top:0});
     }catch(e){setError(e instanceof Error?e.message:"تعذر حفظ تقدم الإعداد.");}
@@ -48,7 +50,7 @@ export default function NetworkQuickSetup({endpoint,initialStep,networkName,onCo
     <div className="mx-auto max-w-5xl space-y-4">
       <FloatingNotice error={error} onDismiss={()=>setError("")}/>
       {stage?<ProjectInfoCard>
-        <p className="text-xs font-semibold text-blue-600 dark:text-blue-300">الإعداد السريع · الخطوة {(step+1).toLocaleString("ar")} من ٤</p>
+        <p className="text-xs font-semibold text-blue-600 dark:text-blue-300">الإعداد السريع · الخطوة {(NETWORK_SETUP_STEPS.indexOf(step)+2).toLocaleString("ar")} من ٥</p>
         <h1 className="mt-2 flex items-center gap-2 text-lg font-bold"><ProjectCardIcon icon={stage.icon}/>{stage.title}</h1>
         <p className="mt-2 text-sm">{stage.description}</p>
       </ProjectInfoCard>:<ProjectInfoCard tone="success" className="text-center">
@@ -57,11 +59,12 @@ export default function NetworkQuickSetup({endpoint,initialStep,networkName,onCo
         <p className="mt-2 text-sm">اكتمل الإعداد السريع. يمكنك متابعة إدارة شبكتك من لوحة التحكم.</p>
       </ProjectInfoCard>}
       {step===1&&<NetworkSettings endpoint={endpoint} refresh={0}/>}
+      {step===ACCOUNTING_SETUP_STEP&&<NetworkRadiusSettings endpoint={endpoint} accountingOnly onSaved={advance} advanceBusy={busy}/>}
       {step===2&&<NetworkCategories endpoint={endpoint} permissions={[]} principal/>}
       {step===3&&profileTab&&<NetworkProfiles endpoint={endpoint} tab={profileTab} onTabChange={setProfileTab}/>}
       <div className="flex flex-wrap justify-end gap-2">
         {step===3&&!profileTab&&<ProjectButton variant="secondary" onClick={()=>setProfileTab("create")}>إضافة بروفايل</ProjectButton>}
-        <ProjectButton disabled={busy} onClick={()=>void advance()}><ArrowLeft/>{busy?"جارٍ الحفظ…":step===4?"فتح لوحة التحكم":step===3?(profileTab?"إنهاء الإعداد":"تخطي الآن"):"متابعة"}</ProjectButton>
+        {step!==ACCOUNTING_SETUP_STEP&&<ProjectButton disabled={busy} onClick={()=>void advance()}><ArrowLeft/>{busy?"جارٍ الحفظ…":step===4?"فتح لوحة التحكم":step===3?(profileTab?"إنهاء الإعداد":"تخطي الآن"):"متابعة"}</ProjectButton>}
       </div>
     </div>
   </main>;

@@ -1,3 +1,4 @@
+import {ACCOUNTING_SETUP_STEP,NETWORK_SETUP_COMPLETE,NETWORK_SETUP_STEPS,isNetworkSetupStep} from '../shared/network-quick-setup';
 import {readNasLiveApi} from '../services/nas-live-api.service';
 import {repairNasRadiusAddress} from '../services/nas-radius-address.service';
 import {SESSION_IDLE_SECONDS,renewVerifiedSession,writeSessionCookie} from '../services/session-policy.service';
@@ -364,21 +365,24 @@ router.post('/:slug/quick-setup',async(req,res)=>{
  try{
   const scope=await principal(req);
   const step=req.body?.step;
-  if(![1,2,3,4].includes(step))return res.status(422).json({message:'خطوة الإعداد غير صالحة.'});
+  if(!isNetworkSetupStep(step))return res.status(422).json({message:'خطوة الإعداد غير صالحة.'});
   const key='environment_'+scope.environment_id;
   const current=await readPrivateSetting('network_quick_setup',key);
-  if(Number.isInteger(current)&&current>step)return res.json({quickSetupStep:current});
+  const index=NETWORK_SETUP_STEPS.indexOf(step);
+  if(current===NETWORK_SETUP_COMPLETE||(isNetworkSetupStep(current)&&NETWORK_SETUP_STEPS.indexOf(current)>index))return res.json({quickSetupStep:current});
   if(current!==step)return res.status(409).json({message:'تغيّرت مرحلة الإعداد. حدّث الصفحة.'});
-  if(step===1||step===2){
+  if(step===1||step===2||step===ACCOUNTING_SETUP_STEP){
    const ready=await withNetwork(scope,async connection=>{
     const [rows]:any=await connection.query(step===1
      ? "SELECT 1 FROM network_settings WHERE id=1 AND TRIM(network_name)<>'' AND timezone IS NOT NULL AND TRIM(timezone)<>'' AND TRIM(primary_contact_phone)<>''"
-     : 'SELECT 1 FROM customer_categories WHERE archived_at IS NULL LIMIT 1');
+     : step===ACCOUNTING_SETUP_STEP
+      ? 'SELECT 1 FROM network_settings WHERE id=1 AND radius_interim_update_seconds BETWEEN 60 AND 86400'
+      : 'SELECT 1 FROM customer_categories WHERE archived_at IS NULL LIMIT 1');
     return Boolean(rows[0]);
    });
-   if(!ready)return res.status(422).json({message:step===1?'احفظ اسم الشبكة ورقم التواصل والمنطقة الزمنية في إعدادات الشبكة أولًا.':'أضف تصنيفًا واحدًا على الأقل للمتابعة.'});
+   if(!ready)return res.status(422).json({message:step===1?'احفظ اسم الشبكة ورقم التواصل والمنطقة الزمنية في إعدادات الشبكة أولًا.':step===ACCOUNTING_SETUP_STEP?'احفظ فترة تحديث محاسبة RADIUS للمتابعة.':'أضف تصنيفًا واحدًا على الأقل للمتابعة.'});
   }
-  await db.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='network_quick_setup' AND setting_key=? AND setting_value=?",[JSON.stringify(step+1),key,JSON.stringify(step)]);
+  await db.query("UPDATE platform_settings SET setting_value=? WHERE setting_group='network_quick_setup' AND setting_key=? AND setting_value=?",[JSON.stringify(NETWORK_SETUP_STEPS[index+1]??NETWORK_SETUP_COMPLETE),key,JSON.stringify(step)]);
   return res.json({quickSetupStep:await readPrivateSetting('network_quick_setup',key)});
  }catch(e){return res.status((e as Error).message==='NETWORK_AUTH'?401:503).json({message:'تعذر حفظ تقدم الإعداد. أعد المحاولة.'});}
 });
@@ -402,7 +406,7 @@ async function readNetworkSession(req:Request,res:import('express').Response){
   writeSessionCookie(res,'network',renewed.token,renewed.maxAge);
   sessionExpiresAt=renewed.expiresAt;
  }
- return res.json({...result,serverNow:new Date().toISOString(),sessionExpiresAt:new Date(sessionExpiresAt*1000).toISOString(),quickSetupStep:[1,2,3,4].includes(quickSetupStep)?quickSetupStep:null});
+ return res.json({...result,serverNow:new Date().toISOString(),sessionExpiresAt:new Date(sessionExpiresAt*1000).toISOString(),quickSetupStep:isNetworkSetupStep(quickSetupStep)?quickSetupStep:null});
  }catch(error){
   const failure=error as Error;
   const invalid=['TokenExpiredError','JsonWebTokenError','NotBeforeError'].includes(failure.name)||['SCOPE','NETWORK_AUTH','MANAGER'].includes(failure.message);

@@ -1,4 +1,5 @@
 "use client";
+import type {NetworkSetupStep} from "@/app/backend/shared/network-quick-setup";
 import {ProjectClockProvider} from "@/components/ui/project-clock-provider";
 import ProjectLoading from "@/components/ui/project-loading";
 import LordAuth from "@/components/auth/lord-auth";
@@ -15,7 +16,7 @@ import {AlertTriangle,KeyRound,Network as NetworkIcon,Radio,UserRound} from "luc
 import ProjectInput from "@/components/ui/project-input";
 import {ProjectInfoCard,ProjectCardIcon} from "@/components/ui/project-info-card";
 import ProjectButton from "@/components/ui/project-button";
-type Network={quickSetupStep?:1|2|3|4|null;mustChangeCredentials?:boolean;manager:{full_name:string;manager_type:string};networkName:string;license:string;expiresAt:string;maxSubscribers:number;maxNas:number;planName:string;durationMonths:number;startsAt:string};
+type Network={quickSetupStep?:NetworkSetupStep|null;mustChangeCredentials?:boolean;manager:{full_name:string;manager_type:string};networkName:string;license:string;expiresAt:string;maxSubscribers:number;maxNas:number;planName:string;durationMonths:number;startsAt:string};
 export default function NetworkPage(){
  const {slug}=useParams<{slug:string}>();const endpoint=`/api/network/${encodeURIComponent(slug)}`;
  const [activationToken,setActivationToken]=useState(""),[recovering,setRecovering]=useState(false),[confirmPassword,setConfirmPassword]=useState(""),[success,setSuccess]=useState("");
