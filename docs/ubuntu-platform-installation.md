@@ -127,3 +127,8 @@ SQL changes still require the real reviewed migration hook; the baseline approva
 cannot bypass migrations after a current release exists. Keep workers disabled
 until old network endpoints, pending jobs and new infrastructure settings have
 been reviewed. Starting a standalone worker separately is outside this server flag.
+
+
+### فتح قاعدة الشبكة من الإدارة المركزية
+
+اضبط العنوان من «إعدادات المنصة ← phpMyAdmin». يسري الحفظ مباشرة عند تحميل قائمة الشبكات. يمكن استخدام `RADIUS_PHPMYADMIN_URL` كإعداد أولي قبل الحفظ من المنصة. عند وجود أكثر من خادم MySQL، استخدم `RADIUS_PHPMYADMIN_URL_<ID>` لكل خادم حسب معرّفه في `database_servers`. ضع عنوان دخول phpMyAdmin الذي يمكن لجهاز المسؤول الوصول إليه، مثل `http://127.0.0.1:8080/phpmyadmin/index.php` عند استخدام نفق SSH محلي. إذا كانت صفحة phpMyAdmin تدير عدة خوادم، يمكن تضمين معامل `server` في العنوان. يظهر زر الفتح عند ضبط العنوان، ويستخدم جلسة تسجيل الدخول والصلاحيات في phpMyAdmin.

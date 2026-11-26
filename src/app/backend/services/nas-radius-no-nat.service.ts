@@ -50,6 +50,7 @@ async function ensureEnvironmentRule(api:RouterApi,rules:Rule[],desired:Rule){
  const matches=(rule:Rule)=>!on(rule.invalid)&&Object.entries(desired).every(([key,value])=>{
   if(key==='dst-address'||key==='to-addresses')return host(rule[key])===host(value);
   if(key==='disabled')return !on(rule.disabled);
+  if(key==='comment')return owned(rule);
   return rule[key]===value;
  });
  const hasExtraMatch=(rule:Rule)=>['src-address','src-port','in-interface','out-interface','dst-address-list','connection-mark','routing-mark'].some(key=>Boolean(rule[key]));
@@ -68,7 +69,7 @@ async function ensureEnvironmentRule(api:RouterApi,rules:Rule[],desired:Rule){
  if(old){
   if(!old['.id']||on(old.dynamic)||old.chain!==desired.chain||old.action!==desired.action||old.protocol!=='udp'||old['src-address-list']!==desired['src-address-list']||hasExtraMatch(old))fail('NAS_RADIUS_ENV_RULE_CONFLICT');
   if(sameRule(old)&&rules.slice(0,rules.indexOf(old)).every(safeBefore))return rules;
-  if(!sameRule(old))await api.command('/ip/firewall/nat/set',{'.id':old['.id'],...desired});
+  if(!sameRule(old))await api.command('/ip/firewall/nat/set',{'.id':old['.id'],...desired,comment:old.comment});
  }else{
   const first=rules.find(rule=>!safeBefore(rule));
   await api.command('/ip/firewall/nat/add',{...desired,...(first?.['.id']?{'place-before':first['.id']}:{})});

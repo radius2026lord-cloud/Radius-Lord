@@ -5,6 +5,51 @@ import {Response} from 'express';
 import {db} from '../config/db';
 import {AuthenticatedRequest} from '../middleware/auth.middleware';
 
+const databaseToolsGroup='database_tools';
+const phpMyAdminKey='phpmyadmin';
+
+function parsePhpMyAdminUrl(value:unknown){
+ if(typeof value!=='string'||value.length>2048)return null;
+ try{
+  const url=new URL(value.trim());
+  if(!['http:','https:'].includes(url.protocol)||url.username||url.password)return null;
+  return url;
+ }catch{return null;}
+}
+
+async function readPhpMyAdminSetting(){
+ const setting=await readPrivateSetting(databaseToolsGroup,phpMyAdminKey);
+ return typeof setting?.url==='string'?setting.url:null;
+}
+
+export async function getPhpMyAdminSettings(_req:AuthenticatedRequest,res:Response){
+ res.set('Cache-Control','no-store');
+ try{return res.json({url:await readPhpMyAdminSetting()??parsePhpMyAdminUrl(process.env.RADIUS_PHPMYADMIN_URL)?.href??''});}
+ catch{return res.status(500).json({message:'تعذر تحميل عنوان phpMyAdmin.'});}
+}
+
+export async function savePhpMyAdminSettings(req:AuthenticatedRequest,res:Response){
+ const value=req.body?.url;
+ const url=parsePhpMyAdminUrl(value);
+ if(typeof value!=='string'||(value.trim()&&!url))return res.status(400).json({message:'أدخل رابط HTTP أو HTTPS صالحًا بدون بيانات دخول.'});
+ try{
+  const savedUrl=url?.href??'';
+  await savePrivateSetting(databaseToolsGroup,phpMyAdminKey,{url:savedUrl});
+  return res.json({url:savedUrl});
+ }catch{return res.status(500).json({message:'تعذر حفظ عنوان phpMyAdmin.'});}
+}
+
+function databaseAdminUrl(serverId:number|null,databaseName:string|null,platformUrl:string|null){
+ if(!serverId||!databaseName)return null;
+ const override=process.env[`RADIUS_PHPMYADMIN_URL_${serverId}`]?.trim();
+ const url=parsePhpMyAdminUrl(override||(platformUrl??process.env.RADIUS_PHPMYADMIN_URL));
+ if(!url)return null;
+ url.searchParams.set('route','/database/structure');
+ url.searchParams.set('db',databaseName);
+ url.hash='';
+ return url.href;
+}
+
 export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
  res.set('Cache-Control','no-store');
  const id=req.query.networkId;
@@ -12,7 +57,7 @@ export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
  try{
   const [items]=await db.query(`SELECT t.id,t.name,t.slug,t.status,t.license_number licenseNumber,c.full_name ownerName,
    e.id environmentId,e.status environmentStatus,e.system_url systemUrl,
-   d.db_name databaseName,ds.name databaseServerName,
+   d.db_name databaseName,ds.id databaseServerId,ds.name databaseServerName,
    s.id subscriptionId,s.status subscriptionStatus,s.starts_at startsAt,s.expires_at expiresAt,
    ${id!==undefined?`s.plan_limits_snapshot planLimitsSnapshot,
    (SELECT COALESCE(SUM(a.quantity*a.nas_capacity_increment),0) FROM subscription_addons a WHERE a.tenant_id=t.id AND a.subscription_id=s.id AND a.status='active' AND (a.expires_at IS NULL OR a.expires_at>NOW())) additionalNas,`:''}
@@ -29,11 +74,12 @@ export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
    LEFT JOIN platform_settings renewal ON renewal.setting_group='subscription_renewal_requests' AND renewal.setting_key=CONCAT('tenant_',t.id)
    LEFT JOIN platform_settings upgrade ON upgrade.setting_group='subscription_upgrade_requests' AND upgrade.setting_key=CONCAT('tenant_',t.id)
    WHERE t.archived_at IS NULL AND e.id IS NOT NULL ${id!==undefined?'AND t.id=?':''} ORDER BY t.id DESC`,id!==undefined?[Number(id)]:[]);
-  const [reminderSettings,tunnels]=await Promise.all([
+  const [reminderSettings,tunnels,phpMyAdminUrl]=await Promise.all([
    readSubscriptionReminderSettings(),
    readMasterNetworkTunnels((items as any[]).map(item=>Number(item.environmentId)),id!==undefined),
+   readPhpMyAdminSetting(),
   ]);
-  return res.json({reminderSettings,items:(items as any[]).map(({metricsSnapshot,renewalRequestSnapshot,upgradeRequestSnapshot,planLimitsSnapshot,additionalNas,...item})=>{
+  return res.json({reminderSettings,items:(items as any[]).map(({metricsSnapshot,renewalRequestSnapshot,upgradeRequestSnapshot,planLimitsSnapshot,additionalNas,databaseServerId,...item})=>{
    let snapshot:any=null;
    try{snapshot=typeof metricsSnapshot==='string'?JSON.parse(metricsSnapshot):metricsSnapshot;}catch{}
    if(Number(snapshot?.environmentId)!==Number(item.environmentId))snapshot=null;
@@ -41,7 +87,7 @@ export async function listMasterNetworks(req:AuthenticatedRequest,res:Response){
    let upgradeRequest:any=null;try{const request=typeof upgradeRequestSnapshot==='string'?JSON.parse(upgradeRequestSnapshot):upgradeRequestSnapshot;if(request?.status==='requested'&&Number(request.subscriptionId)===Number(item.subscriptionId))upgradeRequest={requestedAt:request.requestedAt,requestedPppoeLimit:request.requestedPppoeLimit,requestedNasLimit:request.requestedNasLimit,includeRenewal:request.includeRenewal};}catch{}
    const limits=validLimits(planLimitsSnapshot);
    const planLimits=limits?{pppoe:limits.maxSubscribers,nas:limits.maxNas===0?0:limits.maxNas+Number(additionalNas)}:null;
-   return {...item,ovpn:describeMasterNetworkTunnels(tunnels,Number(item.environmentId),snapshot?.nasInventory,id!==undefined),planLimits,upgradeRequest,renewalRequest,metrics:snapshot?.metrics??null,metricsReadAt:snapshot?.readAt??null,
+   return {...item,phpMyAdminUrl:databaseAdminUrl(databaseServerId,item.databaseName,phpMyAdminUrl),ovpn:describeMasterNetworkTunnels(tunnels,Number(item.environmentId),snapshot?.nasInventory,id!==undefined),planLimits,upgradeRequest,renewalRequest,metrics:snapshot?.metrics??null,metricsReadAt:snapshot?.readAt??null,
     metricsStatus:snapshot?.status??'pending',metricsScope:snapshot?.scope??null,
     metricsStale:!Number.isFinite(Date.parse(snapshot?.readAt??''))||Date.now()-Date.parse(snapshot.readAt)>6*60*1000};
   })});

@@ -5,7 +5,7 @@ import {manageNetworkAccess,RecoveryError} from '../../services/network-access-r
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
 import {createManualEnvironment,listManualEnvironmentPlans} from '../../controllers/manual-environment.controller';
 import {applySubscriptionChange,listSubscriptionChanges,readUpgradePaymentSettings,saveUpgradePaymentSettings} from '../../services/master-subscription-changes.service';
-import {listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
+import {getPhpMyAdminSettings,savePhpMyAdminSettings,listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
 import {deleteEnvironment} from '../../controllers/environment-delete.controller';
 import {requestEnvironmentNotification} from '../../controllers/environment-notification.controller';
 import { Router } from 'express';
@@ -67,6 +67,8 @@ router.post('/admin/subscription-changes/:tenantId/:kind/apply',authenticate,req
 
 router.get('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),getSubscriptionReminderSettings);
 router.put('/admin/subscription-reminders',authenticate,requireAccountType('master_admin'),saveSubscriptionReminderSettings);
+router.get('/admin/phpmyadmin-settings',authenticate,requireAccountType('master_admin'),getPhpMyAdminSettings);
+router.put('/admin/phpmyadmin-settings',authenticate,requireAccountType('master_admin'),savePhpMyAdminSettings);
 router.get('/admin/networks',authenticate,requireAccountType('master_admin'),listMasterNetworks);
 router.post('/admin/networks/:slug/connection-check',authenticate,requireAccountType('master_admin'),requireAuthOrigin,async(req,res)=>{
  res.set('Cache-Control','no-store');

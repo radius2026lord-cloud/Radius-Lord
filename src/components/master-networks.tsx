@@ -27,7 +27,7 @@ function matchesGateway(item:NetworkRow,filter:string){
  const id=Number(affected?filter.slice(9):filter);
  return Boolean(item.ovpn?.gateways?.some(gateway=>gateway.id===id&&(!affected||gatewayAffected(gateway))));
 }
-type NetworkRow={ovpn?:{gateways?:GatewayHealth[];state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;history?:ConnectionEvent[];tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
+type NetworkRow={phpMyAdminUrl?:string|null;ovpn?:{gateways?:GatewayHealth[];state:TunnelState;total:number;connected:number;disconnected:number;readAt:string|null;history?:ConnectionEvent[];tunnels?:Tunnel[]};systemUrl?:string|null;planLimits?:{pppoe:number;nas:number}|null;upgradeRequest?:{requestedAt:string;requestedPppoeLimit:number|null;requestedNasLimit:number|null;includeRenewal:boolean}|null;renewalRequest?:{status:string;requestedAt:string;subscriptionId:number;expiresAt:string}|null;planName:string|null;startsAt:string|null;metrics:Metrics|null;metricsReadAt:string|null;metricsStatus:string;metricsStale:boolean;id:number;name:string;slug:string;status:string;licenseNumber:string;ownerName:string;environmentId:number|null;environmentStatus:string|null;databaseName:string|null;databaseServerName:string|null;subscriptionStatus:string|null;expiresAt:string|null;reportedAt:string|null;lastSeenAt:string|null;onlineUsers:number|null;activeSessions:number|null;databaseStatus:string|null;radiusStatus:string|null};
 const labels:Record<string,string>={ready:"جاهزة",provisioning:"جارٍ التجهيز",pending:"بانتظار التجهيز",failed:"تحتاج معالجة",active:"نشط",disabled:"غير مفعّل",expired:"منتهي",healthy:"سليم",unknown:"غير معروف"};
 const label=(value:string|null)=>value?labels[value]||"غير محدد":"غير متاح";
 function date(value:string|null){if(!value)return "لم تصل قراءة";const d=new Date(value);return Number.isNaN(d.getTime())?"غير متاح":d.toLocaleString("ar");}
@@ -152,6 +152,16 @@ function EnvironmentNumber({id,onCopy}:{id:number|null;onCopy:(value:string)=>vo
  </div>;
 }
 
+function DatabaseActions({item,copy}:{item:NetworkRow;copy:(value:string)=>void}){
+ const name=item.databaseName;
+ if(!name)return <span>لم تُجهّز</span>;
+ return <div className="flex min-w-0 flex-wrap items-center gap-2">
+  <bdi dir="ltr" className="break-all font-mono">{name}</bdi>
+  <ProjectButton variant="ghost" size="icon" aria-label="نسخ اسم قاعدة البيانات" title="نسخ اسم قاعدة البيانات" onClick={()=>copy(name)}><Copy className="size-4"/></ProjectButton>
+  {item.phpMyAdminUrl&&<a href={item.phpMyAdminUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg px-2 py-1 text-xs font-semibold text-blue-700 underline underline-offset-4 dark:text-blue-300">فتح في phpMyAdmin</a>}
+ </div>;
+}
+
 const networkReturnKey="lord-radius:master-networks:return";
 
 type NetworkListReturn = {
@@ -179,9 +189,9 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  const [reminderDays,setReminderDays]=useState(7);
  const [hasLoaded,setHasLoaded]=useState(false);
  const [environmentNotice,setEnvironmentNotice]=useState({message:"",error:""});
- async function copyEnvironment(value:string){
-  try{await copyNetworkValue(value);setEnvironmentNotice({message:"نُسخ رقم البيئة.",error:""});}
-  catch{setEnvironmentNotice({message:"",error:"تعذر نسخ رقم البيئة."});}
+ async function copyFromList(value:string,label:string){
+  try{await copyNetworkValue(value);setEnvironmentNotice({message:`نُسخ ${label}.`,error:""});}
+  catch{setEnvironmentNotice({message:"",error:`تعذر نسخ ${label}.`});}
  }
  const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false);
  const [subscriptionFilter,setSubscriptionFilter]=useState("all"),[readingFilter,setReadingFilter]=useState("all"),[serverFilter,setServerFilter]=useState("all");
@@ -372,7 +382,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><UserRound className="size-4 shrink-0 text-violet-500"/>المالك</dt><dd className="mt-1 break-words">{item.ownerName||"غير محدد"}</dd></div>
   <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><ShieldCheck className="size-4 shrink-0 text-blue-500"/>الاشتراك</dt><dd className="mt-1 break-words">{subscriptionLabels[expiryState(item,reminderDays,now)]}</dd></div>
  </dl>
- <EnvironmentNumber id={item.environmentId} onCopy={value=>void copyEnvironment(value)}/>
+ <EnvironmentNumber id={item.environmentId} onCopy={value=>void copyFromList(value,"رقم البيئة")}/>
  {(item.ovpn?.gateways??[]).map(gateway=><p key={gateway.id} className="break-words text-xs">بوابة CHR · <bdi>{gateway.name} (#{gateway.id})</bdi></p>)}
  <NetworkTunnelBadge ovpn={item.ovpn}/>
  </section>
@@ -393,7 +403,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  <footer className="mt-4 space-y-3 border-t border-slate-200 pt-3 dark:border-white/10">
  <details onClick={event=>event.stopPropagation()} onKeyDown={event=>event.stopPropagation()} className="rounded-xl border border-slate-200 px-3 py-2 text-xs dark:border-white/10">
  <summary className="cursor-pointer text-slate-600 dark:text-slate-300"><Database className="mx-1 inline h-4 w-4 text-violet-500"/>التفاصيل التقنية</summary>
- <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2"><div><dt className="text-slate-500 dark:text-slate-400">قاعدة البيانات</dt><dd className="mt-1 break-all"><bdi>{item.databaseName||"لم تُجهّز"}</bdi></dd></div><div><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><Server className="h-3.5 w-3.5 text-sky-500"/>الخادم</dt><dd className="mt-1 break-words">{item.databaseServerName||"غير محدد"}</dd></div></dl>
+ <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2"><div><dt className="text-slate-500 dark:text-slate-400">قاعدة البيانات</dt><dd className="mt-1 break-all"><DatabaseActions item={item} copy={value=>void copyFromList(value,"اسم قاعدة البيانات")}/></dd></div><div><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><Server className="h-3.5 w-3.5 text-sky-500"/>الخادم</dt><dd className="mt-1 break-words">{item.databaseServerName||"غير محدد"}</dd></div></dl>
  </details>
  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px]"><p className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400"><CalendarClock className="h-3.5 w-3.5 shrink-0"/><span>آخر قراءة · {date(item.metricsReadAt)}</span></p><p className={item.metricsStatus==="unavailable"||item.metricsStale?"text-amber-700 dark:text-amber-300":"text-slate-500 dark:text-slate-400"}>{readingLabel(item)}</p></div>
  </footer>
@@ -596,7 +606,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    <section><ProjectInfoCard tone="connections" className="space-y-4">
     <h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={ShieldCheck}/>صحة البيئة</h2><p className="text-xs text-slate-500 dark:text-slate-400">آخر تقرير · {date(item.reportedAt)}</p>
     <div className="grid gap-2 sm:grid-cols-2">{[{name:"قاعدة البيانات",value:item.databaseStatus,icon:Database},{name:"FreeRADIUS",value:item.radiusStatus,icon:Radio}].map(service=>{const tone=service.value==="healthy"?"success":!service.value||service.value==="unknown"?"pending":"warning";return <ProjectInfoCard key={service.name} tone={tone} className="flex flex-wrap items-center justify-between gap-2 !p-3 text-sm"><span className="flex items-center gap-2"><ProjectCardIcon icon={service.icon} tone={tone}/>{service.name}</span><span className="font-semibold">{label(service.value)}</span></ProjectInfoCard>;})}</div>
-    <dl className="grid grid-cols-2 gap-3">{healthSummary.slice(2).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm"><bdi>{value}</bdi></dd></div>)}</dl>
+    <dl className="grid grid-cols-2 gap-3">{healthSummary.slice(2).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-xs text-slate-500 dark:text-slate-400">{name}</dt><dd className="mt-1 break-words text-sm">{name==="اسم القاعدة"?<DatabaseActions item={item} copy={value=>void copy(value,"نُسخ اسم قاعدة البيانات.")}/>:<bdi>{value}</bdi>}</dd></div>)}</dl>
    </ProjectInfoCard></section>
   </div>
   <section id="network-ovpn" className="scroll-mt-4">
@@ -604,7 +614,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2><span className="text-xs text-slate-500 dark:text-slate-400">سجل مرئي لآخر 24 ساعة</span></div>
     <div className="flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-700 dark:text-emerald-300">● متصل</span><span className="text-rose-700 dark:text-rose-300">● منقطع</span><span className="text-slate-500 dark:text-slate-400">● غير مؤكد أو لم يُرصد</span></div>
     {item.environmentId!=null&&tunnels.length>0&&<div className="flex flex-wrap items-center gap-2 text-xs">
-     <span>تسميات قواعد RADIUS</span>
+     <span>تسميات RADIUS للتجهيز الجديد</span>
      {["auth","acct","nonat"].map(kind=>{const name=`rl-e${item.environmentId}-radius-${kind}`;return <ProjectButton key={kind} variant="ghost" aria-label={`نسخ ${name}`} onClick={()=>void copy(name,"نُسخ اسم القاعدة.")}><bdi dir="ltr">{name}</bdi><Copy className="size-3.5"/></ProjectButton>;})}
     </div>}
     {!tunnels.length?<p className="text-sm">{ovpn?.state==="unlinked"?"لا توجد أجهزة NAS مرتبطة عبر OpenVPN.":"بانتظار بيانات أجهزة NAS."}</p>:
