@@ -1,3 +1,4 @@
+import {nasOvpnName} from '../services/nas-resource-identity.service';
 import type {Response} from 'express';
 import mysql from 'mysql2/promise';
 import {lookup} from 'dns/promises';
@@ -23,7 +24,7 @@ export async function deleteEnvironment(req:AuthenticatedRequest,res:Response){
  const key='environment_'+scope.id;journal=await readPrivateSetting('environment_cleanup',key);if(journal?.status==='complete'){await central.rollback();return res.json({message:'موارد البيئة محذوفة بالفعل.'});}
  if(scope.archived_at&&!journal)throw new CleanupError('البيئة مؤرشفة خارج مسار التنظيف؛ تحتاج مراجعة.');
  const [jobs]:any=await central.query('SELECT id,status FROM environment_provisioning_jobs WHERE environment_id=? ORDER BY id DESC',[scope.id]);if(jobs.some((j:any)=>['queued','running'].includes(j.status)))throw new CleanupError('لا يمكن حذف البيئة أثناء التجهيز أو انتظار تنفيذ المهمة.');
- const [tunnels]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=?',[scope.id]);if(tunnels.some((t:any)=>{const name=String(t.tunnel_username),reserved=/_slot_\d+$/.test(name),expected=reserved?'rl_env_'+scope.id+'_slot_'+t.reservation_slot:'rl_env_'+scope.id+'_nas_'+t.tenant_nas_id;return name!==expected||!/^rl_env_\d+_(?:nas_\d+|slot_\d+)$/.test(name)||t.certificate_reference!==name||reserved&&Number(t.reservation_slot)<1||!reserved&&!t.tenant_nas_id;}))throw new CleanupError('توجد أنفاق غير مدارة؛ راجع ملكيتها قبل الحذف.');
+ const [tunnels]:any=await central.query('SELECT * FROM nas_tunnels WHERE environment_id=?',[scope.id]);if(tunnels.some((t:any)=>{const name=String(t.tunnel_username),nasId=Number(t.tenant_nas_id||0),slot=Number(t.reservation_slot||0),id=nasId||slot;if(!Number.isSafeInteger(id)||id<1||t.certificate_reference!==name)return true;const legacy='rl_env_'+scope.id+(nasId?'_nas_':'_slot_')+id;return name!==legacy&&name!==nasOvpnName(Number(scope.id),id,nasId?'nas':'slot');}))throw new CleanupError('توجد أنفاق غير مدارة؛ راجع ملكيتها قبل الحذف.');
  const [steps]:any=await central.query('SELECT s.* FROM environment_provisioning_steps s JOIN environment_provisioning_jobs j ON j.id=s.job_id WHERE j.environment_id=? ORDER BY s.id DESC',[scope.id]);
  const created=steps.some((s:any)=>s.step_code==='database_create'&&s.status==='success');
  if(scope.db_name&&(!/^rl_tenant_(?:zone_[0-9]+|[0-9]+_[a-f0-9]{16})$/.test(scope.db_name)||!/^rla_[a-f0-9]{16}$/.test(scope.db_username)||!/^rlr_[a-f0-9]{16}$/.test(scope.radius_username)))throw new CleanupError('ملكية موارد القاعدة لا تطابق موارد التوليد المدارة.');

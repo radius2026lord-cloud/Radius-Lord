@@ -13,3 +13,9 @@ export function nasLicenseName(prefix:string,id:number,kind:'nas'|'slot'='nas'){
  return name;
 }
 export const isLicenseNasName=(name:string)=>/^rl-[A-Za-z0-9][A-Za-z0-9_-]{0,49}-(?:nas|slot)-[1-9][0-9]*$/.test(name);
+
+
+export function nasOvpnName(environmentId:number,id:number,kind:'nas'|'slot'='nas'){
+ if(![environmentId,id].every(value=>Number.isSafeInteger(value)&&value>0))throw new Error('NAS_SNAPSHOT_SCOPE');
+ return 'rl-e'+environmentId+(kind==='slot'?'-s':'-n')+id;
+}

@@ -17,6 +17,10 @@ const markers=(s:Scope)=>[s.resourceName?s.resourceName+' | RADIUS-NoNAT':nasRes
 const plain=(r:Rule)=>r.chain==='srcnat'&&r.action==='accept'&&r.protocol==='udp'&&!on(r.dynamic)&&!['to-addresses','to-ports','src-port','in-interface','out-interface','src-address-list','dst-address-list','connection-mark','routing-mark'].some(k=>Boolean(r[k]));
 const listPrefix='rl-radius-env-';
 const environmentList=(s:Scope)=>listPrefix+s.environmentId;
+const radiusLabels=['Auth','Acct','NoNAT'] as const;
+const shortComment=(list:string,label:string)=>'rl-e'+list.slice(listPrefix.length)+'-radius-'+label.toLowerCase();
+const legacyComment=(list:string,label:string)=>list+' | RADIUS-'+label;
+const environmentRule=(rule:Rule,list:string)=>radiusLabels.some(label=>[shortComment(list,label),legacyComment(list,label)].includes(rule.comment));
 const memberMarker=(s:Scope)=>environmentList(s)+' | NAS-'+s.nasId;
 const memberFields='.id,list,address,comment,disabled,dynamic';
 const managedList=/^rl-radius-env-[1-9][0-9]*$/;
@@ -29,10 +33,10 @@ function planRules(i:Input):Rule[]{
  const udp={protocol:'udp','src-address-list':list,disabled:'no'};
  const forward=(label:string,external:number,internal:number)=>({
   ...udp,chain:'dstnat',action:'dst-nat','dst-address':i.gatewayAddress+'/32','dst-port':String(external),
-  'to-addresses':i.radiusAddress,'to-ports':String(internal),comment:list+' | RADIUS-'+label,
+  'to-addresses':i.radiusAddress,'to-ports':String(internal),comment:shortComment(list,label),
  });
  return [
-  {...udp,chain:'srcnat',action:'accept','dst-address':i.radiusAddress+'/32','dst-port':i.authPort+','+i.accountingPort,comment:list+' | RADIUS-NoNAT'},
+  {...udp,chain:'srcnat',action:'accept','dst-address':i.radiusAddress+'/32','dst-port':i.authPort+','+i.accountingPort,comment:shortComment(list,'NoNAT')},
   forward('Auth',1812,i.authPort),
   forward('Acct',1813,i.accountingPort),
  ];
@@ -40,7 +44,9 @@ function planRules(i:Input):Rule[]{
 
 const readRules=(api:RouterApi)=>api.command('/ip/firewall/nat/print',{'.proplist':fields});
 async function ensureEnvironmentRule(api:RouterApi,rules:Rule[],desired:Rule){
- const owned=(rule:Rule)=>rule.comment===desired.comment;
+ const list=desired['src-address-list'];
+ const label=radiusLabels.find(value=>shortComment(list,value)===desired.comment)!;
+ const owned=(rule:Rule)=>rule.comment===desired.comment||rule.comment===legacyComment(list,label);
  const matches=(rule:Rule)=>!on(rule.invalid)&&Object.entries(desired).every(([key,value])=>{
   if(key==='dst-address'||key==='to-addresses')return host(rule[key])===host(value);
   if(key==='disabled')return !on(rule.disabled);
@@ -52,7 +58,7 @@ async function ensureEnvironmentRule(api:RouterApi,rules:Rule[],desired:Rule){
   if(rule.chain!==desired.chain||on(rule.disabled)||rule.protocol==='tcp')return true;
   if(exactHost(rule['dst-address'])&&host(rule['dst-address'])!==host(desired['dst-address']))return true;
   const list=rule['src-address-list']||'';
-  if(managedList.test(list)&&list!==desired['src-address-list']&&rule.comment?.startsWith(list+' | RADIUS-'))return true;
+  if(managedList.test(list)&&list!==desired['src-address-list']&&environmentRule(rule,list))return true;
   const port=rule['dst-port']||'';
   return rule.protocol==='udp'&&/^\d+(,\d+)*$/.test(port)&&port.split(',').every(value=>!desired['dst-port'].split(',').includes(value));
  };
@@ -115,9 +121,9 @@ export async function removeNasRadiusNoNat(api:RouterApi,s:Scope){
  if(members.length>1||members.some(row=>!validMember(row,s)))fail('NAS_RADIUS_ENV_MEMBER_CONFLICT');
  const list=environmentList(s);
  const lastMember=entries.every(row=>row.list!==list||members.includes(row));
- const environmentRules=lastMember?rules.filter(row=>['Auth','Acct','NoNAT'].some(label=>row.comment===list+' | RADIUS-'+label)):[];
+ const environmentRules=lastMember?rules.filter(row=>environmentRule(row,list)):[];
  if(environmentRules.some(row=>!row['.id']||on(row.dynamic)||row.protocol!=='udp'||row['src-address-list']!==list||row['src-address']||
-  (row.comment.endsWith('NoNAT')?row.chain!=='srcnat'||row.action!=='accept':row.chain!=='dstnat'||row.action!=='dst-nat')))fail('NAS_RADIUS_ENV_RULE_CONFLICT');
+  (row.comment.toLowerCase().endsWith('nonat')?row.chain!=='srcnat'||row.action!=='accept':row.chain!=='dstnat'||row.action!=='dst-nat')))fail('NAS_RADIUS_ENV_RULE_CONFLICT');
  for(const row of members)await api.command('/ip/firewall/address-list/remove',{'.id':row['.id']});
  for(const r of [...owned,...forwarded,...environmentRules])await api.command('/ip/firewall/nat/remove',{'.id':r['.id']});
 }

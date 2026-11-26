@@ -163,7 +163,7 @@ export function describeMasterNetworkTunnels(inventory:Awaited<ReturnType<typeof
   const fresh=Boolean(snapshot?.readAt&&now-Date.parse(snapshot.readAt)<=3*60*1000);
   const state=snapshot?.status==='unavailable'?'unavailable':snapshot?.readAt&&!fresh?'stale':!observed?'pending':observed.connected?'connected':'disconnected';
   return [{tunnelId:Number(tunnel.id),nasId,name:nas?.name||'NAS #'+nasId,gatewayId,gateway:gateway?.name||'CHR #'+gatewayId,
-   state,since:observed?.since??null,readAt:snapshot?.readAt??null,lastSeenAt:observed?.lastSeenAt??tunnelTime(tunnel.lastSeenAt)}];
+   ...(details?{username:tunnel.username,address:tunnel.address}:{}),state,since:observed?.since??null,readAt:snapshot?.readAt??null,lastSeenAt:observed?.lastSeenAt??tunnelTime(tunnel.lastSeenAt)}];
  });
  const total=tunnels.length,connected=tunnels.filter(tunnel=>tunnel.state==='connected').length;
  const disconnected=tunnels.filter(tunnel=>tunnel.state==='disconnected').length;

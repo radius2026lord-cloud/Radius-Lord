@@ -16,7 +16,7 @@ import {ProjectInfoCard,ProjectCardIcon,type InfoCardTone} from "@/components/ui
 type Metrics={totalPppoeAccounts?:number;connectedPppoeAccounts?:number;totalHotspotAccounts?:number;connectedHotspotAccounts?:number;hotspotSessions?:number;totalSubscribers:number;connectedSubscribers:number;disconnectedSubscribers:number;newSubscribers24h:number;activeSessions:number;totalNas:number;connectedNas:number};
 type TunnelState="connected"|"disconnected"|"partial"|"pending"|"unavailable"|"stale"|"unlinked";
 type ConnectionEvent={at:string;state:"connected"|"disconnected"|"unknown";previousState:"connected"|"disconnected"|"unknown"|null;durationSeconds:number|null;baseline:boolean;tunnelId:number;nasId:number;gatewayId:number};
-type Tunnel={since?:string|null;tunnelId:number;nasId:number;name:string;gatewayId:number;gateway:string;state:TunnelState;readAt:string|null;lastSeenAt:string|null};
+type Tunnel={username?:string;address?:string;since?:string|null;tunnelId:number;nasId:number;name:string;gatewayId:number;gateway:string;state:TunnelState;readAt:string|null;lastSeenAt:string|null};
 type GatewayHealth={id:number;name:string;total:number;connected:number;disconnected:number;unavailable:boolean;stale:boolean;pending:boolean;attemptedAt:string|null;readAt:string|null};
 function gatewayAffected(gateway:GatewayHealth){
  return gateway.unavailable||gateway.stale||gateway.disconnected>0;
@@ -126,6 +126,32 @@ function readingLabel(item:NetworkRow){
  return item.metricsStatus==="unavailable"?"تعذرت آخر قراءة":!item.metricsReadAt?"بانتظار أول قراءة":item.metricsStale?"قراءة قديمة":"قراءة حديثة";
 }
 
+function matchesNetworkQuery(item:NetworkRow,query:string){
+ const search=query.trim().toLowerCase().replace(/[٠-٩۰-۹]/g,digit=>String(digit.charCodeAt(0)-(digit<="٩"?0x660:0x6f0)));
+ const environment=search.match(/^(?:env-([0-9]+)|rl-e([0-9]+)(?:-[a-z0-9]+)*|rl-radius-env-([0-9]+)(?:\s*\|\s*.*)?)$/);
+ if(environment)return item.environmentId===Number(environment[1]??environment[2]??environment[3]);
+ return (search!==""&&String(item.environmentId??"")===search)
+  ||[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(search));
+}
+
+async function copyNetworkValue(value:string){
+   if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+   else{
+    const field=document.createElement("textarea");field.value=value;field.readOnly=true;field.style.position="fixed";field.style.opacity="0";
+    const focused=document.activeElement;
+    document.body.appendChild(field);field.select();
+    try{if(!document.execCommand("copy"))throw Error("COPY_FAILED");}finally{field.remove();if(focused instanceof HTMLElement)focused.focus();}
+   }
+}
+
+function EnvironmentNumber({id,onCopy}:{id:number|null;onCopy:(value:string)=>void}){
+ if(id==null)return null;
+ return <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+  <span>رقم البيئة</span><bdi dir="ltr" className="font-mono font-semibold">{id}</bdi>
+  <ProjectButton variant="ghost" size="icon" aria-label="نسخ رقم البيئة" title="نسخ رقم البيئة" onClick={event=>{event.stopPropagation();onCopy(String(id));}} onKeyDown={event=>event.stopPropagation()}><Copy className="size-4"/></ProjectButton>
+ </div>;
+}
+
 const networkReturnKey="lord-radius:master-networks:return";
 
 type NetworkListReturn = {
@@ -152,6 +178,11 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const [reminderDays,setReminderDays]=useState(7);
  const [hasLoaded,setHasLoaded]=useState(false);
+ const [environmentNotice,setEnvironmentNotice]=useState({message:"",error:""});
+ async function copyEnvironment(value:string){
+  try{await copyNetworkValue(value);setEnvironmentNotice({message:"نُسخ رقم البيئة.",error:""});}
+  catch{setEnvironmentNotice({message:"",error:"تعذر نسخ رقم البيئة."});}
+ }
  const [query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[filtersOpen,setFiltersOpen]=useState(false);
  const [subscriptionFilter,setSubscriptionFilter]=useState("all"),[readingFilter,setReadingFilter]=useState("all"),[serverFilter,setServerFilter]=useState("all");
  const [sort,setSort]=useState("name"),[descending,setDescending]=useState(false),[pageSize,setPageSize]=useState("50"),[page,setPage]=useState(1);
@@ -192,7 +223,7 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  &&(validityFilter==="all"||expiryState(item,reminderDays,now)===validityFilter)
  &&(serverFilter==="all"||item.databaseServerName===serverFilter)
  &&(readingFilter==="all"||(readingFilter==="fresh"?item.metricsStatus==="ok"&&!item.metricsStale:readingFilter==="failed"?item.metricsStatus==="unavailable":item.metricsStale))
- &&[item.id,item.name,item.ownerName,item.licenseNumber,item.databaseName].some(value=>String(value??"").toLowerCase().includes(query.trim().toLowerCase()));
+ &&matchesNetworkQuery(item,query);
  const baseItems=useMemo(()=>items.filter(matchesFilters),[items,query,subscriptionFilter,readingFilter,serverFilter,validityFilter,requestFilter,tunnelFilter,gatewayFilter,reminderDays,now]);
  const filtered=useMemo(()=>baseItems.filter(item=>filter==="all"||operationalState(item,reminderDays,now)===filter).sort((a,b)=>{
  if(sort==="expiry"){
@@ -285,7 +316,8 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
  return <div ref={listRoot} dir="rtl" className="space-y-4">
  {networkId&&<div className="flex justify-end"><ProjectButton variant="back" onClick={()=>router.push("/Dashboard/networks")}><ArrowRight aria-hidden="true"/>العودة إلى الشبكات</ProjectButton></div>}
  {!networkId&&<>
- <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews showSelectionControl selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالشبكة، المالك، المعرّف أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={refreshing} onClick={()=>setRevision(value=>value+1)}><RefreshCw className={refreshing?'animate-spin':''}/>تحديث</ProjectButton>}/>
+ <FloatingNotice {...environmentNotice} onDismiss={()=>setEnvironmentNotice({message:"",error:""})}/>
+ <CollectionToolbar hostingerStyle responsive title="الشبكات" description="الشبكات التي اكتمل تفعيل بيئتها، مع حالة اشتراكها وآخر مؤشرات التشغيل" icon={Network} view={view} onViewChange={setView} selectionMode={selectionMode} onSelectionModeChange={value=>{setSelectionMode(value);if(!value)setSelection(new Set());}} selectionAcrossViews showSelectionControl selectionLabel="تحديد الشبكات" allSelected={allVisibleSelected} onToggleAll={()=>setAll(visible.map(item=>item.id),!allVisibleSelected)} query={query} onQueryChange={setQuery} searchPlaceholder="بحث بالاسم، المالك، رقم البيئة أو الرخصة" searchAction={<button type="button" aria-label="تصفية الشبكات" aria-expanded={filtersOpen} aria-controls="master-network-filters" onClick={()=>setFiltersOpen(value=>!value)} className={`group inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${filtersOpen?"bg-[#eaf1f8] text-[#315d8b] dark:bg-blue-500/10 dark:text-blue-200":"text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"}`}><ListFilter className="h-3.5 w-3.5 text-[#547493]"/><span>تصفية</span>{activeFilters>0&&<span className="rounded-full bg-[#6684a3] px-1.5 text-white">{activeFilters}</span>}<ChevronDown className={`h-3 w-3 ${filtersOpen?"rotate-180":""}`}/></button>} primaryAction={<ProjectButton variant="secondary" disabled={refreshing} onClick={()=>setRevision(value=>value+1)}><RefreshCw className={refreshing?'animate-spin':''}/>تحديث</ProjectButton>}/>
  {gatewayGroups.some(gateway=>gateway.affectedNetworks>0)&&<section aria-label="تنبيهات خوادم CHR" className="grid items-start gap-4 md:grid-cols-2">
   {gatewayGroups.filter(gateway=>gateway.affectedNetworks>0).map(gateway=><ProjectInfoCard key={gateway.id} tone={gateway.unavailable||gateway.stale?"warning":"danger"} className="min-w-0 space-y-3">
    <h2 className="flex min-w-0 items-center gap-2 font-semibold"><ProjectCardIcon icon={Server} tone={gateway.unavailable||gateway.stale?"warning":"danger"}/><span className="break-words">{gateway.name}</span></h2>
@@ -340,6 +372,8 @@ export default function MasterNetworks({networkId}:{networkId?:number}){
   <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><UserRound className="size-4 shrink-0 text-violet-500"/>المالك</dt><dd className="mt-1 break-words">{item.ownerName||"غير محدد"}</dd></div>
   <div className="min-w-0"><dt className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><ShieldCheck className="size-4 shrink-0 text-blue-500"/>الاشتراك</dt><dd className="mt-1 break-words">{subscriptionLabels[expiryState(item,reminderDays,now)]}</dd></div>
  </dl>
+ <EnvironmentNumber id={item.environmentId} onCopy={value=>void copyEnvironment(value)}/>
+ {(item.ovpn?.gateways??[]).map(gateway=><p key={gateway.id} className="break-words text-xs">بوابة CHR · <bdi>{gateway.name} (#{gateway.id})</bdi></p>)}
  <NetworkTunnelBadge ovpn={item.ovpn}/>
  </section>
  <section aria-label="اشتراك الشبكة ومؤشرات التشغيل" className="min-w-0 space-y-3 rounded-[20px] border border-[#e4e4e7] p-3 dark:border-white/[.12] dark:bg-[#0d243b]">
@@ -486,13 +520,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
  }
  async function copy(value:string,message:string){
   try{
-   if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
-   else{
-    const field=document.createElement("textarea");field.value=value;field.readOnly=true;field.style.position="fixed";field.style.opacity="0";
-    const focused=document.activeElement;
-    document.body.appendChild(field);field.select();
-    try{if(!document.execCommand("copy"))throw Error("COPY_FAILED");}finally{field.remove();if(focused instanceof HTMLElement)focused.focus();}
-   }
+   await copyNetworkValue(value);
    setNotice({message,error:"",warning:""});
   }catch{setNotice({message:"",error:"تعذر النسخ في هذا المتصفح.",warning:""});}
  }
@@ -504,6 +532,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    <div className="min-w-0 space-y-2">
     <div className="flex flex-wrap items-center gap-2"><ProjectCardIcon icon={Network}/><h1 className="break-words text-xl font-bold">{item.name}</h1></div>
     <div className="flex flex-wrap items-center gap-3 text-sm"><span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold ${connectionInk}`}><Hash className="size-4"/>{item.id}</span><span className="flex items-center gap-1.5"><UserRound className="size-4 text-violet-500"/>{item.ownerName||"المالك غير محدد"}</span></div>
+    <EnvironmentNumber id={item.environmentId} onCopy={value=>void copy(value,"نُسخ رقم البيئة.")}/>
     {item.licenseNumber&&<div className="flex flex-wrap items-center gap-2 text-xs">الرخصة <bdi className="break-all font-mono">{item.licenseNumber}</bdi><ProjectButton variant="ghost" aria-label="نسخ الرخصة" onClick={()=>void copy(item.licenseNumber,"تم نسخ رقم الرخصة.")}><Copy className="size-4"/></ProjectButton></div>}
    </div>
    <div className="flex flex-wrap items-center gap-2">
@@ -530,7 +559,7 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
      {ovpn&&hasTunnelReading(tunnelStatus)&&<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300">متصل {ovpn.connected}</span><span className="rounded-full bg-rose-500/10 px-2 py-1 text-rose-700 dark:text-rose-300">منقطع {ovpn.disconnected}</span></div>}
      {tunnelStatus==="partial"&&affectedGateways.length>0&&<p className="break-words text-xs">أجهزة متأثرة على خوادم الاتصال · {affectedGateways.join("، ")}</p>}
      {ovpn?.readAt&&<p className="text-xs">آخر فحص ناجح · {date(ovpn.readAt)}</p>}
-     {tunnels.length>0&&<a href="#network-ovpn" className="inline-flex items-center gap-1 text-xs font-semibold underline underline-offset-4"><Router className="size-3.5"/>عرض تفاصيل أجهزة NAS</a>}
+     {tunnels.length>0&&<a href="#network-ovpn" className="inline-flex items-center gap-1 text-xs font-semibold underline underline-offset-4"><Router className="size-3.5"/>عرض الربط</a>}
     </div>
    </ProjectInfoCard>
    <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -574,11 +603,18 @@ function NetworkDetails({item,days,now,error,refreshing,onRefresh}:{item:Network
    <ProjectInfoCard className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ProjectCardIcon icon={Router}/>تشخيص اتصال أجهزة NAS</h2><span className="text-xs text-slate-500 dark:text-slate-400">سجل مرئي لآخر 24 ساعة</span></div>
     <div className="flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-700 dark:text-emerald-300">● متصل</span><span className="text-rose-700 dark:text-rose-300">● منقطع</span><span className="text-slate-500 dark:text-slate-400">● غير مؤكد أو لم يُرصد</span></div>
+    {item.environmentId!=null&&tunnels.length>0&&<div className="flex flex-wrap items-center gap-2 text-xs">
+     <span>تسميات قواعد RADIUS</span>
+     {["auth","acct","nonat"].map(kind=>{const name=`rl-e${item.environmentId}-radius-${kind}`;return <ProjectButton key={kind} variant="ghost" aria-label={`نسخ ${name}`} onClick={()=>void copy(name,"نُسخ اسم القاعدة.")}><bdi dir="ltr">{name}</bdi><Copy className="size-3.5"/></ProjectButton>;})}
+    </div>}
     {!tunnels.length?<p className="text-sm">{ovpn?.state==="unlinked"?"لا توجد أجهزة NAS مرتبطة عبر OpenVPN.":"بانتظار بيانات أجهزة NAS."}</p>:
      <ul className="grid gap-3 sm:grid-cols-2">{tunnels.map(tunnel=><li key={tunnel.nasId+":"+tunnel.gatewayId}>
       <ProjectInfoCard tone={tunnelLabels[tunnel.state].tone} className="min-w-0 space-y-3">
        <div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-words">{tunnel.name}</strong><span className="text-xs">{tunnel.state==="disconnected"?"غير متصل":tunnelLabels[tunnel.state].label}</span></div>
        <p className="flex items-center gap-2 text-xs"><Server className="size-4"/>خادم الاتصال · {tunnel.gateway}</p>
+       <dl className="space-y-1 text-xs">
+        {([{label:"مستخدم OVPN",value:tunnel.username},{label:"عنوان النفق",value:tunnel.address}] as const).map(({label,value})=>value&&<div key={label} className="flex flex-wrap items-center gap-2"><dt>{label}</dt><dd><bdi dir="ltr" className="break-all font-mono">{value}</bdi></dd><ProjectButton variant="ghost" size="icon" aria-label={`نسخ ${label}`} onClick={()=>void copy(value,`تم نسخ ${label}.`)}><Copy className="size-4"/></ProjectButton></div>)}
+       </dl>
        <p className="flex items-center gap-2 text-xs"><Clock3 className="size-4"/>آخر ظهور متصل · {date(tunnel.lastSeenAt)}</p>
        <dl className="grid gap-2 border-t border-slate-200/70 pt-2 text-xs dark:border-white/10">
         {hasTunnelReading(tunnel.state)&&tunnel.since&&<div className="flex flex-wrap justify-between gap-2"><dt>الحالة مرصودة منذ</dt><dd>{date(tunnel.since)}</dd></div>}
