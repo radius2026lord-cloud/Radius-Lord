@@ -567,9 +567,46 @@ class Console:
             raise
 
 
+    def github_environment(self):
+        return {**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never'}
+
+    def check_github(self, project, key, version, changes):
+        project = self.repository(project, require_clean=False)
+        self.events.put(('log', 'GitHub · فحص قراءة الفرع المعتمد.\n'))
+        self.events.put(('log', 'GitHub · commit الفرع: ' + self.github_head(project) + '\n'))
+        cli = shutil.which('gh')
+        if not cli:
+            self.events.put(('log', 'القراءة متاحة. ثبّت GitHub CLI لتسجيل الدخول وفحص صلاحية الكتابة.\n'))
+            return
+        auth = subprocess.run([cli, 'auth', 'status', '--hostname', 'github.com'],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              timeout=20, creationflags=NO_WINDOW)
+        if auth.returncode:
+            self.events.put(('log', 'القراءة متاحة. صلاحية الكتابة غير مؤكدة؛ استخدم تسجيل دخول GitHub.\n'))
+            return
+        account = self.run([cli, 'api', '--hostname', 'github.com', 'user', '--jq', '.login'], timeout=30)
+        permission = self.run([cli, 'api', '--hostname', 'github.com', 'repos/radius2026lord-cloud/Radius-Lord',
+                               '--jq', '.permissions.push // false'], timeout=30)
+        self.events.put(('log', 'GitHub · الحساب: ' + account + ' · صلاحية كتابة المستودع: '
+                         + ('متاحة' if permission == 'true' else 'غير متاحة') + '\n'))
+        if self.run(['git', 'remote', 'get-url', '--push', 'origin'], project).startswith('git@'):
+            self.events.put(('log', 'وجهة الرفع الحالية تستخدم SSH؛ تعتمد على مفتاح GitHub المهيأ في Windows.\n'))
+
+    def login_github(self, project, key, version, changes):
+        project = self.repository(project, require_clean=False)
+        cli = shutil.which('gh')
+        if not cli:
+            raise RuntimeError('ثبّت GitHub CLI بالأمر winget install --id GitHub.cli -e ثم أعد فتح الأداة')
+        self.events.put(('log', 'GitHub · أكمل الدخول في المتصفح ثم أغلق نافذة GitHub CLI للمتابعة.\n'))
+        self.run([cli, 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'],
+                 console=True)
+        self.events.put(('log', 'GitHub · ربط مصادقة Git عبر HTTPS بالحساب.\n'))
+        self.run([cli, 'auth', 'setup-git', '--hostname', 'github.com'], timeout=30)
+        self.check_github(project, key, version, changes)
+
     def github_head(self, project):
         ref = 'refs/heads/' + BRANCH
-        fields = self.run(['git', 'ls-remote', '--exit-code', 'origin', ref], project, timeout=60).split()
+        fields = self.run(['git', 'ls-remote', '--exit-code', 'origin', ref], project, timeout=60, env=self.github_environment()).split()
         if len(fields) != 2 or fields[1] != ref or not re.fullmatch(r'[a-f0-9]{40}', fields[0]):
             raise RuntimeError('تعذر تحديد commit الفرع على GitHub')
         return fields[0]
@@ -595,7 +632,7 @@ class Console:
             self.run(['git', 'commit', '-m', changes], project, stream=True)
         self.repository(project)
         self.validated = None
-        self.run(['git', 'push', 'origin', 'HEAD:refs/heads/' + BRANCH], project, stream=True, timeout=300)
+        self.run(['git', 'push', 'origin', 'HEAD:refs/heads/' + BRANCH], project, stream=True, timeout=300, env=self.github_environment())
         commit = self.synchronized_commit(project)
         self.events.put(('log', 'تطابق Windows وGitHub عند ' + commit + '\n'))
 
@@ -604,7 +641,7 @@ class Console:
         project = self.repository(project)
         self.validated = None
         self.events.put(('log', 'جلب GitHub · تنزيل التغييرات وتحديث الفرع.\n'))
-        self.run(['git', 'pull', '--ff-only', 'origin', BRANCH], project, stream=True, timeout=300)
+        self.run(['git', 'pull', '--ff-only', 'origin', BRANCH], project, stream=True, timeout=300, env=self.github_environment())
         self.events.put(('log', 'جلب GitHub · مقارنة معرّف commit المحلي بالفرع البعيد.\n'))
         self.events.put(('log', 'تطابق Windows وGitHub عند ' + self.synchronized_commit(project) + '\n'))
 

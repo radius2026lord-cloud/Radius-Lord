@@ -288,7 +288,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-9'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-10'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -368,7 +368,7 @@ class Bridge(QObject):
                 self.send_event('log', 'لم يبدأ الأمر '+action+': انتظر اكتمال العملية الجارية\n')
                 self.send_event('error', 'انتظر اكتمال العملية الجارية')
                 return
-            local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings','push-github','pull','build','terminal','copy-deploy-command'}
+            local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings','push-github','pull','build','terminal','copy-deploy-command','github-login','github-check'}
             if not self.connection_ready and action not in local_actions:
                 raise ValueError('نفّذ فحص الاتصال بنجاح أولًا لإتاحة العمليات')
             if action == 'resume-pending':
@@ -421,7 +421,11 @@ class Bridge(QObject):
             if action == 'push-github' and not self.confirm('الرفع إلى GitHub', 'رفع التعديلات المجهزة في Git إلى الفرع المعتمد؟'):
                 self.send_event('log', 'أُلغي الرفع إلى GitHub.\n')
                 return
-            actions = {'inspect': self.inspect_setup, 'terminal': self.core.terminal,
+            if action == 'github-login' and not self.confirm(
+                    'تسجيل دخول GitHub', 'فتح تسجيل الدخول وربط GitHub CLI بمصادقة Git عبر HTTPS لهذا المستخدم؟'):
+                self.send_event('log', 'أُلغي تسجيل دخول GitHub.\n')
+                return
+            actions = {'github-login': self.core.login_github, 'github-check': self.core.check_github, 'inspect': self.inspect_setup, 'terminal': self.core.terminal,
                        'next-release-version': self.core.suggest_release_version, 'push-github': self.core.push_github, 'verify-release': self.core.verify_release_commit, 'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
                        'status': self.core.status, 'latest-log': self.core.latest_log,
                        'create-key': self.create_setup_key, 'install-key': self.install_setup_key,
@@ -857,7 +861,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-9')
+        url.setQuery('revision=review-10')
         self.view.load(url)
 
     def closeEvent(self, event):
