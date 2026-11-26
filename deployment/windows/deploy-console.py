@@ -600,9 +600,12 @@ class Console:
         self.events.put(('log', 'تطابق Windows وGitHub عند ' + commit + '\n'))
 
     def pull(self, project, key, version, changes):
+        self.events.put(('log', 'جلب GitHub · التحقق من الفرع ونظافة مجلد العمل.\n'))
         project = self.repository(project)
         self.validated = None
+        self.events.put(('log', 'جلب GitHub · تنزيل التغييرات وتحديث الفرع.\n'))
         self.run(['git', 'pull', '--ff-only', 'origin', BRANCH], project, stream=True, timeout=300)
+        self.events.put(('log', 'جلب GitHub · مقارنة معرّف commit المحلي بالفرع البعيد.\n'))
         self.events.put(('log', 'تطابق Windows وGitHub عند ' + self.synchronized_commit(project) + '\n'))
 
     def build(self, project, key, version, changes):

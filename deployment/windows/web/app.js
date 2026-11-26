@@ -18,9 +18,10 @@ function send(action,extra={}){
   notify('لم يرد المحرك المحلي؛ راجع سجل الأداة قبل إعادة المحاولة',true);
  },5000);
  try{
-  host.request(action,JSON.stringify({...form(),...extra}),accepted=>{
+  host.submitAction(action,JSON.stringify({...form(),...extra}),accepted=>{
    clearTimeout(ackTimer);
-   if(accepted===false){appendLog('يوجد طلب قيد المعالجة: '+label);notify('انتظر انتهاء الطلب الحالي',true);}
+   if(accepted===true&&visible)appendLog('أكد المحرك استلام الأمر: '+label);
+   else if(accepted!==true){appendLog('يوجد طلب قيد المعالجة: '+label);notify('انتظر انتهاء الطلب الحالي',true);}
   });
  }catch(error){
   clearTimeout(ackTimer);
@@ -79,7 +80,7 @@ $('theme').addEventListener('click',()=>{const dark=document.body.classList.togg
 // No browser/native title tooltips; Arabic hints are rendered by CSS.
 document.querySelectorAll('[title]').forEach(el=>el.removeAttribute('title'));
 renderSetup();applyAccess();
-if(typeof qt!=='undefined'&&typeof QWebChannel!=='undefined'){new QWebChannel(qt.webChannelTransport,channel=>{host=channel.objects.host;host.message.connect(receive);host.ready();});}else{notify('افتح الواجهة من مشغل Radius Lord لربطها بمحرك Python المحلي',true);}
+if(typeof qt!=='undefined'&&typeof QWebChannel!=='undefined'){new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.host;if(!bridge||typeof bridge.submitAction!=='function'){appendLog('فشل الربط: واجهة الويب ومحرك Python من نسختين مختلفتين');notify('أغلق الأداة وأعد تشغيلها من مجلد المشروع المحدّث',true);return;}host=bridge;host.message.connect(receive);host.ready();});}else{notify('افتح الواجهة من مشغل Radius Lord لربطها بمحرك Python المحلي',true);}
 
 $('readiness-details').addEventListener('click',showReadiness);
 $('dismiss-diagnostic').addEventListener('click',()=>$('diagnostic').classList.add('hidden'));

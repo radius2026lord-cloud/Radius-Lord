@@ -288,7 +288,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-8'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-9'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -306,7 +306,7 @@ class Bridge(QObject):
     def connect_startup(self):
         # Retained for compatibility with older desktop callbacks.
         if not self.busy:
-            self.request('inspect', '{}')
+            self.submitAction('inspect', '{}')
 
     def confirm(self, title, text):
         return QMessageBox.question(self.window, title, text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
@@ -316,7 +316,7 @@ class Bridge(QObject):
         return text if ok else None
 
     @Slot(str, str, result=bool)
-    def request(self, action, raw):
+    def submitAction(self, action, raw):
         if self.request_pending:
             return False
         self.request_pending = True
@@ -419,6 +419,7 @@ class Bridge(QObject):
                 self.start(action, prepare_command)
                 return
             if action == 'push-github' and not self.confirm('الرفع إلى GitHub', 'رفع التعديلات المجهزة في Git إلى الفرع المعتمد؟'):
+                self.send_event('log', 'أُلغي الرفع إلى GitHub.\n')
                 return
             actions = {'inspect': self.inspect_setup, 'terminal': self.core.terminal,
                        'next-release-version': self.core.suggest_release_version, 'push-github': self.core.push_github, 'verify-release': self.core.verify_release_commit, 'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
@@ -431,6 +432,7 @@ class Bridge(QObject):
                     self.start('readiness', lambda: self.core.readiness(*args))
                     return
                 if action == 'publish' and not self.confirm('نشر الإصدار', 'نشر ' + self.core.version.get() + ' على ' + legacy.HOST + '؟ سيأخذ الخادم نسخة احتياطية ويبني الإصدار ويعيد تشغيل التطبيق.'):
+                    self.send_event('log', 'أُلغي النشر من نافذة التأكيد.\n')
                     return
                 self.start(action, lambda: actions[action](*args))
                 return
@@ -637,10 +639,13 @@ class Bridge(QObject):
                     if label in WRITE_ACTIONS:
                         raise RuntimeError('تعذر تسجيل عملية الكتابة محليًا؛ تحقق من السجل قبل التنفيذ') from error
                     self.core.events.put(('log', 'تعذر بدء سجل محلي؛ يستمر الفحص للقراءة فقط: ' + type(error).__name__ + '\n'))
-                function()
+                result = function()
+                if label == 'readiness' and not result.get('ready'):
+                    raise RuntimeError('فشل فحص الجاهزية؛ راجع البنود المعروضة')
                 if cancel.is_set():
                     raise TimeoutError('تجاوز الفحص مدته الكلية')
                 save_result('succeeded', 'اكتمل الإجراء في الأداة')
+                self.core.events.put(('log', 'نجحت العملية: ' + label + '\n'))
                 message = 'راجع نتيجة الجاهزية، ثم اضغط رفع الإصدار عندما تكون جاهزًا' if label == 'readiness' else 'اكتملت العملية'
                 self.core.events.put(('notice', message))
             except Exception as error:
@@ -648,7 +653,7 @@ class Bridge(QObject):
                 diagnostic = diagnose(str(error))
                 if diagnostic:
                     self.core.events.put(('diagnostic', diagnostic))
-                self.core.events.put(('log', 'ERROR: ' + str(error) + '\n'))
+                self.core.events.put(('log', 'فشلت العملية: ' + label + ' — ' + str(error) + '\n'))
                 self.core.events.put(('error', str(error)))
             finally:
                 try:
@@ -672,6 +677,7 @@ class Bridge(QObject):
         self.send_event('services', ({}, 'انتهت مهلة الفحص'))
         self.send_event('connected', '🔴 انتهت المهلة الكلية للفحص؛ يمكنك المحاولة مجددًا')
         self.send_event('busy', {'active': False})
+        self.send_event('log', 'فشلت العملية: inspect — تجاوز الفحص مهلة 55 ثانية.\n')
         self.send_event('error', 'توقف انتظار الفحص بعد 55 ثانية؛ لم تُكرّر أي عملية على الخادم')
         def record_timeout():
             try:
@@ -851,7 +857,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-8')
+        url.setQuery('revision=review-9')
         self.view.load(url)
 
     def closeEvent(self, event):
