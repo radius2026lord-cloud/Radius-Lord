@@ -510,7 +510,7 @@ class Console:
             raise CommandFailure(args[0], code, text)
         return text.strip()
 
-    def repository(self, project):
+    def repository(self, project, require_clean=True):
         project = str(pathlib.Path(project).resolve())
         if self.run(['git', 'rev-parse', '--show-toplevel'], project).replace('\\', '/').casefold() != project.replace('\\', '/').casefold():
             raise RuntimeError('اختر جذر مستودع المشروع')
@@ -518,7 +518,7 @@ class Console:
             raise RuntimeError('الفرع المحلي ليس الفرع المعتمد')
         if self.run(['git', 'remote', 'get-url', 'origin'], project) not in ORIGINS:
             raise RuntimeError('origin ليس مستودع Radius Lord المعتمد')
-        if self.run(['git', 'status', '--porcelain', '--untracked-files=normal'], project):
+        if require_clean and self.run(['git', 'status', '--porcelain', '--untracked-files=normal'], project):
             raise RuntimeError('احفظ تعديلات المشروع في Git أولًا؛ لن نحذفها أو نخزنها تلقائيًا')
         return project
 
@@ -567,11 +567,43 @@ class Console:
             raise
 
 
+    def github_head(self, project):
+        ref = 'refs/heads/' + BRANCH
+        fields = self.run(['git', 'ls-remote', '--exit-code', 'origin', ref], project, timeout=60).split()
+        if len(fields) != 2 or fields[1] != ref or not re.fullmatch(r'[a-f0-9]{40}', fields[0]):
+            raise RuntimeError('تعذر تحديد commit الفرع على GitHub')
+        return fields[0]
+
+    def synchronized_commit(self, project):
+        local = self.run(['git', 'rev-parse', 'HEAD'], project)
+        remote = self.github_head(project)
+        if local != remote:
+            raise RuntimeError(f'Windows: {local} — GitHub: {remote}')
+        return local
+
+    def push_github(self, project, key, version, changes):
+        project = self.repository(project, require_clean=False)
+        if self.run(['git', 'remote', 'get-url', '--push', 'origin'], project) not in ORIGINS:
+            raise RuntimeError('وجهة رفع origin تختلف عن المستودع المعتمد')
+        if (self.run(['git', 'diff', '--name-only'], project)
+                or self.run(['git', 'ls-files', '--others', '--exclude-standard'], project)):
+            raise RuntimeError('راجع الملفات ثم أضف التعديلات المقصودة إلى Git قبل الرفع')
+        if self.run(['git', 'diff', '--cached', '--name-only'], project):
+            if not changes.strip():
+                raise RuntimeError('أدخل وصف التغييرات قبل إنشاء commit')
+            self.run(['git', 'diff', '--cached', '--check'], project)
+            self.run(['git', 'commit', '-m', changes], project, stream=True)
+        self.repository(project)
+        self.validated = None
+        self.run(['git', 'push', 'origin', 'HEAD:refs/heads/' + BRANCH], project, stream=True, timeout=300)
+        commit = self.synchronized_commit(project)
+        self.events.put(('log', 'تطابق Windows وGitHub عند ' + commit + '\n'))
+
     def pull(self, project, key, version, changes):
         project = self.repository(project)
         self.validated = None
         self.run(['git', 'pull', '--ff-only', 'origin', BRANCH], project, stream=True, timeout=300)
-        self.run(['git', 'log', '-1', '--oneline'], project, stream=True)
+        self.events.put(('log', 'تطابق Windows وGitHub عند ' + self.synchronized_commit(project) + '\n'))
 
     def build(self, project, key, version, changes):
         project = self.repository(project)
@@ -588,47 +620,46 @@ class Console:
         self.validated = (project, commit)
         self.events.put(('log', 'نجح بناء الباك إند والواجهة للإصدار: ' + commit + '\n'))
 
-    def publish(self, project, key, version, changes):
+    def deploy_command(self, project, version, changes):
         project = self.repository(project)
-        commit = self.run(['git', 'rev-parse', 'HEAD'], project)
+        commit = self.synchronized_commit(project)
         if self.validated != (project, commit):
             raise RuntimeError('ابنِ هذا الإصدار بنجاح من الأداة أولًا')
-        if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version) or not 0 < len(changes) <= 4000:
-            raise RuntimeError('أدخل رقمًا مثل v1.0.4 ووصفًا من 1 إلى 4000 حرف')
-        if self.run(['git', 'remote', 'get-url', '--push', 'production'], project) != REMOTE:
-            raise RuntimeError('وجهة production لا تطابق الخادم المعتمد')
-        self.run([*self.ssh(key), 'test ! -e /srv/radius-lord/maintenance-recovery.json'])
-        info = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' inspect']))
-        if not info.get('ready'):
-            raise RuntimeError('فحص الخادم غير جاهز؛ راجع زر فحص الاتصال')
-        current = info.get('currentVersion')
-        if current and tuple(map(int, version[1:].split('.'))) <= tuple(map(int, current[1:].split('.'))):
-            raise RuntimeError('رقم الإصدار يجب أن يكون أحدث من: ' + current)
-        manifest = {'version': version, 'commit': commit, 'changes': changes}
-        tag = 'refs/tags/radius-release/' + version
-        ssh_command = ' '.join(shlex.quote(arg.replace('\\', '/')) for arg in self.ssh(key)[:-1])
-        # Git supplies its own host; keep key authentication and strict host verification.
-        env = {**os.environ, 'GIT_SSH_COMMAND': ssh_command, 'GIT_SSH_VARIANT': 'ssh'}
-        existing = self.run(['git', 'ls-remote', '--upload-pack=sudo -n -u radiusdeploy git-upload-pack', '--tags', 'production', tag], project, env=env)
-        if existing:
-            raise RuntimeError('الوسم موجود على الخادم؛ استخدم تحديث الحالة ولا تعِد نشره')
-        local = self.run(['git', 'tag', '--list', 'radius-release/' + version], project)
-        if local:
-            stored = json.loads(self.run(['git', 'for-each-ref', '--format=%(contents)', tag], project))
-            target = self.run(['git', 'rev-parse', tag + '^{commit}'], project)
-            if stored != manifest or target != commit:
-                raise RuntimeError('وسم محلي مختلف موجود؛ اختر رقمًا جديدًا')
-        else:
-            handle, file = tempfile.mkstemp(suffix='.json')
-            try:
-                with os.fdopen(handle, 'w', encoding='utf-8', newline='\n') as stream:
-                    json.dump(manifest, stream, ensure_ascii=False)
-                self.run(['git', 'tag', '-a', 'radius-release/' + version, '-F', file], project)
-            finally:
-                os.unlink(file)
+        if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version) or not 0 < len(changes.strip()) <= 4000:
+            raise RuntimeError('أدخل رقم الإصدار ووصف التغييرات')
+        manifest = json.dumps({'version': version, 'commit': commit, 'changes': changes})
+        script = """set -eu
+cd /tmp
+test "$(id -un)" = radiusdeploy
+root=/srv/radius-lord
+repo=$root/repository.git
+ref=refs/tags/radius-release/$1
+commit=$2
+if git --git-dir="$repo" show-ref --verify --quiet "$ref"; then
+    actual=$(git --git-dir="$repo" rev-parse "$ref^{commit}")
+    test "$actual" = "$commit" || { echo "Expected $commit; existing tag points to $actual" >&2; exit 1; }
+    echo 'Release already received'
+    exit 0
+fi
+test ! -e "$root/maintenance-recovery.json"
+stage=$(mktemp -d /tmp/radius-release.XXXXXX)
+trap 'rm -rf -- "$stage"' EXIT
+git clone --bare --shared "$repo" "$stage"
+GIT_TERMINAL_PROMPT=0 git -C "$stage" fetch --no-tags https://github.com/radius2026lord-cloud/Radius-Lord.git "$4"
+actual=$(git -C "$stage" rev-parse FETCH_HEAD)
+test "$actual" = "$commit" || { echo "Expected $commit; GitHub returned $actual" >&2; exit 1; }
+git -C "$stage" -c user.name='Lord Radius Deploy' -c user.email=radiusdeploy@localhost tag -a "${ref#refs/tags/}" "$commit" -m "$3"
+git -C "$stage" push "$repo" "$ref"
+"""
+        payload = base64.b64encode(script.encode('utf-8')).decode('ascii')
+        return commit, 'bash -c "$(printf %s ' + payload + ' | base64 -d)" -- ' + ' '.join(
+            shlex.quote(value) for value in (version, commit, manifest, 'refs/heads/' + BRANCH))
+
+    def publish(self, project, key, version, changes):
+        commit, command = self.deploy_command(project, version, changes)
         self.events.put(('phase', 'رفع'))
-        self.run(['git', 'push', '--receive-pack=sudo -n -u radiusdeploy git-receive-pack', 'production', tag], project, env=env, stream=True, timeout=1800)
-        self.events.put(('log', 'استلم الخادم الإصدار. الرفع لا يعني اكتمال النشر؛ استخدم تحديث حالة الإصدار.\n'))
+        self.run([*self.ssh(key), 'sudo -n -H -u radiusdeploy ' + command], stream=True, timeout=1800)
+        self.events.put(('log', 'وصل الوسم إلى الخادم. جارٍ انتظار التفعيل.\n'))
         self.events.put(('phase', 'تحقق'))
         last = None
         failures = 0
@@ -652,12 +683,28 @@ class Console:
                 self.events.put(('state', 'مرحلة الخادم: ' + str(state)))
                 last = state
             if state in terminal:
-                self.status(project, key, version, changes)
                 if state != 'succeeded':
+                    self.status(project, key, version, changes)
                     raise RuntimeError('حالة النشر: ' + state + ' — راجع السجل قبل أي إصدار آخر')
+                if data.get('commit') != commit:
+                    raise RuntimeError('سجل النشر يشير إلى commit مختلف')
+                self.verify_release_commit(project, key, version, changes)
                 return
             time.sleep(10)
         raise RuntimeError('انتهت مدة المتابعة؛ لا تعِد الرفع، تحقق من الحالة لاحقًا')
+
+    def verify_release_commit(self, project, key, version, changes):
+        if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
+            raise RuntimeError('رقم الإصدار غير صالح')
+        project = self.repository(project)
+        commit = self.synchronized_commit(project)
+        health = json.loads(self.run([*self.ssh(key), 'curl -fsS --max-time 10 http://127.0.0.1:4001/release-health']))
+        if health.get('ok') is not True or health.get('version') != version or health.get('commit') != commit:
+            raise RuntimeError(f'المتوقع {version} / {commit} — الخادم {health.get("version")} / {health.get("commit")}')
+        status = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' status ' + version]))
+        if status.get('status') != 'succeeded' or status.get('commit') != commit:
+            raise RuntimeError('لم يؤكد عامل النشر نجاح هذا الإصدار')
+        self.events.put(('log', 'تطابق Windows وGitHub وUbuntu عند ' + commit + '\n'))
 
     def status(self, project, key, version, changes):
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):

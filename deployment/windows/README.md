@@ -25,20 +25,16 @@ Windows / Python 3 with Tk, Git, Node/npm, Windows OpenSSH Client. Launch
 
 ## Releasing
 
-Set the remote once:
-
-```powershell
-git remote set-url production ssh://root@78.155.66.122:3001/srv/radius-lord/repository.git
-```
-
-SSH uses root, but Git upload/receive and release helper operations run through
-`sudo -n -u radiusdeploy`; services retain their existing identity and ownership.
-Pull with a clean worktree, build backend and frontend, enter a newer semantic
-version and description, then publish. The console checks the branch, origin,
-production destination and built commit, pushes an immutable annotated release
-tag, and monitors deployment. It does not replace tags, reset local changes,
-forge migration receipts or bypass bootstrap/backup/recovery checks. An uncertain
-push is never automatically retried; inspect status before another action.
+1. Stage the intended files in Git, enter the change description, then choose
+   **رفع إلى GitHub**. The console commits staged changes and pushes the canonical branch.
+2. Choose **جلب تحديثات GitHub** and build both applications. The console checks
+   that the clean Windows checkout matches the current GitHub branch.
+3. Choose **نشر على Ubuntu**. Ubuntu fetches the matching commit from GitHub and
+   sends the release tag to the local receiver as `radiusdeploy`.
+4. If using the SSH terminal manually, use **نسخ أمر الطرفية** and paste in a
+   shell running as `radiusdeploy`. From a root shell enter it first with
+   `sudo -n -H -u radiusdeploy bash`. Then use **تأكيد التطابق**. Successful
+   verification requires worker success and the matching running release.
 
 ## Environment backup setup
 
@@ -228,7 +224,7 @@ key automatically. Interactive terminal failures still require reading that
 terminal because they are not captured by the background SSH runner.
 
 **فحص الجاهزية** reads the canonical local repo/branch/worktree, exact built commit,
-production destination, release version/description, remote receiver checks,
+GitHub branch match, release version/description, remote receiver checks,
 free disk space, deployment lock/recovery state and backup-hook configuration.
 It compares local SQL changes to the current server commit and requires the
 existing migration adapter when relevant. It displays current/target revisions

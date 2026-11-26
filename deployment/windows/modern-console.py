@@ -58,7 +58,7 @@ class Operations(legacy.Console):
             prefs = {}
         self.project = Value(prefs.get('project', str(HERE.parents[1])))
         self.key = Value(prefs.get('key', str(pathlib.Path.home() / '.ssh/id_ed25519_radius_lord')))
-        self.version = Value(prefs.get('version', 'v1.0.4'))
+        self.version = Value('')
         self.changes = Value('')
         self.dark = prefs.get('dark', True)
         self.current_job_id = None
@@ -93,7 +93,8 @@ class Operations(legacy.Console):
         if program_name in ('ssh', 'ssh.exe') and (command.endswith(' inspect') or command.startswith('python3 -c ')):
             options.setdefault('timeout', 30)
             options.setdefault('wait_on_timeout', False)
-        if pathlib.Path(args[0]).name.lower() in ('git', 'git.exe') and 'push' in args:
+        if (program_name in ('git', 'git.exe') and 'push' in args) or (
+                program_name in ('ssh', 'ssh.exe') and command.startswith('sudo -n -H -u radiusdeploy bash -c ')):
             self.write_started = True
         try:
             if options.get('wait_on_timeout') is False:
@@ -127,6 +128,10 @@ class Operations(legacy.Console):
 r=subprocess.run(['sudo','-n','-u','radiusdeploy','python3','/srv/radius-lord/repository.git/hooks/radius-deploy.py','inspect'],capture_output=True,text=True,timeout=15)
 if r.returncode: raise RuntimeError('Receiver inspection failed: exit '+str(r.returncode))
 info=json.loads(r.stdout)
+try:
+ tags=subprocess.run(['sudo','-n','-H','-u','radiusdeploy','git','--git-dir=/srv/radius-lord/repository.git','tag','--list','radius-release/*'],capture_output=True,text=True,timeout=4,cwd='/tmp')
+ info['releaseTags']=tags.stdout.splitlines() if tags.returncode==0 else None
+except subprocess.TimeoutExpired: info['releaseTags']=None
 states={}
 for name in ['radius-lord-backend','radius-lord-frontend','mysql','freeradius']:
  try:
@@ -141,11 +146,35 @@ print(json.dumps({'receiver':info,'services':states}))
             self.events.put(('log', json.dumps(info, ensure_ascii=False) + '\n'))
             self.events.put(('services', (result['services'], dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))))
             self.events.put(('summary', 'الإصدار الجاري: ' + str(info.get('currentVersion'))))
+            if info.get('releaseTags') is not None:
+                suggestion = self.next_release_version(info.get('currentVersion'), info['releaseTags'])
+                self.events.put(('release-version', {'version': suggestion, 'replace': False}))
+            else:
+                self.events.put(('log', 'تعذر قراءة وسوم النشر لاقتراح رقم الإصدار.\n'))
             self.events.put(('connected', '🟢 نجح اتصال SSH وفحص الخدمات'))
         except Exception as error:
             self.events.put(('services', ({}, 'تعذر الفحص')))
             self.events.put(('connected', '🔴 تعذر الفحص: ' + str(error)))
             raise
+
+    @staticmethod
+    def next_release_version(current, tags):
+        versions = []
+        for candidate in [current or '', *[tag.removeprefix('radius-release/') for tag in tags]]:
+            match = re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', candidate)
+            if match:
+                versions.append(tuple(map(int, match.groups())))
+        if not versions:
+            return 'v1.0.0'
+        major, minor, patch = max(versions)
+        return f'v{major}.{minor}.{patch + 1}'
+
+    def suggest_release_version(self, project, key, version, changes):
+        inspect = 'sudo -n -u radiusdeploy python3 ' + legacy.HELPER + ' inspect'
+        info = json.loads(self.run([*self.ssh(key), inspect]))
+        command = "cd /tmp && sudo -n -H -u radiusdeploy git --git-dir=/srv/radius-lord/repository.git tag --list 'radius-release/*'"
+        tags = self.run([*self.ssh(key), command], timeout=15).splitlines()
+        self.events.put(('release-version', {'version': self.next_release_version(info.get('currentVersion'), tags), 'replace': True}))
 
     def transfer(self, key, local, remote, upload=False, install=False):
         if upload:
@@ -159,12 +188,10 @@ print(json.dumps({'receiver':info,'services':states}))
             result['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
         try:
             project = self.repository(project)
-            commit = self.run(['git', 'rev-parse', 'HEAD'], project)
+            commit = self.synchronized_commit(project)
             result['targetCommit'] = commit
             check('المستودع والفرع ونظافة الملفات', True)
             check('نجاح بناء هذا التعديل', self.validated == (project, commit), 'يجب بناء الباك إند والفرونت إند في جلسة الأداة الحالية')
-            remote = self.run(['git', 'remote', 'get-url', '--push', 'production'], project)
-            check('وجهة النشر المعتمدة', remote == legacy.REMOTE)
         except Exception as error:
             commit = None
             check('المشروع المحلي', False, str(error))
@@ -339,7 +366,7 @@ class Bridge(QObject):
                 self.send_event('log', 'لم يبدأ الأمر '+action+': انتظر اكتمال العملية الجارية\n')
                 self.send_event('error', 'انتظر اكتمال العملية الجارية')
                 return
-            local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings'}
+            local_actions = {'inspect','setup-scan','setup-agent-service','create-key','install-key','agent','choose-project','choose-key','save-settings','push-github','pull','build','terminal','copy-deploy-command'}
             if not self.connection_ready and action not in local_actions:
                 raise ValueError('نفّذ فحص الاتصال بنجاح أولًا لإتاحة العمليات')
             if action == 'resume-pending':
@@ -383,8 +410,16 @@ class Bridge(QObject):
             if not self.connection_ready and action not in local_actions:
                 raise ValueError('تغيّر إعداد الاتصال؛ أعد فحص الاتصال أولًا')
             args = (self.core.project.get(), self.core.key.get(), self.core.version.get(), self.core.changes.get())
+            if action == 'copy-deploy-command':
+                def prepare_command():
+                    _, command = self.core.deploy_command(args[0], args[2], args[3])
+                    self.core.events.put(('deploy-command', command))
+                self.start(action, prepare_command)
+                return
+            if action == 'push-github' and not self.confirm('الرفع إلى GitHub', 'رفع التعديلات المجهزة في Git إلى الفرع المعتمد؟'):
+                return
             actions = {'inspect': self.inspect_setup, 'terminal': self.core.terminal,
-                       'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
+                       'next-release-version': self.core.suggest_release_version, 'push-github': self.core.push_github, 'verify-release': self.core.verify_release_commit, 'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
                        'status': self.core.status, 'latest-log': self.core.latest_log,
                        'create-key': self.create_setup_key, 'install-key': self.install_setup_key,
                        'agent': self.load_setup_agent, 'backup-install': self.core.install_backup,
@@ -550,6 +585,9 @@ class Bridge(QObject):
                     remote = result.get('status')
                     status = 'succeeded' if remote == 'succeeded' else 'failed' if remote in ('failed', 'failed_rolled_back', 'recovery_required') else 'pending' if remote in ('queued', 'preflight', 'build', 'backup', 'migrate', 'activate', 'verify') else 'unknown'
                     note = 'حالة الإصدار على الخادم: ' + str(remote)
+                    if remote == 'succeeded':
+                        reader.verify_release_commit(self.core.project.get(), key, version, '')
+                        note = 'نجح النشر وتطابق commit على Windows وGitHub وUbuntu'
                 elif row['action'] == 'backup-upload' and row.get('backup_id'):
                     result = reader.rpc('list', key)
                     match = next((r for r in result['backups'] if r['id'] == row['backup_id']), None)
@@ -682,6 +720,14 @@ class Bridge(QObject):
                 if value.startswith('🔴'):
                     self.connection_ready = False
                     self.send_event('access', False)
+                self.send_event(kind, value)
+            elif kind == 'deploy-command':
+                QApplication.clipboard().setText(value)
+                self.send_event('notice', 'نُسخ أمر النشر. الصقه في الطرفية بحساب radiusdeploy.')
+            elif kind == 'release-version':
+                if value['replace'] or not self.core.version.get():
+                    self.core.version.set(value['version'])
+                    self.last_readiness = None
                 self.send_event(kind, value)
             elif kind == 'readiness':
                 self.last_readiness = value
