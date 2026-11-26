@@ -8,7 +8,26 @@ const titles={'radius-lord-backend':'الباك إند','radius-lord-frontend':'
 const stateNames={active:'يعمل',inactive:'متوقف',failed:'فشل',checking:'جارٍ الفحص',unknown:'لم يُفحص',activating:'جارٍ التشغيل',deactivating:'جارٍ الإيقاف'};
 const actionNames={'next-release-version':'اقتراح رقم الإصدار','resume-pending':'فحص حالات العمليات السابقة',readiness:'فحص جاهزية المشروع والخادم',inspect:'فحص اتصال SSH والخدمات',terminal:'فتح الطرفية',pull:'جلب تحديثات GitHub',build:'بناء المشروع',publish:'نشر على Ubuntu','push-github':'رفع إلى GitHub','copy-deploy-command':'نسخ أمر الطرفية','verify-release':'تأكيد التطابق',status:'قراءة حالة الإصدار','latest-log':'قراءة سجل النشر','backup-install':'تجهيز إدارة النسخ','backup-create':'إنشاء نسخة مشفّرة','backup-upload':'رفع النسخة','backup-download':'تنزيل النسخة','backup-review':'فحص النسخة','backup-restore':'استعادة النسخة','backup-list':'تحديث النسخ','reset-plan':'مراجعة خطة التنظيف','reset-apply':'تنفيذ تنظيف المركزية'};
 function form(){return {project:$('project').value,key:$('key').value,version:$('version').value,changes:$('changes').value};}
-function send(action,extra={}){const visible=!['copy','theme','save-log','history-list','history-log'].includes(action);if(visible)appendLog('طلب المستخدم: '+(actionNames[action]||action));if(!host){appendLog('تعذر إرسال الأمر: المحرك المحلي غير متصل');notify('الواجهة لم تتصل بالمحرك المحلي بعد',true);return;}try{host.request(action,JSON.stringify({...form(),...extra}));}catch(error){appendLog('تعذر إرسال الأمر '+action+': '+String(error));notify('تعذر إرسال الأمر؛ راجع السجل',true);}}
+function send(action,extra={}){
+ const visible=!['copy','theme','save-log','history-list','history-log'].includes(action);
+ const label=actionNames[action]||action;
+ if(visible)appendLog('طلب المستخدم: '+label);
+ if(!host){appendLog('تعذر إرسال الأمر: المحرك المحلي غير متصل');notify('الواجهة لم تتصل بالمحرك المحلي بعد',true);return;}
+ const ackTimer=setTimeout(()=>{
+  appendLog('لم يصل تأكيد استلام المحرك: '+label);
+  notify('لم يرد المحرك المحلي؛ راجع سجل الأداة قبل إعادة المحاولة',true);
+ },5000);
+ try{
+  host.request(action,JSON.stringify({...form(),...extra}),accepted=>{
+   clearTimeout(ackTimer);
+   if(accepted===false){appendLog('يوجد طلب قيد المعالجة: '+label);notify('انتظر انتهاء الطلب الحالي',true);}
+  });
+ }catch(error){
+  clearTimeout(ackTimer);
+  appendLog('تعذر إرسال الأمر '+action+': '+String(error));notify('تعذر إرسال الأمر؛ راجع السجل',true);
+ }
+}
+
 function notify(text,error=false){const el=$('notice');clearTimeout(noticeTimer);el.textContent=text;el.className='notice'+(error?' error':'');noticeTimer=setTimeout(()=>el.classList.add('hidden'),error?9000:5000);}
 function openModal(id){document.querySelectorAll('.modal').forEach(el=>el.classList.add('hidden'));$(id).classList.remove('hidden');$('modal-backdrop').classList.remove('hidden');}
 function closeModal(){document.querySelectorAll('.modal').forEach(el=>el.classList.add('hidden'));$('modal-backdrop').classList.add('hidden');}

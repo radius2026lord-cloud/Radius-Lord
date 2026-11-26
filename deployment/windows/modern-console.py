@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent
+from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent, Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QToolTip
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor, QWebEngineProfile
@@ -250,6 +250,7 @@ class LocalPage(QWebEnginePage):
 
 class Bridge(QObject):
     message = Signal(str)
+    dispatch_requested = Signal(str, str)
 
     def __init__(self, window):
         super().__init__(window)
@@ -271,6 +272,7 @@ class Bridge(QObject):
         self.active_cancel = None
         self.inspection_deadline = None
         self.request_pending = False
+        self.dispatch_requested.connect(self.dispatch_request, Qt.ConnectionType.QueuedConnection)
         self.last_progress_at = None
         self.active_label = None
         self.timer = QTimer(self)
@@ -286,7 +288,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-7'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-8'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -313,20 +315,20 @@ class Bridge(QObject):
         text, ok = QInputDialog.getText(self.window, 'تشفير النسخ', label, QLineEdit.Password)
         return text if ok else None
 
-    @Slot(str, str)
+    @Slot(str, str, result=bool)
     def request(self, action, raw):
-        # Return to WebChannel before native dialogs enter a nested event loop.
-        # Reserve dispatch immediately so rapid clicks cannot open two dialogs.
         if self.request_pending:
-            self.send_event('log', 'يوجد طلب قيد المعالجة؛ أغلق نافذة التأكيد الحالية أولًا\n')
-            return
+            return False
         self.request_pending = True
-        def dispatch():
-            try:
-                self.handle_request(action, raw)
-            finally:
-                self.request_pending = False
-        QTimer.singleShot(0, dispatch)
+        self.dispatch_requested.emit(action, raw)
+        return True
+
+    @Slot(str, str)
+    def dispatch_request(self, action, raw):
+        try:
+            self.handle_request(action, raw)
+        finally:
+            self.request_pending = False
 
     def handle_request(self, action, raw):
         try:
@@ -849,7 +851,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-7')
+        url.setQuery('revision=review-8')
         self.view.load(url)
 
     def closeEvent(self, event):
