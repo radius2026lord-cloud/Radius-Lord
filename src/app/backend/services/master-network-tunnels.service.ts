@@ -196,7 +196,7 @@ export function storedNasOvpnObservation(inventory:Awaited<ReturnType<typeof rea
  const observed=snapshot.sessions?.[sessionKey(tunnel.username,tunnel.address)];
  if(snapshot.status!=='ok')return {receivedAt:snapshot.attemptedAt,ok:false,connected:false,lastSeenAt:observed?.lastSeenAt||null};
  if(!snapshot.readAt||!observed)return null;
- return {receivedAt:snapshot.readAt,ok:true,connected:observed.connected,lastSeenAt:observed.lastSeenAt};
+ return {receivedAt:snapshot.readAt,ok:true,connected:observed.connected,lastSeenAt:observed.lastSeenAt,username:observed.connected?tunnel.username:null};
 }
 
 

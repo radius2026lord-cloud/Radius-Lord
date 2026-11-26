@@ -16,7 +16,10 @@ import {
 } from "lucide-react";
 import ProjectTooltip from "./project-tooltip";
 
+import {nasApiStatusLabel,type NasDiagnostics} from "@/lib/nas-diagnostics";
+
 type Nas = {
+  diagnostics?: NasDiagnostics;
   id: number;
   name: string;
   isEnabled?: boolean;
@@ -246,6 +249,9 @@ export default function NetworkStatusFooter({
               <i className={`h-2 w-2 rounded-full ${status.dot} ${item.status === "connected" ? "motion-safe:animate-pulse motion-reduce:animate-none" : ""}`} />
               {status.label}
             </span>
+          )}
+          {item?.diagnostics?.api && prefs.footer.showStatus && (
+            <span className="shrink-0 text-[10px] text-slate-600 dark:text-slate-300">API · {nasApiStatusLabel(item.diagnostics.api)}</span>
           )}
           {nas.length > 1 && (
             <div className="flex shrink-0 items-center gap-0.5">

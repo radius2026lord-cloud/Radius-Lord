@@ -1,3 +1,4 @@
+import {matchesNasRadiusClient} from './nas-diagnostics.service';
 import {ensureNasRadiusNoNat} from './nas-radius-no-nat.service';
 import {nasLicensePrefix,nasLicenseName,isLicenseNasName} from './nas-resource-identity.service';
 import {reserveDirectNasEndpoint} from './nas-direct-endpoint.service';
@@ -436,11 +437,7 @@ async function saveNasApiSample(app:mysql.Connection,nasId:number,port:number,sa
     stateMap[key]='baseline';continue;
    }
    const increased=(name:string)=>client[name]!=null&&old[name]!=null&&Number.isFinite(Number(client[name]))&&Number.isFinite(Number(old[name]))&&Number(client[name])>Number(old[name]);
-   const standardPorts=Number(client.authenticationPort)===1812&&Number(client.accountingPort)===1813;
-   const environmentPorts=Number(client.authenticationPort)===Number(config.authPort)&&Number(client.accountingPort)===Number(config.accountingPort);
-   const ovpn=config.connectionMode!=='direct';
-   const ownRadius=(client.address===config.radiusAddress&&(environmentPorts||ovpn&&standardPorts))
-    ||(ovpn&&client.address===config.serverAddress&&standardPorts);
+   const ownRadius=matchesNasRadiusClient(client,config,config.connectionMode==='direct');
 
    if(increased('badReplies')){
     if(ownRadius)observedRadiusState='bad_reply';

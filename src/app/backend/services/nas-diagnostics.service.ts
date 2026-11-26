@@ -1,5 +1,13 @@
 import {currentNasSignal,type NasDiagnostics,type NasDiagnosticSignal,type NasDiagnosticState} from '../shared/nas-diagnostics';
 
+export function matchesNasRadiusClient(client:any,config:any,direct:boolean){
+ const auth=Number(client.authenticationPort),acct=Number(client.accountingPort);
+ const standard=auth===1812&&acct===1813;
+ const environment=auth===Number(config.authPort)&&acct===Number(config.accountingPort);
+ return (client.address===config.radiusAddress&&(environment||!direct&&standard))
+  ||(!direct&&Boolean(config.serverAddress)&&client.address===config.serverAddress&&standard);
+}
+
 function iso(value:unknown):string|null{const time=value?new Date(value as string|Date).getTime():NaN;return Number.isFinite(time)?new Date(time).toISOString():null;}
 export function buildNasDiagnostics(row:any,config:any,snapshot:any,direct:boolean,now=Date.now()):NasDiagnostics{
  const signal=(state:NasDiagnosticState,reason:string,checked:unknown,lastSuccess:unknown,ttl:number):NasDiagnosticSignal=>{
@@ -14,7 +22,7 @@ export function buildNasDiagnostics(row:any,config:any,snapshot:any,direct:boole
  const apiSignal=!enabled||!apiEnabled?signal('disabled','api_disabled',api?.receivedAt,config.apiLastSuccessAt,360000):
   signal(!api?'unknown':api.ok?'ok':'failed',!api?'api_not_checked':api.ok?'api_connected':String(api.code||'api_failed'),api?.receivedAt,config.apiLastSuccessAt||(api?.ok?api.receivedAt:null),360000);
  const sample=config.telemetryLatest,clients=sample?.radiusClients?.clients;
- const own=Array.isArray(clients)?clients.filter((client:any)=>client.address===config.radiusAddress&&Number(client.authenticationPort)===Number(config.authPort)&&Number(client.accountingPort)===Number(config.accountingPort)):[];
+ const own=Array.isArray(clients)?clients.filter((client:any)=>matchesNasRadiusClient(client,config,direct)):[];
  const evidence=config.radiusResponseHealth;
  let radiusSignal:NasDiagnosticSignal;
  if(!enabled)radiusSignal=signal('disabled','nas_disabled',evidence?.receivedAt,config.radiusLastResponseAt,360000);
