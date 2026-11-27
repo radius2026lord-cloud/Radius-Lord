@@ -642,38 +642,43 @@ class Bridge(QObject):
                 save_result('succeeded', 'اكتمل الإجراء في الأداة')
                 self.core.events.put(('log', 'نجحت العملية: ' + label + '\n'))
                 message = 'اكتملت معاينة النشر؛ راجع تفاصيل الجاهزية' if label == 'readiness' else 'اكتملت العملية'
-                self.core.events.put(('notice', message))
+                self.core.events.put(('done', {'ok': True, 'message': message}))
             except Exception as error:
-                save_result('unknown' if label in WRITE_ACTIONS and self.core.write_started else 'failed', str(error))
+                uncertain = label in WRITE_ACTIONS and self.core.write_started
+                save_result('unknown' if uncertain else 'failed', str(error))
                 diagnostic = diagnose(str(error))
                 if diagnostic:
                     self.core.events.put(('diagnostic', diagnostic))
-                self.core.events.put(('log', 'فشلت العملية: ' + label + ' — ' + str(error) + '\n'))
-                self.core.events.put(('error', str(error)))
-            finally:
-                try:
-                    self.core.events.put(('history', self.history.rows()))
-                except Exception:
-                    self.core.events.put(('log', 'تعذر تحديث سجل العمليات المحلي\n'))
-                self.core.events.put(('done', None))
-        threading.Thread(target=work, daemon=True).start()
+                message = redact(str(error))
+                self.core.events.put(('log', 'فشلت العملية: ' + label + ' — ' + message + '\n'))
+                self.core.events.put(('done', {'ok': False, 'message': message, 'uncertain': uncertain}))
+        try:
+            threading.Thread(target=work, daemon=True).start()
+        except RuntimeError as error:
+            self.finish_operation({'ok': False, 'message': redact(str(error))})
+
+    def finish_operation(self, result):
+        self.inspection_deadline = None
+        self.active_job_id = None
+        self.active_cancel = None
+        self.core.current_job_id = None
+        self.active_label = None
+        self.last_progress_at = None
+        self.busy = False
+        self.send_event('operation-finished', result)
+        self.refresh_history()
 
     def check_inspection_deadline(self):
         if not self.inspection_deadline or time.monotonic() < self.inspection_deadline:
             return
         identifier = self.active_job_id
-        self.inspection_deadline = None
         self.active_cancel.set()
-        self.active_job_id = None
-        self.core.current_job_id = None
-        self.busy = False
         self.connection_ready = False
         self.send_event('access', False)
         self.send_event('services', ({}, 'انتهت مهلة الفحص'))
         self.send_event('connected', '🔴 انتهت المهلة الكلية للفحص؛ يمكنك المحاولة مجددًا')
-        self.send_event('busy', {'active': False})
         self.send_event('log', 'فشلت العملية: inspect — تجاوز الفحص مهلة 55 ثانية.\n')
-        self.send_event('error', 'توقف انتظار الفحص بعد 55 ثانية؛ لم تُكرّر أي عملية على الخادم')
+        self.finish_operation({'ok': False, 'message': 'تجاوز فحص الاتصال مهلة 55 ثانية.'})
         def record_timeout():
             try:
                 self.history.finish(identifier, 'failed', 'تجاوز الفحص مهلة 55 ثانية')
@@ -717,12 +722,7 @@ class Bridge(QObject):
                 except Exception:
                     self.send_event('error', 'تعذر حفظ جزء من السجل المحلي؛ تحقق من مساحة القرص')
             if kind == 'done':
-                self.inspection_deadline = None
-                self.active_job_id = None
-                self.core.current_job_id = None
-                self.busy = False
-                self.send_event('busy', {'active': False})
-                self.send_event('access', self.connection_ready)
+                self.finish_operation(value)
             elif kind == 'access':
                 self.connection_ready = bool(value)
                 self.send_event(kind, self.connection_ready)
@@ -902,8 +902,11 @@ class Window(QMainWindow):
     @Slot(str)
     def show_native_event(self, raw):
         event = json.loads(raw)
-        if event['kind'] in ('log', 'error', 'notice'):
-            value = str(event['value']).strip()
+        if event['kind'] in ('log', 'error', 'notice', 'operation-finished'):
+            value = event['value']
+            if event['kind'] == 'operation-finished':
+                value = ('نجحت العملية · ' if value['ok'] else 'فشلت العملية · ') + value['message']
+            value = str(value).strip()
             if value:
                 self.native_log.appendPlainText(f'[{dt.datetime.now():%H:%M:%S}] {value}')
 
