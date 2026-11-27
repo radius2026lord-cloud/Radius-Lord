@@ -754,12 +754,23 @@ git -C "$stage" push "$repo" "$ref"
             time.sleep(10)
         raise RuntimeError('انتهت مدة المتابعة؛ لا تعِد الرفع، تحقق من الحالة لاحقًا')
 
-    def verify_release_commit(self, project, key, version, changes):
+    def verify_deployed_application(self, project, key, version, changes):
+        return self.verify_release_commit(project, key, version, changes, allow_desktop_difference=True)
+
+    def verify_release_commit(self, project, key, version, changes, allow_desktop_difference=False):
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
             raise RuntimeError('رقم الإصدار غير صالح')
         project = self.repository(project)
         commit = self.synchronized_commit(project)
         health = json.loads(self.run([*self.ssh(key), 'curl -fsS --max-time 10 http://127.0.0.1:4001/release-health']))
+        running = health.get('commit')
+        if (allow_desktop_difference and health.get('ok') is True
+                and isinstance(running, str) and re.fullmatch(r'[a-f0-9]{40}', running)
+                and running != commit):
+            differences = self.run(['git', 'diff', '--name-only', '--no-renames', running, commit, '--'], project)
+            if differences and all(path.startswith('deployment/windows/') for path in differences.splitlines()):
+                self.events.put(('log', f'ملفات التطبيق متطابقة. فرق Windows وGitHub عند {commit} عن Ubuntu عند {running} يخص أداة النشر فقط؛ لا يلزم إصدار خادم جديد.\n'))
+                return
         if health.get('ok') is not True or health.get('version') != version or health.get('commit') != commit:
             raise RuntimeError(f'المتوقع {version} / {commit} — الخادم {health.get("version")} / {health.get("commit")}')
         status = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' status ' + version]))

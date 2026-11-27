@@ -417,7 +417,7 @@ class Bridge(QObject):
                 self.send_event('log', 'أُلغي الرفع إلى GitHub.\n')
                 return
             actions = {'github-login': self.core.login_github, 'github-check': self.core.check_github, 'inspect': self.inspect_setup, 'terminal': self.core.terminal,
-                       'next-release-version': self.core.suggest_release_version, 'push-github': self.core.push_github, 'verify-release': self.core.verify_release_commit, 'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
+                       'next-release-version': self.core.suggest_release_version, 'push-github': self.core.push_github, 'verify-release': self.core.verify_deployed_application, 'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
                        'status': self.core.status, 'latest-log': self.core.latest_log,
                        'create-key': self.create_setup_key, 'install-key': self.install_setup_key,
                        'agent': self.load_setup_agent, 'backup-install': self.core.install_backup,
