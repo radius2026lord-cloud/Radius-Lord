@@ -257,7 +257,6 @@ class Bridge(QObject):
         self.core = Operations()
         self.history = History(legacy.PREFERENCES.parent / 'history')
         self.startup_checked = False
-        self.followup_after_connect = True
         self.busy = False
         self.review = None
         self.reset_review = None
@@ -287,7 +286,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-14'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-15'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -555,24 +554,11 @@ class Bridge(QObject):
             self.setup_state = state
             self.core.events.put(('setup', state))
 
-    def resume_startup(self):
-        if not self.busy:
-            reader = Operations()
-            reader.key.set(self.core.key.get())
-            def followup():
-                try:
-                    self.resume_pending(reader)
-                except Exception as error:
-                    self.core.events.put(('log', 'تعذرت متابعة السجل السابق: ' + str(error) + '\n'))
-            threading.Thread(target=followup, daemon=True).start()
-
-    def resume_pending(self, reader=None):
-        reader = reader or self.core
-        background = reader is not self.core
+    def resume_pending(self):
+        reader = self.core
         key = reader.key.get()
         for row in self.history.pending():
-            if not background:
-                self.core.events.put(('state', 'قراءة حالة العملية السابقة: ' + row['action']))
+            self.core.events.put(('state', 'قراءة حالة العملية السابقة: ' + row['action']))
             self.core.events.put(('log', 'متابعة للقراءة فقط: ' + row['action'] + ' / ' + row['id'] + '\n'))
             try:
                 if row['action'] == 'publish':
@@ -724,9 +710,6 @@ class Bridge(QObject):
                 self.busy = False
                 self.send_event('busy', {'active': False})
                 self.send_event('access', self.connection_ready)
-                if self.connection_ready and self.followup_after_connect:
-                    self.followup_after_connect = False
-                    QTimer.singleShot(300, self.resume_startup)
             elif kind == 'access':
                 self.connection_ready = bool(value)
                 self.send_event(kind, self.connection_ready)
@@ -877,7 +860,7 @@ class Window(QMainWindow):
         self.native_log = QPlainTextEdit(self)
         self.native_log.setReadOnly(True)
         self.native_log.setMaximumBlockCount(1500)
-        dock = QDockWidget('سجل عمليات GitHub · review-14', self)
+        dock = QDockWidget('سجل عمليات GitHub · review-15', self)
         dock.setWidget(self.native_log)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
         self.native_log_dock = dock
@@ -887,7 +870,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-14')
+        url.setQuery('revision=review-15')
         self.view.load(url)
 
     def run_github_action(self, action, operation):
@@ -898,7 +881,10 @@ class Window(QMainWindow):
         core = self.bridge.core
         project = core.project.get()
         self.native_log.appendPlainText(f'[{dt.datetime.now():%H:%M:%S}] {action} · {project}')
-        self.bridge.start(action, lambda: operation(project, '', '', ''))
+        try:
+            self.bridge.start(action, lambda: operation(project, '', '', ''))
+        except Exception as error:
+            self.native_log.appendPlainText('تعذر بدء العملية: ' + redact(str(error)))
 
     @Slot(str)
     def show_native_event(self, raw):
