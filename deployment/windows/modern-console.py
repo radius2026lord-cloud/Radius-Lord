@@ -274,9 +274,7 @@ class Bridge(QObject):
         self.request_inbox = queue.Queue(maxsize=1)
         self.last_progress_at = None
         self.active_label = None
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.drain)
-        self.timer.start(80)
+        self.processing_events = False
 
     def send_event(self, kind, value):
         self.message.emit(json.dumps({'kind': kind, 'value': value}, ensure_ascii=False))
@@ -287,7 +285,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-11'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-12'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -684,7 +682,21 @@ class Bridge(QObject):
                 pass
         threading.Thread(target=record_timeout, daemon=True).start()
 
-    @Slot()
+    @Slot(result=bool)
+    def processEvents(self):
+        if self.processing_events:
+            return False
+        self.processing_events = True
+        try:
+            self.drain()
+        except Exception as error:
+            self.send_event('log', 'فشلت معالجة أحداث الأداة: ' + redact(str(error)) + '\n')
+            self.send_event('error', 'تعذر تحديث سجل الأداة؛ راجع آخر رسالة.')
+            return False
+        finally:
+            self.processing_events = False
+        return True
+
     def drain(self):
         self.check_inspection_deadline()
         try:
@@ -864,7 +876,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-11')
+        url.setQuery('revision=review-12')
         self.view.load(url)
 
     def closeEvent(self, event):

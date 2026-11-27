@@ -87,7 +87,15 @@ $('theme').addEventListener('click',()=>{const dark=document.body.classList.togg
 // No browser/native title tooltips; Arabic hints are rendered by CSS.
 document.querySelectorAll('[title]').forEach(el=>el.removeAttribute('title'));
 renderSetup();applyAccess();
-if(typeof qt!=='undefined'&&typeof QWebChannel!=='undefined'){new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.host;if(!bridge||typeof bridge.submitAction!=='function'){appendLog('فشل الربط: واجهة الويب ومحرك Python من نسختين مختلفتين');notify('أغلق الأداة وأعد تشغيلها من مجلد المشروع المحدّث',true);return;}host=bridge;host.message.connect(receive);host.ready();});}else{notify('افتح الواجهة من مشغل Radius Lord لربطها بمحرك Python المحلي',true);}
+if(typeof qt!=='undefined'&&typeof QWebChannel!=='undefined'){new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.host;if(!bridge||(typeof bridge.submitAction!=='function'||typeof bridge.processEvents!=='function')){appendLog('فشل الربط: واجهة الويب ومحرك Python من نسختين مختلفتين');notify('أغلق الأداة وأعد تشغيلها من مجلد المشروع المحدّث',true);return;}host=bridge;host.message.connect(receive);
+ let processing=false;
+ setInterval(()=>{
+  if(processing)return;
+  processing=true;
+  try{host.processEvents(()=>{processing=false;});}
+  catch(error){processing=false;console.error('تعذر قراءة أحداث المحرك',error);}
+ },150);
+ host.ready();});}else{notify('افتح الواجهة من مشغل Radius Lord لربطها بمحرك Python المحلي',true);}
 
 $('readiness-details').addEventListener('click',showReadiness);
 $('dismiss-diagnostic').addEventListener('click',()=>$('diagnostic').classList.add('hidden'));
