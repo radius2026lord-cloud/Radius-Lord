@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent, Qt
+from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent
 from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QToolTip
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor, QWebEngineProfile
@@ -250,7 +250,6 @@ class LocalPage(QWebEnginePage):
 
 class Bridge(QObject):
     message = Signal(str)
-    dispatch_requested = Signal(str, str)
 
     def __init__(self, window):
         super().__init__(window)
@@ -272,7 +271,7 @@ class Bridge(QObject):
         self.active_cancel = None
         self.inspection_deadline = None
         self.request_pending = False
-        self.dispatch_requested.connect(self.dispatch_request, Qt.ConnectionType.QueuedConnection)
+        self.request_inbox = queue.Queue(maxsize=1)
         self.last_progress_at = None
         self.active_label = None
         self.timer = QTimer(self)
@@ -288,7 +287,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-10'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-11'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -320,15 +319,8 @@ class Bridge(QObject):
         if self.request_pending:
             return False
         self.request_pending = True
-        self.dispatch_requested.emit(action, raw)
+        self.request_inbox.put_nowait((action, raw))
         return True
-
-    @Slot(str, str)
-    def dispatch_request(self, action, raw):
-        try:
-            self.handle_request(action, raw)
-        finally:
-            self.request_pending = False
 
     def handle_request(self, action, raw):
         try:
@@ -421,10 +413,11 @@ class Bridge(QObject):
             if action == 'push-github' and not self.confirm('الرفع إلى GitHub', 'رفع التعديلات المجهزة في Git إلى الفرع المعتمد؟'):
                 self.send_event('log', 'أُلغي الرفع إلى GitHub.\n')
                 return
-            if action == 'github-login' and not self.confirm(
-                    'تسجيل دخول GitHub', 'فتح تسجيل الدخول وربط GitHub CLI بمصادقة Git عبر HTTPS لهذا المستخدم؟'):
-                self.send_event('log', 'أُلغي تسجيل دخول GitHub.\n')
-                return
+            if action == 'github-login':
+                self.send_event('log', 'GitHub · فتح نافذة التأكيد.\n')
+                if not self.confirm('تسجيل دخول GitHub', 'فتح تسجيل الدخول وربط GitHub CLI بمصادقة Git عبر HTTPS لهذا المستخدم؟'):
+                    self.send_event('log', 'أُلغي تسجيل دخول GitHub.\n')
+                    return
             actions = {'github-login': self.core.login_github, 'github-check': self.core.check_github, 'inspect': self.inspect_setup, 'terminal': self.core.terminal,
                        'next-release-version': self.core.suggest_release_version, 'push-github': self.core.push_github, 'verify-release': self.core.verify_release_commit, 'pull': self.core.pull, 'build': self.core.build, 'publish': self.publish_checked, 'readiness': self.core.readiness,
                        'status': self.core.status, 'latest-log': self.core.latest_log,
@@ -694,6 +687,16 @@ class Bridge(QObject):
     @Slot()
     def drain(self):
         self.check_inspection_deadline()
+        try:
+            action, raw = self.request_inbox.get_nowait()
+        except queue.Empty:
+            pass
+        else:
+            try:
+                self.send_event('dispatch', action)
+                self.handle_request(action, raw)
+            finally:
+                self.request_pending = False
         if self.busy and self.last_progress_at and time.monotonic() - self.last_progress_at >= 15:
             self.last_progress_at = time.monotonic()
             self.send_event('log', 'ما زالت العملية قيد الانتظار: ' + str(self.active_label) + '؛ لم تُكرر الأداة الطلب.\n')
@@ -861,7 +864,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-10')
+        url.setQuery('revision=review-11')
         self.view.load(url)
 
     def closeEvent(self, event):
