@@ -597,8 +597,8 @@ class Console:
         cli = shutil.which('gh')
         if not cli:
             raise RuntimeError('ثبّت GitHub CLI بالأمر winget install --id GitHub.cli -e ثم أعد فتح الأداة')
-        self.events.put(('log', 'GitHub · أكمل الدخول في المتصفح ثم أغلق نافذة GitHub CLI للمتابعة.\n'))
-        self.run([cli, 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'],
+        self.events.put(('log', 'GitHub · أكمل الدخول في المتصفح ثم اضغط Enter في نافذة GitHub CLI بعد اكتمال الدخول.\n'))
+        self.run([cli, 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web', '--clipboard'],
                  console=True)
         self.events.put(('log', 'GitHub · ربط مصادقة Git عبر HTTPS بالحساب.\n'))
         self.run([cli, 'auth', 'setup-git', '--hostname', 'github.com'], timeout=30)
