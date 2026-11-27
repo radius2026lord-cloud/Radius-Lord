@@ -15,8 +15,8 @@ import threading
 import time
 import uuid
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent
-from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QToolTip
+from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot, QEvent, Qt
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QToolTip, QDockWidget, QPlainTextEdit
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -287,7 +287,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-13'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-14'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -863,12 +863,50 @@ class Window(QMainWindow):
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
         settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
         self.bridge = Bridge(self)
+        toolbar = self.addToolBar('GitHub')
+        toolbar.setMovable(False)
+        operations = (
+            ('فحص GitHub', 'github-check', self.bridge.core.check_github),
+            ('دخول GitHub بالمتصفح', 'github-login', self.bridge.core.login_github),
+            ('جلب التحديثات', 'pull', self.bridge.core.pull),
+        )
+        for title, label, operation in operations:
+            action = toolbar.addAction(title)
+            action.triggered.connect(
+                lambda checked=False, name=label, run=operation: self.run_github_action(name, run))
+        self.native_log = QPlainTextEdit(self)
+        self.native_log.setReadOnly(True)
+        self.native_log.setMaximumBlockCount(1500)
+        dock = QDockWidget('سجل عمليات GitHub · review-14', self)
+        dock.setWidget(self.native_log)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+        self.native_log_dock = dock
+        dock.hide()
+        self.bridge.message.connect(self.show_native_event)
         self.channel = QWebChannel(self.page)
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-13')
+        url.setQuery('revision=review-14')
         self.view.load(url)
+
+    def run_github_action(self, action, operation):
+        self.native_log_dock.show()
+        if self.bridge.busy:
+            self.native_log.appendPlainText('انتظر انتهاء العملية الجارية.')
+            return
+        core = self.bridge.core
+        project = core.project.get()
+        self.native_log.appendPlainText(f'[{dt.datetime.now():%H:%M:%S}] {action} · {project}')
+        self.bridge.start(action, lambda: operation(project, '', '', ''))
+
+    @Slot(str)
+    def show_native_event(self, raw):
+        event = json.loads(raw)
+        if event['kind'] in ('log', 'error', 'notice'):
+            value = str(event['value']).strip()
+            if value:
+                self.native_log.appendPlainText(f'[{dt.datetime.now():%H:%M:%S}] {value}')
 
     def closeEvent(self, event):
         if self.bridge.busy:
