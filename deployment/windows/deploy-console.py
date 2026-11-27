@@ -632,11 +632,14 @@ class Console:
             raise RuntimeError('تعذر تحديد commit الفرع على GitHub')
         return fields[0]
 
-    def synchronized_commit(self, project):
+    def synchronized_commit(self, project, report=False):
         local = self.run(['git', 'rev-parse', 'HEAD'], project)
         remote = self.github_head(project)
+        if report or local != remote:
+            self.events.put(('log', f'Windows المحلي · {local}\n'))
+            self.events.put(('log', f'GitHub · {remote}\n'))
         if local != remote:
-            raise RuntimeError(f'Windows: {local} — GitHub: {remote}')
+            raise RuntimeError('توقف التحقق: نسخة Windows تختلف عن الفرع المعتمد على GitHub')
         return local
 
     def push_github(self, project, key, version, changes):
@@ -683,7 +686,7 @@ class Console:
 
     def deploy_command(self, project, version, changes):
         project = self.repository(project)
-        commit = self.synchronized_commit(project)
+        commit = self.synchronized_commit(project, report=True)
         if self.validated != (project, commit):
             raise RuntimeError('ابنِ هذا الإصدار بنجاح من الأداة أولًا')
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version) or not 0 < len(changes.strip()) <= 4000:
@@ -699,6 +702,7 @@ commit=$2
 if git --git-dir="$repo" show-ref --verify --quiet "$ref"; then
     actual=$(git --git-dir="$repo" rev-parse "$ref^{commit}")
     test "$actual" = "$commit" || { echo "Expected $commit; existing tag points to $actual" >&2; exit 1; }
+    printf 'Ubuntu (existing release tag): %s\\n' "$actual"
     echo 'Release already received'
     exit 0
 fi
@@ -708,7 +712,18 @@ trap 'rm -rf -- "$stage"' EXIT
 git clone --bare --shared "$repo" "$stage"
 GIT_TERMINAL_PROMPT=0 git -C "$stage" fetch --no-tags https://github.com/radius2026lord-cloud/Radius-Lord.git "$4"
 actual=$(git -C "$stage" rev-parse FETCH_HEAD)
-test "$actual" = "$commit" || { echo "Expected $commit; GitHub returned $actual" >&2; exit 1; }
+printf 'Ubuntu (fetched commit): %s\\n' "$actual"
+test "$actual" = "$commit" || { echo "Deployment blocked: expected $commit, fetched $actual" >&2; exit 1; }
+if test -f "$root/current/release.json"; then
+    running=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$root/current/release.json")
+    if git -C "$stage" diff --quiet --no-renames "$running" "$commit" -- . ':(exclude)deployment/windows/**'; then
+        echo 'Deployment blocked: application files already match Ubuntu.' >&2
+        exit 1
+    else
+        test "$?" -eq 1
+    fi
+fi
+printf 'Commit match confirmed: Windows, GitHub, Ubuntu\\n'
 git -C "$stage" -c user.name='Lord Radius Deploy' -c user.email=radiusdeploy@localhost tag -a "${ref#refs/tags/}" "$commit" -m "$3"
 git -C "$stage" push "$repo" "$ref"
 """
@@ -761,22 +776,23 @@ git -C "$stage" push "$repo" "$ref"
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
             raise RuntimeError('رقم الإصدار غير صالح')
         project = self.repository(project)
-        commit = self.synchronized_commit(project)
+        commit = self.synchronized_commit(project, report=True)
         health = json.loads(self.run([*self.ssh(key), 'curl -fsS --max-time 10 http://127.0.0.1:4001/release-health']))
         running = health.get('commit')
+        self.events.put(('log', f'Ubuntu · الإصدار المشغّل {health.get("version")} · {running}\n'))
         if (allow_desktop_difference and health.get('ok') is True
                 and isinstance(running, str) and re.fullmatch(r'[a-f0-9]{40}', running)
                 and running != commit):
             differences = self.run(['git', 'diff', '--name-only', '--no-renames', running, commit, '--'], project)
             if differences and all(path.startswith('deployment/windows/') for path in differences.splitlines()):
-                self.events.put(('log', f'ملفات التطبيق متطابقة. فرق Windows وGitHub عند {commit} عن Ubuntu عند {running} يخص أداة النشر فقط؛ لا يلزم إصدار خادم جديد.\n'))
+                self.events.put(('log', 'ملفات التطبيق متطابقة. الفرق يخص أداة النشر على Windows فقط. لا يلزم إصدار جديد للخادم.\n'))
                 return
         if health.get('ok') is not True or health.get('version') != version or health.get('commit') != commit:
             raise RuntimeError(f'المتوقع {version} / {commit} — الخادم {health.get("version")} / {health.get("commit")}')
         status = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' status ' + version]))
         if status.get('status') != 'succeeded' or status.get('commit') != commit:
             raise RuntimeError('لم يؤكد عامل النشر نجاح هذا الإصدار')
-        self.events.put(('log', 'تطابق Windows وGitHub وUbuntu عند ' + commit + '\n'))
+        self.events.put(('log', 'نجح التحقق من الإصدار المشغّل: الـ commit متطابق على الجهات الثلاث.\n'))
 
     def status(self, project, key, version, changes):
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):

@@ -183,7 +183,7 @@ print(json.dumps({'receiver':info,'services':states}))
 
     def readiness(self, project, key, version, changes):
         result = {'ready': False, 'checks': [], 'targetVersion': version, 'targetCommit': None,
-                  'currentVersion': None, 'currentCommit': None, 'host': None}
+                  'currentVersion': None, 'currentCommit': None, 'host': None, 'preview': None}
         def check(name, ok, detail=''):
             result['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
         try:
@@ -191,15 +191,30 @@ print(json.dumps({'receiver':info,'services':states}))
             commit = self.synchronized_commit(project)
             result['targetCommit'] = commit
             check('المستودع والفرع ونظافة الملفات', True)
-            check('نجاح بناء هذا التعديل', self.validated == (project, commit), 'يجب بناء الباك إند والفرونت إند في جلسة الأداة الحالية')
         except Exception as error:
             commit = None
             check('المشروع المحلي', False, str(error))
         valid_version = bool(re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version))
-        check('رقم الإصدار ووصف التغييرات', valid_version and 0 < len(changes) <= 4000, 'مثل v1.0.4 مع وصف للتغيير')
         try:
             info = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + legacy.HELPER + ' inspect']))
             result.update(currentVersion=info.get('currentVersion'), currentCommit=info.get('currentCommit'))
+            if commit:
+                previous = result['currentCommit']
+                paths = self.run(['git', 'diff', '--name-only', '--no-renames', previous, commit, '--'], project).splitlines() if previous else self.run(['git', 'ls-tree', '-r', '--name-only', commit], project).splitlines()
+                sql = [path for path in paths if path.endswith('.sql') or '/migrations/' in path]
+                scope = ('initial' if not previous else 'unchanged' if not paths else
+                         'desktop' if all(path.startswith('deployment/windows/') for path in paths) else 'application')
+                result['preview'] = {'scope': scope, 'count': len(paths), 'sqlCount': len(sql), 'paths': paths[:60]}
+                if scope in ('desktop', 'unchanged'):
+                    message = ('تحديث أداة Windows فقط. لا يلزم نشر على Ubuntu.' if scope == 'desktop'
+                               else 'ملفات التطبيق مطابقة لما يعمل على Ubuntu.')
+                    self.events.put(('log', message + '\n'))
+                    result['checkedAt'] = dt.datetime.now().isoformat(timespec='seconds')
+                    self.events.put(('readiness', result))
+                    return result
+            if commit:
+                check('نجاح بناء هذا التعديل', self.validated == (project, commit), 'يجب بناء الباك إند والفرونت إند في جلسة الأداة الحالية')
+            check('رقم الإصدار ووصف التغييرات', valid_version and 0 < len(changes) <= 4000, 'مثل v1.0.4 مع وصف للتغيير')
             for item in info.get('checks', []):
                 check(item['name'], item['ok'])
             check('عامل النشر جاهز', info.get('ready') is True)
@@ -217,10 +232,7 @@ print(json.dumps({'receiver':info,'services':states}))
                 except (ValueError, AttributeError):
                     newer = False
                 check('الإصدار الجديد أحدث من الجاري', newer)
-            if commit:
-                previous = info.get('currentCommit')
-                paths = self.run(['git', 'diff', '--name-only', previous, commit], project).splitlines() if previous else self.run(['git', 'ls-tree', '-r', '--name-only', commit], project).splitlines()
-                sql = [path for path in paths if path.endswith('.sql') or '/migrations/' in path]
+            if result['preview']:
                 check('متطلبات ترحيل قواعد البيانات', not sql or info.get('migrationReady') is True,
                       'لا توجد تغييرات SQL' if not sql else 'تغييرات SQL: %d؛ يجب أن يراجعها عامل الترحيل المعتمد' % len(sql))
         except Exception as error:
@@ -622,13 +634,14 @@ class Bridge(QObject):
                         raise RuntimeError('تعذر تسجيل عملية الكتابة محليًا؛ تحقق من السجل قبل التنفيذ') from error
                     self.core.events.put(('log', 'تعذر بدء سجل محلي؛ يستمر الفحص للقراءة فقط: ' + type(error).__name__ + '\n'))
                 result = function()
-                if label == 'readiness' and not result.get('ready'):
+                if (label == 'readiness' and not result.get('ready')
+                        and (result.get('preview') or {}).get('scope') not in ('desktop', 'unchanged')):
                     raise RuntimeError('فشل فحص الجاهزية؛ راجع البنود المعروضة')
                 if cancel.is_set():
                     raise TimeoutError('تجاوز الفحص مدته الكلية')
                 save_result('succeeded', 'اكتمل الإجراء في الأداة')
                 self.core.events.put(('log', 'نجحت العملية: ' + label + '\n'))
-                message = 'راجع نتيجة الجاهزية، ثم اضغط رفع الإصدار عندما تكون جاهزًا' if label == 'readiness' else 'اكتملت العملية'
+                message = 'اكتملت معاينة النشر؛ راجع تفاصيل الجاهزية' if label == 'readiness' else 'اكتملت العملية'
                 self.core.events.put(('notice', message))
             except Exception as error:
                 save_result('unknown' if label in WRITE_ACTIONS and self.core.write_started else 'failed', str(error))
