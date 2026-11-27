@@ -567,6 +567,26 @@ class Console:
             raise
 
 
+    @staticmethod
+    def github_cli():
+        executable = shutil.which('gh')
+        if executable or os.name != 'nt':
+            return executable
+        locations = (
+            ('ProgramW6432', 'GitHub CLI', 'gh.exe'),
+            ('ProgramFiles', 'GitHub CLI', 'gh.exe'),
+            ('ProgramFiles(x86)', 'GitHub CLI', 'gh.exe'),
+            ('LOCALAPPDATA', 'Programs', 'GitHub CLI', 'gh.exe'),
+            ('LOCALAPPDATA', 'Microsoft', 'WinGet', 'Links', 'gh.exe'),
+        )
+        for variable, *parts in locations:
+            base = os.environ.get(variable)
+            if base:
+                path = pathlib.Path(base).joinpath(*parts)
+                if path.is_file():
+                    return str(path)
+        return None
+
     def github_environment(self):
         return {**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never'}
 
@@ -574,7 +594,7 @@ class Console:
         project = self.repository(project, require_clean=False)
         self.events.put(('log', 'GitHub · فحص قراءة الفرع المعتمد.\n'))
         self.events.put(('log', 'GitHub · commit الفرع: ' + self.github_head(project) + '\n'))
-        cli = shutil.which('gh')
+        cli = self.github_cli()
         if not cli:
             self.events.put(('log', 'القراءة متاحة. ثبّت GitHub CLI لتسجيل الدخول وفحص صلاحية الكتابة.\n'))
             return
@@ -594,9 +614,10 @@ class Console:
 
     def login_github(self, project, key, version, changes):
         project = self.repository(project, require_clean=False)
-        cli = shutil.which('gh')
+        cli = self.github_cli()
         if not cli:
-            raise RuntimeError('ثبّت GitHub CLI بالأمر winget install --id GitHub.cli -e ثم أعد فتح الأداة')
+            raise RuntimeError('لم يُعثر على gh.exe في PATH أو مسارات التثبيت المعتادة. تحقق من مساره في PowerShell')
+        self.events.put(('log', 'GitHub CLI · ' + cli + '\n'))
         self.events.put(('log', 'GitHub · أكمل الدخول في المتصفح ثم اضغط Enter في نافذة GitHub CLI بعد اكتمال الدخول.\n'))
         self.run([cli, 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web', '--clipboard'],
                  console=True)

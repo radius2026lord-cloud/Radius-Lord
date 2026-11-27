@@ -286,7 +286,7 @@ class Bridge(QObject):
         # requests the normal guarded inspection slot; startup errors stay visible.
         self.send_event('init', {'host': legacy.HOST, 'port': legacy.PORT, 'user': legacy.USER,
                           'branch': legacy.BRANCH, 'project': self.core.project.get(), 'key': self.core.key.get(),
-                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-15'})
+                          'version': self.core.version.get(), 'dark': self.core.dark, 'desktopRevision': 'review-16'})
         self.send_event('access', self.connection_ready)
         if not self.startup_checked:
             self.startup_checked = True
@@ -860,7 +860,7 @@ class Window(QMainWindow):
         self.native_log = QPlainTextEdit(self)
         self.native_log.setReadOnly(True)
         self.native_log.setMaximumBlockCount(1500)
-        dock = QDockWidget('سجل عمليات GitHub · review-15', self)
+        dock = QDockWidget('سجل عمليات GitHub · review-16', self)
         dock.setWidget(self.native_log)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
         self.native_log_dock = dock
@@ -870,7 +870,7 @@ class Window(QMainWindow):
         self.channel.registerObject('host', self.bridge)
         self.page.setWebChannel(self.channel)
         url = QUrl.fromLocalFile(str(HERE / 'web/index.html'))
-        url.setQuery('revision=review-15')
+        url.setQuery('revision=review-16')
         self.view.load(url)
 
     def run_github_action(self, action, operation):
