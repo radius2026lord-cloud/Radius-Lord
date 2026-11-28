@@ -50,6 +50,10 @@ class TrackedQueue(queue.Queue):
         return super().put((*item, identifier), *args, **kwargs)
 
 
+def readiness_failures(result):
+    return '، '.join(item['name'] for item in result['checks'] if not item['ok']) or 'لم تكتمل الفحوص'
+
+
 class Operations(legacy.Console):
     """No Tk window: inherit only the established SSH/Git/backup operations."""
     def __init__(self):
@@ -220,7 +224,7 @@ print(json.dumps({'receiver':info,'services':states}))
             result['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
         try:
             project = self.repository(project)
-            commit = self.synchronized_commit(project)
+            commit = self.synchronized_commit(project, report=True)
             result['targetCommit'] = commit
             check('المستودع والفرع ونظافة الملفات', True)
         except Exception as error:
@@ -267,6 +271,10 @@ print(json.dumps({'receiver':info,'services':states}))
                       'لا توجد تغييرات SQL' if not sql else 'تغييرات SQL: %d؛ يجب أن يراجعها عامل الترحيل المعتمد' % len(sql))
         except Exception as error:
             check('الاتصال وفحوص الخادم', False, str(error))
+        for item in result['checks']:
+            if not item['ok']:
+                detail = ' — ' + item['detail'] if item['detail'] else ''
+                self.events.put(('log', 'تعذر اجتياز الجاهزية: ' + item['name'] + detail + '\n'))
         result['ready'] = bool(result['checks']) and all(item['ok'] for item in result['checks'])
         result['checkedAt'] = dt.datetime.now().isoformat(timespec='seconds')
         self.events.put(('readiness', result))
@@ -306,7 +314,6 @@ class Bridge(QObject):
         self.setup_state = {}
         self.installed_for = None
         self.connected_for = None
-        self.last_readiness = None
         self.connection_ready = False
         self.active_job_id = None
         self.active_cancel = None
@@ -418,7 +425,6 @@ class Bridge(QObject):
                         raise ValueError('Invalid field: ' + name)
                     if getattr(self.core, name).get() != data[name].strip():
                         settings_changed = True
-                        self.last_readiness = None
                         if name in ('project','key'):
                             self.connection_ready = False
                             self.send_event('access', False)
@@ -465,9 +471,6 @@ class Bridge(QObject):
                        'agent': self.load_setup_agent, 'backup-install': self.core.install_backup,
                        'backup-list': self.core.list_backups}
             if action in actions:
-                if action == 'publish' and (not self.last_readiness or not self.last_readiness.get('ready') or self.last_readiness.get('targetVersion') != args[2]):
-                    self.start('readiness', lambda: self.core.readiness(*args))
-                    return
                 if action == 'publish' and not self.confirm('نشر الإصدار', 'نشر ' + self.core.version.get() + ' على ' + legacy.HOST + '؟ سيأخذ الخادم نسخة احتياطية ويبني الإصدار ويعيد تشغيل التطبيق.'):
                     self.send_event('log', 'أُلغي النشر من نافذة التأكيد.\n')
                     return
@@ -489,11 +492,14 @@ class Bridge(QObject):
             self.send_event('error', str(error))
 
     def publish_checked(self, *args):
-        # Re-run immediately before the existing immutable-tag publish flow.
+        self.core.events.put(('log', 'النشر على Ubuntu · فحص الجاهزية قبل إرسال الإصدار.\n'))
         result = self.core.readiness(*args)
+        if (result.get('preview') or {}).get('scope') in ('desktop', 'unchanged'):
+            return 'لا يلزم نشر إصدار على Ubuntu'
         if not result['ready']:
-            raise RuntimeError('فحص الجاهزية منع النشر؛ راجع البنود غير المكتملة')
-        self.core.publish(*args)
+            raise RuntimeError('فحص الجاهزية منع النشر: ' + readiness_failures(result))
+        self.core.publish(*args, expected_commit=result['targetCommit'])
+        return 'تم النشر والتحقق من الإصدار المشغّل على Ubuntu'
 
     def scan_setup(self):
         key = pathlib.Path(self.core.key.get())
@@ -666,12 +672,13 @@ class Bridge(QObject):
                 result = function()
                 if (label == 'readiness' and not result.get('ready')
                         and (result.get('preview') or {}).get('scope') not in ('desktop', 'unchanged')):
-                    raise RuntimeError('فشل فحص الجاهزية؛ راجع البنود المعروضة')
+                    raise RuntimeError('فشل فحص الجاهزية: ' + readiness_failures(result))
                 if cancel.is_set():
                     raise TimeoutError('تجاوز الفحص مدته الكلية')
-                save_result('succeeded', 'اكتمل الإجراء في الأداة')
-                self.core.events.put(('log', 'نجحت العملية: ' + label + '\n'))
-                message = 'اكتملت معاينة النشر؛ راجع تفاصيل الجاهزية' if label == 'readiness' else 'اكتملت العملية'
+                message = ('اكتملت معاينة النشر؛ راجع تفاصيل الجاهزية' if label == 'readiness'
+                           else result if label == 'publish' and isinstance(result, str) else 'اكتملت العملية')
+                save_result('succeeded', message)
+                self.core.events.put(('log', label + ' — ' + message + '\n' if label == 'publish' else 'نجحت العملية: ' + label + '\n'))
                 self.core.events.put(('done', {'ok': True, 'message': message}))
             except Exception as error:
                 uncertain = label in WRITE_ACTIONS and self.core.write_started
@@ -771,10 +778,8 @@ class Bridge(QObject):
             elif kind == 'release-version':
                 if value['replace'] or not self.core.version.get():
                     self.core.version.set(value['version'])
-                    self.last_readiness = None
                 self.send_event(kind, value)
             elif kind == 'readiness':
-                self.last_readiness = value
                 self.send_event(kind, value)
             elif kind == 'backup-created':
                 self.backups[value['id']] = value

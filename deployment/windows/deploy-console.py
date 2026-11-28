@@ -721,7 +721,7 @@ if test -f "$root/current/release.json"; then
         test "$?" -eq 1
     fi
 fi
-printf 'Commit match confirmed: Windows, GitHub, Ubuntu\\n'
+printf 'Fetched commit matches Windows and GitHub. Sending release tag to Ubuntu\\n'
 git -C "$stage" -c user.name='Lord Radius Deploy' -c user.email=radiusdeploy@localhost tag -a "${ref#refs/tags/}" "$commit" -m "$3"
 git -C "$stage" push "$repo" "$ref"
 """
@@ -729,8 +729,10 @@ git -C "$stage" push "$repo" "$ref"
         return commit, 'bash -c "$(printf %s ' + payload + ' | base64 -d)" -- ' + ' '.join(
             shlex.quote(value) for value in (version, commit, manifest, 'refs/heads/' + BRANCH))
 
-    def publish(self, project, key, version, changes):
+    def publish(self, project, key, version, changes, *, expected_commit=None):
         commit, command = self.deploy_command(project, version, changes)
+        if expected_commit is not None and commit != expected_commit:
+            raise RuntimeError('تغير commit بعد فحص الجاهزية؛ أعد بدء النشر')
         self.events.put(('phase', 'رفع'))
         self.run([*self.ssh(key), 'sudo -n -H -u radiusdeploy ' + command], stream=True, timeout=1800)
         self.events.put(('log', 'وصل الوسم إلى الخادم. جارٍ انتظار التفعيل.\n'))
