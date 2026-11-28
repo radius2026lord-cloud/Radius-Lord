@@ -210,7 +210,9 @@ print(json.dumps({'receiver':info,'services':states}))
         info = json.loads(self.run([*self.ssh(key), inspect]))
         command = "cd /tmp && sudo -n -H -u radiusdeploy git --git-dir=/srv/radius-lord/repository.git tag --list 'radius-release/*'"
         tags = self.run([*self.ssh(key), command], timeout=15).splitlines()
-        self.events.put(('release-version', {'version': self.next_release_version(info.get('currentVersion'), tags), 'replace': True}))
+        suggestion = self.next_release_version(info.get('currentVersion'), tags)
+        self.events.put(('release-version', {'version': suggestion, 'replace': True}))
+        return suggestion
 
     def transfer(self, key, local, remote, upload=False, install=False):
         if upload:
@@ -499,6 +501,13 @@ class Bridge(QObject):
         if not result['ready']:
             raise RuntimeError('فحص الجاهزية منع النشر: ' + readiness_failures(result))
         self.core.publish(*args, expected_commit=result['targetCommit'])
+        self.core.events.put(('summary', 'الإصدار الجاري: ' + args[2]))
+        try:
+            suggestion = self.core.suggest_release_version(*args)
+        except Exception:
+            self.core.events.put(('log', 'تعذر تحديث رقم الإصدار التالي. استخدم زر الإصدار التالي لإعادة المحاولة.\n'))
+        else:
+            self.core.events.put(('log', f'الإصدار التالي المقترح: {suggestion}\n'))
         return 'تم النشر والتحقق من الإصدار المشغّل على Ubuntu'
 
     def scan_setup(self):
@@ -743,7 +752,8 @@ class Bridge(QObject):
         self.check_inspection_deadline()
         if self.busy and self.last_progress_at and time.monotonic() - self.last_progress_at >= 15:
             self.last_progress_at = time.monotonic()
-            self.send_event('log', 'ما زالت العملية قيد الانتظار: ' + str(self.active_label) + '؛ لم تُكرر الأداة الطلب.\n')
+            if self.active_label != 'publish':
+                self.send_event('log', 'ما زالت العملية قيد الانتظار: ' + str(self.active_label) + '؛ لم تُكرر الأداة الطلب.\n')
         for _ in range(150):
             try:
                 kind, value, identifier = self.core.events.get_nowait()

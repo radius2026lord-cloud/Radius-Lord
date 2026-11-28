@@ -734,6 +734,7 @@ git -C "$stage" push "$repo" "$ref"
         if expected_commit is not None and commit != expected_commit:
             raise RuntimeError('تغير commit بعد فحص الجاهزية؛ أعد بدء النشر')
         self.events.put(('phase', 'رفع'))
+        self.events.put(('state', 'إرسال الإصدار إلى Ubuntu'))
         self.run([*self.ssh(key), 'sudo -n -H -u radiusdeploy ' + command], stream=True, timeout=1800)
         self.events.put(('log', 'وصل الوسم إلى الخادم. جارٍ انتظار التفعيل.\n'))
         self.events.put(('phase', 'تحقق'))
@@ -744,10 +745,15 @@ git -C "$stage" push "$repo" "$ref"
         while time.monotonic() < deadline:
             try:
                 data = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' status ' + version]))
+                if failures:
+                    self.events.put(('log', 'استؤنفت متابعة حالة النشر على Ubuntu.\n'))
+                    self.events.put(('state', 'مرحلة الخادم: ' + str(data.get('status'))))
                 failures = 0
             except Exception:
                 failures += 1
-                self.events.put(('log', 'تعذر قراءة الحالة؛ النشر قد يستمر على الخادم. سنعيد فحص الحالة فقط.\n'))
+                if failures == 1:
+                    self.events.put(('log', 'تعذر قراءة الحالة؛ سنعيد فحص حالة الطلب نفسه.\n'))
+                    self.events.put(('state', 'بانتظار استعادة الاتصال بـUbuntu'))
                 if failures >= 5:
                     raise RuntimeError('تعذر متابعة الاتصال؛ لا تعِد الرفع. استخدم تحديث الحالة لاحقًا')
                 time.sleep(10)
