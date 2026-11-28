@@ -25,8 +25,11 @@ export async function listManualEnvironmentPlans(_req:AuthenticatedRequest,res:R
 
 const networkNamePattern=/^[A-Za-z0-9][A-Za-z0-9 -]{0,14}$/;
 const networkNameLock='radius-lord:manual-environment-name';
+function portalSlug(name:string){
+ return name.toLowerCase().replace(/[ -]+/g,'-').replace(/-$/,'');
+}
 async function networkNameTaken(connection:typeof db | PoolConnection,name:string){
- const [rows]:any=await connection.query('SELECT id FROM tenants WHERE LOWER(TRIM(name))=LOWER(?) LIMIT 1',[name]);
+ const [rows]:any=await connection.query('SELECT id FROM tenants WHERE LOWER(TRIM(name))=LOWER(?) OR slug=? LIMIT 1',[name,portalSlug(name)]);
  return Boolean(rows[0]);
 }
 
@@ -122,8 +125,7 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
    VALUES (?,?,?,?,'initial_subscription',?,?,?,?,?,?,'manual_authorized')`,
    [paymentCode,customerId,planId,deployment[0].id,planName,duration,deployment[0].name_ar,currency,JSON.stringify([]),JSON.stringify(limits)]);
   const order={id:result.insertId,customer_id:customerId,plan_id:planId,deployment_type_id:deployment[0].id,payment_purpose:'initial_subscription',duration_months_snapshot:duration,plan_limits_snapshot:limits,addons_snapshot:[],currency_code:currency};
-  const central=await ensureCentralSubscription(conn,req,order);
-  await conn.query('UPDATE tenants SET name=? WHERE id=?',[networkName,central.tenantId]);
+  const central=await ensureCentralSubscription(conn,req,order,{name:networkName,slug:portalSlug(networkName)});
   await saveEnvironmentNasLink(conn,central,nasLink);
   const jobId=await enqueueInitialEnvironment(conn,central,order.id,req.auth!.accountId);
   await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:'اعتماد إداري لتجهيز بيئة دون تسجيل دفعة',metadata:{eventType:'manual_environment_requested',customerId,subscriptionId:central.subscriptionId,environmentId:central.environmentId,paymentOrderId:order.id,custom}},conn);
@@ -137,6 +139,9 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
   if(code==='ER_DUP_ENTRY'){
    const [previous]:any=await (conn??db).query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]).catch(()=>[[]]);
    if(previous[0])return res.json({orderId:previous[0].id});
+   if((error as {sqlMessage?:string}).sqlMessage?.includes('uq_tenant_slug')){
+    return res.status(409).json({code:'NETWORK_NAME_TAKEN',message:'رابط اسم الشبكة مستخدم. اختر اسمًا آخر.'});
+   }
    return res.status(409).json({message:'البريد الإلكتروني أو الهاتف مستخدم مسبقًا.'});
   }
   console.error('[manual-environment]',{code:code||'UNKNOWN'});

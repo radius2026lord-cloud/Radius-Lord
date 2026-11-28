@@ -19,7 +19,7 @@ export function validLimits(value: unknown) {
 
 // Called only with the payment row locked, in the same transaction as confirmation.
 // Repeated calls reuse the recorded network; legacy links must be explicitly consistent.
-export async function ensureCentralSubscription(conn: PoolConnection, req: AuthenticatedRequest, order: any) {
+export async function ensureCentralSubscription(conn: PoolConnection, req: AuthenticatedRequest, order: any, networkIdentity?: {name:string;slug:string}) {
   if (order.payment_purpose !== 'initial_subscription') {
     throw new EnvironmentRequestError(409, 'هذا المسار مخصص للاشتراك الأول. معالجة التجديد والإضافات ليست مفعّلة بعد.');
   }
@@ -46,8 +46,8 @@ export async function ensureCentralSubscription(conn: PoolConnection, req: Authe
     // Never attach another purchase to an existing network by name or owner alone.
     if (tenantId) throw new EnvironmentRequestError(409, 'الشبكة مرتبطة بالطلب دون اشتراك؛ راجع الربط قبل المتابعة.');
     const license = 'RL-' + randomBytes(16).toString('hex').toUpperCase();
-    const slug = 'network-' + randomBytes(12).toString('hex');
-    const [network]: any = await conn.query("INSERT INTO tenants (customer_id,license_number,name,slug,status) VALUES (?,?,?,?,'disabled')", [order.customer_id,license,owners[0].full_name,slug]);
+    const slug = networkIdentity?.slug ?? 'network-' + randomBytes(12).toString('hex');
+    const [network]: any = await conn.query("INSERT INTO tenants (customer_id,license_number,name,slug,status) VALUES (?,?,?,?,'disabled')", [order.customer_id,license,networkIdentity?.name ?? owners[0].full_name,slug]);
     tenantId = network.insertId;
     const limits = validLimits(order.plan_limits_snapshot);
     const [period]: any = await conn.query("INSERT INTO subscriptions (tenant_id,plan_id,deployment_type_id,plan_limits_snapshot,duration_months_snapshot,status,starts_at,expires_at) VALUES (?,?,?,?,?,'pending',NULL,NULL)", [tenantId,order.plan_id,order.deployment_type_id,limits ? JSON.stringify(limits) : null,order.duration_months_snapshot]);
