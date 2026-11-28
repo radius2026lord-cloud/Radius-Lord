@@ -850,7 +850,7 @@ git -C "$stage" push "$repo" "$ref"
         args = self.ssh(key)
         args.insert(1, '-tt')
         self.terminal_process = self.console_process(args)
-        self.events.put(('log', 'فُتحت طرفية OpenSSH مستقلة؛ حالة الجلسة تظهر داخل نافذتها.\n'))
+        self.events.put(('log', 'فُتحت طرفية OpenSSH؛ حالة الطرفية تظهر داخل نافذتها.\n'))
 
     def latest_log(self, project, key, version, changes):
         info = json.loads(self.run([*self.ssh(key), 'sudo -n -u radiusdeploy python3 ' + HELPER + ' inspect']))
@@ -970,6 +970,8 @@ git -C "$stage" push "$repo" "$ref"
             self.events.put(('state', 'جارٍ تنفيذ العملية على الخادم؛ قد تتوقف الخدمات مؤقتًا. انتظر ولا تكرر الطلب عند انقطاع الاتصال.'))
         result = self.rpc(action, key, data)
         self.events.put(('log', json.dumps(result, ensure_ascii=False, indent=2) + '\n'))
+        if action == 'create':
+            self.events.put(('backup-created', result))
         if action == 'reset-plan':
             self.events.put(('reset-review', result))
         if action == 'review':

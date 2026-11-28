@@ -24,6 +24,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from deployment_checks import diagnose, HOST_PROBE
 from operation_history import History, WRITE_ACTIONS, redact
 from bounded_process import capture_readonly
+from ssh_session import ServerSession
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('radius_legacy_console', HERE / 'deploy-console.py')
@@ -68,7 +69,20 @@ class Operations(legacy.Console):
         self.process = None
         self.terminal_process = None
         self.write_started = False
+        self.server_session = ServerSession(legacy.NO_WINDOW)
 
+
+    def ssh(self, key):
+        direct = super().ssh(key)
+        try:
+            return self.server_session.command(
+                direct, key, legacy.HOST, legacy.PORT, legacy.USER,
+                lambda message: self.events.put(('log', message)))
+        except RuntimeError as error:
+            diagnostic = diagnose(str(error), 255)
+            if diagnostic:
+                self.events.put(('diagnostic', diagnostic))
+            raise
 
     def rpc(self, action, key, data=None):
         request = dict(data or {})
@@ -76,8 +90,14 @@ class Operations(legacy.Console):
             request['operationId'] = self.current_job_id
             self.write_started = True
         if action in ('list','operation-status'):
-            result = capture_readonly([*self.ssh(key), 'python3 ' + legacy.BACKUP_HELPER + ' ' + action],
-                                      timeout=25, input_bytes=json.dumps(request).encode('utf-8'), creationflags=legacy.NO_WINDOW, cancel_event=getattr(self.worker_context, 'cancel', None))
+            command = 'python3 ' + legacy.BACKUP_HELPER + ' ' + action
+            def read():
+                return capture_readonly([*self.ssh(key), command], timeout=25,
+                    input_bytes=json.dumps(request).encode('utf-8'), creationflags=legacy.NO_WINDOW,
+                    cancel_event=getattr(self.worker_context, 'cancel', None))
+            result = read()
+            if self.server_session.interrupted(result.returncode, result.stderr.decode('utf-8', errors='replace')):
+                result = read()
             if result.returncode:
                 output = result.stderr.decode('utf-8', errors='replace')
                 diagnostic = diagnose(output, result.returncode if result.returncode == 255 else None)
@@ -96,18 +116,30 @@ class Operations(legacy.Console):
         if (program_name in ('git', 'git.exe') and 'push' in args) or (
                 program_name in ('ssh', 'ssh.exe') and command.startswith('sudo -n -H -u radiusdeploy bash -c ')):
             self.write_started = True
-        try:
+        def execute(command_args):
             if options.get('wait_on_timeout') is False:
-                result = capture_readonly(args, options.get('timeout',30), cwd=options.get('cwd'),
+                result = capture_readonly(command_args, options.get('timeout',30), cwd=options.get('cwd'),
                                           env=options.get('env'), creationflags=legacy.NO_WINDOW, cancel_event=getattr(self.worker_context, 'cancel', None))
                 output = result.stdout.decode('utf-8', errors='replace')
                 error = result.stderr.decode('utf-8', errors='replace')
                 if options.get('stream') or result.returncode:
                     self.events.put(('log', output + error))
                 if result.returncode:
-                    raise legacy.CommandFailure(args[0], result.returncode, output + error)
+                    raise legacy.CommandFailure(command_args[0], result.returncode, output + error)
                 return output.strip()
-            return super().run(args, *values, **options)
+            return super(Operations, self).run(command_args, *values, **options)
+        readonly = program_name in ('ssh', 'ssh.exe') and (
+            options.get('wait_on_timeout') is False or command.startswith((
+                'curl -fsS --max-time 10 http://127.0.0.1:4001/release-health',
+                'tail -n 60 /srv/radius-lord/logs/')))
+        try:
+            try:
+                return execute(args)
+            except legacy.CommandFailure as error:
+                key = self.server_session.key
+                if not readonly or not key or not self.server_session.interrupted(error.code, error.output):
+                    raise
+                return execute([*self.ssh(key), command])
         except legacy.CommandFailure as error:
             program = pathlib.Path(error.program).name.lower()
             diagnostic = diagnose(error.output, error.code if program in ('ssh', 'ssh.exe') else None)
@@ -746,6 +778,9 @@ class Bridge(QObject):
             elif kind == 'readiness':
                 self.last_readiness = value
                 self.send_event(kind, value)
+            elif kind == 'backup-created':
+                self.backups[value['id']] = value
+                self.send_event(kind, value)
             elif kind == 'backups':
                 self.backups = {row['id']: row for row in value['backups']}
                 self.send_event(kind, value)
@@ -862,8 +897,6 @@ class Window(QMainWindow):
         toolbar = self.addToolBar('GitHub')
         toolbar.setMovable(False)
         operations = (
-            ('فحص GitHub', 'github-check', self.bridge.core.check_github),
-            ('دخول GitHub بالمتصفح', 'github-login', self.bridge.core.login_github),
             ('جلب التحديثات', 'pull', self.bridge.core.pull),
         )
         for title, label, operation in operations:
@@ -916,6 +949,7 @@ class Window(QMainWindow):
             event.ignore()
         else:
             self.bridge.core.save_preferences()
+            self.bridge.core.server_session.close()
             try:
                 self.bridge.history.flush(timeout=2)
             except Exception:

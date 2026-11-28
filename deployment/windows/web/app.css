@@ -6,3 +6,5 @@
 .history-table{height:180px}.history-table td{font-size:10px;max-width:260px}.history-table .text-button{font-size:10px;padding:3px 7px;min-height:25px}.history-success{color:var(--success)}.history-error{color:var(--danger)}.history-warning{color:var(--warning)}#pending-count{background:var(--warning);color:var(--panel);border-radius:50%;font-size:9px;min-width:17px;height:17px;display:grid;place-items:center;padding:2px}.tabs{gap:3px}.tab{padding-inline:12px}
 
 .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;max-height:92vh;overflow:auto;margin:0}.modal-backdrop{position:fixed;inset:0;background:#0b183759;backdrop-filter:blur(4px);z-index:99}.notice{z-index:110}
+
+.github-settings,.github-settings .step-actions{flex-wrap:wrap}
