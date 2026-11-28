@@ -3,7 +3,7 @@ import {listMasterNetworkHealth,requestMasterNetworkHealth} from '../../services
 import {checkMasterNetworkConnections,NetworkCheckError} from '../../services/master-network-tunnels.service';
 import {manageNetworkAccess,RecoveryError} from '../../services/network-access-recovery.service';
 import {requireAuthOrigin} from '../../middleware/auth-origin.middleware';
-import {createManualEnvironment,listManualEnvironmentPlans} from '../../controllers/manual-environment.controller';
+import {checkManualEnvironmentName,createManualEnvironment,listManualEnvironmentPlans} from '../../controllers/manual-environment.controller';
 import {applySubscriptionChange,listSubscriptionChanges,readUpgradePaymentSettings,saveUpgradePaymentSettings} from '../../services/master-subscription-changes.service';
 import {getPhpMyAdminSettings,savePhpMyAdminSettings,listMasterNetworks,getSubscriptionReminderSettings,saveSubscriptionReminderSettings} from '../../controllers/master-networks.controller';
 import {deleteEnvironment} from '../../controllers/environment-delete.controller';
@@ -29,6 +29,7 @@ router.post('/admin/network-health/:environmentId/check',authenticate,requireAcc
 });
 
 router.get('/admin/manual-environment/plans',authenticate,requireAccountType('master_admin'),listManualEnvironmentPlans);
+router.get('/admin/manual-environment/name-availability',authenticate,requireAccountType('master_admin'),checkManualEnvironmentName);
 router.post('/admin/manual-environment',authenticate,requireAccountType('master_admin'),createManualEnvironment);
 router.get('/admin/subscription-changes',authenticate,requireAccountType('master_admin'),async(_req,res)=>{
  try{res.set('Cache-Control','no-store');return res.json({items:await listSubscriptionChanges(),paymentSettings:await readUpgradePaymentSettings()});}

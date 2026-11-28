@@ -29,10 +29,24 @@ export async function migrateManualEnvironment() {
         !status || ![previousType, newType].includes(status.COLUMN_TYPE)) {
       throw new Error('MANUAL_ENVIRONMENT_CENTRAL_SCHEMA_UNEXPECTED');
     }
-    if (status.COLUMN_TYPE === newType && planColumns.every(column => column.IS_NULLABLE === 'YES')) return;
-
-    const source = await readFile(join(__dirname, '../migrations/20261106_manual_environment.sql'), 'utf8');
-    for (const statement of splitTenantTemplate(source)) await connection.query(statement);
+    if (status.COLUMN_TYPE !== newType || planColumns.some(column => column.IS_NULLABLE !== 'YES')) {
+      const source = await readFile(join(__dirname, '../migrations/20261106_manual_environment.sql'), 'utf8');
+      for (const statement of splitTenantTemplate(source)) await connection.query(statement);
+    }
+    const [contacts] = await connection.query<RowDataPacket[]>(`
+      SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, CHARACTER_SET_NAME, COLLATION_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='customers' AND COLUMN_NAME IN ('email','phone')`);
+    if (contacts.length !== 2) throw new Error('MANUAL_ENVIRONMENT_CUSTOMER_SCHEMA_UNEXPECTED');
+    const changes = contacts.filter(column => column.IS_NULLABLE !== 'YES').map(column => {
+      if (!/^varchar\([0-9]+\)$/.test(column.COLUMN_TYPE)
+          || !/^[a-zA-Z0-9_]+$/.test(column.CHARACTER_SET_NAME)
+          || !/^[a-zA-Z0-9_]+$/.test(column.COLLATION_NAME)) {
+        throw new Error('MANUAL_ENVIRONMENT_CUSTOMER_SCHEMA_UNEXPECTED');
+      }
+      return `MODIFY COLUMN \`${column.COLUMN_NAME}\` ${column.COLUMN_TYPE} CHARACTER SET ${column.CHARACTER_SET_NAME} COLLATE ${column.COLLATION_NAME} NULL DEFAULT NULL`;
+    });
+    if (changes.length) await connection.query('ALTER TABLE customers ' + changes.join(', '));
   } finally {
     try {
       if (locked) await connection.query('SELECT RELEASE_LOCK(?)', [lockName]);

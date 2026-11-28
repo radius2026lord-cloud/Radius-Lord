@@ -17,8 +17,8 @@ type Customer = {
   id: number;
   fullName: string;
   username: string | null;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   country: string;
   status: "active" | "suspended" | "disabled";
   lastLoginAt: string | null;
@@ -56,7 +56,7 @@ export default function CustomerDetailsPage() {
       .then((data) => {
         if (data?.customer) {
           setCustomer(data.customer);
-          setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email, phone: data.customer.phone, country: data.customer.country });
+          setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email ?? "", phone: data.customer.phone ?? "", country: data.customer.country });
         }
       })
       .catch(() => setNotFound(true))
@@ -76,7 +76,7 @@ export default function CustomerDetailsPage() {
 
   const beginEdit = () => {
     if (!customer) return;
-    setForm({ fullName: customer.fullName, username: customer.username ?? "", email: customer.email, phone: customer.phone, country: customer.country });
+    setForm({ fullName: customer.fullName, username: customer.username ?? "", email: customer.email ?? "", phone: customer.phone ?? "", country: customer.country });
     setError(""); setMessage(""); setEditing(true);
   };
 
@@ -89,7 +89,7 @@ export default function CustomerDetailsPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "تعذر حفظ التعديلات.");
       setCustomer(data.customer);
-      setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email, phone: data.customer.phone, country: data.customer.country });
+      setForm({ fullName: data.customer.fullName, username: data.customer.username ?? "", email: data.customer.email ?? "", phone: data.customer.phone ?? "", country: data.customer.country });
       setEditing(false); setMessage(data.message || "تم حفظ التعديلات بنجاح.");
       loadRecentActivity();
     } catch (err) { setError(err instanceof Error ? err.message : "تعذر حفظ التعديلات."); }
@@ -141,8 +141,8 @@ export default function CustomerDetailsPage() {
             </div>
           ) : (
           <div key="view" className="ui-state-enter grid gap-2 sm:grid-cols-2">
-            <Info icon={Mail} label="البريد الإلكتروني" value={customer.email} ltr />
-            <Info icon={Phone} label="رقم الهاتف" value={customer.phone} ltr />
+            <Info icon={Mail} label="البريد الإلكتروني" value={customer.email ?? "—"} ltr />
+            <Info icon={Phone} label="رقم الهاتف" value={customer.phone ?? "—"} ltr />
             <Info icon={MapPin} label="الدولة" value={customer.country} />
             <Info icon={UserRound} label="اسم المستخدم" value={customer.username ? `@${customer.username}` : "—"} />
           </div>

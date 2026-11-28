@@ -3,6 +3,7 @@ import {randomBytes} from 'crypto';
 import bcrypt from 'bcryptjs';
 import type {Response} from 'express';
 import {db} from '../config/db';
+import type {PoolConnection} from 'mysql2/promise';
 import type {AuthenticatedRequest} from '../middleware/auth.middleware';
 import {migrateManualEnvironment} from '../services/manual-environment-migration.service';
 import {writeAuditLog} from '../services/audit.service';
@@ -22,20 +23,39 @@ export async function listManualEnvironmentPlans(_req:AuthenticatedRequest,res:R
  catch{return res.status(503).json({message:'تعذر تحميل الخطط المتاحة للتجهيز.'});}
 }
 
+const networkNamePattern=/^[A-Za-z0-9][A-Za-z0-9 -]{0,14}$/;
+const networkNameLock='radius-lord:manual-environment-name';
+async function networkNameTaken(connection:typeof db | PoolConnection,name:string){
+ const [rows]:any=await connection.query('SELECT id FROM tenants WHERE LOWER(TRIM(name))=LOWER(?) LIMIT 1',[name]);
+ return Boolean(rows[0]);
+}
+
+export async function checkManualEnvironmentName(req:AuthenticatedRequest,res:Response){
+ res.set('Cache-Control','no-store');
+ const name=typeof req.query.name==='string'?req.query.name.trim():'';
+ if(!networkNamePattern.test(name))return res.status(400).json({message:'أدخل اسم شبكة إنكليزيًا حتى 15 محرفًا.'});
+ try{return res.json({available:!await networkNameTaken(db,name)});}
+ catch{return res.status(503).json({message:'تعذر التحقق من توفر اسم الشبكة.'});}
+}
+
 export async function createManualEnvironment(req:AuthenticatedRequest,res:Response){
  const body=req.body??{},requestId=String(body.requestId??'');
  const networkName=String(body.networkName??'').trim();
  const fullName=String(body.fullName??'').trim(),email=String(body.email??'').trim().toLowerCase();
  const phone=String(body.phone??'').replace(/\s+/g,''),country=String(body.country??'').trim();
- const password=typeof body.password==='string'?body.password:'';
  const existing=body.customerMode==='existing',custom=body.planMode==='custom';
- if(!['new','existing'].includes(body.customerMode)||!['plan','custom'].includes(body.planMode)||!/^[a-f0-9]{32}$/.test(requestId)||!networkName||networkName.length>150||email.length>254||/[^\x21-\x7e]/.test(email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-  return res.status(400).json({message:'راجع اسم الشبكة والبريد الإلكتروني وخيارات الطلب.'});
+ const existingCustomerId=Number(body.customerId);
+ if(!['new','existing'].includes(body.customerMode)||!['plan','custom'].includes(body.planMode)||!/^[a-f0-9]{32}$/.test(requestId)||!networkNamePattern.test(networkName)){
+  return res.status(400).json({message:'أدخل اسم شبكة إنكليزيًا حتى 15 محرفًا وراجع خيارات الطلب.'});
  }
- if(!existing&&(!fullName||fullName.length>150||!/^\+[0-9]{7,15}$/.test(phone)||!country||country.length>100||/\p{Script=Arabic}/u.test(password)||password.length<8||Buffer.byteLength(password,'utf8')>72)){
-  return res.status(400).json({message:'أدخل اسم العميل والدولة ورقم هاتف دوليًا، وكلمة مرور من 8 أحرف على الأقل وبحد أقصى 72 بايت، دون أحرف عربية.'});
+ if(existing&&(!Number.isSafeInteger(existingCustomerId)||existingCustomerId<1)){
+  return res.status(400).json({message:'اختر عميلًا موجودًا.'});
+ }
+ if(!existing&&(!fullName||fullName.length>100||email&&(email.length>100||/[^\x21-\x7e]/.test(email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))||phone&&!/^\+[0-9]{7,15}$/.test(phone)||!country||country.length>100)){
+  return res.status(400).json({message:'أدخل اسم العميل الكامل، وتحقق من صيغة البريد والهاتف عند إدخالهما.'});
  }
  const paymentCode='MAN-RL-'+requestId;
+ let nameLocked=false;
  let conn:Awaited<ReturnType<typeof db.pool.getConnection>>|undefined;
  try{
   const [previous]:any=await db.query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]);
@@ -53,9 +73,18 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
     : 'تعذر تحديث القاعدة المركزية تلقائيًا. راجع سجل الباك إند ثم أعد المحاولة.';
    return res.status(503).json({code:'MANUAL_ENVIRONMENT_MIGRATION_FAILED',message});
   }
-  const passwordHash=existing?null:await bcrypt.hash(password,12);
+  const passwordHash=existing?null:await bcrypt.hash(randomBytes(32).toString('base64url'),12);
   conn=await db.pool.getConnection();
+  const [locks]:any=await conn.query('SELECT GET_LOCK(?, 10) AS acquired',[networkNameLock]);
+  nameLocked=Number(locks[0]?.acquired)===1;
+  if(!nameLocked)throw new EnvironmentRequestError(503,'تعذر التحقق من اسم الشبكة الآن. أعد المحاولة.');
   await conn.beginTransaction();
+  const [replayed]:any=await conn.query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]);
+  if(replayed[0]){await conn.rollback();return res.json({orderId:replayed[0].id});}
+  if(await networkNameTaken(conn,networkName)){
+   await conn.rollback();
+   return res.status(409).json({code:'NETWORK_NAME_TAKEN',message:'اسم الشبكة مستخدم. اختر اسمًا آخر.'});
+  }
   const [deployment]:any=await conn.query("SELECT id,name_ar FROM deployment_types WHERE code='shared_cloud' LIMIT 1");
   if(!deployment[0])throw new EnvironmentRequestError(409,'الاستضافة المشتركة غير مهيأة.');
   let planId:number|null=null,planName='اشتراك مخصص',currency='USD';
@@ -75,13 +104,13 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
   if(!limits||!Number.isSafeInteger(duration)||duration<1||duration>120)throw new EnvironmentRequestError(400,'أدخل حدودًا صحيحة ومدة من شهر إلى 120 شهرًا.');
   let customerId:number;
   if(existing){
-   const [customers]:any=await conn.query("SELECT id FROM customers WHERE email=? AND status='active' FOR UPDATE",[email]);
-   if(!customers[0])throw new EnvironmentRequestError(404,'لم يُعثر على عميل نشط بهذا البريد.');
+   const [customers]:any=await conn.query("SELECT id FROM customers WHERE id=? AND status='active' FOR UPDATE",[existingCustomerId]);
+   if(!customers[0])throw new EnvironmentRequestError(404,'لم يُعثر على العميل النشط المحدد.');
    customerId=Number(customers[0].id);
   }else{
-   const [duplicates]:any=await conn.query('SELECT id FROM customers WHERE email=? OR phone=? LIMIT 1',[email,phone]);
-   if(duplicates[0])throw new EnvironmentRequestError(409,'البريد أو الهاتف مستخدم. اختر عميلًا موجودًا بالبريد المسجل.');
-   const [result]:any=await conn.query('INSERT INTO customers (full_name,email,username,phone,country,password_hash) VALUES (?,?,?,?,?,?)',[fullName,email,'rl_'+randomBytes(8).toString('hex'),phone,country,passwordHash]);
+   const [duplicates]:any=await conn.query('SELECT id FROM customers WHERE email=? OR phone=? LIMIT 1',[email||null,phone||null]);
+   if(duplicates[0])throw new EnvironmentRequestError(409,'البريد أو الهاتف مستخدم. اختر العميل المسجل من القائمة.');
+   const [result]:any=await conn.query('INSERT INTO customers (full_name,email,username,phone,country,password_hash) VALUES (?,?,?,?,?,?)',[fullName,email||null,'rl_'+randomBytes(8).toString('hex'),phone||null,country,passwordHash]);
    customerId=Number(result.insertId);
   }
   if(limits.maxTenants>0){
@@ -106,11 +135,17 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
   if(error instanceof EnvironmentRequestError)return res.status(error.status).json({message:error.message});
   const code=(error as {code?:string}).code;
   if(code==='ER_DUP_ENTRY'){
-   const [previous]:any=await db.query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]).catch(()=>[[]]);
+   const [previous]:any=await (conn??db).query("SELECT id FROM payment_orders WHERE payment_code=? AND status='manual_authorized'",[paymentCode]).catch(()=>[[]]);
    if(previous[0])return res.json({orderId:previous[0].id});
    return res.status(409).json({message:'البريد الإلكتروني أو الهاتف مستخدم مسبقًا.'});
   }
   console.error('[manual-environment]',{code:code||'UNKNOWN'});
   return res.status(500).json({message:'تعذر تسجيل طلب التجهيز. يمكنك إعادة المحاولة من النموذج نفسه.'});
- }finally{conn?.release();}
+ }finally{
+  if(conn){
+   try{if(nameLocked)await conn.query('SELECT RELEASE_LOCK(?)',[networkNameLock]);}
+   catch{conn.destroy();}
+   finally{conn.release();}
+  }
+ }
 }
