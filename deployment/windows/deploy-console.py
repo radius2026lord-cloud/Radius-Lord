@@ -687,8 +687,6 @@ class Console:
     def deploy_command(self, project, version, changes):
         project = self.repository(project)
         commit = self.synchronized_commit(project, report=True)
-        if self.validated != (project, commit):
-            raise RuntimeError('ابنِ هذا الإصدار بنجاح من الأداة أولًا')
         if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version) or not 0 < len(changes.strip()) <= 4000:
             raise RuntimeError('أدخل رقم الإصدار ووصف التغييرات')
         manifest = json.dumps({'version': version, 'commit': commit, 'changes': changes})

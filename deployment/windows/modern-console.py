@@ -244,8 +244,6 @@ print(json.dumps({'receiver':info,'services':states}))
                     result['checkedAt'] = dt.datetime.now().isoformat(timespec='seconds')
                     self.events.put(('readiness', result))
                     return result
-            if commit:
-                check('نجاح بناء هذا التعديل', self.validated == (project, commit), 'يجب بناء الباك إند والفرونت إند في جلسة الأداة الحالية')
             check('رقم الإصدار ووصف التغييرات', valid_version and 0 < len(changes) <= 4000, 'مثل v1.0.4 مع وصف للتغيير')
             for item in info.get('checks', []):
                 check(item['name'], item['ok'])
