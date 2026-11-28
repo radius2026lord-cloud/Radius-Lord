@@ -31,10 +31,18 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
  const internationalPhone=form.phone?country.code+form.phone:'';
  const emailValid=!form.email.trim()||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())&&/^[!-~]+$/.test(form.email.trim());
  const phoneValid=!internationalPhone||/^\+[0-9]{7,15}$/.test(internationalPhone);
+ const [networkNameWarning,setNetworkNameWarning]=useState(false);
  const name=form.networkName.trim();
  const nameValid=/^[A-Za-z0-9][A-Za-z0-9 -]{0,14}$/.test(name);
  const nameStatus=nameValid&&availability?.name===name?availability.status:undefined;
- const nameError=/\p{Script=Arabic}/u.test(form.networkName)?'الأحرف العربية غير مسموحة في اسم الشبكة.':name&&!nameValid?'استخدم حتى 15 محرفًا من الأحرف الإنكليزية والأرقام والمسافات والشرطات، وابدأ بحرف أو رقم.':nameStatus==='taken'?'اسم الشبكة مستخدم. اختر اسمًا آخر.':nameStatus==='error'?'تعذر التحقق من الاسم.':'';
+ const nameError=name&&!nameValid?'استخدم حتى 15 محرفًا من الأحرف الإنكليزية والأرقام والمسافات والشرطات، وابدأ بحرف أو رقم.':nameStatus==='taken'?'اسم الشبكة مستخدم. اختر اسمًا آخر.':nameStatus==='error'?'تعذر التحقق من الاسم.':'';
+ function changeNetworkName(value:string){
+  const containsArabic=/\p{Script=Arabic}/u.test(value);
+  setNetworkNameWarning(containsArabic);
+  if(containsArabic)return;
+  if(value.trim()!==name)setAvailability(undefined);
+  set('networkName',value);
+ }
  const customer=customers.find(item=>String(item.id)===form.customerId);
  useEffect(()=>{
   if(!nameValid)return;
@@ -163,17 +171,18 @@ export default function ManualEnvironmentDialog({onClose,onCreated}:{onClose:()=
     <div className="mt-4 grid items-start gap-4 sm:grid-cols-2">
      <div className="min-w-0 space-y-2"><p className="text-xs font-semibold">حساب العميل</p><ProjectDropdown fieldStyle value={customerMode} disabled={busy} onChange={setCustomerMode} icon={UserRound} options={[{value:'new',label:'إنشاء عميل جديد'},{value:'existing',label:'عميل موجود'}]}/></div>
      <div className="min-w-0 space-y-2 text-xs font-semibold">
-      <label htmlFor="manual-network-name" className="flex items-center gap-2"><ProjectCardIcon icon={Network}/>اسم الشبكة (إلزامي)</label>
-      <ProjectInput id="manual-network-name" name="networkName" required dir="ltr" maxLength={15} disabled={busy} value={form.networkName} onChange={e=>{if(e.target.value.trim()!==name)setAvailability(undefined);set('networkName',e.target.value);}} aria-invalid={Boolean(nameError)} aria-describedby="manual-network-status"/>
+      <label htmlFor="manual-network-name" className="flex items-center gap-2"><ProjectCardIcon icon={Network}/>اسم الشبكة <span aria-hidden="true" className="text-red-700 dark:text-red-300">*</span></label>
+      <ProjectInput id="manual-network-name" name="networkName" required dir="ltr" maxLength={15} disabled={busy} value={form.networkName} onChange={e=>changeNetworkName(e.target.value)} aria-invalid={Boolean(nameError)} aria-describedby={networkNameWarning?"manual-network-warning manual-network-status":"manual-network-status"}/>
+      {networkNameWarning&&<p id="manual-network-warning" role="alert" className="text-red-700 dark:text-red-300">الأحرف العربية غير مسموحة في اسم الشبكة.</p>}
       <p id="manual-network-status" role="status" className={nameError?'text-red-700 dark:text-red-300':nameStatus==='available'?'text-emerald-700 dark:text-emerald-300':'text-slate-600 dark:text-slate-300'}>{nameError||(nameStatus==='available'?'الاسم متاح':nameValid?'جارٍ التحقق من الاسم…':'أحرف إنكليزية، حتى 15 محرفًا.')}</p>
       {nameStatus==='error'&&<ProjectButton variant="ghost" onClick={()=>{setAvailability(undefined);setNameRetry(n=>n+1);}}>إعادة التحقق</ProjectButton>}
      </div>
      {customerMode==='existing'?<div data-existing-customer className="min-w-0 space-y-2 sm:col-span-2">
-      <p className="text-xs font-semibold">العميل المسجل (إلزامي)</p>
+      <p className="text-xs font-semibold">العميل المسجل <span aria-hidden="true" className="text-red-700 dark:text-red-300">*</span></p>
       <ProjectDropdown fieldStyle searchable value={form.customerId} disabled={busy} onChange={value=>set('customerId',value)} placeholder="اختر عميلًا نشطًا" options={customers.map(item=>({value:String(item.id),label:[item.fullName,item.email||item.phone].filter(Boolean).join(' · ')}))}/>
       {customerError&&<p role="alert" className="text-xs text-red-700 dark:text-red-300">{customerError}</p>}
      </div>:<>
-      <label className="min-w-0 space-y-2 text-xs font-semibold"><span className="flex items-center gap-2"><ProjectCardIcon icon={UserRound} tone="pending"/>اسم العميل الكامل (إلزامي)</span><ProjectInput name="fullName" required maxLength={100} disabled={busy} value={form.fullName} onChange={e=>set('fullName',e.target.value)} aria-invalid={Boolean(form.fullName&&!form.fullName.trim())}/></label>
+      <label className="min-w-0 space-y-2 text-xs font-semibold"><span className="flex items-center gap-2"><ProjectCardIcon icon={UserRound} tone="pending"/>اسم العميل الكامل <span aria-hidden="true" className="text-red-700 dark:text-red-300">*</span></span><ProjectInput name="fullName" required maxLength={100} disabled={busy} value={form.fullName} onChange={e=>set('fullName',e.target.value)} aria-invalid={Boolean(form.fullName&&!form.fullName.trim())}/></label>
       <label className="min-w-0 space-y-2 text-xs font-semibold"><span className="flex items-center gap-2"><ProjectCardIcon icon={Mail} tone="success"/>البريد الإلكتروني (اختياري)</span><ProjectInput name="email" type="email" dir="ltr" maxLength={100} disabled={busy} value={form.email} onChange={e=>set('email',e.target.value)} aria-invalid={!emailValid}/>{!emailValid&&<span className="block text-red-700 dark:text-red-300">أدخل بريدًا إلكترونيًا صالحًا.</span>}</label>
       <div className="sm:col-span-2">
        <CountryPhoneInput countries={arabCountries} country={country} label="رقم الهاتف (اختياري)" name="phone"
