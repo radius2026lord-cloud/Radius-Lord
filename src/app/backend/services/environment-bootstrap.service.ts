@@ -1,3 +1,4 @@
+import {isManagedTenantDatabaseName} from './nas-resource-identity.service';
 import {resolveNasRadiusAddress,repairNasRadiusAddress} from './nas-radius-address.service';
 import {readEnvironmentNasLink,directNasSchema} from './environment-nas-link.service';
 import {randomBytes} from 'crypto';
@@ -104,7 +105,7 @@ export async function completeEnvironment(options:{central:PoolConnection;admin:
  },true);
  await step('network_database_isolation',async()=>{
   const [databases]:any=await central.query('SELECT db_name FROM tenant_databases WHERE database_server_id=? AND tenant_id<>? AND credentials_state=?',[server.id,job.tenant_id,'ready']);
-  for(const sql of ['SELECT 1 FROM mysql.user LIMIT 1',...databases.map((other:any)=>{if(!/^rl_tenant_(?:zone_[0-9]+|[0-9]+_[a-f0-9]{16})$/.test(other.db_name))fail('ISOLATION_DATABASE_NAME');return `SELECT 1 FROM \`${other.db_name}\`.managers LIMIT 1`;})]){
+  for(const sql of ['SELECT 1 FROM mysql.user LIMIT 1',...databases.map((other:any)=>{if(!isManagedTenantDatabaseName(other.db_name))fail('ISOLATION_DATABASE_NAME');return `SELECT 1 FROM \`${other.db_name}\`.managers LIMIT 1`;})]){
    let denied=false;try{await app.query({sql,timeout:5000});}catch(e){denied=['ER_TABLEACCESS_DENIED_ERROR','ER_DBACCESS_DENIED_ERROR'].includes((e as any).code);}if(!denied)fail('NETWORK_DATABASE_ISOLATION_FAILED');
   }
  },true);

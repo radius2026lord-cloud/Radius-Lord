@@ -1,3 +1,4 @@
+import {networkResourceSlug} from '../services/nas-resource-identity.service';
 import {validateNasLink,saveEnvironmentNasLink} from '../services/environment-nas-link.service';
 import {randomBytes} from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -25,11 +26,11 @@ export async function listManualEnvironmentPlans(_req:AuthenticatedRequest,res:R
 
 const networkNamePattern=/^[A-Za-z0-9][A-Za-z0-9 -]{0,14}$/;
 const networkNameLock='radius-lord:manual-environment-name';
-function portalSlug(name:string){
- return name.toLowerCase().replace(/[ -]+/g,'-').replace(/-$/,'');
-}
 async function networkNameTaken(connection:typeof db | PoolConnection,name:string){
- const [rows]:any=await connection.query('SELECT id FROM tenants WHERE LOWER(TRIM(name))=LOWER(?) OR slug=? LIMIT 1',[name,portalSlug(name)]);
+ const [rows]:any=await connection.query(
+  "SELECT id FROM tenants WHERE slug=? OR TRIM(TRAILING '-' FROM REGEXP_REPLACE(LOWER(TRIM(name)), '[ -]+', '-'))=? LIMIT 1",
+  [networkResourceSlug(name),networkResourceSlug(name)],
+ );
  return Boolean(rows[0]);
 }
 
@@ -125,7 +126,7 @@ export async function createManualEnvironment(req:AuthenticatedRequest,res:Respo
    VALUES (?,?,?,?,'initial_subscription',?,?,?,?,?,?,'manual_authorized')`,
    [paymentCode,customerId,planId,deployment[0].id,planName,duration,deployment[0].name_ar,currency,JSON.stringify([]),JSON.stringify(limits)]);
   const order={id:result.insertId,customer_id:customerId,plan_id:planId,deployment_type_id:deployment[0].id,payment_purpose:'initial_subscription',duration_months_snapshot:duration,plan_limits_snapshot:limits,addons_snapshot:[],currency_code:currency};
-  const central=await ensureCentralSubscription(conn,req,order,{name:networkName,slug:portalSlug(networkName)});
+  const central=await ensureCentralSubscription(conn,req,order,{name:networkName,slug:networkResourceSlug(networkName)});
   await saveEnvironmentNasLink(conn,central,nasLink);
   const jobId=await enqueueInitialEnvironment(conn,central,order.id,req.auth!.accountId);
   await writeAuditLog(req,{actionCode:'CREATE',entityTypeCode:'PROVISIONING_JOB',entityId:jobId,tenantId:central.tenantId,description:'اعتماد إداري لتجهيز بيئة دون تسجيل دفعة',metadata:{eventType:'manual_environment_requested',customerId,subscriptionId:central.subscriptionId,environmentId:central.environmentId,paymentOrderId:order.id,custom}},conn);

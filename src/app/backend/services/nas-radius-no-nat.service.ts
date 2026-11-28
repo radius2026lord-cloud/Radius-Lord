@@ -1,10 +1,10 @@
 import {isIP} from 'net';
-import {isLicenseNasName} from './nas-resource-identity.service';
+import {isLicenseNasName,networkResourceSlug} from './nas-resource-identity.service';
 import {nasResourceTag} from './nas-resource-scope.service';
 import type {RouterApi} from './routeros-api.service';
 
 type Scope={environmentId:number;nasId:number;tunnelAddress:string;resourceName?:string};
-type Input=Omit<Scope,'resourceName'>&{radiusAddress:string;gatewayAddress:string;authPort:number;accountingPort:number};
+type Input=Omit<Scope,'resourceName'>&{networkName?:string;radiusAddress:string;gatewayAddress:string;authPort:number;accountingPort:number};
 type Rule=Record<string,string>;
 const fields='.id,comment,chain,action,protocol,src-address,dst-address,dst-port,disabled,invalid,dynamic,to-addresses,to-ports,src-port,in-interface,out-interface,src-address-list,dst-address-list,connection-mark,routing-mark';
 const host=(s:string)=>String(s||'').replace(/\/32$/,'');
@@ -20,7 +20,13 @@ const environmentList=(s:Scope)=>listPrefix+s.environmentId;
 const radiusLabels=['Auth','Acct','NoNAT'] as const;
 const shortComment=(list:string,label:string)=>'rl-e'+list.slice(listPrefix.length)+'-radius-'+label.toLowerCase();
 const legacyComment=(list:string,label:string)=>list+' | RADIUS-'+label;
-const environmentRule=(rule:Rule,list:string)=>radiusLabels.some(label=>[shortComment(list,label),legacyComment(list,label)].includes(rule.comment));
+const commentSuffix=(list:string,label:string)=>' | ENV-'+list.slice(listPrefix.length)+' | RADIUS-'+label;
+function ownsEnvironmentComment(comment:string,list:string,label:string){
+ const suffix=commentSuffix(list,label);
+ return comment===shortComment(list,label)||comment===legacyComment(list,label)
+  || Boolean(comment?.endsWith(suffix)&&networkResourceSlug(comment.slice(0,-suffix.length)));
+}
+const environmentRule=(rule:Rule,list:string)=>radiusLabels.some(label=>ownsEnvironmentComment(rule.comment,list,label));
 const memberMarker=(s:Scope)=>environmentList(s)+' | NAS-'+s.nasId;
 const memberFields='.id,list,address,comment,disabled,dynamic';
 const managedList=/^rl-radius-env-[1-9][0-9]*$/;
@@ -30,13 +36,14 @@ const memberships=(api:RouterApi)=>api.command('/ip/firewall/address-list/print'
 
 function planRules(i:Input):Rule[]{
  const list=environmentList(i);
+ const comment=(label:string)=>networkResourceSlug(i.networkName)?i.networkName!.trim()+commentSuffix(list,label):shortComment(list,label);
  const udp={protocol:'udp','src-address-list':list,disabled:'no'};
  const forward=(label:string,external:number,internal:number)=>({
   ...udp,chain:'dstnat',action:'dst-nat','dst-address':i.gatewayAddress+'/32','dst-port':String(external),
-  'to-addresses':i.radiusAddress,'to-ports':String(internal),comment:shortComment(list,label),
+  'to-addresses':i.radiusAddress,'to-ports':String(internal),comment:comment(label),
  });
  return [
-  {...udp,chain:'srcnat',action:'accept','dst-address':i.radiusAddress+'/32','dst-port':i.authPort+','+i.accountingPort,comment:shortComment(list,'NoNAT')},
+  {...udp,chain:'srcnat',action:'accept','dst-address':i.radiusAddress+'/32','dst-port':i.authPort+','+i.accountingPort,comment:comment('NoNAT')},
   forward('Auth',1812,i.authPort),
   forward('Acct',1813,i.accountingPort),
  ];
@@ -45,12 +52,12 @@ function planRules(i:Input):Rule[]{
 const readRules=(api:RouterApi)=>api.command('/ip/firewall/nat/print',{'.proplist':fields});
 async function ensureEnvironmentRule(api:RouterApi,rules:Rule[],desired:Rule){
  const list=desired['src-address-list'];
- const label=radiusLabels.find(value=>shortComment(list,value)===desired.comment)!;
- const owned=(rule:Rule)=>rule.comment===desired.comment||rule.comment===legacyComment(list,label);
+ const label=radiusLabels.find(value=>ownsEnvironmentComment(desired.comment,list,value))!;
+ const owned=(rule:Rule)=>ownsEnvironmentComment(rule.comment,list,label);
  const matches=(rule:Rule)=>!on(rule.invalid)&&Object.entries(desired).every(([key,value])=>{
   if(key==='dst-address'||key==='to-addresses')return host(rule[key])===host(value);
   if(key==='disabled')return !on(rule.disabled);
-  if(key==='comment')return owned(rule);
+  if(key==='comment')return true;
   return rule[key]===value;
  });
  const hasExtraMatch=(rule:Rule)=>['src-address','src-port','in-interface','out-interface','dst-address-list','connection-mark','routing-mark'].some(key=>Boolean(rule[key]));
@@ -68,21 +75,22 @@ async function ensureEnvironmentRule(api:RouterApi,rules:Rule[],desired:Rule){
  const [old]=existing;
  if(old){
   if(!old['.id']||on(old.dynamic)||old.chain!==desired.chain||old.action!==desired.action||old.protocol!=='udp'||old['src-address-list']!==desired['src-address-list']||hasExtraMatch(old))fail('NAS_RADIUS_ENV_RULE_CONFLICT');
-  if(sameRule(old)&&rules.slice(0,rules.indexOf(old)).every(safeBefore))return rules;
-  if(!sameRule(old))await api.command('/ip/firewall/nat/set',{'.id':old['.id'],...desired,comment:old.comment});
+  if(sameRule(old)&&old.comment===desired.comment&&rules.slice(0,rules.indexOf(old)).every(safeBefore))return rules;
+  if(!sameRule(old))await api.command('/ip/firewall/nat/set',{'.id':old['.id'],...desired});
+  else if(old.comment!==desired.comment)await api.command('/ip/firewall/nat/set',{'.id':old['.id'],comment:desired.comment});
  }else{
   const first=rules.find(rule=>!safeBefore(rule));
   await api.command('/ip/firewall/nat/add',{...desired,...(first?.['.id']?{'place-before':first['.id']}:{})});
  }
  rules=await readRules(api);
  let index=rules.findIndex(owned);
- if(index<0||rules.filter(owned).length!==1||!sameRule(rules[index]))fail('NAS_RADIUS_ENV_RULE_VERIFY_FAILED');
+ if(index<0||rules.filter(owned).length!==1||rules[index].comment!==desired.comment||!sameRule(rules[index]))fail('NAS_RADIUS_ENV_RULE_VERIFY_FAILED');
  const blocker=rules.slice(0,index).find(rule=>!safeBefore(rule));
  if(blocker){
   await api.command('/ip/firewall/nat/move',{'.id':rules[index]['.id'],destination:blocker['.id']});
   rules=await readRules(api);index=rules.findIndex(owned);
  }
- if(index<0||rules.filter(owned).length!==1||!sameRule(rules[index])||rules.slice(0,index).some(rule=>!safeBefore(rule)))fail('NAS_RADIUS_ENV_RULE_VERIFY_FAILED');
+ if(index<0||rules.filter(owned).length!==1||rules[index].comment!==desired.comment||!sameRule(rules[index])||rules.slice(0,index).some(rule=>!safeBefore(rule)))fail('NAS_RADIUS_ENV_RULE_VERIFY_FAILED');
  return rules;
 }
 
